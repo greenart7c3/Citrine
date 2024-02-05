@@ -1,30 +1,78 @@
 package com.greenart7c3.citrine
 
-import android.util.Log
-import org.java_websocket.WebSocket
-import org.java_websocket.handshake.ClientHandshake
-import org.java_websocket.server.WebSocketServer
-import java.net.InetSocketAddress
+import io.ktor.http.ContentType
+import io.ktor.server.application.call
+import io.ktor.server.application.install
+import io.ktor.server.cio.CIO
+import io.ktor.server.engine.ApplicationEngine
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.Frame
+import io.ktor.websocket.readText
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 
-class CustomWebSocketServer(port: Int) : WebSocketServer(InetSocketAddress(port)) {
-    override fun onStart() {
-        Log.d("server","Server started $address")
+
+class CustomWebSocketServer(private val port: Int) {
+    private lateinit var server: ApplicationEngine
+
+    fun port(): Int {
+        return server.environment.connectors.first().port
     }
 
-    override fun onOpen(conn: WebSocket?, handshake: ClientHandshake?) {
-        Log.d("server","Connection opened from ${conn?.remoteSocketAddress}")
+    fun start() {
+        server = startKtorHttpServer(port)
     }
 
-    override fun onClose(conn: WebSocket?, code: Int, reason: String?, remote: Boolean) {
-        Log.d("server","Connection closed by ${conn?.remoteSocketAddress}, Code: $code, Reason: $reason")
+    fun stop() {
+        server.stop(1000)
     }
 
-    override fun onMessage(conn: WebSocket?, message: String?) {
-        Log.d("server","Message received from ${conn?.remoteSocketAddress}: $message")
-        conn?.send("Server received: $message")
-    }
+    private fun startKtorHttpServer(port: Int): ApplicationEngine {
+        return embeddedServer(CIO, port = port) {
+            install(WebSockets)
 
-    override fun onError(conn: WebSocket?, ex: Exception?) {
-        Log.d("server","Error occurred: ${ex?.message}")
+            routing {
+                // Handle HTTP GET requests
+                get("/") {
+                    if (call.request.headers["Accept"] == "application/nostr+json") {
+                        val json = """
+                        {
+                            "id": "ws://localhost:7777",
+                            "name": "Citrine",
+                            "description": "A Nostr relay in you phone",
+                            "pubkey": "",
+                            "supported_nips": [],
+                            "software": "https://github.com/greenart7c3/Citrine",
+                            "version": "0.0.1"
+                        }
+                        """
+                        call.respondText(json, ContentType.Application.Json)
+                    } else {
+                        call.respondText("Use a Nostr client or Websocket client to connect", ContentType.Text.Html)
+                    }
+
+                }
+
+                // WebSocket endpoint
+                webSocket("/") {
+                    try {
+                        for (frame in incoming) {
+                            when (frame) {
+                                is Frame.Text -> {
+                                    println("Received WebSocket message: ${frame.readText()}")
+                                }
+                                else -> {}
+                            }
+                        }
+                    } catch (e: ClosedReceiveChannelException) {
+                        // Channel closed
+                    }
+                }
+            }
+        }.start(wait = false)
     }
 }

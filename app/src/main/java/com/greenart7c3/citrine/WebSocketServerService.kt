@@ -32,7 +32,7 @@ class WebSocketServerService : Service() {
                 applicationContext,
                 ClipboardManager::class.java
             ) as ClipboardManager
-            val clip = ClipData.newPlainText("WebSocket Server Address", "ws://localhost:${webSocketServer.port}")
+            val clip = ClipData.newPlainText("WebSocket Server Address", "ws://localhost:${webSocketServer.port()}")
             clipboard.setPrimaryClip(clip)
         }
     }
@@ -55,7 +55,7 @@ class WebSocketServerService : Service() {
         super.onDestroy()
         unregisterReceiver(brCopy)
         // Stop the WebSocket server when the service is destroyed
-        webSocketServer.stop(1000)
+        webSocketServer.stop()
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -83,7 +83,7 @@ class WebSocketServerService : Service() {
         }
 
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")
-            .setContentTitle("Relay running at ws://localhost:${webSocketServer.port}")
+            .setContentTitle("Relay running at ws://localhost:${webSocketServer.port()}")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .addAction(R.drawable.ic_launcher_background, "Copy Address", piCopy)

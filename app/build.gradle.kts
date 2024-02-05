@@ -71,4 +71,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
     implementation("androidx.core:core-ktx:1.12.0")
+    implementation("io.ktor:ktor-server-core:2.3.8")
+    implementation("io.ktor:ktor-server-cio:2.3.8")
+    implementation("io.ktor:ktor-server-websockets:2.3.8")
+    implementation("io.ktor:ktor-websockets:2.3.8")
+
 }

@@ -21,7 +21,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
+import java.net.ServerSocket
 
+
+class CustomSocketServer(port: Int) : ServerSocket(port) {
+
+}
 
 class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher =
@@ -41,7 +46,7 @@ class MainActivity : ComponentActivity() {
             val binder = service as WebSocketServerService.LocalBinder
             this@MainActivity.service = binder.getService()
             bound = true
-            port.intValue = this@MainActivity.service?.webSocketServer?.port ?: 0
+            port.intValue = this@MainActivity.service?.webSocketServer?.port() ?: 0
             this@MainActivity.isLoading.value = false
         }
 
