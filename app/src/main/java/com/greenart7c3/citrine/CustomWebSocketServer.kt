@@ -104,6 +104,11 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
     private suspend fun processEvent(eventNode: JsonNode, session: DefaultWebSocketServerSession) {
         val event = objectMapper.treeToValue(eventNode, Event::class.java)
 
+        if (!event.hasVerifiedSignature()) {
+            session.send(CommandResult.invalid(event, "event signature verification failed").toJson())
+            return
+        }
+
         AppDatabase.getDatabase(context).eventDao().insertEventWithTags(event.toEventWithTags())
 
         session.send(CommandResult.ok(event).toJson())
