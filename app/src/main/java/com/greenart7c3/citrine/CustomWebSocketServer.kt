@@ -78,6 +78,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
 
 
     private suspend fun processNewRelayMessage(newMessage: String, session: DefaultWebSocketServerSession) {
+        Log.d("message", newMessage)
         val msgArray = Event.mapper.readTree(newMessage)
         when (val type = msgArray.get(0).asText()) {
             "REQ" -> {
@@ -85,6 +86,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
                 subscribe(subscriptionId, msgArray.drop(2), session)
             }
             "EVENT" -> {
+                Log.d("EVENT", newMessage)
                 processEvent(msgArray.get(1), session)
             }
             "CLOSE" -> {
@@ -109,6 +111,12 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             return
         }
 
+        val eventEntity = AppDatabase.getDatabase(context).eventDao().getByEventId(event.id)
+        if (eventEntity != null) {
+            session.send(CommandResult.duplicated(event).toJson())
+            return
+        }
+
         AppDatabase.getDatabase(context).eventDao().insertEventWithTags(event.toEventWithTags())
 
         session.send(CommandResult.ok(event).toJson())
@@ -117,6 +125,8 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
     private fun startKtorHttpServer(port: Int): ApplicationEngine {
         return embeddedServer(CIO, port = port) {
             install(WebSockets) {
+                pingPeriodMillis = 1000L
+                timeoutMillis = 300000L
                 extensions {
                     install(WebSocketDeflateExtension) {
                         /**

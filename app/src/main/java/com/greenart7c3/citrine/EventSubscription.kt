@@ -70,8 +70,6 @@ object EventSubscription {
               ORDER BY EventEntity.createdAt DESC
         """
 
-        Log.d("query", query)
-
         if (filter.limit > 0) {
             query += " LIMIT ${filter.limit}"
         }
@@ -80,12 +78,14 @@ object EventSubscription {
         cursor.use { item ->
             while (item.moveToNext()) {
                 val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(item.getString(0))
-                runBlocking {
-                    session.send(
-                        objectMapper.writeValueAsString(
-                            listOf("EVENT", subscriptionId, eventEntity.toEvent().toJsonObject())
-                        ),
-                    )
+                eventEntity?.let {
+                    runBlocking {
+                        session.send(
+                            objectMapper.writeValueAsString(
+                                listOf("EVENT", subscriptionId, it.toEvent().toJsonObject())
+                            ),
+                        )
+                    }
                 }
             }
         }
