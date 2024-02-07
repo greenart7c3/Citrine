@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -75,5 +76,12 @@ dependencies {
     implementation("io.ktor:ktor-server-cio:2.3.8")
     implementation("io.ktor:ktor-server-websockets:2.3.8")
     implementation("io.ktor:ktor-websockets:2.3.8")
-
+    implementation("com.github.vitorpamplona.amethyst:quartz:v0.83.9") {
+        exclude("net.java.dev.jna")
+    }
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    annotationProcessor("androidx.room:room-compiler:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 }

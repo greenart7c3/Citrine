@@ -1,23 +1,47 @@
 package com.greenart7c3.citrine
 
+import EOSE
+import android.content.Context
+import android.util.Log
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.database.toEventWithTags
+import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.pingPeriod
+import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.WebSocketDeflateExtension
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import io.ktor.websocket.send
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import java.time.Duration
+import java.util.zip.Deflater
 
 
-class CustomWebSocketServer(private val port: Int) {
+class CustomWebSocketServer(private val port: Int, private val context: Context) {
     private lateinit var server: ApplicationEngine
+    private val objectMapper = jacksonObjectMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     fun port(): Int {
         return server.environment.connectors.first().port
@@ -31,9 +55,77 @@ class CustomWebSocketServer(private val port: Int) {
         server.stop(1000)
     }
 
+    private suspend fun subscribe(subscriptionId: String, filterNodes: List<JsonNode>, session: DefaultWebSocketServerSession) {
+        val filters = filterNodes.map { jsonNode ->
+            val tags = jsonNode.fields().asSequence()
+                .filter { it.key.startsWith("#") }
+                .map { it.key.substringAfter("#") to it.value.map { item -> item.asText() }.toSet() }
+                .toMap()
+
+            val filter = objectMapper.treeToValue(jsonNode, EventFilter::class.java)
+
+            filter.copy(tags = tags)
+        }.toSet()
+
+        for (filter in filters) {
+           runBlocking {
+               EventSubscription.subscribe(subscriptionId, filter, session, context, objectMapper, true)
+           }
+        }
+
+        session.send(EOSE(subscriptionId).toJson())
+    }
+
+
+    private suspend fun processNewRelayMessage(newMessage: String, session: DefaultWebSocketServerSession) {
+        val msgArray = Event.mapper.readTree(newMessage)
+        when (val type = msgArray.get(0).asText()) {
+            "REQ" -> {
+                val subscriptionId = msgArray.get(1).asText()
+                subscribe(subscriptionId, msgArray.drop(2), session)
+            }
+            "EVENT" -> {
+                processEvent(msgArray.get(1), session)
+            }
+            "CLOSE" -> {
+                session.close(CloseReason(CloseReason.Codes.NORMAL, newMessage))
+            }
+            "PING" -> {
+                session.send(NoticeResult("PONG").toJson())
+            }
+            else -> {
+                val errorMessage = NoticeResult.invalid("unknown message type $type").toJson()
+                Log.d("message", errorMessage)
+                session.send(errorMessage)
+            }
+        }
+    }
+
+    private suspend fun processEvent(eventNode: JsonNode, session: DefaultWebSocketServerSession) {
+        val event = objectMapper.treeToValue(eventNode, Event::class.java)
+
+        AppDatabase.getDatabase(context).eventDao().insertEventWithTags(event.toEventWithTags())
+
+        session.send(CommandResult.ok(event).toJson())
+    }
+
     private fun startKtorHttpServer(port: Int): ApplicationEngine {
         return embeddedServer(CIO, port = port) {
-            install(WebSockets)
+            install(WebSockets) {
+                extensions {
+                    install(WebSocketDeflateExtension) {
+                        /**
+                         * Compression level to use for [java.util.zip.Deflater].
+                         */
+                        compressionLevel = Deflater.DEFAULT_COMPRESSION
+
+                        /**
+                         * Prevent compressing small outgoing frames.
+                         */
+                        compressIfBiggerThan(bytes = 4 * 1024)
+                    }
+                }
+            }
 
             routing {
                 // Handle HTTP GET requests
@@ -54,7 +146,6 @@ class CustomWebSocketServer(private val port: Int) {
                     } else {
                         call.respondText("Use a Nostr client or Websocket client to connect", ContentType.Text.Html)
                     }
-
                 }
 
                 // WebSocket endpoint
@@ -63,13 +154,16 @@ class CustomWebSocketServer(private val port: Int) {
                         for (frame in incoming) {
                             when (frame) {
                                 is Frame.Text -> {
-                                    println("Received WebSocket message: ${frame.readText()}")
+                                    val message = frame.readText()
+                                    processNewRelayMessage(message, this)
                                 }
-                                else -> {}
+                                else -> {
+                                    Log.d("error", frame.toString())
+                                }
                             }
                         }
                     } catch (e: ClosedReceiveChannelException) {
-                        // Channel closed
+                        Log.d("error", e.toString())
                     }
                 }
             }

@@ -13,6 +13,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat.getSystemService
@@ -41,10 +42,15 @@ class WebSocketServerService : Service() {
         super.onCreate()
 
         val intentFilter = IntentFilter("com.example.ACTION_COPY")
-        registerReceiver(brCopy, intentFilter)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(brCopy, intentFilter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(brCopy, intentFilter)
+        }
 
         // Start the WebSocket server
-        webSocketServer = CustomWebSocketServer(7777)
+        webSocketServer = CustomWebSocketServer(7777, this@WebSocketServerService)
         webSocketServer.start()
 
         // Create a notification to keep the service in the foreground
