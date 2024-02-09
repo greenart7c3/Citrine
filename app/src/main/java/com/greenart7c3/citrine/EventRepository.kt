@@ -17,7 +17,6 @@ object EventRepository {
         objectMapper: ObjectMapper
     ) {
         val whereClause = mutableListOf<String>()
-        val parameters = mutableListOf<String>()
 
         if (filter.since != null) {
             whereClause.add("EventEntity.createdAt >= ${filter.since}")
@@ -45,10 +44,8 @@ object EventRepository {
 
         if (filter.searchKeywords.isNotEmpty()) {
             whereClause.add(
-                filter.searchKeywords.joinToString(" AND ", prefix = "(", postfix = ")") { "EventEntity.content ~* ?" }
+                filter.searchKeywords.joinToString(" AND ", prefix = "(", postfix = ")") { "LOWER(EventEntity.content) LIKE '%${it}%'" }
             )
-
-            parameters.addAll(filter.searchKeywords.map { it })
         }
 
         if (filter.kinds.isNotEmpty()) {
@@ -77,9 +74,8 @@ object EventRepository {
             query += " LIMIT ${filter.limit}"
         }
 
-        val cursor = AppDatabase.getDatabase(context).query(query, parameters.toTypedArray())
-        cursor.use { item ->
-            while (item.moveToNext()) {
+        val cursor = AppDatabase.getDatabase(context).query(query, arrayOf())
+        cursor.use { item -> while (item.moveToNext()) {
                 val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(item.getString(0))
                 eventEntity?.let {
                     val event = it.toEvent()
