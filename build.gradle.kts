@@ -13,6 +13,7 @@ tasks.register<Copy>("installGitHook") {
     fileMode = 0b111101101
 }
 
+
 tasks.getByPath(":app:preBuild").dependsOn(tasks.getByName("installGitHook"))
 
 subprojects {
