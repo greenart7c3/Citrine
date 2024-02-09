@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
+import com.vitorpamplona.quartz.events.AddressableEvent
 import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.server.application.call
@@ -106,6 +107,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
 
         when {
             event.shouldDelete() -> deleteEvent(event)
+            event.isParameterizedReplaceable() -> handleParameterizedReplaceable(event)
             event.shouldOverwrite() -> override(event)
             !event.isEphemeral() -> {
                 val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(event.id)
@@ -118,6 +120,12 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
         }
 
         session.send(CommandResult.ok(event).toJson())
+    }
+
+    private fun handleParameterizedReplaceable(event: Event) {
+        save(event)
+        val ids = AppDatabase.getDatabase(context).eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
+        AppDatabase.getDatabase(context).eventDao().delete(ids)
     }
 
     private fun override(event: Event) {

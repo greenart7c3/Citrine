@@ -30,6 +30,31 @@ interface EventDao {
     @Transaction
     fun deleteOldestByKind(kind: Int, pubkey: String)
 
+    @Query("""
+        SELECT EventEntity.id 
+          FROM EventEntity EventEntity
+         WHERE EventEntity.pubkey = :pubkey 
+           AND EventEntity.kind = :kind
+           AND EventEntity.createdAt < (SELECT MAX(EventEntity.createdAt) 
+                              FROM EventEntity EventEntity 
+                             INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent  
+                             WHERE EventEntity.pubkey = :pubkey 
+                               AND EventEntity.kind = :kind
+                               AND TagEntity.col0Name = 'd'
+                               AND TagEntity.col1Value = :dTagValue
+                           )
+          and EventEntity.id in (SELECT EventEntity.id
+                       FROM EventEntity EventEntity
+                      INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent  
+                      WHERE EventEntity.pubkey = :pubkey 
+                        AND EventEntity.kind = :kind
+                        AND TagEntity.col0Name = 'd'
+                        AND TagEntity.col1Value = :dTagValue
+                    )                 
+        """)
+    @Transaction
+    fun getOldestReplaceable(kind: Int, pubkey: String, dTagValue: String): List<String>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     fun insertEventWithTags(dbEvent: EventEntity, dbTags: List<TagEntity>) {
