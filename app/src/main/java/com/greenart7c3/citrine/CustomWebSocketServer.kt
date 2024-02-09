@@ -55,7 +55,11 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
         server.stop(1000)
     }
 
-    private suspend fun subscribe(subscriptionId: String, filterNodes: List<JsonNode>, session: DefaultWebSocketServerSession) {
+    private suspend fun subscribe(
+        subscriptionId: String,
+        filterNodes: List<JsonNode>,
+        session: DefaultWebSocketServerSession
+    ) {
         val filters = filterNodes.map { jsonNode ->
             val tags = jsonNode.fields().asSequence()
                 .filter { it.key.startsWith("#") }
@@ -67,13 +71,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             filter.copy(tags = tags)
         }.toSet()
 
-        for (filter in filters) {
-           runBlocking {
-               EventSubscription.subscribe(subscriptionId, filter, session, context, objectMapper, true)
-           }
-        }
-
-        session.send(EOSE(subscriptionId).toJson())
+        EventSubscription.subscribe(subscriptionId, filters, session, context, objectMapper)
     }
 
 
@@ -90,7 +88,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
                 processEvent(msgArray.get(1), session)
             }
             "CLOSE" -> {
-                session.close(CloseReason(CloseReason.Codes.NORMAL, newMessage))
+                EventSubscription.close(msgArray.get(1).asText())
             }
             "PING" -> {
                 session.send(NoticeResult("PONG").toJson())
@@ -174,11 +172,13 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
                                 }
                                 else -> {
                                     Log.d("error", frame.toString())
+                                    send(NoticeResult.invalid("Error processing message").toJson())
                                 }
                             }
                         }
                     } catch (e: ClosedReceiveChannelException) {
                         Log.d("error", e.toString())
+                        send(NoticeResult.invalid("Error processing message").toJson())
                     }
                 }
             }

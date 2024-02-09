@@ -6,8 +6,6 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
-import android.os.StrictMode
-import android.os.StrictMode.VmPolicy
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,12 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
-import java.net.ServerSocket
 
-
-class CustomSocketServer(port: Int) : ServerSocket(port) {
-
-}
 
 class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher =
