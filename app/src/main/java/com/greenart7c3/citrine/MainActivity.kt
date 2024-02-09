@@ -27,8 +27,10 @@ class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
-        ) { isGranted: Boolean ->
-
+        ) {
+            val intent = Intent(this, WebSocketServerService::class.java)
+            startService(intent)
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
         }
 
     private var service: WebSocketServerService? = null
@@ -55,11 +57,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
-
-        val intent = Intent(this, WebSocketServerService::class.java)
-        startService(intent)
-
-        bindService(intent, connection, Context.BIND_AUTO_CREATE)
 
         setContent {
             CitrineTheme {
