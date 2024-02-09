@@ -4,6 +4,10 @@ Citrine is a nostr relay for android. It allows any nostr client that supports A
 
 # Current Features
 
+- [ ] Export full database
+- [ ] Export only events from your account
+- [ ] Manage the relay (port, icon, user, start, stop)
+
 # Contributing
 
 [Issues](https://github.com/greenart7c3/Citrine/issues) and [pull requests](https://github.com/greenart7c3/Citrine/pulls) are very welcome.
