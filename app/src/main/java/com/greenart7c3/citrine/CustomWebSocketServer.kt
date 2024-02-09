@@ -115,6 +115,11 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             return
         }
 
+        if (event.isExpired()) {
+            session.send(CommandResult.invalid(event, "event expired").toJson())
+            return
+        }
+
         AppDatabase.getDatabase(context).eventDao().insertEventWithTags(event.toEventWithTags())
 
         session.send(CommandResult.ok(event).toJson())
