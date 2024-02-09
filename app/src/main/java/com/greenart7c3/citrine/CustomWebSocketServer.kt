@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
-import com.vitorpamplona.quartz.events.AddressableEvent
 import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.server.application.call
@@ -172,7 +171,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
                             "name": "Citrine",
                             "description": "A Nostr relay in you phone",
                             "pubkey": "",
-                            "supported_nips": [],
+                            "supported_nips": [1,2,4,9,11,50],
                             "software": "https://github.com/greenart7c3/Citrine",
                             "version": "0.0.1"
                         }
