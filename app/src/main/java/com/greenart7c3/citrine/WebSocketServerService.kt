@@ -49,7 +49,8 @@ class WebSocketServerService : Service() {
         }
 
         // Start the WebSocket server
-        webSocketServer = CustomWebSocketServer(7777, this@WebSocketServerService)
+        val port = if (BuildConfig.DEBUG) defaultPortDebug else defaultPort
+        webSocketServer = CustomWebSocketServer(port, this@WebSocketServerService)
         webSocketServer.start()
 
         // Create a notification to keep the service in the foreground
@@ -94,5 +95,10 @@ class WebSocketServerService : Service() {
             .setContentIntent(resultPendingIntent)
 
         return notificationBuilder.build()
+    }
+
+    companion object {
+        const val defaultPort = 7777
+        const val defaultPortDebug = 7778
     }
 }
