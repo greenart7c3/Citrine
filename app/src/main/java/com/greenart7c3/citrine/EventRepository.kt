@@ -66,9 +66,9 @@ object EventRepository {
         val predicatesSql = whereClause.joinToString(" AND ", prefix = "WHERE ")
 
         var query = """
-            SELECT EventEntity.pk
+            SELECT EventEntity.id
               FROM EventEntity EventEntity
-              LEFT JOIN TagEntity TagEntity ON EventEntity.pk = TagEntity.pkEvent
+              LEFT JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
               $predicatesSql 
               ORDER BY EventEntity.createdAt DESC
         """
@@ -80,19 +80,21 @@ object EventRepository {
         val cursor = AppDatabase.getDatabase(context).query(query, parameters.toTypedArray())
         cursor.use { item ->
             while (item.moveToNext()) {
-                val eventEntity = AppDatabase.getDatabase(context).eventDao().getByPk(item.getString(0))
-                val event = eventEntity.toEvent()
-                if (!event.isExpired()) {
-                    runBlocking {
-                        session.send(
-                            objectMapper.writeValueAsString(
-                                listOf(
-                                    "EVENT",
-                                    subscriptionId,
-                                    eventEntity.toEvent().toJsonObject()
-                                )
-                            ),
-                        )
+                val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(item.getString(0))
+                eventEntity?.let {
+                    val event = it.toEvent()
+                    if (!event.isExpired()) {
+                        runBlocking {
+                            session.send(
+                                objectMapper.writeValueAsString(
+                                    listOf(
+                                        "EVENT",
+                                        subscriptionId,
+                                        event.toJsonObject()
+                                    )
+                                ),
+                            )
+                        }
                     }
                 }
             }

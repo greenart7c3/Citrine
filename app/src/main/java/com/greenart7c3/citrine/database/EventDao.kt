@@ -18,10 +18,6 @@ interface EventDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertTags(tags: List<TagEntity>): List<Long>?
 
-    @Query("SELECT * FROM EventEntity WHERE pk = :pk")
-    @Transaction
-    fun getByPk(pk: String): EventWithTags
-
     @Query("SELECT * FROM EventEntity WHERE id = :id")
     @Transaction
     fun getById(id: String): EventWithTags?
@@ -30,31 +26,32 @@ interface EventDao {
     @Transaction
     fun delete(ids: List<String>)
 
+    @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind AND createdAt < (SELECT MAX(createdAt) FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind)")
+    @Transaction
+    fun deleteOldestByKind(kind: Int, pubkey: String)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     fun insertEventWithTags(dbEvent: EventEntity, dbTags: List<TagEntity>) {
-        insertEvent(dbEvent)?.let { eventPK ->
-            if (eventPK >= 0) {
-                dbTags.forEach {
-                    it.pkEvent = eventPK
-                }
-
-                insertTags(dbTags)
+        insertEvent(dbEvent)?.let {
+            dbTags.forEach {
+                it.pkEvent = dbEvent.id
             }
+
+            insertTags(dbTags)
+
         }
     }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     fun insertEventWithTags(dbEvent: EventWithTags) {
-        insertEvent(dbEvent.event)?.let { eventPK ->
-            if (eventPK >= 0) {
-                dbEvent.tags.forEach {
-                    it.pkEvent = eventPK
-                }
-
-                insertTags(dbEvent.tags)
+        insertEvent(dbEvent.event)?.let {
+            dbEvent.tags.forEach {
+                it.pkEvent = dbEvent.event.id
             }
+
+            insertTags(dbEvent.tags)
         }
     }
 
@@ -62,14 +59,12 @@ interface EventDao {
     @Transaction
     fun insertListOfEventWithTags(dbEvent: List<EventWithTags>) {
         dbEvent.forEach {
-            insertEvent(it.event)?.let { eventPK ->
-                if (eventPK >= 0) {
-                    it.tags.forEach {
-                        it.pkEvent = eventPK
-                    }
-
-                    insertTags(it.tags)
+            insertEvent(it.event)?.let { event ->
+                it.tags.forEach { entity ->
+                    entity.pkEvent = it.event.id
                 }
+
+                insertTags(it.tags)
             }
         }
     }

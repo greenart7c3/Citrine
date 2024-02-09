@@ -109,12 +109,6 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             return
         }
 
-        val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(event.id)
-        if (eventEntity != null) {
-            session.send(CommandResult.duplicated(event).toJson())
-            return
-        }
-
         if (event.isExpired()) {
             session.send(CommandResult.invalid(event, "event expired").toJson())
             return
@@ -122,10 +116,23 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
 
         when {
             event.shouldDelete() -> deleteEvent(event)
-            else -> save(event)
+            event.shouldOverwrite() -> override(event)
+            !event.isEphemeral() -> {
+                val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(event.id)
+                if (eventEntity != null) {
+                    session.send(CommandResult.duplicated(event).toJson())
+                    return
+                }
+                save(event)
+            }
         }
 
         session.send(CommandResult.ok(event).toJson())
+    }
+
+    private fun override(event: Event) {
+        save(event)
+        AppDatabase.getDatabase(context).eventDao().deleteOldestByKind(event.kind, event.pubKey)
     }
 
     private fun save(event: Event) {

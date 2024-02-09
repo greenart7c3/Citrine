@@ -28,7 +28,7 @@ import com.vitorpamplona.quartz.events.EventFactory
     ]
 )
 data class EventEntity(
-    @PrimaryKey(autoGenerate = true) val pk: Long? = null,
+    @PrimaryKey(autoGenerate = false)
     val id: String,
     val pubkey: String,
     val createdAt: Long,
@@ -40,7 +40,7 @@ data class EventEntity(
 data class EventWithTags(
     @Embedded val event: EventEntity,
     @Relation(
-        parentColumn = "pk",
+        parentColumn = "id",
         entityColumn = "pkEvent"
     )
     val tags: List<TagEntity>
@@ -51,7 +51,7 @@ data class EventWithTags(
         ForeignKey(
             entity = EventEntity::class,
             childColumns = ["pkEvent"],
-            parentColumns = ["pk"],
+            parentColumns = ["id"],
             onDelete = CASCADE
         )
     ],
@@ -69,8 +69,7 @@ data class EventWithTags(
 
 data class TagEntity(
     @PrimaryKey(autoGenerate = true) val pk: Long? = null,
-
-    var pkEvent: Long? = null,
+    var pkEvent: String? = null,
     val position: Int,
 
     // Holds 6 columns but can be extended.
