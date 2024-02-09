@@ -26,6 +26,10 @@ interface EventDao {
     @Transaction
     fun getById(id: String): EventWithTags?
 
+    @Query("DELETE FROM EventEntity WHERE id in (:ids)")
+    @Transaction
+    fun delete(ids: List<String>)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     fun insertEventWithTags(dbEvent: EventEntity, dbTags: List<TagEntity>) {

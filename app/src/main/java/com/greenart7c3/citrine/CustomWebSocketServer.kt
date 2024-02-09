@@ -120,9 +120,21 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             return
         }
 
-        AppDatabase.getDatabase(context).eventDao().insertEventWithTags(event.toEventWithTags())
+        when {
+            event.shouldDelete() -> deleteEvent(event)
+            else -> save(event)
+        }
 
         session.send(CommandResult.ok(event).toJson())
+    }
+
+    private fun save(event: Event) {
+        AppDatabase.getDatabase(context).eventDao().insertEventWithTags(event.toEventWithTags())
+    }
+
+    private fun deleteEvent(event: Event) {
+        save(event)
+        AppDatabase.getDatabase(context).eventDao().delete(event.taggedEvents())
     }
 
     private fun startKtorHttpServer(port: Int): ApplicationEngine {
