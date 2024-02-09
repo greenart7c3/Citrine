@@ -2,6 +2,7 @@ package com.greenart7c3.citrine
 
 import EOSE
 import android.content.Context
+import android.util.Log
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
@@ -34,8 +35,13 @@ object EventSubscription {
         )
 
         for (filter in filters) {
-            runBlocking {
-                EventRepository.subscribe(subscriptionId, filter, session, context, objectMapper)
+            try {
+                runBlocking {
+                    EventRepository.subscribe(subscriptionId, filter, session, context, objectMapper)
+                }
+            } catch (e: Exception) {
+                Log.d("error", "Error reading data from database", e)
+                session.send(NoticeResult.invalid("Error reading data from database").toJson())
             }
         }
         session.send(EOSE(subscriptionId).toJson())
