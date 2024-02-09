@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -29,6 +29,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            resValue("string", "app_name", "@string/app_name_release")
+        }
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-DEBUG"
+            resValue("string", "app_name", "@string/app_name_debug")
         }
     }
     compileOptions {
@@ -48,6 +54,14 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("x86", "x86_64", "arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true
         }
     }
 }

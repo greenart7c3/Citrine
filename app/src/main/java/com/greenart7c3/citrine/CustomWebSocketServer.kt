@@ -171,7 +171,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
                             "pubkey": "",
                             "supported_nips": [1,2,4,9,11,50],
                             "software": "https://github.com/greenart7c3/Citrine",
-                            "version": "0.0.1"
+                            "version": "${BuildConfig.VERSION_NAME}"
                         }
                         """
                         call.respondText(json, ContentType.Application.Json)

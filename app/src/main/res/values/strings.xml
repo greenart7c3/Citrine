@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Citrine</string>
+    <string name="app_name_release">Citrine</string>
+    <string name="app_name_debug">Citrine Debug</string>
 </resources>
