@@ -4,8 +4,6 @@ import EOSE
 import android.content.Context
 import android.util.Log
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.toEvent
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.send
 import kotlinx.coroutines.runBlocking

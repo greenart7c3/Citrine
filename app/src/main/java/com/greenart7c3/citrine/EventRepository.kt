@@ -29,7 +29,7 @@ object EventRepository {
         if (filter.ids.isNotEmpty()) {
             whereClause.add(
                 filter.ids.joinToString(" OR ", prefix = "(", postfix = ")") {
-                    "EventEntity.id = '${it}'"
+                    "EventEntity.id = '$it'"
                 }
             )
         }
@@ -37,14 +37,14 @@ object EventRepository {
         if (filter.authors.isNotEmpty()) {
             whereClause.add(
                 filter.authors.joinToString(" OR ", prefix = "(", postfix = ")") {
-                    "EventEntity.pubkey = '${it}'"
+                    "EventEntity.pubkey = '$it'"
                 }
             )
         }
 
         if (filter.searchKeywords.isNotEmpty()) {
             whereClause.add(
-                filter.searchKeywords.joinToString(" AND ", prefix = "(", postfix = ")") { "LOWER(EventEntity.content) LIKE '%${it}%'" }
+                filter.searchKeywords.joinToString(" AND ", prefix = "(", postfix = ")") { "LOWER(EventEntity.content) LIKE '%$it%'" }
             )
         }
 
@@ -75,7 +75,8 @@ object EventRepository {
         }
 
         val cursor = AppDatabase.getDatabase(context).query(query, arrayOf())
-        cursor.use { item -> while (item.moveToNext()) {
+        cursor.use { item ->
+            while (item.moveToNext()) {
                 val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(item.getString(0))
                 eventEntity?.let {
                     val event = it.toEvent()
@@ -88,7 +89,7 @@ object EventRepository {
                                         subscriptionId,
                                         event.toJsonObject()
                                     )
-                                ),
+                                )
                             )
                         }
                     }

@@ -28,7 +28,6 @@ class WebSocketServerService : Service() {
 
     private val brCopy: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-
             val clipboard = getSystemService(
                 applicationContext,
                 ClipboardManager::class.java
@@ -76,7 +75,7 @@ class WebSocketServerService : Service() {
         notificationManager.createNotificationChannel(channel)
 
         val copy = Intent("com.example.ACTION_COPY")
-        val piCopy = PendingIntent.getBroadcast(this, 0, copy,PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val piCopy = PendingIntent.getBroadcast(this, 0, copy, PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val resultIntent = Intent(this, MainActivity::class.java)
 
@@ -84,8 +83,7 @@ class WebSocketServerService : Service() {
             // Add the intent, which inflates the back stack.
             addNextIntentWithParentStack(resultIntent)
             // Get the PendingIntent containing the entire back stack.
-            getPendingIntent(0,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
 
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")

@@ -27,7 +27,6 @@ import io.ktor.websocket.send
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import java.util.zip.Deflater
 
-
 class CustomWebSocketServer(private val port: Int, private val context: Context) {
     private lateinit var server: ApplicationEngine
     private val objectMapper = jacksonObjectMapper()
@@ -63,7 +62,6 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
 
         EventSubscription.subscribe(subscriptionId, filters, session, context, objectMapper)
     }
-
 
     private suspend fun processNewRelayMessage(newMessage: String, session: DefaultWebSocketServerSession) {
         Log.d("message", newMessage)

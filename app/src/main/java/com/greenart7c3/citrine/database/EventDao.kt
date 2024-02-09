@@ -30,7 +30,8 @@ interface EventDao {
     @Transaction
     fun deleteOldestByKind(kind: Int, pubkey: String)
 
-    @Query("""
+    @Query(
+        """
         SELECT EventEntity.id 
           FROM EventEntity EventEntity
          WHERE EventEntity.pubkey = :pubkey 
@@ -51,7 +52,8 @@ interface EventDao {
                         AND TagEntity.col0Name = 'd'
                         AND TagEntity.col1Value = :dTagValue
                     )                 
-        """)
+        """
+    )
     @Transaction
     fun getOldestReplaceable(kind: Int, pubkey: String, dTagValue: String): List<String>
 
@@ -64,7 +66,6 @@ interface EventDao {
             }
 
             insertTags(dbTags)
-
         }
     }
 

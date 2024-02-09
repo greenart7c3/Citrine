@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 
-
 class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher =
         registerForActivityResult(
