@@ -109,7 +109,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             return
         }
 
-        val eventEntity = AppDatabase.getDatabase(context).eventDao().getByEventId(event.id)
+        val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(event.id)
         if (eventEntity != null) {
             session.send(CommandResult.duplicated(event).toJson())
             return

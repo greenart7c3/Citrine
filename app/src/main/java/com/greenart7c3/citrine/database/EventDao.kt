@@ -24,7 +24,7 @@ interface EventDao {
 
     @Query("SELECT * FROM EventEntity WHERE id = :id")
     @Transaction
-    fun getByEventId(id: String): EventWithTags?
+    fun getById(id: String): EventWithTags?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
