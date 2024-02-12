@@ -7,10 +7,6 @@ import com.greenart7c3.citrine.database.AppDatabase
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.send
 import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
 
@@ -67,30 +63,30 @@ object EventSubscription {
             }
             session.send(EOSE(subscriptionId).toJson())
 
-            GlobalScope.launch(Dispatchers.IO) {
-                delay(5000)
-                subscriptions[subscriptionId] = Subscription(
-                    subscriptionId,
-                    session,
-                    filters.map {
-                        val since = it.since?.plus(1) ?: (System.currentTimeMillis() / 1000).toInt()
-                        it.since = since
-                        it
-                    }.toSet()
-                )
-
-                val subscription = subscriptions[subscriptionId]
-                if (subscription != null) {
-                    subscribe(
-                        subscription.id,
-                        subscription.filters,
-                        subscription.session,
-                        appDatabase,
-                        objectMapper,
-                        true
-                    )
-                }
-            }
+//            GlobalScope.launch(Dispatchers.IO) {
+//                delay(5000)
+//                subscriptions[subscriptionId] = Subscription(
+//                    subscriptionId,
+//                    session,
+//                    filters.map {
+//                        val since = it.since?.plus(1) ?: (System.currentTimeMillis() / 1000).toInt()
+//                        it.since = since
+//                        it
+//                    }.toSet()
+//                )
+//
+//                val subscription = subscriptions[subscriptionId]
+//                if (subscription != null) {
+//                    subscribe(
+//                        subscription.id,
+//                        subscription.filters,
+//                        subscription.session,
+//                        appDatabase,
+//                        objectMapper,
+//                        true
+//                    )
+//                }
+//            }
         }
     }
 }
