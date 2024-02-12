@@ -1,0 +1,181 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "3b07bf4ea94274460773626c1fe0957e",
+    "entities": [
+      {
+        "tableName": "EventEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `pubkey` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `kind` INTEGER NOT NULL, `content` TEXT NOT NULL, `sig` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pubkey",
+            "columnName": "pubkey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sig",
+            "columnName": "sig",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "id_is_hash",
+            "unique": true,
+            "columnNames": [
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `id_is_hash` ON `${TABLE_NAME}` (`id`)"
+          },
+          {
+            "name": "most_common_search_is_pubkey_kind",
+            "unique": false,
+            "columnNames": [
+              "pubkey",
+              "kind"
+            ],
+            "orders": [
+              "ASC",
+              "ASC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `most_common_search_is_pubkey_kind` ON `${TABLE_NAME}` (`pubkey` ASC, `kind` ASC)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "TagEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pk` INTEGER PRIMARY KEY AUTOINCREMENT, `pkEvent` TEXT, `position` INTEGER NOT NULL, `col0Name` TEXT, `col1Value` TEXT, `col2Differentiator` TEXT, `col3Amount` TEXT, `col4Plus` TEXT NOT NULL, FOREIGN KEY(`pkEvent`) REFERENCES `EventEntity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "pk",
+            "columnName": "pk",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pkEvent",
+            "columnName": "pkEvent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "col0Name",
+            "columnName": "col0Name",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "col1Value",
+            "columnName": "col1Value",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "col2Differentiator",
+            "columnName": "col2Differentiator",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "col3Amount",
+            "columnName": "col3Amount",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "col4Plus",
+            "columnName": "col4Plus",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "pk"
+          ]
+        },
+        "indices": [
+          {
+            "name": "tags_by_pk_event",
+            "unique": false,
+            "columnNames": [
+              "pkEvent"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `tags_by_pk_event` ON `${TABLE_NAME}` (`pkEvent`)"
+          },
+          {
+            "name": "tags_by_tags_on_person_or_events",
+            "unique": false,
+            "columnNames": [
+              "col0Name",
+              "col1Value"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `tags_by_tags_on_person_or_events` ON `${TABLE_NAME}` (`col0Name`, `col1Value`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "EventEntity",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "pkEvent"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3b07bf4ea94274460773626c1fe0957e')"
+    ]
+  }
+}
