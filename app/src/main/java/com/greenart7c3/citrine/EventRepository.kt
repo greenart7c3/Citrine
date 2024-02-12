@@ -1,6 +1,5 @@
 package com.greenart7c3.citrine
 
-import android.content.Context
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
@@ -13,7 +12,7 @@ object EventRepository {
         subscriptionId: String,
         filter: EventFilter,
         session: DefaultWebSocketServerSession,
-        context: Context,
+        appDatabase: AppDatabase,
         objectMapper: ObjectMapper
     ) {
         val whereClause = mutableListOf<String>()
@@ -74,10 +73,10 @@ object EventRepository {
             query += " LIMIT ${filter.limit}"
         }
 
-        val cursor = AppDatabase.getDatabase(context).query(query, arrayOf())
+        val cursor = appDatabase.query(query, arrayOf())
         cursor.use { item ->
             while (item.moveToNext()) {
-                val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(item.getString(0))
+                val eventEntity = appDatabase.eventDao().getById(item.getString(0))
                 eventEntity?.let {
                     val event = it.toEvent()
                     if (!event.isExpired()) {

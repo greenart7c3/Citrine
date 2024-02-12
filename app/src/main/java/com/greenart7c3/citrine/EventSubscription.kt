@@ -1,9 +1,9 @@
 package com.greenart7c3.citrine
 
 import EOSE
-import android.content.Context
 import android.util.Log
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.greenart7c3.citrine.database.AppDatabase
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.send
 import kotlinx.coroutines.runBlocking
@@ -21,7 +21,7 @@ object EventSubscription {
         subscriptions.remove(subscriptionId)
     }
 
-    suspend fun subscribe(subscriptionId: String, filters: Set<EventFilter>, session: DefaultWebSocketServerSession, context: Context, objectMapper: ObjectMapper) {
+    suspend fun subscribe(subscriptionId: String, filters: Set<EventFilter>, session: DefaultWebSocketServerSession, appDatabase: AppDatabase, objectMapper: ObjectMapper) {
         subscriptions.plus(
             Pair(
                 subscriptionId,
@@ -35,7 +35,7 @@ object EventSubscription {
         for (filter in filters) {
             try {
                 runBlocking {
-                    EventRepository.subscribe(subscriptionId, filter, session, context, objectMapper)
+                    EventRepository.subscribe(subscriptionId, filter, session, appDatabase, objectMapper)
                 }
             } catch (e: Exception) {
                 Log.d("error", "Error reading data from database", e)

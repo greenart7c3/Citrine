@@ -20,6 +20,11 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments.putIfAbsent("room.schemaLocation", "$projectDir/schemas")
+            }
+        }
     }
 
     buildTypes {

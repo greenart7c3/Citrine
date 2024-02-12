@@ -22,6 +22,10 @@ interface EventDao {
     @Transaction
     fun getById(id: String): EventWithTags?
 
+    @Query("SELECT id FROM EventEntity WHERE kind = :kind ORDER BY createdAt DESC")
+    @Transaction
+    fun getByKind(kind: Int): List<String>
+
     @Query("DELETE FROM EventEntity WHERE id in (:ids)")
     @Transaction
     fun delete(ids: List<String>)

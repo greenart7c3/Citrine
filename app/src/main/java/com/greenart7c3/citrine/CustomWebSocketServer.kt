@@ -1,6 +1,5 @@
 package com.greenart7c3.citrine
 
-import android.content.Context
 import android.util.Log
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
@@ -27,7 +26,7 @@ import io.ktor.websocket.send
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import java.util.zip.Deflater
 
-class CustomWebSocketServer(private val port: Int, private val context: Context) {
+class CustomWebSocketServer(private val port: Int, private val appDatabase: AppDatabase) {
     private lateinit var server: ApplicationEngine
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -60,7 +59,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             filter.copy(tags = tags)
         }.toSet()
 
-        EventSubscription.subscribe(subscriptionId, filters, session, context, objectMapper)
+        EventSubscription.subscribe(subscriptionId, filters, session, appDatabase, objectMapper)
     }
 
     private suspend fun processNewRelayMessage(newMessage: String, session: DefaultWebSocketServerSession) {
@@ -107,7 +106,7 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
             event.isParameterizedReplaceable() -> handleParameterizedReplaceable(event)
             event.shouldOverwrite() -> override(event)
             !event.isEphemeral() -> {
-                val eventEntity = AppDatabase.getDatabase(context).eventDao().getById(event.id)
+                val eventEntity = appDatabase.eventDao().getById(event.id)
                 if (eventEntity != null) {
                     session.send(CommandResult.duplicated(event).toJson())
                     return
@@ -121,22 +120,24 @@ class CustomWebSocketServer(private val port: Int, private val context: Context)
 
     private fun handleParameterizedReplaceable(event: Event) {
         save(event)
-        val ids = AppDatabase.getDatabase(context).eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
-        AppDatabase.getDatabase(context).eventDao().delete(ids)
+        val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
+        appDatabase.eventDao().delete(ids)
     }
 
     private fun override(event: Event) {
         save(event)
-        AppDatabase.getDatabase(context).eventDao().deleteOldestByKind(event.kind, event.pubKey)
+        val ids = appDatabase.eventDao().getByKind(event.kind).drop(5)
+        if (ids.isEmpty()) return
+        appDatabase.eventDao().delete(ids)
     }
 
     private fun save(event: Event) {
-        AppDatabase.getDatabase(context).eventDao().insertEventWithTags(event.toEventWithTags())
+        appDatabase.eventDao().insertEventWithTags(event.toEventWithTags())
     }
 
     private fun deleteEvent(event: Event) {
         save(event)
-        AppDatabase.getDatabase(context).eventDao().delete(event.taggedEvents())
+        appDatabase.eventDao().delete(event.taggedEvents())
     }
 
     private fun startKtorHttpServer(port: Int): ApplicationEngine {

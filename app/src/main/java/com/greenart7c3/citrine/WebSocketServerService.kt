@@ -17,6 +17,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat.getSystemService
+import com.greenart7c3.citrine.database.AppDatabase
 
 class WebSocketServerService : Service() {
     lateinit var webSocketServer: CustomWebSocketServer
@@ -50,7 +51,10 @@ class WebSocketServerService : Service() {
 
         // Start the WebSocket server
         val port = if (BuildConfig.DEBUG) defaultPortDebug else defaultPort
-        webSocketServer = CustomWebSocketServer(port, this@WebSocketServerService)
+        webSocketServer = CustomWebSocketServer(
+            port,
+            AppDatabase.getDatabase(this@WebSocketServerService)
+        )
         webSocketServer.start()
 
         // Create a notification to keep the service in the foreground
