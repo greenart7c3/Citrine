@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -38,6 +39,7 @@ class WebSocketServerService : Service() {
         }
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onCreate() {
         super.onCreate()
 
@@ -62,10 +64,9 @@ class WebSocketServerService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         unregisterReceiver(brCopy)
-        // Stop the WebSocket server when the service is destroyed
         webSocketServer.stop()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder {

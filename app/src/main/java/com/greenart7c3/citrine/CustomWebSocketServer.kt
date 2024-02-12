@@ -27,20 +27,25 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import java.util.zip.Deflater
 
 class CustomWebSocketServer(private val port: Int, private val appDatabase: AppDatabase) {
-    private lateinit var server: ApplicationEngine
+    var server: ApplicationEngine? = null
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-    fun port(): Int {
-        return server.environment.connectors.first().port
+    fun port(): Int? {
+        return server?.environment?.connectors?.first()?.port
     }
 
     fun start() {
-        server = startKtorHttpServer(port)
+        if (server == null) {
+            server = startKtorHttpServer(port)
+        } else {
+            server!!.start(false)
+        }
     }
 
     fun stop() {
-        server.stop(1000)
+        server!!.stop(1000)
+        server = null
     }
 
     private suspend fun subscribe(

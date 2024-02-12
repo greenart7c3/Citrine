@@ -8,7 +8,7 @@ data class EventFilter(
     val authors: Set<String> = emptySet(),
     val kinds: Set<Int> = emptySet(),
     val tags: Map<String, Set<String>> = emptyMap(),
-    val since: Int? = null,
+    var since: Int? = null,
     val until: Int? = null,
     val limit: Int = 10_000,
     private val search: String? = null
@@ -17,7 +17,7 @@ data class EventFilter(
     val searchKeywords: Set<String> = search?.let { tokenizeString(search) } ?: emptySet()
 
     override fun test(event: Event): Boolean {
-        if (since != null && event.createdAt < since) {
+        if (since != null && event.createdAt < since!!) {
             return false
         }
 

@@ -90,6 +90,9 @@ object EventRepository {
                                     )
                                 )
                             )
+                            if (item.isLast) {
+                                filter.since = event.createdAt.plus(1).toInt()
+                            }
                         }
                     }
                 }
