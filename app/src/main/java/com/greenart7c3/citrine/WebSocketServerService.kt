@@ -103,7 +103,7 @@ class WebSocketServerService : Service() {
     }
 
     companion object {
-        const val defaultPort = 7777
+        const val defaultPort = 4869
         const val defaultPortDebug = 7778
     }
 }
