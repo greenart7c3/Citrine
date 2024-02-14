@@ -64,6 +64,7 @@ class WebSocketServerService : Service() {
     }
 
     override fun onDestroy() {
+        EventSubscription.closeAll()
         unregisterReceiver(brCopy)
         webSocketServer.stop()
         super.onDestroy()

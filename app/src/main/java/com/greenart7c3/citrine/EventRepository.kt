@@ -1,19 +1,13 @@
 package com.greenart7c3.citrine
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
-import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.send
 import kotlinx.coroutines.runBlocking
 
 object EventRepository {
     suspend fun subscribe(
-        subscriptionId: String,
-        filter: EventFilter,
-        session: DefaultWebSocketServerSession,
-        appDatabase: AppDatabase,
-        objectMapper: ObjectMapper
+        subscription: Subscription,
+        filter: EventFilter
     ) {
         val whereClause = mutableListOf<String>()
 
@@ -61,11 +55,17 @@ object EventRepository {
 
         val predicatesSql = whereClause.joinToString(" AND ", prefix = "WHERE ")
 
+        var notInFilter = ""
+        if (subscription.eventIdsSent.isNotEmpty()) {
+            notInFilter = "AND EventEntity.id NOT IN ${subscription.eventIdsSent.joinToString(prefix = "(", postfix = ")") { "'$it'" }}"
+        }
+
         var query = """
             SELECT EventEntity.id
               FROM EventEntity EventEntity
               LEFT JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
               $predicatesSql 
+              $notInFilter
               ORDER BY EventEntity.createdAt DESC
         """
 
@@ -73,26 +73,24 @@ object EventRepository {
             query += " LIMIT ${filter.limit}"
         }
 
-        val cursor = appDatabase.query(query, arrayOf())
+        val cursor = subscription.appDatabase.query(query, arrayOf())
         cursor.use { item ->
             while (item.moveToNext()) {
-                val eventEntity = appDatabase.eventDao().getById(item.getString(0))
+                val eventEntity = subscription.appDatabase.eventDao().getById(item.getString(0))
                 eventEntity?.let {
                     val event = it.toEvent()
                     if (!event.isExpired()) {
+                        subscription.eventIdsSent = subscription.eventIdsSent.plus(event.id).toMutableList()
                         runBlocking {
-                            session.send(
-                                objectMapper.writeValueAsString(
+                            subscription.session.send(
+                                subscription.objectMapper.writeValueAsString(
                                     listOf(
                                         "EVENT",
-                                        subscriptionId,
+                                        subscription.id,
                                         event.toJsonObject()
                                     )
                                 )
                             )
-                            if (item.isLast) {
-                                filter.since = event.createdAt.plus(1).toInt()
-                            }
                         }
                     }
                 }

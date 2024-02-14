@@ -1,92 +1,59 @@
 package com.greenart7c3.citrine
 
-import EOSE
 import android.util.Log
+import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
+import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.server.websocket.DefaultWebSocketServerSession
-import io.ktor.websocket.send
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.runBlocking
-import java.util.concurrent.ConcurrentHashMap
 
 data class Subscription(
     val id: String,
     val session: DefaultWebSocketServerSession,
-    val filters: Set<EventFilter>
+    val filters: Set<EventFilter>,
+    val appDatabase: AppDatabase,
+    val objectMapper: ObjectMapper,
+    var eventIdsSent: MutableList<String> = mutableListOf(),
+    val initialTime: Long = TimeUtils.now()
 )
 
 object EventSubscription {
-    private val subscriptions: MutableMap<String, Subscription> = ConcurrentHashMap()
+    private val subscriptions = LruCache<String, SubscriptionManager>(30)
 
-    fun close(subscriptionId: String) {
-        subscriptions.remove(subscriptionId)
+    fun closeAll() {
+        subscriptions.snapshot().keys.forEach {
+            close(it)
+        }
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
-    suspend fun subscribe(
+    fun close(subscriptionId: String) {
+        subscriptions[subscriptionId]?.finalize()
+        subscriptions.remove(subscriptionId)
+        Log.d("subscriptions", subscriptions.size().toString())
+    }
+
+    fun subscribe(
         subscriptionId: String,
         filters: Set<EventFilter>,
         session: DefaultWebSocketServerSession,
         appDatabase: AppDatabase,
-        objectMapper: ObjectMapper,
-        self: Boolean = false
+        objectMapper: ObjectMapper
     ) {
-        if (self && filters != subscriptions[subscriptionId]?.filters) {
-            Log.d("filters", "closed")
-            return
-        } else {
+        if (filters != subscriptions[subscriptionId]?.subscription?.filters) {
+            Log.d("subscriptions", "new subscription $subscriptionId")
             close(subscriptionId)
-            subscriptions[subscriptionId] = Subscription(
+            subscriptions.put(
                 subscriptionId,
-                session,
-                filters
-            )
-
-            for (filter in filters) {
-                try {
-                    runBlocking {
-                        EventRepository.subscribe(
-                            subscriptionId,
-                            filter,
-                            session,
-                            appDatabase,
-                            objectMapper
-                        )
-                    }
-                } catch (e: Exception) {
-                    Log.d("error", "Error reading data from database", e)
-                    session.send(
-                        NoticeResult.invalid("Error reading data from database").toJson()
+                SubscriptionManager(
+                    Subscription(
+                        subscriptionId,
+                        session,
+                        filters,
+                        appDatabase,
+                        objectMapper
                     )
-                }
-            }
-            session.send(EOSE(subscriptionId).toJson())
-
-//            GlobalScope.launch(Dispatchers.IO) {
-//                delay(5000)
-//                subscriptions[subscriptionId] = Subscription(
-//                    subscriptionId,
-//                    session,
-//                    filters.map {
-//                        val since = it.since?.plus(1) ?: (System.currentTimeMillis() / 1000).toInt()
-//                        it.since = since
-//                        it
-//                    }.toSet()
-//                )
-//
-//                val subscription = subscriptions[subscriptionId]
-//                if (subscription != null) {
-//                    subscribe(
-//                        subscription.id,
-//                        subscription.filters,
-//                        subscription.session,
-//                        appDatabase,
-//                        objectMapper,
-//                        true
-//                    )
-//                }
-//            }
+                )
+            )
         }
     }
 }
