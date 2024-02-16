@@ -76,11 +76,7 @@ class WebSocketServerService : Service() {
 
     private fun createNotification(): Notification {
         val channelId = "WebSocketServerServiceChannel"
-        val channel = NotificationChannel(
-            channelId,
-            "WebSocket Server",
-            NotificationManager.IMPORTANCE_UNSPECIFIED
-        )
+        val channel = NotificationChannel(channelId, "WebSocket Server", NotificationManager.IMPORTANCE_DEFAULT)
         channel.setSound(null, null)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
@@ -100,8 +96,7 @@ class WebSocketServerService : Service() {
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")
             .setContentTitle("Relay running at ws://localhost:${webSocketServer.port()}")
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .addAction(R.drawable.ic_launcher_background, "Copy Address", piCopy)
             .setContentIntent(resultPendingIntent)
 
