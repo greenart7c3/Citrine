@@ -51,12 +51,12 @@ class SubscriptionManager(val subscription: Subscription) {
                         if (e is CancellationException) throw e
 
                         Log.d("error", "Error reading data from database", e)
-                        subscription.session.send(
+                        subscription.connection.session.send(
                             NoticeResult.invalid("Error reading data from database").toJson()
                         )
                     }
                 }
-                subscription.session.send(EOSE(subscription.id).toJson())
+                subscription.connection.session.send(EOSE(subscription.id).toJson())
             }
             runBlocking { currentJob?.join() }
         }

@@ -82,7 +82,7 @@ object EventRepository {
                     if (!event.isExpired()) {
                         subscription.eventIdsSent = subscription.eventIdsSent.plus(event.id).toMutableList()
                         runBlocking {
-                            subscription.session.send(
+                            subscription.connection.session.send(
                                 subscription.objectMapper.writeValueAsString(
                                     listOf(
                                         "EVENT",

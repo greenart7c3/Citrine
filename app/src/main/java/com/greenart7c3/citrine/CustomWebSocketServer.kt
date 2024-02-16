@@ -16,7 +16,6 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
@@ -24,6 +23,7 @@ import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import java.util.Collections
 import java.util.zip.Deflater
 
 class CustomWebSocketServer(private val port: Int, private val appDatabase: AppDatabase) {
@@ -51,7 +51,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
     private suspend fun subscribe(
         subscriptionId: String,
         filterNodes: List<JsonNode>,
-        session: DefaultWebSocketServerSession
+        connection: Connection
     ) {
         val filters = filterNodes.map { jsonNode ->
             val tags = jsonNode.fields().asSequence()
@@ -64,45 +64,45 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
             filter.copy(tags = tags)
         }.toSet()
 
-        EventSubscription.subscribe(subscriptionId, filters, session, appDatabase, objectMapper)
+        EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper)
     }
 
-    private suspend fun processNewRelayMessage(newMessage: String, session: DefaultWebSocketServerSession) {
+    private suspend fun processNewRelayMessage(newMessage: String, connection: Connection) {
         Log.d("message", newMessage)
         val msgArray = Event.mapper.readTree(newMessage)
         when (val type = msgArray.get(0).asText()) {
             "REQ" -> {
                 val subscriptionId = msgArray.get(1).asText()
-                subscribe(subscriptionId, msgArray.drop(2), session)
+                subscribe(subscriptionId, msgArray.drop(2), connection)
             }
             "EVENT" -> {
                 Log.d("EVENT", newMessage)
-                processEvent(msgArray.get(1), session)
+                processEvent(msgArray.get(1), connection)
             }
             "CLOSE" -> {
                 EventSubscription.close(msgArray.get(1).asText())
             }
             "PING" -> {
-                session.send(NoticeResult("PONG").toJson())
+                connection.session.send(NoticeResult("PONG").toJson())
             }
             else -> {
                 val errorMessage = NoticeResult.invalid("unknown message type $type").toJson()
                 Log.d("message", errorMessage)
-                session.send(errorMessage)
+                connection.session.send(errorMessage)
             }
         }
     }
 
-    private suspend fun processEvent(eventNode: JsonNode, session: DefaultWebSocketServerSession) {
+    private suspend fun processEvent(eventNode: JsonNode, connection: Connection) {
         val event = objectMapper.treeToValue(eventNode, Event::class.java)
 
         if (!event.hasVerifiedSignature()) {
-            session.send(CommandResult.invalid(event, "event signature verification failed").toJson())
+            connection.session.send(CommandResult.invalid(event, "event signature verification failed").toJson())
             return
         }
 
         if (event.isExpired()) {
-            session.send(CommandResult.invalid(event, "event expired").toJson())
+            connection.session.send(CommandResult.invalid(event, "event expired").toJson())
             return
         }
 
@@ -113,14 +113,14 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
             !event.isEphemeral() -> {
                 val eventEntity = appDatabase.eventDao().getById(event.id)
                 if (eventEntity != null) {
-                    session.send(CommandResult.duplicated(event).toJson())
+                    connection.session.send(CommandResult.duplicated(event).toJson())
                     return
                 }
                 save(event)
             }
         }
 
-        session.send(CommandResult.ok(event).toJson())
+        connection.session.send(CommandResult.ok(event).toJson())
     }
 
     private fun handleParameterizedReplaceable(event: Event) {
@@ -160,12 +160,14 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
                         /**
                          * Prevent compressing small outgoing frames.
                          */
-                        compressIfBiggerThan(bytes = 4 * 1024)
+                        compressIfBiggerThan(bytes = 0)
                     }
                 }
             }
 
             routing {
+                val connections = Collections.synchronizedSet<Connection?>(LinkedHashSet())
+
                 // Handle HTTP GET requests
                 get("/") {
                     if (call.request.headers["Accept"] == "application/nostr+json") {
@@ -188,12 +190,14 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
 
                 // WebSocket endpoint
                 webSocket("/") {
+                    val thisConnection = Connection(this)
+                    connections += thisConnection
                     try {
                         for (frame in incoming) {
                             when (frame) {
                                 is Frame.Text -> {
                                     val message = frame.readText()
-                                    processNewRelayMessage(message, this)
+                                    processNewRelayMessage(message, thisConnection)
                                 }
                                 else -> {
                                     Log.d("error", frame.toString())
@@ -202,8 +206,15 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
                             }
                         }
                     } catch (e: ClosedReceiveChannelException) {
-                        Log.d("error", e.toString())
-                        send(NoticeResult.invalid("Error processing message").toJson())
+                        Log.d("error", e.toString(), e)
+                        send(NoticeResult.invalid(closeReason.await()?.message ?: "").toJson())
+                    } catch (e: Throwable) {
+                        Log.d("error", e.toString(), e)
+                        send(NoticeResult.invalid(closeReason.await()?.message ?: "").toJson())
+                    } finally {
+                        Log.d("connection", "Removing ${thisConnection.name}!")
+                        thisConnection.finalize()
+                        connections -= thisConnection
                     }
                 }
             }

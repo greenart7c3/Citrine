@@ -5,11 +5,10 @@ import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
 import com.vitorpamplona.quartz.utils.TimeUtils
-import io.ktor.server.websocket.DefaultWebSocketServerSession
 
 data class Subscription(
     val id: String,
-    val session: DefaultWebSocketServerSession,
+    val connection: Connection,
     val filters: Set<EventFilter>,
     val appDatabase: AppDatabase,
     val objectMapper: ObjectMapper,
@@ -19,6 +18,16 @@ data class Subscription(
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(30)
+
+    fun closeAll(connectionName: String) {
+        Log.d("connection", "finalizing subscriptions from $connectionName")
+        subscriptions.snapshot().keys.forEach {
+            if (subscriptions[it].subscription.connection.name == connectionName) {
+                Log.d("connection", "closing subscription $it")
+                close(it)
+            }
+        }
+    }
 
     fun closeAll() {
         subscriptions.snapshot().keys.forEach {
@@ -35,7 +44,7 @@ object EventSubscription {
     fun subscribe(
         subscriptionId: String,
         filters: Set<EventFilter>,
-        session: DefaultWebSocketServerSession,
+        connection: Connection,
         appDatabase: AppDatabase,
         objectMapper: ObjectMapper
     ) {
@@ -47,7 +56,7 @@ object EventSubscription {
                 SubscriptionManager(
                     Subscription(
                         subscriptionId,
-                        session,
+                        connection,
                         filters,
                         appDatabase,
                         objectMapper
