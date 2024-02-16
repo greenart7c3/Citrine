@@ -2,7 +2,6 @@ package com.greenart7c3.citrine
 
 import EOSE
 import android.util.Log
-import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.websocket.send
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -30,11 +29,12 @@ class SubscriptionManager(val subscription: Subscription) {
             15000
         ) {
             Log.d("timer", "executed timer id: ${subscription.id}")
+            Log.d("timer", "isClosedForSend: ${subscription.connection.session.outgoing.isClosedForSend}")
             currentJob?.cancel()
-            val oneHour = 60 * 60
-            if ((TimeUtils.now() - subscription.initialTime) >= oneHour) {
+
+            if (subscription.connection.session.outgoing.isClosedForSend) {
                 timer.cancel()
-                Log.d("timer", "cancelling subscription after 1 hour id: ${subscription.id}")
+                Log.d("timer", "cancelling subscription isClosedForSend: ${subscription.id}")
                 return@schedule
             }
 
