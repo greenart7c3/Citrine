@@ -8,11 +8,15 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.httpMethod
+import io.ktor.server.response.appendIfAbsent
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -170,7 +174,13 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
 
                 // Handle HTTP GET requests
                 get("/") {
-                    if (call.request.headers["Accept"] == "application/nostr+json") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Credentials", "true")
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Methods", "*")
+                    call.response.headers.appendIfAbsent("Access-Control-Expose-Headers", "*")
+                    if (call.request.httpMethod == HttpMethod.Post) {
+                        call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
+                    } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         val json = """
                         {
                             "id": "ws://localhost:7777",

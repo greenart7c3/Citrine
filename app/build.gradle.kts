@@ -94,7 +94,7 @@ dependencies {
     implementation("io.ktor:ktor-server-cio:2.3.8")
     implementation("io.ktor:ktor-server-websockets:2.3.8")
     implementation("io.ktor:ktor-websockets:2.3.8")
-    implementation("com.github.vitorpamplona.amethyst:quartz:v0.83.9") {
+    implementation("com.github.vitorpamplona.amethyst:quartz:v0.84.3") {
         exclude("net.java.dev.jna")
     }
     implementation("net.java.dev.jna:jna:5.14.0@aar")
