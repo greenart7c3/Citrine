@@ -26,8 +26,9 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.DelicateCoroutinesApi
 import java.util.Collections
+import java.util.concurrent.CancellationException
 import java.util.zip.Deflater
 
 class CustomWebSocketServer(private val port: Int, private val appDatabase: AppDatabase) {
@@ -149,6 +150,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
         appDatabase.eventDao().delete(event.taggedEvents())
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     private fun startKtorHttpServer(port: Int): ApplicationEngine {
         return embeddedServer(CIO, port = port) {
             install(WebSockets) {
@@ -215,12 +217,16 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
                                 }
                             }
                         }
-                    } catch (e: ClosedReceiveChannelException) {
-                        Log.d("error", e.toString(), e)
-                        send(NoticeResult.invalid(closeReason.await()?.message ?: "").toJson())
                     } catch (e: Throwable) {
+                        if (e is CancellationException) throw e
                         Log.d("error", e.toString(), e)
-                        send(NoticeResult.invalid(closeReason.await()?.message ?: "").toJson())
+                        try {
+                            if (!thisConnection.session.outgoing.isClosedForSend) {
+                                send(NoticeResult.invalid(closeReason.await()?.message ?: "").toJson())
+                            }
+                        } catch (e: Exception) {
+                            Log.d("error", e.toString(), e)
+                        }
                     } finally {
                         Log.d("connection", "Removing ${thisConnection.name}!")
                         thisConnection.finalize()

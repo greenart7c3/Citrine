@@ -33,7 +33,7 @@ class SubscriptionManager(val subscription: Subscription) {
             currentJob?.cancel()
 
             if (subscription.connection.session.outgoing.isClosedForSend) {
-                timer.cancel()
+                EventSubscription.close(subscription.id)
                 Log.d("timer", "cancelling subscription isClosedForSend: ${subscription.id}")
                 return@schedule
             }
