@@ -1,4 +1,12 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
+buildscript {
+    extra.apply {
+        set("room_version", "2.6.1")
+        set("ktor_version", "2.3.8")
+        set("compose_ui_version", "1.6.2")
+    }
+}
+
 plugins {
     id("com.android.application") version "8.2.2" apply false
     id("org.jetbrains.kotlin.android") version "1.9.22" apply false
