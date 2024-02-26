@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.relays.Relay
 import com.greenart7c3.citrine.toDateString
 import com.greenart7c3.citrine.ui.CloseButton
 import com.vitorpamplona.quartz.encoders.bechToBytes
@@ -42,6 +43,7 @@ import com.vitorpamplona.quartz.events.ContactListEvent
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -195,7 +197,18 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                 event.tags,
                                                 signer
                                             ) { signedEvent ->
-                                                Log.d("event", signedEvent.toJson())
+                                                relays.forEach { relay ->
+                                                    if (relay.value.write) {
+                                                        val mRelay = Relay(relay.key)
+                                                        mRelay.connectAndRun { localRelay ->
+                                                            localRelay.send(signedEvent)
+                                                            coroutineScope.launch(Dispatchers.IO) {
+                                                                delay(1000)
+                                                                localRelay.disconnect()
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         },
                                         modifier = Modifier.padding(

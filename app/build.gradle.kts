@@ -103,4 +103,5 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     annotationProcessor("androidx.room:room-compiler:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
+    implementation("com.squareup.okhttp3:okhttp:5.0.0-alpha.12")
 }
