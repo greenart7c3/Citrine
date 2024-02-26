@@ -22,6 +22,10 @@ interface EventDao {
     @Transaction
     fun getById(id: String): EventWithTags?
 
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC LIMIT 5")
+    @Transaction
+    fun getContactLists(pubkey: String): List<EventWithTags>
+
     @Query("SELECT id FROM EventEntity WHERE kind = :kind ORDER BY createdAt DESC")
     @Transaction
     fun getByKind(kind: Int): List<String>
@@ -29,6 +33,10 @@ interface EventDao {
     @Query("DELETE FROM EventEntity WHERE id in (:ids)")
     @Transaction
     fun delete(ids: List<String>)
+
+    @Query("DELETE FROM TagEntity WHERE pkEvent = :id")
+    @Transaction
+    fun deletetags(id: String)
 
     @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind AND createdAt < (SELECT MAX(createdAt) FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind)")
     @Transaction
@@ -63,39 +71,14 @@ interface EventDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
-    fun insertEventWithTags(dbEvent: EventEntity, dbTags: List<TagEntity>) {
-        insertEvent(dbEvent)?.let {
-            dbTags.forEach {
-                it.pkEvent = dbEvent.id
-            }
-
-            insertTags(dbTags)
-        }
-    }
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    @Transaction
     fun insertEventWithTags(dbEvent: EventWithTags) {
+        deletetags(dbEvent.event.id)
         insertEvent(dbEvent.event)?.let {
             dbEvent.tags.forEach {
                 it.pkEvent = dbEvent.event.id
             }
 
             insertTags(dbEvent.tags)
-        }
-    }
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    @Transaction
-    fun insertListOfEventWithTags(dbEvent: List<EventWithTags>) {
-        dbEvent.forEach {
-            insertEvent(it.event)?.let { event ->
-                it.tags.forEach { entity ->
-                    entity.pkEvent = it.event.id
-                }
-
-                insertTags(it.tags)
-            }
         }
     }
 }
