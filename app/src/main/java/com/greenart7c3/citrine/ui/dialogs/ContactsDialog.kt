@@ -35,7 +35,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.relays.Client
-import com.greenart7c3.citrine.relays.Relay
 import com.greenart7c3.citrine.toDateString
 import com.greenart7c3.citrine.ui.CloseButton
 import com.vitorpamplona.quartz.encoders.bechToBytes
@@ -44,7 +43,6 @@ import com.vitorpamplona.quartz.events.ContactListEvent
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 

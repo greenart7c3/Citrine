@@ -91,7 +91,7 @@ object HttpClientManager {
             val requestWithUserAgent: Request =
                 originalRequest
                     .newBuilder()
-                    .header("User-Agent", "Amethyst/${BuildConfig.VERSION_NAME}")
+                    .header("User-Agent", "Citrine/${BuildConfig.VERSION_NAME}")
                     .build()
             return chain.proceed(requestWithUserAgent)
         }
