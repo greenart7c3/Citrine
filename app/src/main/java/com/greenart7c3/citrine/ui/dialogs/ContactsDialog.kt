@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.relays.Client
 import com.greenart7c3.citrine.relays.Relay
 import com.greenart7c3.citrine.toDateString
 import com.greenart7c3.citrine.ui.CloseButton
@@ -199,16 +200,10 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                             ) { signedEvent ->
                                                 relays.forEach { relay ->
                                                     if (relay.value.write) {
-                                                        val mRelay = Relay(relay.key)
-                                                        mRelay.connectAndRun { localRelay ->
-                                                            localRelay.send(signedEvent)
-                                                            coroutineScope.launch(Dispatchers.IO) {
-                                                                delay(1000)
-                                                                localRelay.disconnect()
-                                                            }
-                                                        }
+                                                        Client.send(signedEvent, relay = relay.key)
                                                     }
                                                 }
+                                                onClose()
                                             }
                                         },
                                         modifier = Modifier.padding(
