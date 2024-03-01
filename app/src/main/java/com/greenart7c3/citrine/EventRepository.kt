@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine
 
 import com.greenart7c3.citrine.database.toEvent
+import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.websocket.send
 import kotlinx.coroutines.runBlocking
 
@@ -11,8 +12,12 @@ object EventRepository {
     ) {
         val whereClause = mutableListOf<String>()
 
-        if (filter.since != null) {
-            whereClause.add("EventEntity.createdAt >= ${filter.since}")
+        if (subscription.lastExecuted != null) {
+            whereClause.add("EventEntity.createdAt >= ${subscription.lastExecuted}")
+        } else {
+            if (filter.since != null) {
+                whereClause.add("EventEntity.createdAt >= ${filter.since}")
+            }
         }
 
         if (filter.until != null) {
@@ -55,17 +60,11 @@ object EventRepository {
 
         val predicatesSql = whereClause.joinToString(" AND ", prefix = "WHERE ")
 
-        var notInFilter = ""
-        if (subscription.eventIdsSent.isNotEmpty()) {
-            notInFilter = "AND EventEntity.id NOT IN ${subscription.eventIdsSent.joinToString(prefix = "(", postfix = ")") { "'$it'" }}"
-        }
-
         var query = """
             SELECT EventEntity.id
               FROM EventEntity EventEntity
               LEFT JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
               $predicatesSql 
-              $notInFilter
               ORDER BY EventEntity.createdAt DESC
         """
 
@@ -74,13 +73,16 @@ object EventRepository {
         }
 
         val cursor = subscription.appDatabase.query(query, arrayOf())
+        if (cursor.count > 0) {
+            subscription.lastExecuted = TimeUtils.now()
+        }
+
         cursor.use { item ->
             while (item.moveToNext()) {
                 val eventEntity = subscription.appDatabase.eventDao().getById(item.getString(0))
                 eventEntity?.let {
                     val event = it.toEvent()
                     if (!event.isExpired()) {
-                        subscription.eventIdsSent = subscription.eventIdsSent.plus(event.id).toMutableList()
                         runBlocking {
                             subscription.connection.session.send(
                                 subscription.objectMapper.writeValueAsString(

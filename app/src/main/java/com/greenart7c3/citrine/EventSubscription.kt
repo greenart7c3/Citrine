@@ -4,7 +4,6 @@ import android.util.Log
 import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
-import com.vitorpamplona.quartz.utils.TimeUtils
 
 data class Subscription(
     val id: String,
@@ -12,8 +11,7 @@ data class Subscription(
     val filters: Set<EventFilter>,
     val appDatabase: AppDatabase,
     val objectMapper: ObjectMapper,
-    var eventIdsSent: MutableList<String> = mutableListOf(),
-    val initialTime: Long = TimeUtils.now()
+    var lastExecuted: Long?
 )
 
 object EventSubscription {
@@ -48,21 +46,25 @@ object EventSubscription {
         appDatabase: AppDatabase,
         objectMapper: ObjectMapper
     ) {
-        if (filters != subscriptions[subscriptionId]?.subscription?.filters) {
-            Log.d("subscriptions", "new subscription $subscriptionId")
-            close(subscriptionId)
-            subscriptions.put(
-                subscriptionId,
-                SubscriptionManager(
-                    Subscription(
-                        subscriptionId,
-                        connection,
-                        filters,
-                        appDatabase,
-                        objectMapper
-                    )
+        if (subscriptions[subscriptionId] != null && filters == subscriptions[subscriptionId]?.subscription?.filters) {
+            Log.d("filters", "same filters $subscriptionId")
+            return
+        }
+
+        Log.d("subscriptions", "new subscription $subscriptionId")
+        close(subscriptionId)
+        subscriptions.put(
+            subscriptionId,
+            SubscriptionManager(
+                Subscription(
+                    subscriptionId,
+                    connection,
+                    filters,
+                    appDatabase,
+                    objectMapper,
+                    null
                 )
             )
-        }
+        )
     }
 }
