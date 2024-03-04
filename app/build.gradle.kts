@@ -95,7 +95,9 @@ dependencies {
     implementation(libs.quartz) {
         exclude("net.java.dev.jna")
     }
-    implementation(libs.jna)
+    implementation(libs.jna) {
+        artifact { type = "aar" }
+    }
     implementation(libs.androidx.room.runtime)
     annotationProcessor(libs.androidx.room.compiler)
     ksp(libs.room.compiler)
