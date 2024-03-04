@@ -152,7 +152,11 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun startKtorHttpServer(port: Int): ApplicationEngine {
-        return embeddedServer(CIO, port = port) {
+        return embeddedServer(
+            CIO,
+            port = port,
+            host = "127.0.0.1"
+        ) {
             install(WebSockets) {
                 pingPeriodMillis = 1000L
                 timeoutMillis = 300000L
@@ -180,7 +184,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Credentials", "true")
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Methods", "*")
                     call.response.headers.appendIfAbsent("Access-Control-Expose-Headers", "*")
-                    if (call.request.httpMethod == HttpMethod.Post) {
+                    if (call.request.httpMethod == HttpMethod.Options) {
                         call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         val json = """
