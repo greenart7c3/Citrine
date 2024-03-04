@@ -1,0 +1,50 @@
+[versions]
+activityCompose = "1.8.2"
+composeBom = "2024.02.01"
+composeUiVersion = "1.6.2"
+coreKtx = "1.12.0"
+espressoCore = "3.5.1"
+jna = "5.14.0"
+junitVersion = "1.1.5"
+junit = "4.13.2"
+kotlinxSerializationJson = "1.4.1"
+kotlinxCoroutinesCore = "1.7.3"
+ktorServer = "2.3.8"
+lifecycleRuntimeKtx = "2.7.0"
+navigationCompose = "2.7.7"
+okhttp = "5.0.0-alpha.12"
+room = "2.6.1"
+workRuntimeKtx = "2.9.0"
+material3 = "1.2.0"
+quartz = "main-SNAPSHOT"
+
+[libraries]
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espressoCore" }
+androidx-junit = { module = "androidx.test.ext:junit", version.ref = "junitVersion" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+androidx-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-ui = { module = "androidx.compose.ui:ui", version.ref = "composeUiVersion" }
+androidx-ui-graphics = { module = "androidx.compose.ui:ui-graphics", version.ref = "composeUiVersion" }
+androidx-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "composeUiVersion" }
+androidx-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "composeUiVersion" }
+androidx-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "composeUiVersion" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+junit = { module = "junit:junit", version.ref = "junit" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
+ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktorServer" }
+ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktorServer" }
+ktor-websockets = { module = "io.ktor:ktor-websockets", version.ref = "ktorServer" }
+ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktorServer" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+quartz = { module = "com.github.vitorpamplona.amethyst:quartz", version.ref = "quartz" }
+
+[plugins]
