@@ -7,7 +7,6 @@ espressoCore = "3.5.1"
 jna = "5.14.0"
 junitVersion = "1.1.5"
 junit = "4.13.2"
-kotlinxSerializationJson = "1.4.1"
 kotlinxCoroutinesCore = "1.7.3"
 ktorServer = "2.3.8"
 lifecycleRuntimeKtx = "2.7.0"
@@ -16,7 +15,7 @@ okhttp = "5.0.0-alpha.12"
 room = "2.6.1"
 workRuntimeKtx = "2.9.0"
 material3 = "1.2.0"
-quartz = "main-SNAPSHOT"
+quartz = "v0.85.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -37,7 +36,6 @@ androidx-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 junit = { module = "junit:junit", version.ref = "junit" }
-kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
 ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktorServer" }
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktorServer" }
