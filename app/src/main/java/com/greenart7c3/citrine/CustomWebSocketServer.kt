@@ -189,7 +189,6 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         val json = """
                         {
-                            "id": "ws://localhost:7777",
                             "name": "Citrine",
                             "description": "A Nostr relay in you phone",
                             "pubkey": "",
