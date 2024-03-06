@@ -1,4 +1,4 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.service
 
 import android.content.BroadcastReceiver
 import android.content.Context

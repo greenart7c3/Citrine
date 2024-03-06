@@ -35,8 +35,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.relays.Client
-import com.greenart7c3.citrine.toDateString
 import com.greenart7c3.citrine.ui.CloseButton
+import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.quartz.encoders.bechToBytes
 import com.vitorpamplona.quartz.encoders.toHexKey
 import com.vitorpamplona.quartz.events.ContactListEvent

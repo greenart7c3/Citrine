@@ -1,11 +1,16 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.server
 
 import android.util.Log
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
+import com.greenart7c3.citrine.utils.isEphemeral
+import com.greenart7c3.citrine.utils.isParameterizedReplaceable
+import com.greenart7c3.citrine.utils.shouldDelete
+import com.greenart7c3.citrine.utils.shouldOverwrite
 import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
@@ -102,7 +107,12 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
         val event = objectMapper.treeToValue(eventNode, Event::class.java)
 
         if (!event.hasVerifiedSignature()) {
-            connection.session.send(CommandResult.invalid(event, "event signature verification failed").toJson())
+            connection.session.send(
+                CommandResult.invalid(
+                    event,
+                    "event signature verification failed"
+                ).toJson()
+            )
             return
         }
 

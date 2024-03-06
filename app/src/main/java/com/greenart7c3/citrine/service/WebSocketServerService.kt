@@ -1,4 +1,4 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.service
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -18,7 +18,11 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat.getSystemService
+import com.greenart7c3.citrine.MainActivity
+import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.server.CustomWebSocketServer
+import com.greenart7c3.citrine.server.EventSubscription
 
 class WebSocketServerService : Service() {
     lateinit var webSocketServer: CustomWebSocketServer
@@ -52,9 +56,8 @@ class WebSocketServerService : Service() {
         }
 
         // Start the WebSocket server
-        val port = if (BuildConfig.DEBUG) defaultPortDebug else defaultPort
         webSocketServer = CustomWebSocketServer(
-            port,
+            DEFAULT_PORT,
             AppDatabase.getDatabase(this@WebSocketServerService)
         )
         webSocketServer.start()
@@ -103,8 +106,15 @@ class WebSocketServerService : Service() {
         return notificationBuilder.build()
     }
 
+    fun isStarted(): Boolean {
+        return webSocketServer.server != null
+    }
+
+    fun port(): Int? {
+        return webSocketServer.port()
+    }
+
     companion object {
-        const val defaultPort = 4869
-        const val defaultPortDebug = 4869
+        const val DEFAULT_PORT = 4869
     }
 }

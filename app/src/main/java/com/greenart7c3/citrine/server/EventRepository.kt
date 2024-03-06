@@ -1,4 +1,4 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.server
 
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.utils.TimeUtils

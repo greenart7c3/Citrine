@@ -1,4 +1,4 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.server
 
 data class NoticeResult(val message: String) {
     fun toJson(): String {

@@ -18,9 +18,10 @@
  * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.utils
 
 import android.util.Log
+import com.greenart7c3.citrine.BuildConfig
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -50,20 +51,20 @@ object HttpClientManager {
     fun setDefaultProxy(proxy: Proxy?) {
         if (internalProxy != proxy) {
             Log.d("HttpClient", "Changing proxy to: ${proxy != null}")
-            this.internalProxy = proxy
+            internalProxy = proxy
 
             // recreates singleton
-            this.defaultHttpClient = buildHttpClient(internalProxy, defaultTimeout)
+            defaultHttpClient = buildHttpClient(internalProxy, defaultTimeout)
         }
     }
 
     fun setDefaultTimeout(timeout: Duration) {
         Log.d("HttpClient", "Changing timeout to: $timeout")
-        if (this.defaultTimeout.seconds != timeout.seconds) {
-            this.defaultTimeout = timeout
+        if (defaultTimeout.seconds != timeout.seconds) {
+            defaultTimeout = timeout
 
             // recreates singleton
-            this.defaultHttpClient = buildHttpClient(internalProxy, defaultTimeout)
+            defaultHttpClient = buildHttpClient(internalProxy, defaultTimeout)
         }
     }
 
@@ -98,8 +99,8 @@ object HttpClientManager {
     }
 
     fun getHttpClient(): OkHttpClient {
-        if (this.defaultHttpClient == null) {
-            this.defaultHttpClient = buildHttpClient(internalProxy, defaultTimeout)
+        if (defaultHttpClient == null) {
+            defaultHttpClient = buildHttpClient(internalProxy, defaultTimeout)
         }
         return defaultHttpClient!!
     }

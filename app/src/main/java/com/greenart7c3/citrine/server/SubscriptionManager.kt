@@ -1,6 +1,5 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.server
 
-import EOSE
 import android.util.Log
 import io.ktor.websocket.send
 import kotlinx.coroutines.CancellationException

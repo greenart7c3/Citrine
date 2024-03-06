@@ -30,21 +30,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private val requestPermissionLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) {
-            val intent = Intent(this, WebSocketServerService::class.java)
-            startService(intent)
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+    @OptIn(DelicateCoroutinesApi::class)
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        GlobalScope.launch(Dispatchers.IO) {
+            start()
         }
+    }
 
     private var service: WebSocketServerService? = null
     private var bound = false
@@ -62,6 +65,26 @@ class MainActivity : ComponentActivity() {
             bound = false
             this@MainActivity.isLoading.value = true
         }
+    }
+
+    private suspend fun stop() {
+        isLoading.value = true
+        val intent = Intent(applicationContext, WebSocketServerService::class.java)
+        stopService(intent)
+        unbindService(connection)
+        bound = false
+        service = null
+        delay(1000)
+        isLoading.value = false
+    }
+
+    private suspend fun start() {
+        isLoading.value = true
+        val intent = Intent(applicationContext, WebSocketServerService::class.java)
+        startService(intent)
+        bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        delay(1000)
+        isLoading.value = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,10 +134,10 @@ class MainActivity : ComponentActivity() {
                         if (isLoading.value) {
                             CircularProgressIndicator()
                         } else {
-                            val isStarted = service?.webSocketServer?.server != null
+                            val isStarted = service?.isStarted() ?: false
                             if (isStarted) {
                                 Text("Relay started at")
-                                Text("ws://localhost:${service?.webSocketServer?.port() ?: 0}")
+                                Text("ws://localhost:${service?.port() ?: 0}")
                                 ElevatedButton(
                                     onClick = {
                                         coroutineScope.launch(Dispatchers.IO) {
@@ -125,11 +148,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 ) {
-                                    if (service?.webSocketServer?.server != null) {
-                                        Text("Stop")
-                                    } else {
-                                        Text("Start")
-                                    }
+                                    Text("Stop")
                                 }
                             } else {
                                 Text("Relay not running")
@@ -143,11 +162,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 ) {
-                                    if (service?.webSocketServer?.server != null) {
-                                        Text("Stop")
-                                    } else {
-                                        Text("Start")
-                                    }
+                                    Text("Start")
                                 }
                             }
 
@@ -186,19 +201,5 @@ class MainActivity : ComponentActivity() {
             bound = false
         }
         super.onDestroy()
-    }
-
-    private fun stop() {
-        val intent = Intent(applicationContext, WebSocketServerService::class.java)
-        stopService(intent)
-        unbindService(connection)
-        bound = false
-        service = null
-    }
-
-    private fun start() {
-        val intent = Intent(applicationContext, WebSocketServerService::class.java)
-        startService(intent)
-        bindService(intent, connection, Context.BIND_AUTO_CREATE)
     }
 }

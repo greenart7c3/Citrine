@@ -15,7 +15,7 @@ okhttp = "5.0.0-alpha.12"
 room = "2.6.1"
 workRuntimeKtx = "2.9.0"
 material3 = "1.2.0"
-quartz = "v0.85.0"
+quartz = "v0.85.3"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }

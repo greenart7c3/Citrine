@@ -1,4 +1,4 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.server
 
 import com.vitorpamplona.quartz.events.Event
 import java.util.function.Predicate

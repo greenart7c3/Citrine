@@ -22,8 +22,8 @@ package com.greenart7c3.citrine.relays
 
 import android.util.Log
 import com.greenart7c3.citrine.BuildConfig
-import com.greenart7c3.citrine.HttpClientManager
-import com.greenart7c3.citrine.checkNotInMainThread
+import com.greenart7c3.citrine.utils.HttpClientManager
+import com.greenart7c3.citrine.utils.checkNotInMainThread
 import com.vitorpamplona.quartz.encoders.HexKey
 import com.vitorpamplona.quartz.events.Event
 import com.vitorpamplona.quartz.events.EventInterface

@@ -21,7 +21,7 @@
 package com.greenart7c3.citrine.relays
 
 import android.util.Log
-import com.greenart7c3.citrine.checkNotInMainThread
+import com.greenart7c3.citrine.utils.checkNotInMainThread
 import com.vitorpamplona.quartz.events.Event
 import com.vitorpamplona.quartz.events.EventInterface
 import kotlinx.coroutines.DelicateCoroutinesApi

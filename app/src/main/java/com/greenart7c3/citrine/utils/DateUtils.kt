@@ -1,4 +1,4 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.utils
 
 import java.time.Instant
 import java.time.LocalDateTime

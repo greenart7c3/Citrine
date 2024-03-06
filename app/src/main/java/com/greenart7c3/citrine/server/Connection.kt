@@ -1,4 +1,4 @@
-package com.greenart7c3.citrine
+package com.greenart7c3.citrine.server
 
 import io.ktor.websocket.DefaultWebSocketSession
 import java.util.concurrent.atomic.AtomicInteger
