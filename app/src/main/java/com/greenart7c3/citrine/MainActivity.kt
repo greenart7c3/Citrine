@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             ) {
-                                Text("Contact Lists")
+                                Text("Restore follows")
                             }
                         }
                     }
