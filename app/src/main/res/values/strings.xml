@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name_release">Citrine</string>
     <string name="app_name_debug">Citrine Debug</string>
+    <string name="no_follow_list_found">No follow list found</string>
 </resources>
