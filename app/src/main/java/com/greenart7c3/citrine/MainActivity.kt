@@ -183,6 +183,8 @@ class MainActivity : ComponentActivity() {
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+                                        launcherLogin.launch(intent)
                                     }
                                 }
                             ) {
