@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
@@ -105,7 +106,7 @@ class MainActivity : ComponentActivity() {
                     if (result.resultCode != Activity.RESULT_OK) {
                         Toast.makeText(
                             context,
-                            "Sign request rejected",
+                            getString(R.string.sign_request_rejected),
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
@@ -136,7 +137,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             val isStarted = service?.isStarted() ?: false
                             if (isStarted) {
-                                Text("Relay started at")
+                                Text(stringResource(R.string.relay_started_at))
                                 Text("ws://localhost:${service?.port() ?: 0}")
                                 ElevatedButton(
                                     onClick = {
@@ -148,10 +149,10 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 ) {
-                                    Text("Stop")
+                                    Text(stringResource(R.string.stop))
                                 }
                             } else {
-                                Text("Relay not running")
+                                Text(stringResource(R.string.relay_not_running))
                                 ElevatedButton(
                                     onClick = {
                                         coroutineScope.launch(Dispatchers.IO) {
@@ -162,7 +163,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 ) {
-                                    Text("Start")
+                                    Text(stringResource(R.string.start))
                                 }
                             }
 
@@ -179,7 +180,7 @@ class MainActivity : ComponentActivity() {
                                         coroutineScope.launch(Dispatchers.Main) {
                                             Toast.makeText(
                                                 context,
-                                                "No external signer installed",
+                                                getString(R.string.no_external_signer_installed),
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
@@ -188,7 +189,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             ) {
-                                Text("Restore follows")
+                                Text(stringResource(R.string.restore_follows))
                             }
                         }
                     }

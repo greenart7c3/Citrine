@@ -67,7 +67,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
             if (result.resultCode != Activity.RESULT_OK) {
                 Toast.makeText(
                     context,
-                    "Sign request rejected",
+                    context.getString(R.string.sign_request_rejected),
                     Toast.LENGTH_SHORT
                 ).show()
             } else {
@@ -89,7 +89,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                 coroutineScope.launch {
                     Toast.makeText(
                         context,
-                        "Make sure the signer application has authorized this transaction",
+                        context.getString(R.string.make_sure_the_signer_application_has_authorized_this_transaction),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -200,7 +200,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                 coroutineScope.launch {
                                                     Toast.makeText(
                                                         context,
-                                                        "No relays found",
+                                                        context.getString(R.string.no_relays_found),
                                                         Toast.LENGTH_SHORT
                                                     ).show()
                                                 }
@@ -226,7 +226,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                             bottom = 6.dp
                                         )
                                     ) {
-                                        Text("Restore")
+                                        Text(stringResource(R.string.restore))
                                     }
                                 }
                             }
