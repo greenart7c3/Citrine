@@ -10,8 +10,7 @@ data class Subscription(
     val connection: Connection,
     val filters: Set<EventFilter>,
     val appDatabase: AppDatabase,
-    val objectMapper: ObjectMapper,
-    var lastExecuted: Long?
+    val objectMapper: ObjectMapper
 )
 
 object EventSubscription {
@@ -61,8 +60,7 @@ object EventSubscription {
                     connection,
                     filters,
                     appDatabase,
-                    objectMapper,
-                    null
+                    objectMapper
                 )
             )
         )

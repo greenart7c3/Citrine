@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.server
 
+import android.util.Log
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.websocket.send
@@ -12,8 +13,8 @@ object EventRepository {
     ) {
         val whereClause = mutableListOf<String>()
 
-        if (subscription.lastExecuted != null) {
-            whereClause.add("EventEntity.createdAt >= ${subscription.lastExecuted}")
+        if (filter.lastExecuted != null) {
+            whereClause.add("EventEntity.createdAt >= ${filter.lastExecuted}")
         } else {
             if (filter.since != null) {
                 whereClause.add("EventEntity.createdAt >= ${filter.since}")
@@ -73,8 +74,12 @@ object EventRepository {
         }
 
         val cursor = subscription.appDatabase.query(query, arrayOf())
+        if (filter.kinds.contains(31234)) {
+            Log.d("draft", "${filter.lastExecuted}")
+            Log.d("draft", "${cursor.count}")
+        }
         if (cursor.count > 0) {
-            subscription.lastExecuted = TimeUtils.now()
+            filter.lastExecuted = TimeUtils.now()
         }
 
         cursor.use { item ->

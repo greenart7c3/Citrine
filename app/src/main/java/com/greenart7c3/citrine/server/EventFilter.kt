@@ -13,7 +13,7 @@ data class EventFilter(
     val limit: Int = 10_000,
     private val search: String? = null
 ) : Predicate<Event> {
-
+    var lastExecuted: Long? = null
     val searchKeywords: Set<String> = search?.let { tokenizeString(search) } ?: emptySet()
 
     override fun test(event: Event): Boolean {
