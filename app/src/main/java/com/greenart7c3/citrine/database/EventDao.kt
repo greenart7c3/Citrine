@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.greenart7c3.citrine.server.EventSubscription
 
 @Dao
 interface EventDao {
@@ -79,6 +80,7 @@ interface EventDao {
             }
 
             insertTags(dbEvent.tags)
+            EventSubscription.executeAll()
         }
     }
 }

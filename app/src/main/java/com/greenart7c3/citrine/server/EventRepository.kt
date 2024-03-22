@@ -62,7 +62,7 @@ object EventRepository {
         val predicatesSql = whereClause.joinToString(" AND ", prefix = "WHERE ")
 
         var query = """
-            SELECT EventEntity.id
+            SELECT DISTINCT EventEntity.id
               FROM EventEntity EventEntity
               LEFT JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
               $predicatesSql 
@@ -74,10 +74,6 @@ object EventRepository {
         }
 
         val cursor = subscription.appDatabase.query(query, arrayOf())
-        if (filter.kinds.contains(31234)) {
-            Log.d("draft", "${filter.lastExecuted}")
-            Log.d("draft", "${cursor.count}")
-        }
         if (cursor.count > 0) {
             filter.lastExecuted = TimeUtils.now()
         }
@@ -87,6 +83,7 @@ object EventRepository {
                 val eventEntity = subscription.appDatabase.eventDao().getById(item.getString(0))
                 eventEntity?.let {
                     val event = it.toEvent()
+                    Log.d("SEND", "sending event ${event.toJsonObject()}")
                     if (!event.isExpired()) {
                         runBlocking {
                             subscription.connection.session.send(

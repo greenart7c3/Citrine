@@ -4,6 +4,10 @@ import android.util.Log
 import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 data class Subscription(
     val id: String,
@@ -15,6 +19,16 @@ data class Subscription(
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(30)
+
+    @OptIn(DelicateCoroutinesApi::class)
+    fun executeAll() {
+        Log.d("executeAll", "executeAll")
+        GlobalScope.launch(Dispatchers.IO) {
+            subscriptions.snapshot().values.forEach {
+                it.execute()
+            }
+        }
+    }
 
     fun closeAll(connectionName: String) {
         Log.d("connection", "finalizing subscriptions from $connectionName")
@@ -33,7 +47,6 @@ object EventSubscription {
     }
 
     fun close(subscriptionId: String) {
-        subscriptions[subscriptionId]?.finalize()
         subscriptions.remove(subscriptionId)
         Log.d("subscriptions", subscriptions.size().toString())
     }
