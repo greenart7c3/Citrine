@@ -7,7 +7,6 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
-import com.greenart7c3.citrine.utils.isEphemeral
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
 import com.greenart7c3.citrine.utils.shouldOverwrite
@@ -125,7 +124,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
             event.shouldDelete() -> deleteEvent(event)
             event.isParameterizedReplaceable() -> handleParameterizedReplaceable(event)
             event.shouldOverwrite() -> override(event)
-            !event.isEphemeral() -> {
+            else -> {
                 val eventEntity = appDatabase.eventDao().getById(event.id)
                 if (eventEntity != null) {
                     connection.session.send(CommandResult.duplicated(event).toJson())
