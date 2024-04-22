@@ -54,7 +54,7 @@ object EventRepository {
         if (filter.tags.isNotEmpty()) {
             filter.tags.filterValues { it.isNotEmpty() }.forEach { tag ->
                 whereClause.add(
-                    "TagEntity.col0Name = '${tag.key}' AND TagEntity.col1Value = '${tag.value.toString().removePrefix("[").removeSuffix("]")}'"
+                    "TagEntity.col0Name = '${tag.key}' AND TagEntity.col1Value in (${tag.value.map { "'$it'" }.toString().removePrefix("[").removeSuffix("]")})"
                 )
             }
         }
@@ -75,7 +75,7 @@ object EventRepository {
 
         val cursor = subscription.appDatabase.query(query, arrayOf())
         if (cursor.count > 0) {
-            filter.lastExecuted = TimeUtils.now()
+            filter.lastExecuted = TimeUtils.oneMinuteAgo()
         }
 
         cursor.use { item ->
