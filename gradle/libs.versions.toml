@@ -1,8 +1,8 @@
 [versions]
-activityCompose = "1.8.2"
-composeBom = "2024.04.00"
-composeUiVersion = "1.6.5"
-coreKtx = "1.12.0"
+activityCompose = "1.9.0"
+composeBom = "2024.04.01"
+composeUiVersion = "1.6.6"
+coreKtx = "1.13.0"
 espressoCore = "3.5.1"
 jna = "5.14.0"
 junitVersion = "1.1.5"
@@ -11,11 +11,11 @@ kotlinxCoroutinesCore = "1.7.3"
 ktorServer = "2.3.8"
 lifecycleRuntimeKtx = "2.7.0"
 navigationCompose = "2.7.7"
-okhttp = "5.0.0-alpha.12"
+okhttp = "5.0.0-alpha.14"
 room = "2.6.1"
 workRuntimeKtx = "2.9.0"
 material3 = "1.2.1"
-quartz = "v0.85.3"
+quartz = "0.86.5"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
