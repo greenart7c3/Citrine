@@ -4,6 +4,9 @@ import android.util.Log
 import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventWithTags
+import com.greenart7c3.citrine.database.toEvent
+import io.ktor.websocket.send
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -18,14 +21,27 @@ data class Subscription(
 )
 
 object EventSubscription {
-    private val subscriptions = LruCache<String, SubscriptionManager>(30)
+    private val subscriptions = LruCache<String, SubscriptionManager>(500)
 
     @OptIn(DelicateCoroutinesApi::class)
-    fun executeAll() {
+    fun executeAll(dbEvent: EventWithTags) {
         Log.d("executeAll", "executeAll")
         GlobalScope.launch(Dispatchers.IO) {
             subscriptions.snapshot().values.forEach {
-                it.execute()
+                it.subscription.filters.forEach { filter ->
+                    val event = dbEvent.toEvent()
+                    if (filter.test(event)) {
+                        it.subscription.connection.session.send(
+                            it.subscription.objectMapper.writeValueAsString(
+                                listOf(
+                                    "EVENT",
+                                    it.subscription.id,
+                                    event.toJsonObject()
+                                )
+                            )
+                        )
+                    }
+                }
             }
         }
     }
@@ -58,11 +74,6 @@ object EventSubscription {
         appDatabase: AppDatabase,
         objectMapper: ObjectMapper
     ) {
-        if (subscriptions[subscriptionId] != null && filters == subscriptions[subscriptionId]?.subscription?.filters) {
-            Log.d("filters", "same filters $subscriptionId")
-            return
-        }
-
         Log.d("subscriptions", "new subscription $subscriptionId")
         close(subscriptionId)
         subscriptions.put(

@@ -11,9 +11,8 @@ data class EventFilter(
     var since: Int? = null,
     val until: Int? = null,
     val limit: Int = 10_000,
-    private val search: String? = null
+    val search: String? = null
 ) : Predicate<Event> {
-    var lastExecuted: Long? = null
     val searchKeywords: Set<String> = search?.let { tokenizeString(search) } ?: emptySet()
 
     override fun test(event: Event): Boolean {
@@ -41,7 +40,11 @@ data class EventFilter(
             return false
         }
 
-        return !(!search.isNullOrBlank() && !testSearch(search, event))
+        if (!search.isNullOrBlank() && !testSearch(search, event)) {
+            return false
+        }
+
+        return true
     }
 
     private fun testTag(tag: Map.Entry<String, Set<String>>, event: Event): Boolean {

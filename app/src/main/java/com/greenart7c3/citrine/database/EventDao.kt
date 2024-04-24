@@ -80,7 +80,8 @@ interface EventDao {
             }
 
             insertTags(dbEvent.tags)
-            EventSubscription.executeAll()
+
+            EventSubscription.executeAll(dbEvent)
         }
     }
 }

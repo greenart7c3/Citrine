@@ -1,8 +1,6 @@
 package com.greenart7c3.citrine.server
 
-import android.util.Log
 import com.greenart7c3.citrine.database.toEvent
-import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.websocket.send
 import kotlinx.coroutines.runBlocking
 
@@ -11,92 +9,63 @@ object EventRepository {
         subscription: Subscription,
         filter: EventFilter
     ) {
-        val whereClause = mutableListOf<String>()
+        var events = subscription.appDatabase.eventDao().getAll().sortedByDescending { it.event.createdAt }.toMutableList()
 
-        if (filter.lastExecuted != null) {
-            whereClause.add("EventEntity.createdAt >= ${filter.lastExecuted}")
-        } else {
-            if (filter.since != null) {
-                whereClause.add("EventEntity.createdAt >= ${filter.since}")
-            }
+        if (filter.since != null) {
+            events = events.filter { it.event.createdAt >= filter.since!! }.toMutableList()
         }
 
         if (filter.until != null) {
-            whereClause.add("EventEntity.createdAt <= ${filter.until}")
+            events = events.filter { it.event.createdAt <= filter.until }.toMutableList()
         }
 
         if (filter.ids.isNotEmpty()) {
-            whereClause.add(
-                filter.ids.joinToString(" OR ", prefix = "(", postfix = ")") {
-                    "EventEntity.id = '$it'"
-                }
-            )
+            events.removeAll { it.event.id !in filter.ids }
         }
 
         if (filter.authors.isNotEmpty()) {
-            whereClause.add(
-                filter.authors.joinToString(" OR ", prefix = "(", postfix = ")") {
-                    "EventEntity.pubkey = '$it'"
-                }
-            )
+            events.removeAll { it.event.pubkey !in filter.authors }
         }
 
         if (filter.searchKeywords.isNotEmpty()) {
-            whereClause.add(
-                filter.searchKeywords.joinToString(" AND ", prefix = "(", postfix = ")") { "LOWER(EventEntity.content) LIKE '%$it%'" }
-            )
-        }
-
-        if (filter.kinds.isNotEmpty()) {
-            whereClause.add("EventEntity.kind IN (${filter.kinds.joinToString(",")})")
-        }
-
-        if (filter.tags.isNotEmpty()) {
-            filter.tags.filterValues { it.isNotEmpty() }.forEach { tag ->
-                whereClause.add(
-                    "TagEntity.col0Name = '${tag.key}' AND TagEntity.col1Value in (${tag.value.map { "'$it'" }.toString().removePrefix("[").removeSuffix("]")})"
-                )
+            events.removeAll { event ->
+                !filter.searchKeywords.any { keyword ->
+                    event.event.content.contains(keyword, ignoreCase = true)
+                }
             }
         }
 
-        val predicatesSql = whereClause.joinToString(" AND ", prefix = "WHERE ")
+        if (filter.kinds.isNotEmpty()) {
+            events.removeAll { it.event.kind !in filter.kinds }
+        }
 
-        var query = """
-            SELECT DISTINCT EventEntity.id
-              FROM EventEntity EventEntity
-              LEFT JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
-              $predicatesSql 
-              ORDER BY EventEntity.createdAt DESC
-        """
+        if (filter.tags.isNotEmpty()) {
+            events.removeAll {
+                !filter.tags.all { tag ->
+                    tag.value.any { value ->
+                        it.tags.any { it.col0Name == tag.key && it.col1Value == value }
+                    }
+                }
+            }
+        }
 
         if (filter.limit > 0) {
-            query += " LIMIT ${filter.limit}"
+            events = events.take(filter.limit).sortedByDescending { it.event.createdAt }.toMutableList()
         }
 
-        val cursor = subscription.appDatabase.query(query, arrayOf())
-        if (cursor.count > 0) {
-            filter.lastExecuted = TimeUtils.oneMinuteAgo()
-        }
-
-        cursor.use { item ->
-            while (item.moveToNext()) {
-                val eventEntity = subscription.appDatabase.eventDao().getById(item.getString(0))
-                eventEntity?.let {
-                    val event = it.toEvent()
-                    Log.d("SEND", "sending event ${event.toJsonObject()}")
-                    if (!event.isExpired()) {
-                        runBlocking {
-                            subscription.connection.session.send(
-                                subscription.objectMapper.writeValueAsString(
-                                    listOf(
-                                        "EVENT",
-                                        subscription.id,
-                                        event.toJsonObject()
-                                    )
-                                )
+        events.forEach {
+            val event = it.toEvent()
+            if (!event.isExpired()) {
+                runBlocking {
+                    subscription.connection.session.send(
+                        subscription.objectMapper.writeValueAsString(
+                            listOf(
+                                "EVENT",
+                                subscription.id,
+                                event.toJsonObject()
                             )
-                        }
-                    }
+                        )
+                    )
                 }
             }
         }
