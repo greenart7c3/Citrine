@@ -6,12 +6,22 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.greenart7c3.citrine.server.EventSubscription
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface EventDao {
+    class CountResult {
+        var kind: Int = 0
+        var count: Int = 0
+    }
+
     @Query("SELECT * FROM EventEntity ORDER BY createdAt DESC")
     @Transaction
     fun getAll(): List<EventWithTags>
+
+    @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
+    @Transaction
+    fun countByKind(): Flow<List<CountResult>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertEvent(event: EventEntity): Long?
@@ -27,13 +37,13 @@ interface EventDao {
     @Transaction
     fun getContactLists(pubkey: String): List<EventWithTags>
 
-    @Query("SELECT id FROM EventEntity WHERE kind = :kind ORDER BY createdAt DESC")
+    @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC")
     @Transaction
-    fun getByKind(kind: Int): List<String>
+    fun getByKind(kind: Int, pubkey: String): List<String>
 
-    @Query("DELETE FROM EventEntity WHERE id in (:ids)")
+    @Query("DELETE FROM EventEntity WHERE id in (:ids) and pubkey = :pubkey")
     @Transaction
-    fun delete(ids: List<String>)
+    fun delete(ids: List<String>, pubkey: String)
 
     @Query("DELETE FROM TagEntity WHERE pkEvent = :id")
     @Transaction

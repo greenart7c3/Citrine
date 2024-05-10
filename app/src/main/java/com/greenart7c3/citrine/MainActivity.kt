@@ -14,14 +14,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +39,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
@@ -88,6 +100,7 @@ class MainActivity : ComponentActivity() {
         isLoading.value = false
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -118,8 +131,14 @@ class MainActivity : ComponentActivity() {
             )
 
             CitrineTheme {
+                val database = AppDatabase.getDatabase(context)
+                val flow = database.eventDao().countByKind().collectAsState(initial = listOf())
+                val count = EventSubscription.subscriptionCount.collectAsState(0)
+
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     if (pubKey.isNotBlank()) {
@@ -190,6 +209,40 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) {
                                 Text(stringResource(R.string.restore_follows))
+                            }
+
+                            Spacer(modifier = Modifier.padding(4.dp))
+                            Text(
+                                "Relay",
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.padding(4.dp))
+                            Text("Connections: ${service?.webSocketServer?.connections?.size ?: 0}")
+                            Text("Subscriptions: ${count.value}")
+                            Spacer(modifier = Modifier.padding(4.dp))
+                            Text("Database", fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.padding(4.dp))
+
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Kind", fontWeight = FontWeight.Bold)
+                                Text("Count", fontWeight = FontWeight.Bold)
+                            }
+
+                            flow.value.forEach { item ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("${item.kind}")
+                                    Text("${item.count}")
+                                }
                             }
                         }
                     }

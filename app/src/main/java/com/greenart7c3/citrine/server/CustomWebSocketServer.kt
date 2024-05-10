@@ -36,6 +36,7 @@ import java.util.concurrent.CancellationException
 import java.util.zip.Deflater
 
 class CustomWebSocketServer(private val port: Int, private val appDatabase: AppDatabase) {
+    val connections = Collections.synchronizedSet<Connection?>(LinkedHashSet())
     var server: ApplicationEngine? = null
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -140,14 +141,14 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
     private fun handleParameterizedReplaceable(event: Event) {
         save(event)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
-        appDatabase.eventDao().delete(ids)
+        appDatabase.eventDao().delete(ids, event.pubKey)
     }
 
     private fun override(event: Event) {
         save(event)
-        val ids = appDatabase.eventDao().getByKind(event.kind).drop(5)
+        val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(5)
         if (ids.isEmpty()) return
-        appDatabase.eventDao().delete(ids)
+        appDatabase.eventDao().delete(ids, event.pubKey)
     }
 
     private fun save(event: Event) {
@@ -156,7 +157,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
 
     private fun deleteEvent(event: Event) {
         save(event)
-        appDatabase.eventDao().delete(event.taggedEvents())
+        appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -185,8 +186,6 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
             }
 
             routing {
-                val connections = Collections.synchronizedSet<Connection?>(LinkedHashSet())
-
                 // Handle HTTP GET requests
                 get("/") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")

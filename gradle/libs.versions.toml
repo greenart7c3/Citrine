@@ -43,6 +43,7 @@ ktor-websockets = { module = "io.ktor:ktor-websockets", version.ref = "ktorServe
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktorServer" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 quartz = { module = "com.github.vitorpamplona.amethyst:quartz", version.ref = "quartz" }
 
 [plugins]
