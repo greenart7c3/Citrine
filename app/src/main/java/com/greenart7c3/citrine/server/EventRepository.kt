@@ -53,6 +53,21 @@ object EventRepository {
             events = events.take(filter.limit).sortedByDescending { it.event.createdAt }.toMutableList()
         }
 
+        if (subscription.count) {
+            runBlocking {
+                subscription.connection.session.send(
+                    subscription.objectMapper.writeValueAsString(
+                        listOf(
+                            "COUNT",
+                            subscription.id,
+                            CountResult(events.size).toJson()
+                        )
+                    )
+                )
+            }
+            return
+        }
+
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {

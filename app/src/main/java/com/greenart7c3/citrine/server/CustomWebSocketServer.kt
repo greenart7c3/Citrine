@@ -61,7 +61,8 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
     private suspend fun subscribe(
         subscriptionId: String,
         filterNodes: List<JsonNode>,
-        connection: Connection
+        connection: Connection,
+        count: Boolean = false
     ) {
         val filters = filterNodes.map { jsonNode ->
             val tags = jsonNode.fields().asSequence()
@@ -74,13 +75,17 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
             filter.copy(tags = tags)
         }.toSet()
 
-        EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper)
+        EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper, count)
     }
 
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection) {
         Log.d("message", newMessage)
         val msgArray = Event.mapper.readTree(newMessage)
         when (val type = msgArray.get(0).asText()) {
+            "COUNT" -> {
+                val subscriptionId = msgArray.get(1).asText()
+                subscribe(subscriptionId, msgArray.drop(2), connection, true)
+            }
             "REQ" -> {
                 val subscriptionId = msgArray.get(1).asText()
                 subscribe(subscriptionId, msgArray.drop(2), connection)

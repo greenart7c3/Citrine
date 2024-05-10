@@ -11,7 +11,7 @@ import kotlinx.coroutines.runBlocking
 
 @OptIn(DelicateCoroutinesApi::class)
 class SubscriptionManager(val subscription: Subscription) {
-    suspend fun execute() {
+    private suspend fun execute() {
         if (subscription.connection.session.outgoing.isClosedForSend) {
             EventSubscription.close(subscription.id)
             Log.d("timer", "cancelling subscription isClosedForSend: ${subscription.id}")

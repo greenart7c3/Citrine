@@ -19,12 +19,13 @@ data class Subscription(
     val connection: Connection,
     val filters: Set<EventFilter>,
     val appDatabase: AppDatabase,
-    val objectMapper: ObjectMapper
+    val objectMapper: ObjectMapper,
+    val count: Boolean
 )
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
-    val _subscriptionCount = MutableStateFlow(0)
+    private val _subscriptionCount = MutableStateFlow(0)
     val subscriptionCount = _subscriptionCount.asStateFlow()
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -77,7 +78,8 @@ object EventSubscription {
         filters: Set<EventFilter>,
         connection: Connection,
         appDatabase: AppDatabase,
-        objectMapper: ObjectMapper
+        objectMapper: ObjectMapper,
+        count: Boolean
     ) {
         Log.d("subscriptions", "new subscription $subscriptionId")
         close(subscriptionId)
@@ -89,7 +91,8 @@ object EventSubscription {
                     connection,
                     filters,
                     appDatabase,
-                    objectMapper
+                    objectMapper,
+                    count
                 )
             )
         )
