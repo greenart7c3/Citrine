@@ -203,7 +203,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
                         val json = """
                         {
                             "name": "Citrine",
-                            "description": "A Nostr relay in you phone",
+                            "description": "A Nostr relay in your phone",
                             "pubkey": "",
                             "supported_nips": [1,2,4,9,11,50],
                             "software": "https://github.com/greenart7c3/Citrine",
