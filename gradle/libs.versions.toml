@@ -13,6 +13,7 @@ lifecycleRuntimeKtx = "2.7.0"
 navigationCompose = "2.7.7"
 okhttp = "5.0.0-alpha.14"
 room = "2.6.1"
+storage = "1.5.5"
 workRuntimeKtx = "2.9.0"
 material3 = "1.2.1"
 quartz = "0.86.5"
@@ -45,5 +46,6 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 quartz = { module = "com.github.vitorpamplona.amethyst:quartz", version.ref = "quartz" }
+storage = { module = "com.anggrayudi:storage", version.ref = "storage" }
 
 [plugins]

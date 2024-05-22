@@ -14,7 +14,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,18 +40,31 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anggrayudi.storage.SimpleStorageHelper
+import com.anggrayudi.storage.file.makeFile
+import com.anggrayudi.storage.file.openInputStream
+import com.anggrayudi.storage.file.openOutputStream
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
+import com.vitorpamplona.quartz.events.Event
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
+import kotlin.text.Charsets.UTF_8
 
 class MainActivity : ComponentActivity() {
+    private val storageHelper = SimpleStorageHelper(this@MainActivity)
+
     @OptIn(DelicateCoroutinesApi::class)
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -100,8 +112,45 @@ class MainActivity : ComponentActivity() {
         isLoading.value = false
     }
 
-    @OptIn(ExperimentalFoundationApi::class)
+    @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        val database = AppDatabase.getDatabase(this)
+
+        storageHelper.onFolderSelected = { _, folder ->
+            GlobalScope.launch(Dispatchers.IO) {
+                val events = database.eventDao().getAll()
+                val json = events.joinToString(separator = "\n") {
+                    it.toEvent().toJson()
+                }
+
+                val file = folder.makeFile(this@MainActivity, "citrine.jsonl")
+                val op = file?.openOutputStream(this@MainActivity)
+                op?.writer().use {
+                    it?.write(json)
+                }
+            }
+        }
+
+        storageHelper.onFileSelected = { _, files ->
+            GlobalScope.launch(Dispatchers.IO) {
+                val json = files.first().openInputStream(this@MainActivity)?.bufferedReader().use {
+                    it?.readText()
+                }
+
+                database.eventDao().deleteAll()
+
+                json!!.split("\n").map {
+                    it.trim()
+                }.filter {
+                    it.isNotEmpty()
+                }.map {
+                    Event.fromJson(it).toEventWithTags()
+                }.forEach {
+                    database.eventDao().insertEventWithTags(it)
+                }
+            }
+        }
+
         super.onCreate(savedInstanceState)
 
         requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
@@ -131,7 +180,6 @@ class MainActivity : ComponentActivity() {
             )
 
             CitrineTheme {
-                val database = AppDatabase.getDatabase(context)
                 val flow = database.eventDao().countByKind().collectAsState(initial = listOf())
                 val count = EventSubscription.subscriptionCount.collectAsState(0)
 
@@ -211,6 +259,24 @@ class MainActivity : ComponentActivity() {
                                 Text(stringResource(R.string.restore_follows))
                             }
 
+                            Row {
+                                ElevatedButton(
+                                    onClick = {
+                                        storageHelper.openFolderPicker()
+                                    }
+                                ) {
+                                    Text("Export database")
+                                }
+                                Spacer(modifier = Modifier.padding(4.dp))
+                                ElevatedButton(
+                                    onClick = {
+                                        storageHelper.openFilePicker()
+                                    }
+                                ) {
+                                    Text("Import database")
+                                }
+                            }
+
                             Spacer(modifier = Modifier.padding(4.dp))
                             Text(
                                 "Relay",
@@ -258,4 +324,13 @@ class MainActivity : ComponentActivity() {
         }
         super.onDestroy()
     }
+
+    fun gzip(content: String): ByteArray {
+        val bos = ByteArrayOutputStream()
+        GZIPOutputStream(bos).bufferedWriter(UTF_8).use { it.write(content) }
+        return bos.toByteArray()
+    }
+
+    fun ungzip(content: ByteArray): String =
+        GZIPInputStream(content.inputStream()).bufferedReader(UTF_8).use { it.readText() }
 }

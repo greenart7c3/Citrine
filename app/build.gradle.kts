@@ -103,4 +103,5 @@ dependencies {
     annotationProcessor(libs.androidx.room.compiler)
     ksp(libs.room.compiler)
     implementation(libs.okhttp)
+    implementation(libs.storage)
 }

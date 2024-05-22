@@ -80,6 +80,10 @@ interface EventDao {
     @Transaction
     fun getOldestReplaceable(kind: Int, pubkey: String, dTagValue: String): List<String>
 
+    @Query("DELETE FROM EventEntity")
+    @Transaction
+    fun deleteAll()
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     fun insertEventWithTags(dbEvent: EventWithTags) {
