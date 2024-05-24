@@ -163,6 +163,13 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
     private fun deleteEvent(event: Event) {
         save(event)
         appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
+        event.taggedAddresses().forEach { aTag ->
+            val events = appDatabase.eventDao().getAll().filter {
+                it.tags.any { tag -> tag.col0Name == "d" && tag.col1Value == aTag.dTag } && it.event.pubkey == aTag.pubKeyHex && it.event.kind == aTag.kind
+            }
+
+            appDatabase.eventDao().delete(events.map { it.event.id }, event.pubKey)
+        }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
