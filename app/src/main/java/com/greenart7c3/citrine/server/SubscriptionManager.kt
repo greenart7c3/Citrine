@@ -24,7 +24,7 @@ class SubscriptionManager(val subscription: Subscription) {
                     runBlocking {
                         EventRepository.subscribe(
                             subscription,
-                            filter
+                            filter,
                         )
                     }
                 } catch (e: Exception) {
@@ -32,7 +32,7 @@ class SubscriptionManager(val subscription: Subscription) {
 
                     Log.d("error", "Error reading data from database", e)
                     subscription.connection.session.send(
-                        NoticeResult.invalid("Error reading data from database").toJson()
+                        NoticeResult.invalid("Error reading data from database").toJson(),
                     )
                 }
             }

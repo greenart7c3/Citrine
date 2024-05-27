@@ -52,22 +52,22 @@ import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.vitorpamplona.quartz.events.Event
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
+import kotlin.text.Charsets.UTF_8
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.ByteArrayOutputStream
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
-import kotlin.text.Charsets.UTF_8
 
 class MainActivity : ComponentActivity() {
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
 
     @OptIn(DelicateCoroutinesApi::class)
     private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission(),
     ) {
         GlobalScope.launch(Dispatchers.IO) {
             start()
@@ -169,14 +169,14 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(
                             context,
                             getString(R.string.sign_request_rejected),
-                            Toast.LENGTH_SHORT
+                            Toast.LENGTH_SHORT,
                         ).show()
                     } else {
                         result.data?.let {
                             pubKey = it.getStringExtra("signature") ?: ""
                         }
                     }
-                }
+                },
             )
 
             CitrineTheme {
@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState()),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
                     if (pubKey.isNotBlank()) {
                         ContactsDialog(pubKey = pubKey) {
@@ -197,7 +197,7 @@ class MainActivity : ComponentActivity() {
 
                     Column(
                         verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         if (isLoading.value) {
                             CircularProgressIndicator()
@@ -214,7 +214,7 @@ class MainActivity : ComponentActivity() {
                                             delay(1000)
                                             isLoading.value = false
                                         }
-                                    }
+                                    },
                                 ) {
                                     Text(stringResource(R.string.stop))
                                 }
@@ -228,7 +228,7 @@ class MainActivity : ComponentActivity() {
                                             delay(1000)
                                             isLoading.value = false
                                         }
-                                    }
+                                    },
                                 ) {
                                     Text(stringResource(R.string.start))
                                 }
@@ -248,13 +248,13 @@ class MainActivity : ComponentActivity() {
                                             Toast.makeText(
                                                 context,
                                                 getString(R.string.no_external_signer_installed),
-                                                Toast.LENGTH_SHORT
+                                                Toast.LENGTH_SHORT,
                                             ).show()
                                         }
                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
                                         launcherLogin.launch(intent)
                                     }
-                                }
+                                },
                             ) {
                                 Text(stringResource(R.string.restore_follows))
                             }
@@ -263,7 +263,7 @@ class MainActivity : ComponentActivity() {
                                 ElevatedButton(
                                     onClick = {
                                         storageHelper.openFolderPicker()
-                                    }
+                                    },
                                 ) {
                                     Text("Export database")
                                 }
@@ -271,7 +271,7 @@ class MainActivity : ComponentActivity() {
                                 ElevatedButton(
                                     onClick = {
                                         storageHelper.openFilePicker()
-                                    }
+                                    },
                                 ) {
                                     Text("Import database")
                                 }
@@ -280,7 +280,7 @@ class MainActivity : ComponentActivity() {
                             Spacer(modifier = Modifier.padding(4.dp))
                             Text(
                                 "Relay",
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                             Spacer(modifier = Modifier.padding(4.dp))
                             Text("Connections: ${service?.webSocketServer?.connections?.size ?: 0}")
@@ -293,7 +293,7 @@ class MainActivity : ComponentActivity() {
                                 Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text("Kind", fontWeight = FontWeight.Bold)
                                 Text("Count", fontWeight = FontWeight.Bold)
@@ -304,7 +304,7 @@ class MainActivity : ComponentActivity() {
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 24.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
                                     Text("${item.kind}")
                                     Text("${item.count}")

@@ -22,15 +22,15 @@ package com.greenart7c3.citrine.utils
 
 import android.util.Log
 import com.greenart7c3.citrine.BuildConfig
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.time.Duration
 import kotlin.properties.Delegates
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 
 object HttpClientManager {
     val DEFAULT_TIMEOUT_ON_WIFI: Duration = Duration.ofSeconds(10L)
@@ -42,11 +42,11 @@ object HttpClientManager {
 
     // fires off every time value of the property changes
     private var internalProxy: Proxy? by
-    Delegates.observable(null) { _, oldValue, newValue ->
-        if (oldValue != newValue) {
-            proxyChangeListeners.forEach { it() }
+        Delegates.observable(null) { _, oldValue, newValue ->
+            if (oldValue != newValue) {
+                proxyChangeListeners.forEach { it() }
+            }
         }
-    }
 
     fun setDefaultProxy(proxy: Proxy?) {
         if (internalProxy != proxy) {
@@ -70,7 +70,7 @@ object HttpClientManager {
 
     private fun buildHttpClient(
         proxy: Proxy?,
-        timeout: Duration
+        timeout: Duration,
     ): OkHttpClient {
         val seconds = if (proxy != null) timeout.seconds * 2 else timeout.seconds
         val duration = Duration.ofSeconds(seconds)
@@ -108,7 +108,7 @@ object HttpClientManager {
     fun initProxy(
         useProxy: Boolean,
         hostname: String,
-        port: Int
+        port: Int,
     ): Proxy? {
         return if (useProxy) Proxy(Proxy.Type.SOCKS, InetSocketAddress(hostname, port)) else null
     }

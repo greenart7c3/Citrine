@@ -87,7 +87,7 @@ object RelayPool : Relay.Listener {
 
     fun sendToSelectedRelays(
         list: List<Relay>,
-        signedEvent: EventInterface
+        signedEvent: EventInterface,
     ) {
         list.forEach { relay -> relays.filter { it.url == relay.url }.forEach { it.send(signedEvent) } }
     }
@@ -129,36 +129,36 @@ object RelayPool : Relay.Listener {
             event: Event,
             subscriptionId: String,
             relay: Relay,
-            afterEOSE: Boolean
+            afterEOSE: Boolean,
         )
 
         fun onError(
             error: Error,
             subscriptionId: String,
-            relay: Relay
+            relay: Relay,
         )
 
         fun onRelayStateChange(
             type: Relay.StateType,
             relay: Relay,
-            channel: String?
+            channel: String?,
         )
 
         fun onSendResponse(
             eventId: String,
             success: Boolean,
             message: String,
-            relay: Relay
+            relay: Relay,
         )
 
         fun onAuth(
             relay: Relay,
-            challenge: String
+            challenge: String,
         )
 
         fun onNotify(
             relay: Relay,
-            description: String
+            description: String,
         )
     }
 
@@ -166,7 +166,7 @@ object RelayPool : Relay.Listener {
         relay: Relay,
         subscriptionId: String,
         event: Event,
-        afterEOSE: Boolean
+        afterEOSE: Boolean,
     ) {
         listeners.forEach { it.onEvent(event, subscriptionId, relay, afterEOSE) }
     }
@@ -174,7 +174,7 @@ object RelayPool : Relay.Listener {
     override fun onError(
         relay: Relay,
         subscriptionId: String,
-        error: Error
+        error: Error,
     ) {
         listeners.forEach { it.onError(error, subscriptionId, relay) }
         updateStatus()
@@ -183,7 +183,7 @@ object RelayPool : Relay.Listener {
     override fun onRelayStateChange(
         relay: Relay,
         type: Relay.StateType,
-        channel: String?
+        channel: String?,
     ) {
         listeners.forEach { it.onRelayStateChange(type, relay, channel) }
         if (type != Relay.StateType.EOSE) {
@@ -195,21 +195,21 @@ object RelayPool : Relay.Listener {
         relay: Relay,
         eventId: String,
         success: Boolean,
-        message: String
+        message: String,
     ) {
         listeners.forEach { it.onSendResponse(eventId, success, message, relay) }
     }
 
     override fun onAuth(
         relay: Relay,
-        challenge: String
+        challenge: String,
     ) {
         listeners.forEach { it.onAuth(relay, challenge) }
     }
 
     override fun onNotify(
         relay: Relay,
-        description: String
+        description: String,
     ) {
         listeners.forEach { it.onNotify(relay, description) }
     }
@@ -228,5 +228,5 @@ object RelayPool : Relay.Listener {
 data class RelayPoolStatus(
     val connected: Int,
     val available: Int,
-    val isConnected: Boolean = connected > 0
+    val isConnected: Boolean = connected > 0,
 )

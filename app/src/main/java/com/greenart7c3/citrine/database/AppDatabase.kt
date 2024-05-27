@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
-    version = 1
+    version = 1,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -16,17 +16,17 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         @Volatile
-        private var INSTANCE: AppDatabase? = null
+        private var database: AppDatabase? = null
 
         fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
+            return database ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context,
                     AppDatabase::class.java,
-                    "citrine_database"
+                    "citrine_database",
                 ).build()
 
-                INSTANCE = instance
+                database = instance
                 instance
             }
         }

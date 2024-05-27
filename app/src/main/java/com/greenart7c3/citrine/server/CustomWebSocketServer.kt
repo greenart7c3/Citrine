@@ -30,10 +30,10 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
-import kotlinx.coroutines.DelicateCoroutinesApi
 import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.zip.Deflater
+import kotlinx.coroutines.DelicateCoroutinesApi
 
 class CustomWebSocketServer(private val port: Int, private val appDatabase: AppDatabase) {
     val connections = Collections.synchronizedSet<Connection?>(LinkedHashSet())
@@ -62,7 +62,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
         subscriptionId: String,
         filterNodes: List<JsonNode>,
         connection: Connection,
-        count: Boolean = false
+        count: Boolean = false,
     ) {
         val filters = filterNodes.map { jsonNode ->
             val tags = jsonNode.fields().asSequence()
@@ -115,8 +115,8 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
             connection.session.send(
                 CommandResult.invalid(
                     event,
-                    "event signature verification failed"
-                ).toJson()
+                    "event signature verification failed",
+                ).toJson(),
             )
             return
         }
@@ -177,7 +177,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
         return embeddedServer(
             CIO,
             port = port,
-            host = "127.0.0.1"
+            host = "127.0.0.1",
         ) {
             install(WebSockets) {
                 pingPeriodMillis = 1000L

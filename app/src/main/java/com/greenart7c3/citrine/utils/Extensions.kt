@@ -7,7 +7,7 @@ private val KINDS_EVENT_EPHEMERAL = 20000 until 30000
 private val KINDS_EVENT_REPLACEABLE = setOf(
     0..0,
     3..3,
-    10000 until 20000
+    10000 until 20000,
 )
 private val KINDS_PARAMETERIZED_REPLACEABLE = 30000 until 40000
 

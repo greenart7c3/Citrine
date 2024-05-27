@@ -6,7 +6,7 @@ import com.vitorpamplona.quartz.events.Event
 data class CommandResult(val eventId: String, val result: Boolean, val description: String = "") {
     fun toJson(): String {
         return jacksonObjectMapper().writeValueAsString(
-            listOf("OK", eventId, result, description)
+            listOf("OK", eventId, result, description),
         )
     }
 

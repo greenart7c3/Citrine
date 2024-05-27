@@ -26,13 +26,13 @@ import java.util.UUID
 
 data class Subscription(
     val id: String = UUID.randomUUID().toString().substring(0, 4),
-    val onEOSE: ((Long, String) -> Unit)? = null
+    val onEOSE: ((Long, String) -> Unit)? = null,
 ) {
     var typedFilters: List<TypedFilter>? = null // Inactive when null
 
     fun updateEOSE(
         time: Long,
-        relay: String
+        relay: String,
     ) {
         onEOSE?.let { it(time, relay) }
     }
@@ -51,7 +51,7 @@ data class Subscription(
                     "typedFilters",
                     factory.arrayNode(filters.size).apply {
                         filters.forEach { filter -> add(filter.toJsonObject()) }
-                    }
+                    },
                 )
             }
         }

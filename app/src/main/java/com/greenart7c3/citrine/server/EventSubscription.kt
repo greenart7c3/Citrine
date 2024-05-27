@@ -20,7 +20,7 @@ data class Subscription(
     val filters: Set<EventFilter>,
     val appDatabase: AppDatabase,
     val objectMapper: ObjectMapper,
-    val count: Boolean
+    val count: Boolean,
 )
 
 object EventSubscription {
@@ -41,9 +41,9 @@ object EventSubscription {
                                 listOf(
                                     "EVENT",
                                     it.subscription.id,
-                                    event.toJsonObject()
-                                )
-                            )
+                                    event.toJsonObject(),
+                                ),
+                            ),
                         )
                     }
                 }
@@ -79,7 +79,7 @@ object EventSubscription {
         connection: Connection,
         appDatabase: AppDatabase,
         objectMapper: ObjectMapper,
-        count: Boolean
+        count: Boolean,
     ) {
         Log.d("subscriptions", "new subscription $subscriptionId")
         close(subscriptionId)
@@ -92,9 +92,9 @@ object EventSubscription {
                     filters,
                     appDatabase,
                     objectMapper,
-                    count
-                )
-            )
+                    count,
+                ),
+            ),
         )
         _subscriptionCount.value = subscriptions.size()
     }

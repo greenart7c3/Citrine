@@ -36,7 +36,7 @@ class WebSocketServerService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val clipboard = getSystemService(
                 applicationContext,
-                ClipboardManager::class.java
+                ClipboardManager::class.java,
             ) as ClipboardManager
             val clip = ClipData.newPlainText("WebSocket Server Address", "ws://localhost:${webSocketServer.port()}")
             clipboard.setPrimaryClip(clip)
@@ -58,7 +58,7 @@ class WebSocketServerService : Service() {
         // Start the WebSocket server
         webSocketServer = CustomWebSocketServer(
             DEFAULT_PORT,
-            AppDatabase.getDatabase(this@WebSocketServerService)
+            AppDatabase.getDatabase(this@WebSocketServerService),
         )
         webSocketServer.start()
 

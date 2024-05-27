@@ -7,7 +7,7 @@ import kotlinx.coroutines.runBlocking
 object EventRepository {
     suspend fun subscribe(
         subscription: Subscription,
-        filter: EventFilter
+        filter: EventFilter,
     ) {
         var events = subscription.appDatabase.eventDao().getAll().sortedByDescending { it.event.createdAt }.toMutableList()
 
@@ -60,9 +60,9 @@ object EventRepository {
                         listOf(
                             "COUNT",
                             subscription.id,
-                            CountResult(events.size).toJson()
-                        )
-                    )
+                            CountResult(events.size).toJson(),
+                        ),
+                    ),
                 )
             }
             return
@@ -77,9 +77,9 @@ object EventRepository {
                             listOf(
                                 "EVENT",
                                 subscription.id,
-                                event.toJsonObject()
-                            )
-                        )
+                                event.toJsonObject(),
+                            ),
+                        ),
                     )
                 }
             }

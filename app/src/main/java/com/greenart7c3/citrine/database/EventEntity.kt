@@ -18,14 +18,14 @@ import com.vitorpamplona.quartz.events.EventFactory
         Index(
             value = ["id"],
             name = "id_is_hash",
-            unique = true
+            unique = true,
         ),
         Index(
             value = ["pubkey", "kind"],
             name = "most_common_search_is_pubkey_kind",
-            orders = [Index.Order.ASC, Index.Order.ASC]
-        )
-    ]
+            orders = [Index.Order.ASC, Index.Order.ASC],
+        ),
+    ],
 )
 data class EventEntity(
     @PrimaryKey(autoGenerate = false)
@@ -34,16 +34,16 @@ data class EventEntity(
     val createdAt: Long,
     val kind: Int,
     val content: String,
-    val sig: String
+    val sig: String,
 )
 
 data class EventWithTags(
     @Embedded val event: EventEntity,
     @Relation(
         parentColumn = "id",
-        entityColumn = "pkEvent"
+        entityColumn = "pkEvent",
     )
-    val tags: List<TagEntity>
+    val tags: List<TagEntity>,
 )
 
 @Entity(
@@ -52,21 +52,20 @@ data class EventWithTags(
             entity = EventEntity::class,
             childColumns = ["pkEvent"],
             parentColumns = ["id"],
-            onDelete = CASCADE
-        )
+            onDelete = CASCADE,
+        ),
     ],
     indices = [
         Index(
             value = ["pkEvent"],
-            name = "tags_by_pk_event"
+            name = "tags_by_pk_event",
         ),
         Index(
             value = ["col0Name", "col1Value"],
-            name = "tags_by_tags_on_person_or_events"
-        )
-    ]
+            name = "tags_by_tags_on_person_or_events",
+        ),
+    ],
 )
-
 data class TagEntity(
     @PrimaryKey(autoGenerate = true) val pk: Long? = null,
     var pkEvent: String? = null,
@@ -77,7 +76,7 @@ data class TagEntity(
     val col1Value: String?,
     val col2Differentiator: String?,
     val col3Amount: String?,
-    val col4Plus: List<String>
+    val col4Plus: List<String>,
 )
 
 class Converters {
@@ -108,7 +107,7 @@ fun EventWithTags.toEvent(): Event {
         sig = event.sig,
         tags = tags.map {
             it.toTags()
-        }.toTypedArray()
+        }.toTypedArray(),
     )
 }
 
@@ -117,7 +116,7 @@ fun TagEntity.toTags(): Array<String> {
         col0Name,
         col1Value,
         col2Differentiator,
-        col3Amount
+        col3Amount,
     ).plus(col4Plus).toTypedArray()
 }
 
@@ -128,17 +127,21 @@ fun Event.toEventWithTags(): EventWithTags {
         createdAt = createdAt,
         kind = kind,
         content = content,
-        sig = sig
+        sig = sig,
     )
 
     val dbTags = tags.mapIndexed { index, tag ->
         TagEntity(
             position = index,
-            col0Name = tag.getOrNull(0), // tag name
-            col1Value = tag.getOrNull(1), // tag value
-            col2Differentiator = tag.getOrNull(2), // marker
-            col3Amount = tag.getOrNull(3), // value
-            col4Plus = if (tag.size > 4) tag.asList().subList(4, tag.size) else emptyList()
+            // tag name
+            col0Name = tag.getOrNull(0),
+            // tag value
+            col1Value = tag.getOrNull(1),
+            // marker
+            col2Differentiator = tag.getOrNull(2),
+            // value
+            col3Amount = tag.getOrNull(3),
+            col4Plus = if (tag.size > 4) tag.asList().subList(4, tag.size) else emptyList(),
         )
     }
 

@@ -9,12 +9,12 @@ import java.time.format.FormatStyle
 fun Long.toDateString(): String {
     val dateTime = LocalDateTime.ofInstant(
         Instant.ofEpochMilli(this * 1000),
-        ZoneId.systemDefault()
+        ZoneId.systemDefault(),
     )
 
     // Format the LocalDateTime with local format
     val formatter = DateTimeFormatter.ofLocalizedDateTime(
-        FormatStyle.SHORT
+        FormatStyle.SHORT,
     )
 
     return formatter.format(dateTime)

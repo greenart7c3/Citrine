@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
-    id("org.jlleitschuh.gradle.ktlint") version "11.5.0"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
 android {
@@ -30,7 +30,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             resValue("string", "app_name", "@string/app_name_release")
         }

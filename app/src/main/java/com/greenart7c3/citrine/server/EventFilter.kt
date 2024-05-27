@@ -11,7 +11,7 @@ data class EventFilter(
     var since: Int? = null,
     val until: Int? = null,
     val limit: Int = 10_000,
-    val search: String? = null
+    val search: String? = null,
 ) : Predicate<Event> {
     val searchKeywords: Set<String> = search?.let { tokenizeString(search) } ?: emptySet()
 

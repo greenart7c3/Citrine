@@ -45,9 +45,9 @@ import com.vitorpamplona.quartz.encoders.toHexKey
 import com.vitorpamplona.quartz.events.ContactListEvent
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.coroutines.cancellation.CancellationException
 
 @Composable
 fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
@@ -59,7 +59,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
 
     val signer = NostrSignerExternal(
         pubKey.bechToBytes().toHexKey(),
-        ExternalSignerLauncher(pubKey, "")
+        ExternalSignerLauncher(pubKey, ""),
     )
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -68,7 +68,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                 Toast.makeText(
                     context,
                     context.getString(R.string.sign_request_rejected),
-                    Toast.LENGTH_SHORT
+                    Toast.LENGTH_SHORT,
                 ).show()
             } else {
                 result.data?.let {
@@ -77,7 +77,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                     }
                 }
             }
-        }
+        },
     )
     signer.launcher.registerLauncher(
         launcher = {
@@ -90,12 +90,12 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.make_sure_the_signer_application_has_authorized_this_transaction),
-                        Toast.LENGTH_LONG
+                        Toast.LENGTH_LONG,
                     ).show()
                 }
             }
         },
-        contentResolver = { context.contentResolver }
+        contentResolver = { context.contentResolver },
     )
 
     val events = mutableListOf<ContactListEvent>()
@@ -112,15 +112,15 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
 
     Dialog(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            Modifier.fillMaxSize()
+            Modifier.fillMaxSize(),
         ) {
             if (loading) {
                 Column(
                     verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     CircularProgressIndicator()
                 }
@@ -128,17 +128,17 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.background)
-                        .fillMaxSize()
+                        .fillMaxSize(),
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         CloseButton(
-                            onCancel = onClose
+                            onCancel = onClose,
                         )
                     }
 
@@ -146,52 +146,52 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                         Column(
                             Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
                                 stringResource(R.string.no_follow_list_found),
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
                             )
                         }
                     }
 
                     LazyColumn(
-                        Modifier.fillMaxSize()
+                        Modifier.fillMaxSize(),
                     ) {
                         items(events.size) {
                             val event = events[it]
                             Card(
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(4.dp)
+                                    .padding(4.dp),
                             ) {
                                 Text(
                                     "Date: ${event.createdAt.toDateString()}",
                                     modifier = Modifier.padding(
                                         start = 6.dp,
                                         end = 6.dp,
-                                        top = 6.dp
-                                    )
+                                        top = 6.dp,
+                                    ),
                                 )
                                 Text(
                                     "Following: ${event.verifiedFollowKeySet.size}",
-                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp),
                                 )
                                 Text(
                                     "Communities: ${event.verifiedFollowCommunitySet.size}",
-                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp),
                                 )
                                 Text(
                                     "Hashtags: ${event.verifiedFollowTagSet.size}",
-                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp),
                                 )
                                 Text(
                                     "Relays: ${event.relays()?.keys?.size ?: 0}",
-                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp),
                                 )
                                 Row(
                                     Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center
+                                    horizontalArrangement = Arrangement.Center,
                                 ) {
                                     ElevatedButton(
                                         onClick = {
@@ -201,7 +201,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                     Toast.makeText(
                                                         context,
                                                         context.getString(R.string.no_relays_found),
-                                                        Toast.LENGTH_SHORT
+                                                        Toast.LENGTH_SHORT,
                                                     ).show()
                                                 }
                                                 return@ElevatedButton
@@ -210,7 +210,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                             ContactListEvent.create(
                                                 event.content,
                                                 event.tags,
-                                                signer
+                                                signer,
                                             ) { signedEvent ->
                                                 relays.forEach { relay ->
                                                     if (relay.value.write) {
@@ -223,8 +223,8 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                         modifier = Modifier.padding(
                                             start = 6.dp,
                                             end = 6.dp,
-                                            bottom = 6.dp
-                                        )
+                                            bottom = 6.dp,
+                                        ),
                                     ) {
                                         Text(stringResource(R.string.restore))
                                     }

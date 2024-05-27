@@ -16,12 +16,12 @@ fun CloseButton(onCancel: () -> Unit) {
         onClick = {
             onCancel()
         },
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(20.dp),
     ) {
         Icon(
             Icons.Outlined.Close,
             contentDescription = "Cancel",
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.dp),
         )
     }
 }

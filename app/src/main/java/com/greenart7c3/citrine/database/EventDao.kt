@@ -75,7 +75,7 @@ interface EventDao {
                         AND TagEntity.col0Name = 'd'
                         AND TagEntity.col1Value = :dTagValue
                     )                 
-        """
+        """,
     )
     @Transaction
     fun getOldestReplaceable(kind: Int, pubkey: String, dTagValue: String): List<String>
