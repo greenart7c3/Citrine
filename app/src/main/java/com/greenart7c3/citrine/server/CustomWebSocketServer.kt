@@ -212,7 +212,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
                             "name": "Citrine",
                             "description": "A Nostr relay in your phone",
                             "pubkey": "",
-                            "supported_nips": [1,2,4,9,11,50],
+                            "supported_nips": [1,2,4,9,11,45,50],
                             "software": "https://github.com/greenart7c3/Citrine",
                             "version": "${BuildConfig.VERSION_NAME}"
                         }
