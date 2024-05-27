@@ -2,7 +2,6 @@ package com.greenart7c3.citrine.server
 
 import com.greenart7c3.citrine.database.toEvent
 import io.ktor.websocket.send
-import kotlinx.coroutines.runBlocking
 
 object EventRepository {
     suspend fun subscribe(
@@ -54,34 +53,30 @@ object EventRepository {
         }
 
         if (subscription.count) {
-            runBlocking {
-                subscription.connection.session.send(
-                    subscription.objectMapper.writeValueAsString(
-                        listOf(
-                            "COUNT",
-                            subscription.id,
-                            CountResult(events.size).toJson(),
-                        ),
+            subscription.connection.session.send(
+                subscription.objectMapper.writeValueAsString(
+                    listOf(
+                        "COUNT",
+                        subscription.id,
+                        CountResult(events.size).toJson(),
                     ),
-                )
-            }
+                ),
+            )
             return
         }
 
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {
-                runBlocking {
-                    subscription.connection.session.send(
-                        subscription.objectMapper.writeValueAsString(
-                            listOf(
-                                "EVENT",
-                                subscription.id,
-                                event.toJsonObject(),
-                            ),
+                subscription.connection.session.send(
+                    subscription.objectMapper.writeValueAsString(
+                        listOf(
+                            "EVENT",
+                            subscription.id,
+                            event.toJsonObject(),
                         ),
-                    )
-                }
+                    ),
+                )
             }
         }
     }

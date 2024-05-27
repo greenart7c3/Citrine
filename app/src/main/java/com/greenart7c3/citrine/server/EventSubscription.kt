@@ -73,7 +73,7 @@ object EventSubscription {
         Log.d("subscriptions", subscriptions.size().toString())
     }
 
-    fun subscribe(
+    suspend fun subscribe(
         subscriptionId: String,
         filters: Set<EventFilter>,
         connection: Connection,
@@ -83,19 +83,22 @@ object EventSubscription {
     ) {
         Log.d("subscriptions", "new subscription $subscriptionId")
         close(subscriptionId)
-        subscriptions.put(
-            subscriptionId,
-            SubscriptionManager(
-                Subscription(
-                    subscriptionId,
-                    connection,
-                    filters,
-                    appDatabase,
-                    objectMapper,
-                    count,
-                ),
+        val manager = SubscriptionManager(
+            Subscription(
+                subscriptionId,
+                connection,
+                filters,
+                appDatabase,
+                objectMapper,
+                count,
             ),
         )
+        subscriptions.put(
+            subscriptionId,
+            manager,
+        )
+        manager.execute()
+        connection.session.send(EOSE(subscriptionId).toJson())
         _subscriptionCount.value = subscriptions.size()
     }
 }
