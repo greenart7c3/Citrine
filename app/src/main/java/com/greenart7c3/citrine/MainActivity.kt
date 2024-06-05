@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
                 }.map {
                     Event.fromJson(it).toEventWithTags()
                 }.forEach {
-                    database.eventDao().insertEventWithTags(it)
+                    database.eventDao().insertEventWithTags(it, false)
                 }
             }
         }

@@ -55,26 +55,26 @@ interface EventDao {
 
     @Query(
         """
-        SELECT EventEntity.id 
+        SELECT EventEntity.id
           FROM EventEntity EventEntity
-         WHERE EventEntity.pubkey = :pubkey 
+         WHERE EventEntity.pubkey = :pubkey
            AND EventEntity.kind = :kind
-           AND EventEntity.createdAt < (SELECT MAX(EventEntity.createdAt) 
-                              FROM EventEntity EventEntity 
-                             INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent  
-                             WHERE EventEntity.pubkey = :pubkey 
+           AND EventEntity.createdAt < (SELECT MAX(EventEntity.createdAt)
+                              FROM EventEntity EventEntity
+                             INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
+                             WHERE EventEntity.pubkey = :pubkey
                                AND EventEntity.kind = :kind
                                AND TagEntity.col0Name = 'd'
                                AND TagEntity.col1Value = :dTagValue
                            )
           and EventEntity.id in (SELECT EventEntity.id
                        FROM EventEntity EventEntity
-                      INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent  
-                      WHERE EventEntity.pubkey = :pubkey 
+                      INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
+                      WHERE EventEntity.pubkey = :pubkey
                         AND EventEntity.kind = :kind
                         AND TagEntity.col0Name = 'd'
                         AND TagEntity.col1Value = :dTagValue
-                    )                 
+                    )
         """,
     )
     @Transaction
@@ -86,7 +86,7 @@ interface EventDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
-    fun insertEventWithTags(dbEvent: EventWithTags) {
+    fun insertEventWithTags(dbEvent: EventWithTags, sendEventToSubscriptions: Boolean = true) {
         deletetags(dbEvent.event.id)
         insertEvent(dbEvent.event)?.let {
             dbEvent.tags.forEach {
@@ -95,7 +95,9 @@ interface EventDao {
 
             insertTags(dbEvent.tags)
 
-            EventSubscription.executeAll(dbEvent)
+            if (sendEventToSubscriptions) {
+                EventSubscription.executeAll(dbEvent)
+            }
         }
     }
 }
