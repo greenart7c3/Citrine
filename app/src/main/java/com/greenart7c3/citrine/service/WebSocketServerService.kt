@@ -26,12 +26,12 @@ import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.utils.isEphemeral
-import java.util.Timer
-import kotlin.concurrent.schedule
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import java.util.Timer
+import java.util.TimerTask
 
 class WebSocketServerService : Service() {
     lateinit var webSocketServer: CustomWebSocketServer
@@ -71,15 +71,17 @@ class WebSocketServerService : Service() {
 
         val database = AppDatabase.getDatabase(this@WebSocketServerService)
 
-        eventsToDelete(database)
-
         timer?.cancel()
         timer = Timer()
         timer?.schedule(
-            300000L,
-        ) {
-            eventsToDelete(database)
-        }
+            object : TimerTask() {
+                override fun run() {
+                    eventsToDelete(database)
+                }
+            },
+            0,
+            300000,
+        )
 
         val intentFilter = IntentFilter("com.example.ACTION_COPY")
 
