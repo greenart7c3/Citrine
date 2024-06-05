@@ -26,12 +26,12 @@ import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.utils.isEphemeral
+import java.util.Timer
+import java.util.TimerTask
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.util.Timer
-import java.util.TimerTask
 
 class WebSocketServerService : Service() {
     lateinit var webSocketServer: CustomWebSocketServer
