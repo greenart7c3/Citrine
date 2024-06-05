@@ -16,18 +16,27 @@ import android.content.IntentFilter
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat.getSystemService
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
+import com.greenart7c3.citrine.utils.isEphemeral
+import java.util.Timer
+import kotlin.concurrent.schedule
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 class WebSocketServerService : Service() {
     lateinit var webSocketServer: CustomWebSocketServer
     private val binder = LocalBinder()
-
+    private var timer: Timer? = null
     inner class LocalBinder : Binder() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
     }
@@ -43,9 +52,34 @@ class WebSocketServerService : Service() {
         }
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun eventsToDelete(database: AppDatabase) {
+        Log.d("timer", "Deleting ephemeral and expired events")
+        GlobalScope.launch(Dispatchers.IO) {
+            database.eventDao().getAll().forEach {
+                val event = it.toEvent()
+                if (event.isEphemeral() || event.isExpired()) {
+                    database.eventDao().delete(listOf(event.id), event.pubKey)
+                }
+            }
+        }
+    }
+
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onCreate() {
         super.onCreate()
+
+        val database = AppDatabase.getDatabase(this@WebSocketServerService)
+
+        eventsToDelete(database)
+
+        timer?.cancel()
+        timer = Timer()
+        timer?.schedule(
+            300000L,
+        ) {
+            eventsToDelete(database)
+        }
 
         val intentFilter = IntentFilter("com.example.ACTION_COPY")
 
@@ -58,7 +92,7 @@ class WebSocketServerService : Service() {
         // Start the WebSocket server
         webSocketServer = CustomWebSocketServer(
             DEFAULT_PORT,
-            AppDatabase.getDatabase(this@WebSocketServerService),
+            database,
         )
         webSocketServer.start()
 
@@ -67,6 +101,8 @@ class WebSocketServerService : Service() {
     }
 
     override fun onDestroy() {
+        timer?.cancel()
+        timer = null
         EventSubscription.closeAll()
         unregisterReceiver(brCopy)
         webSocketServer.stop()
