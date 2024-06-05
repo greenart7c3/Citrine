@@ -15,7 +15,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,8 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.anggrayudi.storage.file.makeFile
 import com.anggrayudi.storage.file.openInputStream
@@ -49,6 +48,9 @@ import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.service.WebSocketServerService
+import com.greenart7c3.citrine.ui.components.DatabaseButtons
+import com.greenart7c3.citrine.ui.components.DatabaseInfo
+import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.vitorpamplona.quartz.events.Event
@@ -111,41 +113,13 @@ class MainActivity : ComponentActivity() {
         isLoading.value = false
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         storageHelper.onFolderSelected = { _, folder ->
-            GlobalScope.launch(Dispatchers.IO) {
-                val events = database.eventDao().getAll()
-                val json = events.joinToString(separator = "\n") {
-                    it.toEvent().toJson()
-                }
-
-                val file = folder.makeFile(this@MainActivity, "citrine.jsonl")
-                val op = file?.openOutputStream(this@MainActivity)
-                op?.writer().use {
-                    it?.write(json)
-                }
-            }
+            exportDatabase(folder)
         }
 
         storageHelper.onFileSelected = { _, files ->
-            GlobalScope.launch(Dispatchers.IO) {
-                val json = files.first().openInputStream(this@MainActivity)?.bufferedReader().use {
-                    it?.readText()
-                }
-
-                database.eventDao().deleteAll()
-
-                json!!.split("\n").map {
-                    it.trim()
-                }.filter {
-                    it.isNotEmpty()
-                }.map {
-                    Event.fromJson(it).toEventWithTags()
-                }.forEach {
-                    database.eventDao().insertEventWithTags(it, false)
-                }
-            }
+            importDatabase(files)
         }
 
         super.onCreate(savedInstanceState)
@@ -260,60 +234,67 @@ class MainActivity : ComponentActivity() {
                                 Text(stringResource(R.string.restore_follows))
                             }
 
-                            Row {
-                                ElevatedButton(
-                                    onClick = {
-                                        storageHelper.openFolderPicker()
-                                    },
-                                ) {
-                                    Text("Export database")
-                                }
-                                Spacer(modifier = Modifier.padding(4.dp))
-                                ElevatedButton(
-                                    onClick = {
-                                        storageHelper.openFilePicker()
-                                    },
-                                ) {
-                                    Text("Import database")
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.padding(4.dp))
-                            Text(
-                                "Relay",
-                                fontWeight = FontWeight.Bold,
+                            DatabaseButtons(
+                                onExport = {
+                                    storageHelper.openFolderPicker()
+                                },
+                                onImport = {
+                                    storageHelper.openFilePicker()
+                                },
                             )
                             Spacer(modifier = Modifier.padding(4.dp))
-                            Text("Connections: ${service?.webSocketServer?.connections?.size ?: 0}")
-                            Text("Subscriptions: ${count.value}")
+                            RelayInfo(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                connections = service?.webSocketServer?.connections?.size ?: 0,
+                                subscriptions = count.value,
+                            )
                             Spacer(modifier = Modifier.padding(4.dp))
-                            Text("Database", fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.padding(4.dp))
-
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text("Kind", fontWeight = FontWeight.Bold)
-                                Text("Count", fontWeight = FontWeight.Bold)
-                            }
-
-                            flow?.value?.forEach { item ->
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 24.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text("${item.kind}")
-                                    Text("${item.count}")
-                                }
-                            }
+                            DatabaseInfo(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                flow = flow,
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun exportDatabase(folder: DocumentFile) {
+        GlobalScope.launch(Dispatchers.IO) {
+            val events = database.eventDao().getAll()
+            val json = events.joinToString(separator = "\n") {
+                it.toEvent().toJson()
+            }
+
+            val file = folder.makeFile(this@MainActivity, "citrine.jsonl")
+            val op = file?.openOutputStream(this@MainActivity)
+            op?.writer().use {
+                it?.write(json)
+            }
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun importDatabase(files: List<DocumentFile>) {
+        GlobalScope.launch(Dispatchers.IO) {
+            val json = files.first().openInputStream(this@MainActivity)?.bufferedReader().use {
+                it?.readText()
+            }
+
+            database.eventDao().deleteAll()
+
+            json!!.split("\n").map {
+                it.trim()
+            }.filter {
+                it.isNotEmpty()
+            }.map {
+                Event.fromJson(it).toEventWithTags()
+            }.forEach {
+                database.eventDao().insertEventWithTags(it, false)
             }
         }
     }

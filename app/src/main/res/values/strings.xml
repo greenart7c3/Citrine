@@ -12,4 +12,6 @@
     <string name="start">Start</string>
     <string name="no_external_signer_installed">No external signer installed</string>
     <string name="restore_follows">Restore follows</string>
+    <string name="export_database">Export database</string>
+    <string name="import_database">Import database</string>
 </resources>
