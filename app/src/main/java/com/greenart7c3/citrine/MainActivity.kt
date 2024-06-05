@@ -1,6 +1,5 @@
 package com.greenart7c3.citrine
 
-import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -45,6 +44,7 @@ import com.anggrayudi.storage.file.makeFile
 import com.anggrayudi.storage.file.openInputStream
 import com.anggrayudi.storage.file.openOutputStream
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
@@ -52,17 +52,16 @@ import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.vitorpamplona.quartz.events.Event
-import java.io.ByteArrayOutputStream
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
-import kotlin.text.Charsets.UTF_8
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private lateinit var database: AppDatabase
+    private var countByKind: Flow<List<EventDao.CountResult>>? = null
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -114,8 +113,6 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
-        val database = AppDatabase.getDatabase(this)
-
         storageHelper.onFolderSelected = { _, folder ->
             GlobalScope.launch(Dispatchers.IO) {
                 val events = database.eventDao().getAll()
@@ -161,11 +158,12 @@ class MainActivity : ComponentActivity() {
             var pubKey by remember {
                 mutableStateOf("")
             }
+            database = AppDatabase.getDatabase(this)
 
             val launcherLogin = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.StartActivityForResult(),
                 onResult = { result ->
-                    if (result.resultCode != Activity.RESULT_OK) {
+                    if (result.resultCode != RESULT_OK) {
                         Toast.makeText(
                             context,
                             getString(R.string.sign_request_rejected),
@@ -180,7 +178,10 @@ class MainActivity : ComponentActivity() {
             )
 
             CitrineTheme {
-                val flow = database.eventDao().countByKind().collectAsState(initial = listOf())
+                if (countByKind == null) {
+                    countByKind = database.eventDao().countByKind()
+                }
+                val flow = countByKind?.collectAsState(initial = listOf())
                 val count = EventSubscription.subscriptionCount.collectAsState(0)
 
                 Surface(
@@ -299,7 +300,7 @@ class MainActivity : ComponentActivity() {
                                 Text("Count", fontWeight = FontWeight.Bold)
                             }
 
-                            flow.value.forEach { item ->
+                            flow?.value?.forEach { item ->
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
@@ -324,13 +325,4 @@ class MainActivity : ComponentActivity() {
         }
         super.onDestroy()
     }
-
-    fun gzip(content: String): ByteArray {
-        val bos = ByteArrayOutputStream()
-        GZIPOutputStream(bos).bufferedWriter(UTF_8).use { it.write(content) }
-        return bos.toByteArray()
-    }
-
-    fun ungzip(content: ByteArray): String =
-        GZIPInputStream(content.inputStream()).bufferedReader(UTF_8).use { it.readText() }
 }
