@@ -16,7 +16,7 @@ room = "2.6.1"
 storage = "1.5.5"
 workRuntimeKtx = "2.9.0"
 material3 = "1.2.1"
-quartz = "0.86.5"
+quartz = "0.87.5"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
