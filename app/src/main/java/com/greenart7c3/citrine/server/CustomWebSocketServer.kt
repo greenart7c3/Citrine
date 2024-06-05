@@ -111,6 +111,16 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
     private suspend fun processEvent(eventNode: JsonNode, connection: Connection) {
         val event = objectMapper.treeToValue(eventNode, Event::class.java)
 
+        if (!event.hasCorrectIDHash()) {
+            connection.session.send(
+                CommandResult.invalid(
+                    event,
+                    "event id hash verification failed",
+                ).toJson(),
+            )
+            return
+        }
+
         if (!event.hasVerifiedSignature()) {
             connection.session.send(
                 CommandResult.invalid(
