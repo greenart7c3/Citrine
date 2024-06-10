@@ -14,4 +14,6 @@
     <string name="restore_follows">Restore follows</string>
     <string name="export_database">Export database</string>
     <string name="import_database">Import database</string>
+    <string name="import_failed">Import failed</string>
+    <string name="invalid_file_extension">File not supported</string>
 </resources>

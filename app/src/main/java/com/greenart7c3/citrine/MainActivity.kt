@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anggrayudi.storage.SimpleStorageHelper
+import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.makeFile
 import com.anggrayudi.storage.file.openInputStream
 import com.anggrayudi.storage.file.openOutputStream
@@ -53,7 +54,9 @@ import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
+import com.greenart7c3.citrine.utils.NostrSync
 import com.vitorpamplona.quartz.events.Event
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -281,20 +284,52 @@ class MainActivity : ComponentActivity() {
     @OptIn(DelicateCoroutinesApi::class)
     private fun importDatabase(files: List<DocumentFile>) {
         GlobalScope.launch(Dispatchers.IO) {
-            val json = files.first().openInputStream(this@MainActivity)?.bufferedReader().use {
-                it?.readText()
+            val file = files.first()
+            if (file.extension != "js" && file.extension != "jsonl") {
+                GlobalScope.launch(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.invalid_file_extension),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+                return@launch
             }
 
-            database.eventDao().deleteAll()
+            try {
+                val json = file.openInputStream(this@MainActivity)?.bufferedReader().use {
+                    it?.readText()
+                }
 
-            json!!.split("\n").map {
-                it.trim()
-            }.filter {
-                it.isNotEmpty()
-            }.map {
-                Event.fromJson(it).toEventWithTags()
-            }.forEach {
-                database.eventDao().insertEventWithTags(it, false)
+                if (file.extension == "js") {
+                    val nostrSync = NostrSync.mapper.readValue(json!!.replaceFirst("const data = [", "["), NostrSync::class.java)
+                    database.eventDao().deleteAll()
+                    nostrSync.data.forEach {
+                        database.eventDao().insertEventWithTags(it.toEventWithTags(), false)
+                    }
+                } else {
+                    val events = json!!.split("\n").map {
+                        it.trim()
+                    }.filter {
+                        it.isNotEmpty()
+                    }.map {
+                        Event.fromJson(it).toEventWithTags()
+                    }
+                    database.eventDao().deleteAll()
+                    events.forEach {
+                        database.eventDao().insertEventWithTags(it, false)
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.d("import", e.message ?: "", e)
+                GlobalScope.launch(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.import_failed),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
             }
         }
     }
