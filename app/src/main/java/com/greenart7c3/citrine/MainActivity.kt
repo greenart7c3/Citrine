@@ -26,7 +26,6 @@ import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.anggrayudi.storage.file.makeFile
 import com.anggrayudi.storage.file.openInputStream
@@ -155,8 +155,8 @@ class MainActivity : ComponentActivity() {
                 if (countByKind == null) {
                     countByKind = database.eventDao().countByKind()
                 }
-                val flow = countByKind?.collectAsState(initial = listOf())
-                val count = EventSubscription.subscriptionCount.collectAsState(0)
+                val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
+                val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
 
                 Surface(
                     modifier = Modifier

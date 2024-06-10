@@ -47,5 +47,6 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 quartz = { module = "com.github.vitorpamplona.amethyst:quartz", version.ref = "quartz" }
 storage = { module = "com.anggrayudi:storage", version.ref = "storage" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
 
 [plugins]
