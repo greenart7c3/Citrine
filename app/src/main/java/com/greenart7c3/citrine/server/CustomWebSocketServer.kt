@@ -173,9 +173,15 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
     private fun deleteEvent(event: Event) {
         save(event)
         appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
+        val taggedAddresses = event.taggedAddresses()
+        if (taggedAddresses.isEmpty()) return
+        val events = appDatabase.eventDao().getAll()
         event.taggedAddresses().forEach { aTag ->
-            val events = appDatabase.eventDao().getAll().filter {
-                it.tags.any { tag -> tag.col0Name == "d" && tag.col1Value == aTag.dTag } && it.event.pubkey == aTag.pubKeyHex && it.event.kind == aTag.kind
+            events.filter {
+                it.tags.any { tag -> tag.col0Name == "d" && tag.col1Value == aTag.dTag } &&
+                    it.event.pubkey == aTag.pubKeyHex &&
+                    it.event.kind == aTag.kind &&
+                    it.event.createdAt <= event.createdAt
             }
 
             appDatabase.eventDao().delete(events.map { it.event.id }, event.pubKey)
