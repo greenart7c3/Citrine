@@ -30,7 +30,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Citrine"
         android:usesCleartextTraffic="true"
-        tools:targetApi="31">
+        android:localeConfig="@xml/locales_config"
+        tools:targetApi="tiramisu">
 
         <service
             android:name=".service.WebSocketServerService"
