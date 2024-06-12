@@ -1,6 +1,5 @@
 package com.greenart7c3.citrine.utils
 
-import android.util.Log
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.DeserializationContext
@@ -36,7 +35,6 @@ data class NostrSync(
         fun fromJson(jsonObject: JsonNode): NostrSync {
             return NostrSync(
                 jsonObject.toList().map {
-                    Log.d("NostrSync", it.toString())
                     Event.fromJson(it)
                 }.toList(),
             )
