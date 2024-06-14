@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name_release">Citrine</string>
-    <string name="app_name_debug">Citrine Debug</string>
-    <string name="no_follow_list_found">No follow list found</string>
-    <string name="no_relays_found">No relays found</string>
-    <string name="restore">Restore</string>
-    <string name="make_sure_the_signer_application_has_authorized_this_transaction">Make sure the signer application has authorized this transaction</string>
-    <string name="sign_request_rejected">Sign request rejected</string>
-    <string name="relay_started_at">Relay started at</string>
-    <string name="relay_not_running">Relay not running</string>
-    <string name="stop">Stop</string>
-    <string name="start">Start</string>
-    <string name="no_external_signer_installed">No external signer installed</string>
-    <string name="restore_follows">Restore follows</string>
-    <string name="export_database">Export database</string>
-    <string name="import_database">Import database</string>
-    <string name="import_failed">Import failed</string>
-    <string name="invalid_file_extension">File not supported</string>
+    <string name="app_name_debug">Citrine 调试</string>
+    <string name="no_follow_list_found">未找到关注列表</string>
+    <string name="no_relays_found">未找到中继</string>
+    <string name="restore">恢复</string>
+    <string name="make_sure_the_signer_application_has_authorized_this_transaction">请确保签名器已授权本次请求</string>
+    <string name="sign_request_rejected">签名请求已被拒绝</string>
+    <string name="relay_started_at">中继运行于</string>
+    <string name="relay_not_running">中继未运行</string>
+    <string name="stop">停止</string>
+    <string name="start">启动</string>
+    <string name="no_external_signer_installed">未安装外部签名器</string>
+    <string name="restore_follows">恢复关注列表</string>
+    <string name="export_database">导出数据库</string>
+    <string name="import_database">导入数据库</string>
+    <string name="import_failed">导入失败</string>
+    <string name="invalid_file_extension">不支持的文件类型</string>
 </resources>
