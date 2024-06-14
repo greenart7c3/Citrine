@@ -39,7 +39,7 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
           # override default build-tools version (29.0.3) -- optional
-          BUILD_TOOLS_VERSION: "34.0.0"          
+          BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Build APK
         run: ./gradlew assembleRelease --stacktrace
@@ -54,7 +54,14 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
           # override default build-tools version (29.0.3) -- optional
-          BUILD_TOOLS_VERSION: "34.0.0"          
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      - uses: kaisugi/action-regex-match@v1.0.1
+        id: regex-match
+        with:
+          text: ${{ github.ref }}
+          regex: '(v*-pre*)'
+          flags: gm
 
       - name: Create Release
         id: create_release
@@ -65,7 +72,7 @@ jobs:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.regex-match.outputs.match != '' }}
 
       - name: Upload APK Universal Asset
         id: upload-release-asset-universal-apk
@@ -73,7 +80,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: app/build/outputs/apk/release/app-universal-release-unsigned-signed.apk
           asset_name: citrine-universal-${{ github.ref_name }}.apk
           asset_content_type: application/zip
