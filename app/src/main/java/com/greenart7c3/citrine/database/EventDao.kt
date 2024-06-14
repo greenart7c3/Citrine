@@ -4,7 +4,9 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Transaction
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.greenart7c3.citrine.server.EventSubscription
 import kotlinx.coroutines.flow.Flow
 
@@ -14,6 +16,9 @@ interface EventDao {
         var kind: Int = 0
         var count: Int = 0
     }
+
+    @RawQuery
+    fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
     @Query("SELECT * FROM EventEntity ORDER BY createdAt DESC")
     @Transaction

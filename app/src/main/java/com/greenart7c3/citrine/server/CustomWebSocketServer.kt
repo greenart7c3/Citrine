@@ -175,14 +175,17 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
         appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
         val taggedAddresses = event.taggedAddresses()
         if (taggedAddresses.isEmpty()) return
-        val events = appDatabase.eventDao().getAll()
+
         event.taggedAddresses().forEach { aTag ->
-            events.filter {
-                it.tags.any { tag -> tag.col0Name == "d" && tag.col1Value == aTag.dTag } &&
-                    it.event.pubkey == aTag.pubKeyHex &&
-                    it.event.kind == aTag.kind &&
-                    it.event.createdAt <= event.createdAt
-            }
+            val events = EventRepository.query(
+                appDatabase,
+                EventFilter(
+                    authors = setOf(aTag.pubKeyHex),
+                    kinds = setOf(aTag.kind),
+                    tags = mapOf("d" to setOf(aTag.dTag)),
+                    until = event.createdAt.toInt(),
+                ),
+            )
 
             appDatabase.eventDao().delete(events.map { it.event.id }, event.pubKey)
         }
