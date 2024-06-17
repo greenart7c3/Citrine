@@ -2,19 +2,19 @@
 <resources>
     <string name="app_name_release">Citrine</string>
     <string name="app_name_debug">Citrine Debug</string>
-    <string name="no_follow_list_found">No follow list found</string>
-    <string name="no_relays_found">No relays found</string>
-    <string name="restore">Restore</string>
-    <string name="make_sure_the_signer_application_has_authorized_this_transaction">Make sure the signer application has authorized this transaction</string>
-    <string name="sign_request_rejected">Sign request rejected</string>
-    <string name="relay_started_at">Relay started at</string>
-    <string name="relay_not_running">Relay not running</string>
-    <string name="stop">Stop</string>
-    <string name="start">Start</string>
-    <string name="no_external_signer_installed">No external signer installed</string>
-    <string name="restore_follows">Restore follows</string>
-    <string name="export_database">Export database</string>
-    <string name="import_database">Import database</string>
-    <string name="import_failed">Import failed</string>
-    <string name="invalid_file_extension">File not supported</string>
+    <string name="no_follow_list_found">Aucune liste de suivi trouvée</string>
+    <string name="no_relays_found">Aucun relais trouvé</string>
+    <string name="restore">Restaurer</string>
+    <string name="make_sure_the_signer_application_has_authorized_this_transaction">Assurez-vous que l\'application signataire a autorisé cette transaction</string>
+    <string name="sign_request_rejected">Demande de signature rejetée</string>
+    <string name="relay_started_at">Relais démarré à</string>
+    <string name="relay_not_running">Relais inactif</string>
+    <string name="stop">Arrêter</string>
+    <string name="start">Démarrer</string>
+    <string name="no_external_signer_installed">Aucun signataire externe n\'est installé</string>
+    <string name="restore_follows">Restaurer les abonnements</string>
+    <string name="export_database">Exporter la base de données</string>
+    <string name="import_database">Importer la base de données</string>
+    <string name="import_failed">Échec de l\'importation</string>
+    <string name="invalid_file_extension">Fichier non pris en charge</string>
 </resources>
