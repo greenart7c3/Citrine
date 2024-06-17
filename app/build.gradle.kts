@@ -173,7 +173,7 @@ dependencies {
     }
     implementation(libs.androidx.room.runtime)
     implementation(libs.room.ktx)
-    annotationProcessor(libs.androidx.room.compiler)
+    annotationProcessor(libs.room.compiler)
     ksp(libs.room.compiler)
     implementation(libs.okhttp)
     implementation(libs.storage)

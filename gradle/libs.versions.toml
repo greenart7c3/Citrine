@@ -1,7 +1,7 @@
 [versions]
 activityCompose = "1.9.0"
-composeBom = "2024.05.00"
-composeUiVersion = "1.6.7"
+composeBom = "2024.06.00"
+composeUiVersion = "1.6.8"
 coreKtx = "1.13.1"
 espressoCore = "3.5.1"
 jna = "5.14.0"
@@ -9,7 +9,7 @@ junitVersion = "1.1.5"
 junit = "4.13.2"
 kotlinxCoroutinesCore = "1.8.1"
 ktorServer = "2.3.11"
-lifecycleRuntimeKtx = "2.7.0"
+lifecycleRuntimeKtx = "2.8.2"
 navigationCompose = "2.7.7"
 okhttp = "5.0.0-alpha.14"
 room = "2.6.1"
@@ -28,7 +28,6 @@ androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtim
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
-androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 androidx-ui = { module = "androidx.compose.ui:ui", version.ref = "composeUiVersion" }
 androidx-ui-graphics = { module = "androidx.compose.ui:ui-graphics", version.ref = "composeUiVersion" }
 androidx-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "composeUiVersion" }
