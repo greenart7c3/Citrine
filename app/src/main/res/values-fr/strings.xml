@@ -17,4 +17,5 @@
     <string name="import_database">Importer la base de données</string>
     <string name="import_failed">Échec de l\'importation</string>
     <string name="invalid_file_extension">Fichier non pris en charge</string>
+    <string name="imported_events_successfully">Imported %1$d events successfully</string>
 </resources>
