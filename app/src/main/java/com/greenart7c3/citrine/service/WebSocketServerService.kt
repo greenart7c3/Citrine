@@ -24,8 +24,9 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.CustomWebSocketServer
+import com.greenart7c3.citrine.server.EventFilter
+import com.greenart7c3.citrine.server.EventRepository
 import com.greenart7c3.citrine.server.EventSubscription
-import com.greenart7c3.citrine.utils.isEphemeral
 import java.util.Timer
 import java.util.TimerTask
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -54,14 +55,26 @@ class WebSocketServerService : Service() {
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun eventsToDelete(database: AppDatabase) {
-        Log.d("timer", "Deleting ephemeral and expired events")
         GlobalScope.launch(Dispatchers.IO) {
-            database.eventDao().getAll().forEach {
+            val ephemeralEvents = EventRepository.query(
+                database,
+                EventFilter(
+                    kinds = (20000 until 30000).toSet(),
+                ),
+            )
+            Log.d("timer", "Deleting ${ephemeralEvents.size} ephemeral events")
+            database.eventDao().delete(ephemeralEvents.map { it.event.id })
+
+            val expiredEvents = database.eventDao().getEventsWithExpirations().mapNotNull {
                 val event = it.toEvent()
-                if (event.isEphemeral() || event.isExpired()) {
-                    database.eventDao().delete(listOf(event.id), event.pubKey)
+                if (event.isExpired()) {
+                    it
+                } else {
+                    null
                 }
             }
+            Log.d("timer", "Deleting ${expiredEvents.size} expired events")
+            database.eventDao().delete(expiredEvents.map { it.event.id })
         }
     }
 

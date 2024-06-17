@@ -20,10 +20,6 @@ interface EventDao {
     @RawQuery
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
-    @Query("SELECT * FROM EventEntity ORDER BY createdAt DESC")
-    @Transaction
-    fun getAll(): List<EventWithTags>
-
     @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
     @Transaction
     fun countByKind(): Flow<List<CountResult>>
@@ -38,6 +34,10 @@ interface EventDao {
     @Transaction
     fun getById(id: String): EventWithTags?
 
+    @Query("SELECT EventEntity.* FROM EventEntity EventEntity INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent AND TagEntity.col0Name = 'expiration'")
+    @Transaction
+    fun getEventsWithExpirations(): List<EventWithTags>
+
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC LIMIT 5")
     @Transaction
     fun getContactLists(pubkey: String): List<EventWithTags>
@@ -50,9 +50,17 @@ interface EventDao {
     @Transaction
     fun delete(ids: List<String>, pubkey: String)
 
+    @Query("DELETE FROM EventEntity WHERE id in (:ids)")
+    @Transaction
+    fun delete(ids: List<String>)
+
     @Query("DELETE FROM TagEntity WHERE pkEvent = :id")
     @Transaction
     fun deletetags(id: String)
+
+    @Query("SELECT id from EventEntity")
+    @Transaction
+    fun getAllIds(): List<String>
 
     @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind AND createdAt < (SELECT MAX(createdAt) FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind)")
     @Transaction

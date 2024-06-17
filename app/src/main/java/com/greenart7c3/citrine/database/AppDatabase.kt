@@ -7,7 +7,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.greenart7c3.citrine.BuildConfig
-import java.util.concurrent.Executors
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
@@ -28,7 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "citrine_database",
                 )
-                    .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                    // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
                     .build()
 
                 database = instance

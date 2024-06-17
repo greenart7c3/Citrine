@@ -54,7 +54,6 @@ import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
-import com.greenart7c3.citrine.utils.NostrSync
 import com.vitorpamplona.quartz.events.Event
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -117,12 +116,24 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val progress = mutableStateOf("")
+
         storageHelper.onFolderSelected = { _, folder ->
-            exportDatabase(folder)
+            exportDatabase(
+                folder = folder,
+                onProgress = {
+                    progress.value = it
+                },
+            )
         }
 
         storageHelper.onFileSelected = { _, files ->
-            importDatabase(files)
+            importDatabase(
+                files = files,
+                onProgress = {
+                    progress.value = it
+                },
+            )
         }
 
         super.onCreate(savedInstanceState)
@@ -135,6 +146,10 @@ class MainActivity : ComponentActivity() {
             var pubKey by remember {
                 mutableStateOf("")
             }
+            val progress2 = remember {
+                progress
+            }
+
             database = AppDatabase.getDatabase(this)
 
             val launcherLogin = rememberLauncherForActivityResult(
@@ -155,12 +170,6 @@ class MainActivity : ComponentActivity() {
             )
 
             CitrineTheme {
-                if (countByKind == null) {
-                    countByKind = database.eventDao().countByKind()
-                }
-                val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
-                val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
-
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
@@ -179,6 +188,10 @@ class MainActivity : ComponentActivity() {
                     ) {
                         if (isLoading.value) {
                             CircularProgressIndicator()
+                            if (progress2.value.isNotBlank()) {
+                                Spacer(modifier = Modifier.padding(4.dp))
+                                Text(progress2.value)
+                            }
                         } else {
                             val isStarted = service?.isStarted() ?: false
                             if (isStarted) {
@@ -246,6 +259,13 @@ class MainActivity : ComponentActivity() {
                                 },
                             )
                             Spacer(modifier = Modifier.padding(4.dp))
+
+                            if (countByKind == null) {
+                                countByKind = database.eventDao().countByKind()
+                            }
+                            val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
+                            val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
+
                             RelayInfo(
                                 modifier = Modifier
                                     .fillMaxWidth(),
@@ -266,26 +286,33 @@ class MainActivity : ComponentActivity() {
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun exportDatabase(folder: DocumentFile) {
+    private fun exportDatabase(folder: DocumentFile, onProgress: (String) -> Unit) {
         GlobalScope.launch(Dispatchers.IO) {
-            val events = database.eventDao().getAll()
-            val json = events.joinToString(separator = "\n") {
-                it.toEvent().toJson()
-            }
-
-            val file = folder.makeFile(this@MainActivity, "citrine.jsonl")
-            val op = file?.openOutputStream(this@MainActivity)
-            op?.writer().use {
-                it?.write(json)
+            isLoading.value = true
+            try {
+                val file = folder.makeFile(this@MainActivity, "citrine.jsonl")
+                val op = file?.openOutputStream(this@MainActivity)
+                op?.writer().use { writer ->
+                    val events = database.eventDao().getAllIds()
+                    events.forEachIndexed { index, it ->
+                        val event = database.eventDao().getById(it)!!
+                        val json = event.toEvent().toJson() + "\n"
+                        writer?.write(json)
+                        onProgress("Exported ${index + 1}/${events.size}")
+                    }
+                }
+            } finally {
+                onProgress("")
+                isLoading.value = false
             }
         }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun importDatabase(files: List<DocumentFile>) {
+    private fun importDatabase(files: List<DocumentFile>, onProgress: (String) -> Unit) {
         GlobalScope.launch(Dispatchers.IO) {
             val file = files.first()
-            if (file.extension != "js" && file.extension != "jsonl") {
+            if (file.extension != "jsonl") {
                 GlobalScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         this@MainActivity,
@@ -297,28 +324,51 @@ class MainActivity : ComponentActivity() {
             }
 
             try {
-                val json = file.openInputStream(this@MainActivity)?.bufferedReader().use {
-                    it?.readText()
+                isLoading.value = true
+                var totalLines = 0
+                onProgress("Reading file ${file.name}")
+                val input = file.openInputStream(this@MainActivity) ?: return@launch
+                input.use { ip ->
+                    ip.bufferedReader().use {
+                        var line: String? = ""
+                        while (it.readLine().also { readLine -> line = readLine } != null) {
+                            if (line?.isNotBlank() == true) {
+                                totalLines++
+                            }
+                        }
+                    }
+                }
+                val input2 = file.openInputStream(this@MainActivity) ?: return@launch
+                input2.use { ip ->
+                    ip.bufferedReader().use {
+                        var linesRead = 0
+
+                        onProgress("deleting all events")
+                        database.eventDao().deleteAll()
+
+                        it.useLines { lines ->
+                            lines.forEach { line ->
+                                if (line.isBlank()) {
+                                    return@forEach
+                                }
+                                val event = Event.fromJson(line)
+                                val eventWithTags = event.toEventWithTags()
+                                database.eventDao().insertEventWithTags(eventWithTags, false)
+                                linesRead++
+                                onProgress("Imported $linesRead/$totalLines")
+                            }
+                        }
+                    }
                 }
 
-                if (file.extension == "js") {
-                    val nostrSync = NostrSync.mapper.readValue(json!!.replaceFirst("const data = [", "["), NostrSync::class.java)
-                    database.eventDao().deleteAll()
-                    nostrSync.data.forEach {
-                        database.eventDao().insertEventWithTags(it.toEventWithTags(), false)
-                    }
-                } else {
-                    val events = json!!.split("\n").map {
-                        it.trim()
-                    }.filter {
-                        it.isNotEmpty()
-                    }.map {
-                        Event.fromJson(it).toEventWithTags()
-                    }
-                    database.eventDao().deleteAll()
-                    events.forEach {
-                        database.eventDao().insertEventWithTags(it, false)
-                    }
+                onProgress("")
+                isLoading.value = false
+                GlobalScope.launch(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.imported_events_successfully, totalLines),
+                        Toast.LENGTH_SHORT,
+                    ).show()
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -330,6 +380,8 @@ class MainActivity : ComponentActivity() {
                         Toast.LENGTH_SHORT,
                     ).show()
                 }
+                onProgress("")
+                isLoading.value = false
             }
         }
     }
