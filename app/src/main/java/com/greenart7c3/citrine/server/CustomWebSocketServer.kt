@@ -35,7 +35,11 @@ import java.util.concurrent.CancellationException
 import java.util.zip.Deflater
 import kotlinx.coroutines.DelicateCoroutinesApi
 
-class CustomWebSocketServer(private val port: Int, private val appDatabase: AppDatabase) {
+class CustomWebSocketServer(
+    private val host: String,
+    private val port: Int,
+    private val appDatabase: AppDatabase,
+) {
     val connections = Collections.synchronizedSet<Connection?>(LinkedHashSet())
     var server: ApplicationEngine? = null
     private val objectMapper = jacksonObjectMapper()
@@ -47,7 +51,7 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
 
     fun start() {
         if (server == null) {
-            server = startKtorHttpServer(port)
+            server = startKtorHttpServer(host, port)
         } else {
             server!!.start(false)
         }
@@ -136,6 +140,23 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
             return
         }
 
+        if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
+            connection.session.send(CommandResult.invalid(event, "kind not allowed").toJson())
+            return
+        }
+
+        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
+            connection.session.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
+            return
+        }
+
+        if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
+            if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
+                connection.session.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
+                return
+            }
+        }
+
         when {
             event.shouldDelete() -> deleteEvent(event)
             event.isParameterizedReplaceable() -> handleParameterizedReplaceable(event)
@@ -192,11 +213,11 @@ class CustomWebSocketServer(private val port: Int, private val appDatabase: AppD
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun startKtorHttpServer(port: Int): ApplicationEngine {
+    private fun startKtorHttpServer(host: String, port: Int): ApplicationEngine {
         return embeddedServer(
             CIO,
             port = port,
-            host = "127.0.0.1",
+            host = host,
         ) {
             install(WebSockets) {
                 pingPeriodMillis = 1000L

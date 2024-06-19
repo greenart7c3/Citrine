@@ -27,6 +27,9 @@ import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventFilter
 import com.greenart7c3.citrine.server.EventRepository
 import com.greenart7c3.citrine.server.EventSubscription
+import com.greenart7c3.citrine.server.OlderThan
+import com.greenart7c3.citrine.server.Settings
+import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
 import java.util.TimerTask
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -56,25 +59,49 @@ class WebSocketServerService : Service() {
     @OptIn(DelicateCoroutinesApi::class)
     private fun eventsToDelete(database: AppDatabase) {
         GlobalScope.launch(Dispatchers.IO) {
-            val ephemeralEvents = EventRepository.query(
-                database,
-                EventFilter(
-                    kinds = (20000 until 30000).toSet(),
-                ),
-            )
-            Log.d("timer", "Deleting ${ephemeralEvents.size} ephemeral events")
-            database.eventDao().delete(ephemeralEvents.map { it.event.id })
+            if (Settings.deleteEphemeralEvents) {
+                val ephemeralEvents = EventRepository.query(
+                    database,
+                    EventFilter(
+                        kinds = (20000 until 30000).toSet(),
+                    ),
+                )
+                Log.d("timer", "Deleting ${ephemeralEvents.size} ephemeral events")
+                database.eventDao().delete(ephemeralEvents.map { it.event.id })
+            }
 
-            val expiredEvents = database.eventDao().getEventsWithExpirations().mapNotNull {
-                val event = it.toEvent()
-                if (event.isExpired()) {
-                    it
-                } else {
-                    null
+            if (Settings.deleteExpiredEvents) {
+                val expiredEvents = database.eventDao().getEventsWithExpirations().mapNotNull {
+                    val event = it.toEvent()
+                    if (event.isExpired()) {
+                        it
+                    } else {
+                        null
+                    }
+                }
+                Log.d("timer", "Deleting ${expiredEvents.size} expired events")
+                database.eventDao().delete(expiredEvents.map { it.event.id })
+            }
+
+            if (Settings.deleteEventsOlderThan != OlderThan.NEVER) {
+                val until = when (Settings.deleteEventsOlderThan) {
+                    OlderThan.DAY -> TimeUtils.oneDayAgo()
+                    OlderThan.WEEK -> TimeUtils.oneWeekAgo()
+                    OlderThan.MONTH -> TimeUtils.now() - TimeUtils.ONE_MONTH
+                    OlderThan.YEAR -> TimeUtils.now() - TimeUtils.ONE_YEAR
+                    else -> 0
+                }
+                if (until > 0) {
+                    val oldEvents = EventRepository.query(
+                        database,
+                        EventFilter(
+                            until = until.toInt(),
+                        ),
+                    )
+                    Log.d("timer", "Deleting ${oldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
+                    database.eventDao().delete(oldEvents.map { it.event.id })
                 }
             }
-            Log.d("timer", "Deleting ${expiredEvents.size} expired events")
-            database.eventDao().delete(expiredEvents.map { it.event.id })
         }
     }
 
@@ -106,8 +133,9 @@ class WebSocketServerService : Service() {
 
         // Start the WebSocket server
         webSocketServer = CustomWebSocketServer(
-            DEFAULT_PORT,
-            database,
+            host = Settings.host,
+            port = Settings.port,
+            appDatabase = database,
         )
         webSocketServer.start()
 
@@ -163,9 +191,5 @@ class WebSocketServerService : Service() {
 
     fun port(): Int? {
         return webSocketServer.port()
-    }
-
-    companion object {
-        const val DEFAULT_PORT = 4869
     }
 }
