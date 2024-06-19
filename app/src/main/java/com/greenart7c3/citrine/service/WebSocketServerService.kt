@@ -18,7 +18,6 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat.getSystemService
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
@@ -47,10 +46,7 @@ class WebSocketServerService : Service() {
 
     private val brCopy: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            val clipboard = getSystemService(
-                applicationContext,
-                ClipboardManager::class.java,
-            ) as ClipboardManager
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("WebSocket Server Address", "ws://localhost:${webSocketServer.port()}")
             clipboard.setPrimaryClip(clip)
         }
@@ -123,7 +119,7 @@ class WebSocketServerService : Service() {
             300000,
         )
 
-        val intentFilter = IntentFilter("com.example.ACTION_COPY")
+        val intentFilter = IntentFilter("com.greenart7c3.citrine.ACTION_COPY")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(brCopy, intentFilter, RECEIVER_NOT_EXPORTED)
@@ -163,7 +159,7 @@ class WebSocketServerService : Service() {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
 
-        val copy = Intent("com.example.ACTION_COPY")
+        val copy = Intent("com.greenart7c3.citrine.ACTION_COPY")
         val piCopy = PendingIntent.getBroadcast(this, 0, copy, PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val resultIntent = Intent(this, MainActivity::class.java)
