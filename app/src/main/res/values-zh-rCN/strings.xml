@@ -17,5 +17,5 @@
     <string name="import_database">导入数据库</string>
     <string name="import_failed">导入失败</string>
     <string name="invalid_file_extension">不支持的文件类型</string>
-    <string name="imported_events_successfully">Imported %1$d events successfully</string>
+    <string name="imported_events_successfully">成功导入 %1$d 个事件</string>
 </resources>
