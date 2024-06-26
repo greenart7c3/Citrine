@@ -17,5 +17,5 @@
     <string name="import_database">Datenbank importieren</string>
     <string name="import_failed">Import fehlgeschlagen</string>
     <string name="invalid_file_extension">Datei nicht unterstützt</string>
-    <string name="imported_events_successfully">Imported %1$d events successfully</string>
+    <string name="imported_events_successfully">%1$d Events erfolgreich importiert</string>
 </resources>
