@@ -7,14 +7,9 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.app.TaskStackBuilder
-import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Binder
-import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -42,14 +37,6 @@ class WebSocketServerService : Service() {
     private var timer: Timer? = null
     inner class LocalBinder : Binder() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
-    }
-
-    private val brCopy: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("WebSocket Server Address", "ws://localhost:${webSocketServer.port()}")
-            clipboard.setPrimaryClip(clip)
-        }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -119,14 +106,6 @@ class WebSocketServerService : Service() {
             300000,
         )
 
-        val intentFilter = IntentFilter("com.greenart7c3.citrine.ACTION_COPY")
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(brCopy, intentFilter, RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(brCopy, intentFilter)
-        }
-
         // Start the WebSocket server
         webSocketServer = CustomWebSocketServer(
             host = Settings.host,
@@ -143,7 +122,6 @@ class WebSocketServerService : Service() {
         timer?.cancel()
         timer = null
         EventSubscription.closeAll()
-        unregisterReceiver(brCopy)
         webSocketServer.stop()
         super.onDestroy()
     }
@@ -159,8 +137,15 @@ class WebSocketServerService : Service() {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
 
-        val copy = Intent("com.greenart7c3.citrine.ACTION_COPY")
-        val piCopy = PendingIntent.getBroadcast(this, 0, copy, PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val copyIntent = Intent(this, ClipboardReceiver::class.java)
+        copyIntent.putExtra("url", "ws://localhost:${webSocketServer.port()}")
+
+        val copyPendingIntent = PendingIntent.getBroadcast(
+            this,
+            0,
+            copyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
 
         val resultIntent = Intent(this, MainActivity::class.java)
 
@@ -175,7 +160,7 @@ class WebSocketServerService : Service() {
             .setContentTitle("Relay running at ws://localhost:${webSocketServer.port()}")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_launcher_background, "Copy Address", piCopy)
+            .addAction(R.drawable.ic_launcher_background, "Copy Address", copyPendingIntent)
             .setContentIntent(resultPendingIntent)
 
         return notificationBuilder.build()
