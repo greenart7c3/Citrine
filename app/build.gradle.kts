@@ -168,6 +168,9 @@ dependencies {
     implementation(libs.quartz) {
         exclude("net.java.dev.jna")
     }
+    implementation(libs.ammolite) {
+        exclude("net.java.dev.jna")
+    }
     implementation(libs.jna) {
         artifact { type = "aar" }
     }
