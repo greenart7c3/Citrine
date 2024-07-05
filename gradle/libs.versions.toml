@@ -3,13 +3,13 @@ activityCompose = "1.9.0"
 composeBom = "2024.06.00"
 composeUiVersion = "1.6.8"
 coreKtx = "1.13.1"
-espressoCore = "3.6.0"
+espressoCore = "3.6.1"
 jna = "5.14.0"
-junitVersion = "1.2.0"
+junitVersion = "1.2.1"
 junit = "4.13.2"
 kotlinxCoroutinesCore = "1.8.1"
 ktorServer = "2.3.11"
-lifecycleRuntimeKtx = "2.8.2"
+lifecycleRuntimeKtx = "2.8.3"
 navigationCompose = "2.7.7"
 okhttp = "5.0.0-alpha.14"
 room = "2.6.1"
@@ -17,6 +17,7 @@ storage = "1.5.5"
 workRuntimeKtx = "2.9.0"
 material3 = "1.2.1"
 quartz = "d6ab376f2d"
+kotlin = "2.0.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -50,3 +51,4 @@ storage = { module = "com.anggrayudi:storage", version.ref = "storage" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
 
 [plugins]
+jetbrainsComposeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

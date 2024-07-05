@@ -12,6 +12,7 @@
 /build
 /captures
 .cxx
+.kotlin/
 
 
 # Built application files
