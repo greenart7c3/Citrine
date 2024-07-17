@@ -31,6 +31,7 @@ androidx-material3 = { module = "androidx.compose.material3:material3", version.
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-ui = { module = "androidx.compose.ui:ui", version.ref = "composeUiVersion" }
 androidx-ui-graphics = { module = "androidx.compose.ui:ui-graphics", version.ref = "composeUiVersion" }
+material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "composeUiVersion" }
 androidx-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "composeUiVersion" }
 androidx-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "composeUiVersion" }
 androidx-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "composeUiVersion" }

@@ -23,7 +23,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -38,6 +42,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.makeFile
@@ -49,10 +57,12 @@ import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.service.WebSocketServerService
+import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.DatabaseButtons
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
+import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.vitorpamplona.quartz.events.Event
 import kotlinx.coroutines.CancellationException
@@ -169,114 +179,173 @@ class MainActivity : ComponentActivity() {
                 },
             )
 
+            val items = listOf(Route.Home, Route.Settings)
+
             CitrineTheme {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    if (pubKey.isNotBlank()) {
-                        ContactsDialog(pubKey = pubKey) {
-                            pubKey = ""
+                val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val destinationRoute = navBackStackEntry?.destination?.route ?: ""
+
+                Scaffold(
+                    bottomBar = {
+                        NavigationBar(tonalElevation = 0.dp) {
+                            items.forEach {
+                                val selected = destinationRoute == it.route
+                                NavigationBarItem(
+                                    selected = selected,
+                                    onClick = {
+                                        navController.navigate(it.route) {
+                                            popUpTo(0)
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            if (selected) it.selectedIcon else it.icon,
+                                            it.route,
+                                        )
+                                    },
+                                    label = {
+                                        Text(it.route)
+                                    },
+                                )
+                            }
                         }
-                    }
-
-                    Column(
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                    },
+                ) { padding ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = Route.Home.route,
                     ) {
-                        if (isLoading.value) {
-                            CircularProgressIndicator()
-                            if (progress2.value.isNotBlank()) {
-                                Spacer(modifier = Modifier.padding(4.dp))
-                                Text(progress2.value)
-                            }
-                        } else {
-                            val isStarted = service?.isStarted() ?: false
-                            if (isStarted) {
-                                Text(stringResource(R.string.relay_started_at))
-                                Text("ws://localhost:${service?.port() ?: 0}")
-                                ElevatedButton(
-                                    onClick = {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            isLoading.value = true
-                                            stop()
-                                            delay(1000)
-                                            isLoading.value = false
-                                        }
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.stop))
+                        composable(Route.Home.route) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                                    .verticalScroll(rememberScrollState()),
+                                color = MaterialTheme.colorScheme.background,
+                            ) {
+                                if (pubKey.isNotBlank()) {
+                                    ContactsDialog(pubKey = pubKey) {
+                                        pubKey = ""
+                                    }
                                 }
-                            } else {
-                                Text(stringResource(R.string.relay_not_running))
-                                ElevatedButton(
-                                    onClick = {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            isLoading.value = true
-                                            start()
-                                            delay(1000)
-                                            isLoading.value = false
-                                        }
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.start))
-                                }
-                            }
 
-                            ElevatedButton(
-                                onClick = {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
-                                        val signerType = "get_public_key"
-                                        intent.putExtra("type", signerType)
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                        launcherLogin.launch(intent)
-                                    } catch (e: Exception) {
-                                        Log.d("intent", e.message ?: "", e)
-                                        coroutineScope.launch(Dispatchers.Main) {
-                                            Toast.makeText(
-                                                context,
-                                                getString(R.string.no_external_signer_installed),
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                Column(
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    if (isLoading.value) {
+                                        CircularProgressIndicator()
+                                        if (progress2.value.isNotBlank()) {
+                                            Spacer(modifier = Modifier.padding(4.dp))
+                                            Text(progress2.value)
                                         }
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
-                                        launcherLogin.launch(intent)
+                                    } else {
+                                        val isStarted = service?.isStarted() ?: false
+                                        if (isStarted) {
+                                            Text(stringResource(R.string.relay_started_at))
+                                            Text("ws://localhost:${service?.port() ?: 0}")
+                                            ElevatedButton(
+                                                onClick = {
+                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                        isLoading.value = true
+                                                        stop()
+                                                        delay(1000)
+                                                        isLoading.value = false
+                                                    }
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.stop))
+                                            }
+                                        } else {
+                                            Text(stringResource(R.string.relay_not_running))
+                                            ElevatedButton(
+                                                onClick = {
+                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                        isLoading.value = true
+                                                        start()
+                                                        delay(1000)
+                                                        isLoading.value = false
+                                                    }
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.start))
+                                            }
+                                        }
+
+                                        ElevatedButton(
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
+                                                    val signerType = "get_public_key"
+                                                    intent.putExtra("type", signerType)
+                                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                                    launcherLogin.launch(intent)
+                                                } catch (e: Exception) {
+                                                    Log.d("intent", e.message ?: "", e)
+                                                    coroutineScope.launch(Dispatchers.Main) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            getString(R.string.no_external_signer_installed),
+                                                            Toast.LENGTH_SHORT,
+                                                        ).show()
+                                                    }
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+                                                    launcherLogin.launch(intent)
+                                                }
+                                            },
+                                        ) {
+                                            Text(stringResource(R.string.restore_follows))
+                                        }
+
+                                        DatabaseButtons(
+                                            onExport = {
+                                                storageHelper.openFolderPicker()
+                                            },
+                                            onImport = {
+                                                storageHelper.openFilePicker()
+                                            },
+                                        )
+                                        Spacer(modifier = Modifier.padding(4.dp))
+
+                                        if (countByKind == null) {
+                                            countByKind = database.eventDao().countByKind()
+                                        }
+                                        val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
+                                        val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
+
+                                        RelayInfo(
+                                            modifier = Modifier
+                                                .fillMaxWidth(),
+                                            connections = service?.webSocketServer?.connections?.size ?: 0,
+                                            subscriptions = count.value,
+                                        )
+                                        Spacer(modifier = Modifier.padding(4.dp))
+                                        DatabaseInfo(
+                                            modifier = Modifier
+                                                .fillMaxWidth(),
+                                            flow = flow,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        composable(Route.Settings.route) {
+                            SettingsScreen(
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                                    .padding(16.dp),
+                                onApplyChanges = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        isLoading.value = true
+                                        stop()
+                                        delay(1000)
+                                        start()
+                                        isLoading.value = false
                                     }
                                 },
-                            ) {
-                                Text(stringResource(R.string.restore_follows))
-                            }
-
-                            DatabaseButtons(
-                                onExport = {
-                                    storageHelper.openFolderPicker()
-                                },
-                                onImport = {
-                                    storageHelper.openFilePicker()
-                                },
-                            )
-                            Spacer(modifier = Modifier.padding(4.dp))
-
-                            if (countByKind == null) {
-                                countByKind = database.eventDao().countByKind()
-                            }
-                            val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
-                            val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
-
-                            RelayInfo(
-                                modifier = Modifier
-                                    .fillMaxWidth(),
-                                connections = service?.webSocketServer?.connections?.size ?: 0,
-                                subscriptions = count.value,
-                            )
-                            Spacer(modifier = Modifier.padding(4.dp))
-                            DatabaseInfo(
-                                modifier = Modifier
-                                    .fillMaxWidth(),
-                                flow = flow,
                             )
                         }
                     }
