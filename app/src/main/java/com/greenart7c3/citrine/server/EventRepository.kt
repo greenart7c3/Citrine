@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.server
 
+import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
@@ -50,17 +51,35 @@ object EventRepository {
         }
 
         if (filter.kinds.isNotEmpty()) {
-            whereClause.add("EventEntity.kind IN (?)")
-            params.add(filter.kinds.joinToString(","))
+            whereClause.add(
+                filter.kinds.joinToString(" OR ", prefix = "(", postfix = ")") {
+                    "EventEntity.kind = ?"
+                },
+            )
+            params.addAll(filter.kinds)
         }
 
         if (filter.tags.isNotEmpty()) {
-            filter.tags.filterValues { it.isNotEmpty() }.forEach { tag ->
-                whereClause.add(
-                    "TagEntity.col0Name = ? AND TagEntity.col1Value in (?)",
-                )
+            val tags = filter.tags.filterValues { it.isNotEmpty() }
+            var tagQuery = ""
+            tags.forEach { tag ->
+                tagQuery = "EXISTS (SELECT TagEntity.pkEvent FROM TagEntity WHERE EventEntity.id = TagEntity.pkEvent"
+                tagQuery += " AND TagEntity.col0Name = ? AND ("
                 params.add(tag.key)
-                params.add(tag.value.map { "'$it'" }.toString().removePrefix("[").removeSuffix("]"))
+
+                var count2 = 0
+                tag.value.forEach {
+                    if (count2 == 0) {
+                        count2++
+                    } else {
+                        tagQuery += " OR "
+                    }
+                    tagQuery += " TagEntity.col1Value = ?"
+                    params.add(it)
+                }
+                tagQuery += "))"
+
+                whereClause.add(tagQuery)
             }
         }
 
@@ -69,7 +88,6 @@ object EventRepository {
         var query = """
             SELECT EventEntity.*
               FROM EventEntity EventEntity
-              LEFT JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
               $predicatesSql
               ORDER BY EventEntity.createdAt DESC
         """
@@ -105,6 +123,7 @@ object EventRepository {
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {
+                Log.d("event", "sending event ${event.id} subscription ${subscription.id} filter $filter")
                 subscription.connection.session.send(
                     subscription.objectMapper.writeValueAsString(
                         listOf(

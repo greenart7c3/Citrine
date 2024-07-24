@@ -66,6 +66,9 @@ interface EventDao {
     @Transaction
     fun deleteOldestByKind(kind: Int, pubkey: String)
 
+    @Query("SELECT * FROM EventEntity WHERE kind >= 20000 AND kind < 30000")
+    fun getEphemeralEvents(): List<EventWithTags>
+
     @Query(
         """
         SELECT EventEntity.id

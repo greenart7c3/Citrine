@@ -43,12 +43,7 @@ class WebSocketServerService : Service() {
     private fun eventsToDelete(database: AppDatabase) {
         GlobalScope.launch(Dispatchers.IO) {
             if (Settings.deleteEphemeralEvents) {
-                val ephemeralEvents = EventRepository.query(
-                    database,
-                    EventFilter(
-                        kinds = (20000 until 30000).toSet(),
-                    ),
-                )
+                val ephemeralEvents = database.eventDao().getEphemeralEvents()
                 Log.d("timer", "Deleting ${ephemeralEvents.size} ephemeral events")
                 database.eventDao().delete(ephemeralEvents.map { it.event.id })
             }
