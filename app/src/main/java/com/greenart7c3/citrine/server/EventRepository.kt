@@ -89,7 +89,7 @@ object EventRepository {
             SELECT EventEntity.*
               FROM EventEntity EventEntity
               $predicatesSql
-              ORDER BY EventEntity.createdAt DESC
+              ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC
         """
 
         if (filter.limit > 0) {
