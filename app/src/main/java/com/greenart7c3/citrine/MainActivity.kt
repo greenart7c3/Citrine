@@ -21,11 +21,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -117,25 +119,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val progress = mutableStateOf("")
-
-        storageHelper.onFolderSelected = { _, folder ->
-            exportDatabase(
-                folder = folder,
-                onProgress = {
-                    progress.value = it
-                },
-            )
-        }
-
-        storageHelper.onFileSelected = { _, files ->
-            importDatabase(
-                files = files,
-                onProgress = {
-                    progress.value = it
-                },
-            )
-        }
-
         super.onCreate(savedInstanceState)
 
         requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
@@ -170,6 +153,78 @@ class MainActivity : ComponentActivity() {
             )
 
             CitrineTheme {
+                var showDialog by remember { mutableStateOf(false) }
+                val selectedFiles = remember {
+                    mutableListOf<DocumentFile>()
+                }
+
+                storageHelper.onFolderSelected = { _, folder ->
+                    exportDatabase(
+                        folder = folder,
+                        onProgress = {
+                            progress.value = it
+                        },
+                    )
+                }
+
+                storageHelper.onFileSelected = { _, files ->
+                    selectedFiles.clear()
+                    selectedFiles.addAll(files)
+                    showDialog = true
+                }
+
+                if (showDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showDialog = false
+                        },
+                        title = {
+                            Text(getString(R.string.import_events))
+                        },
+                        text = {
+                            Text(getString(R.string.import_events_warning))
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showDialog = false
+                                    importDatabase(
+                                        files = selectedFiles,
+                                        shouldDelete = true,
+                                        onProgress = {
+                                            progress.value = it
+                                        },
+                                        onFinished = {
+                                            selectedFiles.clear()
+                                        },
+                                    )
+                                },
+                            ) {
+                                Text(getString(R.string.yes))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    showDialog = false
+                                    importDatabase(
+                                        files = selectedFiles,
+                                        shouldDelete = false,
+                                        onProgress = {
+                                            progress.value = it
+                                        },
+                                        onFinished = {
+                                            selectedFiles.clear()
+                                        },
+                                    )
+                                },
+                            ) {
+                                Text(getString(R.string.no))
+                            }
+                        },
+                    )
+                }
+
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
@@ -309,7 +364,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun importDatabase(files: List<DocumentFile>, onProgress: (String) -> Unit) {
+    private fun importDatabase(files: List<DocumentFile>, shouldDelete: Boolean, onProgress: (String) -> Unit, onFinished: () -> Unit) {
         GlobalScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {
@@ -330,7 +385,7 @@ class MainActivity : ComponentActivity() {
                 val input = file.openInputStream(this@MainActivity) ?: return@launch
                 input.use { ip ->
                     ip.bufferedReader().use {
-                        var line: String? = ""
+                        var line: String?
                         while (it.readLine().also { readLine -> line = readLine } != null) {
                             if (line?.isNotBlank() == true) {
                                 totalLines++
@@ -343,8 +398,10 @@ class MainActivity : ComponentActivity() {
                     ip.bufferedReader().use {
                         var linesRead = 0
 
-                        onProgress("deleting all events")
-                        database.eventDao().deleteAll()
+                        if (shouldDelete) {
+                            onProgress("deleting all events")
+                            database.eventDao().deleteAll()
+                        }
 
                         it.useLines { lines ->
                             lines.forEach { line ->
@@ -363,6 +420,7 @@ class MainActivity : ComponentActivity() {
 
                 onProgress("")
                 isLoading.value = false
+                onFinished()
                 GlobalScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         this@MainActivity,
@@ -382,6 +440,7 @@ class MainActivity : ComponentActivity() {
                 }
                 onProgress("")
                 isLoading.value = false
+                onFinished()
             }
         }
     }
