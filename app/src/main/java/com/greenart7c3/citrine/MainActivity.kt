@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,8 +36,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +53,7 @@ import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
+import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.components.DatabaseButtons
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
@@ -248,10 +252,16 @@ class MainActivity : ComponentActivity() {
                                 Text(progress2.value)
                             }
                         } else {
+                            val clipboardManager = LocalClipboardManager.current
                             val isStarted = service?.isStarted() ?: false
                             if (isStarted) {
                                 Text(stringResource(R.string.relay_started_at))
-                                Text("ws://localhost:${service?.port() ?: 0}")
+                                Text(
+                                    "ws://${Settings.host}:${Settings.port}",
+                                    modifier = Modifier.clickable {
+                                        clipboardManager.setText(AnnotatedString("ws://${Settings.host}:${Settings.port}"))
+                                    },
+                                )
                                 ElevatedButton(
                                     onClick = {
                                         coroutineScope.launch(Dispatchers.IO) {
