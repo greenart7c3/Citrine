@@ -18,9 +18,9 @@
     <string name="import_failed">导入失败</string>
     <string name="invalid_file_extension">不支持的文件类型</string>
     <string name="imported_events_successfully">成功导入 %1$d 个事件</string>
-    <string name="import_events">Import events</string>
-    <string name="import_events_warning">Delete existing events? This action cannot be undone.</string>
-    <string name="yes">Yes</string>
-    <string name="no">No</string>
-    <string name="cancel">Cancel</string>
+    <string name="import_events">导入事件</string>
+    <string name="import_events_warning">删除已有事件？该操作无法撤销。</string>
+    <string name="yes">确定</string>
+    <string name="no">取消</string>
+    <string name="cancel">取消</string>
 </resources>
