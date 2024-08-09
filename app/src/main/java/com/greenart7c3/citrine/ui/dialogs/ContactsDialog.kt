@@ -174,15 +174,15 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                     ),
                                 )
                                 Text(
-                                    "Following: ${event.verifiedFollowKeySet.size}",
+                                    "Following: ${event.verifiedFollowKeySet().size}",
                                     modifier = Modifier.padding(horizontal = 6.dp),
                                 )
                                 Text(
-                                    "Communities: ${event.verifiedFollowCommunitySet.size}",
+                                    "Communities: ${event.verifiedFollowAddressSet().size}",
                                     modifier = Modifier.padding(horizontal = 6.dp),
                                 )
                                 Text(
-                                    "Hashtags: ${event.verifiedFollowTagSet.size}",
+                                    "Hashtags: ${event.countFollowTags()}",
                                     modifier = Modifier.padding(horizontal = 6.dp),
                                 )
                                 Text(
