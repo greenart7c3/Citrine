@@ -211,6 +211,78 @@ class MainActivity : ComponentActivity() {
                                     .verticalScroll(rememberScrollState()),
                                 color = MaterialTheme.colorScheme.background,
                             ) {
+                                var showDialog by remember { mutableStateOf(false) }
+                                val selectedFiles = remember {
+                                    mutableListOf<DocumentFile>()
+                                }
+
+                                storageHelper.onFolderSelected = { _, folder ->
+                                    exportDatabase(
+                                        folder = folder,
+                                        onProgress = {
+                                            progress.value = it
+                                        },
+                                    )
+                                }
+
+                                storageHelper.onFileSelected = { _, files ->
+                                    selectedFiles.clear()
+                                    selectedFiles.addAll(files)
+                                    showDialog = true
+                                }
+
+                                if (showDialog) {
+                                    AlertDialog(
+                                        onDismissRequest = {
+                                            showDialog = false
+                                        },
+                                        title = {
+                                            Text(getString(R.string.import_events))
+                                        },
+                                        text = {
+                                            Text(getString(R.string.import_events_warning))
+                                        },
+                                        confirmButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    showDialog = false
+                                                    importDatabase(
+                                                        files = selectedFiles,
+                                                        shouldDelete = true,
+                                                        onProgress = {
+                                                            progress.value = it
+                                                        },
+                                                        onFinished = {
+                                                            selectedFiles.clear()
+                                                        },
+                                                    )
+                                                },
+                                            ) {
+                                                Text(getString(R.string.yes))
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    showDialog = false
+                                                    importDatabase(
+                                                        files = selectedFiles,
+                                                        shouldDelete = false,
+                                                        onProgress = {
+                                                            progress.value = it
+                                                        },
+                                                        onFinished = {
+                                                            selectedFiles.clear()
+                                                        },
+                                                    )
+                                                },
+                                            ) {
+                                                Text(getString(R.string.no))
+                                            }
+                                        },
+                                    )
+                                }
+
                                 if (pubKey.isNotBlank()) {
                                     ContactsDialog(pubKey = pubKey) {
                                         pubKey = ""
@@ -229,9 +301,15 @@ class MainActivity : ComponentActivity() {
                                         }
                                     } else {
                                         val isStarted = service?.isStarted() ?: false
+                                        val clipboardManager = LocalClipboardManager.current
                                         if (isStarted) {
                                             Text(stringResource(R.string.relay_started_at))
-                                            Text("ws://localhost:${service?.port() ?: 0}")
+                                            Text(
+                                                "ws://${Settings.host}:${Settings.port}",
+                                                modifier = Modifier.clickable {
+                                                    clipboardManager.setText(AnnotatedString("ws://${Settings.host}:${Settings.port}"))
+                                                },
+                                            )
                                             ElevatedButton(
                                                 onClick = {
                                                     coroutineScope.launch(Dispatchers.IO) {
