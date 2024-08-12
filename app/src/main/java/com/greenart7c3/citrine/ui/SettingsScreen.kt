@@ -73,8 +73,20 @@ fun SettingsScreen(
         var signedBy by remember {
             mutableStateOf(TextFieldValue(""))
         }
+        var referredBy by remember {
+            mutableStateOf(TextFieldValue(""))
+        }
+        var kind by remember {
+            mutableStateOf(TextFieldValue(""))
+        }
         var allowedPubKeys by remember {
             mutableStateOf(Settings.allowedPubKeys)
+        }
+        var allowedTaggedPubKeys by remember {
+            mutableStateOf(Settings.allowedTaggedPubKeys)
+        }
+        var allowedKinds by remember {
+            mutableStateOf(Settings.allowedKinds)
         }
 
         LazyColumn(
@@ -192,11 +204,6 @@ fun SettingsScreen(
                     }
                 }
             }
-            if (allowedPubKeys.isEmpty()) {
-                item {
-                    Text("Events signed by anyone are allowed")
-                }
-            }
             items(allowedPubKeys.size) { index ->
                 Text(allowedPubKeys.elementAt(index))
             }
@@ -217,6 +224,11 @@ fun SettingsScreen(
                                 onClick = {
                                     clipboardManager.getText()?.let {
                                         signedBy = TextFieldValue(it)
+                                        val users = Settings.allowedPubKeys.toMutableSet()
+                                        users.add(signedBy.text)
+                                        Settings.allowedPubKeys = users
+                                        allowedPubKeys = Settings.allowedPubKeys
+                                        signedBy = TextFieldValue("")
                                     }
                                     signedBy = TextFieldValue("")
                                 },
@@ -264,13 +276,57 @@ fun SettingsScreen(
                     }
                 }
             }
-            if (Settings.allowedTaggedPubKeys.isEmpty()) {
-                item {
-                    Text("Events referring to anyone are allowed")
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(0.9f),
+                        value = referredBy,
+                        onValueChange = {
+                            referredBy = it
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.getText()?.let {
+                                        referredBy = TextFieldValue(it)
+                                        val users = Settings.allowedTaggedPubKeys.toMutableSet()
+                                        users.add(referredBy.text)
+                                        Settings.allowedTaggedPubKeys = users
+                                        allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                                        referredBy = TextFieldValue("")
+                                    }
+                                    referredBy = TextFieldValue("")
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentPaste,
+                                    contentDescription = "Paste from clipboard",
+                                )
+                            }
+                        },
+                    )
+                    IconButton(
+                        onClick = {
+                            val users = Settings.allowedTaggedPubKeys.toMutableSet()
+                            users.add(referredBy.text)
+                            Settings.allowedTaggedPubKeys = users
+                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                            referredBy = TextFieldValue("")
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add",
+                        )
+                    }
                 }
             }
-            items(Settings.allowedTaggedPubKeys.size) { index ->
-                Text(Settings.allowedTaggedPubKeys.elementAt(index))
+            items(allowedTaggedPubKeys.size) { index ->
+                Text(allowedTaggedPubKeys.elementAt(index))
             }
             stickyHeader {
                 Row(
@@ -292,13 +348,61 @@ fun SettingsScreen(
                     }
                 }
             }
-            if (Settings.allowedKinds.isEmpty()) {
-                item {
-                    Text("All kinds are allowed")
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(0.9f),
+                        value = kind,
+                        onValueChange = {
+                            kind = it
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.getText()?.let {
+                                        kind = TextFieldValue(it)
+                                        val users = Settings.allowedKinds.toMutableSet()
+                                        users.add(kind.text.toInt())
+                                        Settings.allowedKinds = users
+                                        allowedKinds = Settings.allowedKinds
+                                        kind = TextFieldValue("")
+                                    }
+                                    kind = TextFieldValue("")
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentPaste,
+                                    contentDescription = "Paste from clipboard",
+                                )
+                            }
+                        },
+                    )
+                    IconButton(
+                        onClick = {
+                            if (kind.text.toIntOrNull() == null) {
+                                return@IconButton
+                            }
+
+                            val users = Settings.allowedKinds.toMutableSet()
+                            users.add(kind.text.toInt())
+                            Settings.allowedKinds = users
+                            allowedKinds = Settings.allowedKinds
+                            kind = TextFieldValue("")
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add",
+                        )
+                    }
                 }
             }
-            items(Settings.allowedKinds.size) { index ->
-                Text(Settings.allowedKinds.elementAt(index).toString())
+            items(allowedKinds.size) { index ->
+                Text(allowedKinds.elementAt(index).toString())
             }
             stickyHeader {
                 Row(
