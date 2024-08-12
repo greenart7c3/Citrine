@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
@@ -30,6 +32,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,8 +40,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,6 +61,7 @@ import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
+import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.DatabaseButtons
@@ -127,25 +133,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val progress = mutableStateOf("")
-
-        storageHelper.onFolderSelected = { _, folder ->
-            exportDatabase(
-                folder = folder,
-                onProgress = {
-                    progress.value = it
-                },
-            )
-        }
-
-        storageHelper.onFileSelected = { _, files ->
-            importDatabase(
-                files = files,
-                onProgress = {
-                    progress.value = it
-                },
-            )
-        }
-
         super.onCreate(savedInstanceState)
 
         requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
@@ -378,7 +365,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun importDatabase(files: List<DocumentFile>, onProgress: (String) -> Unit) {
+    private fun importDatabase(files: List<DocumentFile>, shouldDelete: Boolean, onProgress: (String) -> Unit, onFinished: () -> Unit) {
         GlobalScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {
@@ -399,7 +386,7 @@ class MainActivity : ComponentActivity() {
                 val input = file.openInputStream(this@MainActivity) ?: return@launch
                 input.use { ip ->
                     ip.bufferedReader().use {
-                        var line: String? = ""
+                        var line: String?
                         while (it.readLine().also { readLine -> line = readLine } != null) {
                             if (line?.isNotBlank() == true) {
                                 totalLines++
@@ -412,8 +399,10 @@ class MainActivity : ComponentActivity() {
                     ip.bufferedReader().use {
                         var linesRead = 0
 
-                        onProgress("deleting all events")
-                        database.eventDao().deleteAll()
+                        if (shouldDelete) {
+                            onProgress("deleting all events")
+                            database.eventDao().deleteAll()
+                        }
 
                         it.useLines { lines ->
                             lines.forEach { line ->
@@ -432,6 +421,7 @@ class MainActivity : ComponentActivity() {
 
                 onProgress("")
                 isLoading.value = false
+                onFinished()
                 GlobalScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         this@MainActivity,
@@ -451,6 +441,7 @@ class MainActivity : ComponentActivity() {
                 }
                 onProgress("")
                 isLoading.value = false
+                onFinished()
             }
         }
     }

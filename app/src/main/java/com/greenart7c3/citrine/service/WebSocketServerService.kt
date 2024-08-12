@@ -43,12 +43,7 @@ class WebSocketServerService : Service() {
     private fun eventsToDelete(database: AppDatabase) {
         GlobalScope.launch(Dispatchers.IO) {
             if (Settings.deleteEphemeralEvents) {
-                val ephemeralEvents = EventRepository.query(
-                    database,
-                    EventFilter(
-                        kinds = (20000 until 30000).toSet(),
-                    ),
-                )
+                val ephemeralEvents = database.eventDao().getEphemeralEvents()
                 Log.d("timer", "Deleting ${ephemeralEvents.size} ephemeral events")
                 database.eventDao().delete(ephemeralEvents.map { it.event.id })
             }
@@ -138,7 +133,7 @@ class WebSocketServerService : Service() {
         notificationManager.createNotificationChannel(channel)
 
         val copyIntent = Intent(this, ClipboardReceiver::class.java)
-        copyIntent.putExtra("url", "ws://localhost:${webSocketServer.port()}")
+        copyIntent.putExtra("url", "ws://${Settings.host}:${Settings.port}")
 
         val copyPendingIntent = PendingIntent.getBroadcast(
             this,
@@ -157,7 +152,7 @@ class WebSocketServerService : Service() {
         }
 
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")
-            .setContentTitle("Relay running at ws://localhost:${webSocketServer.port()}")
+            .setContentTitle("Relay running at ws://${Settings.host}:${Settings.port}")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .addAction(R.drawable.ic_launcher_background, "Copy Address", copyPendingIntent)
@@ -168,9 +163,5 @@ class WebSocketServerService : Service() {
 
     fun isStarted(): Boolean {
         return webSocketServer.server != null
-    }
-
-    fun port(): Int? {
-        return webSocketServer.port()
     }
 }
