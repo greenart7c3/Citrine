@@ -2,6 +2,10 @@
 
 package com.greenart7c3.citrine.ui
 
+import android.net.InetAddresses.isNumericAddress
+import android.os.Build
+import android.util.Patterns
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
@@ -34,9 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.text.isDigitsOnly
 import com.greenart7c3.citrine.R
@@ -44,6 +51,10 @@ import com.greenart7c3.citrine.server.OlderThanType
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.ui.components.SettingsRow
 import com.greenart7c3.citrine.ui.components.TitleExplainer
+import com.vitorpamplona.quartz.encoders.Hex
+import com.vitorpamplona.quartz.encoders.Nip19Bech32
+import com.vitorpamplona.quartz.encoders.hexToByteArray
+import com.vitorpamplona.quartz.encoders.toHexKey
 import kotlinx.collections.immutable.persistentListOf
 
 @Composable
@@ -55,6 +66,7 @@ fun SettingsScreen(
         modifier,
     ) {
         val clipboardManager = LocalClipboardManager.current
+        val context = LocalContext.current
         var host by remember {
             mutableStateOf(TextFieldValue(Settings.host))
         }
@@ -67,9 +79,9 @@ fun SettingsScreen(
         var deleteEphemeralEvents by remember {
             mutableStateOf(Settings.deleteEphemeralEvents)
         }
-        var useSSL by remember {
-            mutableStateOf(Settings.useSSL)
-        }
+//        var useSSL by remember {
+//            mutableStateOf(Settings.useSSL)
+//        }
         var signedBy by remember {
             mutableStateOf(TextFieldValue(""))
         }
@@ -123,7 +135,6 @@ fun SettingsScreen(
                     },
                     onValueChange = {
                         host = it
-                        Settings.host = it.text
                     },
                 )
             }
@@ -141,43 +152,52 @@ fun SettingsScreen(
                     },
                     onValueChange = {
                         port = it
-                        if (it.text.isDigitsOnly() && it.text.isNotBlank()) {
-                            Settings.port = it.text.toInt()
-                        }
                     },
                 )
             }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            useSSL = !useSSL
-                            Settings.useSSL = !Settings.useSSL
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = "Use SSL",
-                    )
-                    Switch(
-                        checked = useSSL,
-                        onCheckedChange = {
-                            useSSL = !useSSL
-                            Settings.useSSL = !Settings.useSSL
-                        },
-                    )
-                }
-            }
+//            item {
+//                Row(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .clickable {
+//                            useSSL = !useSSL
+//                            Settings.useSSL = !Settings.useSSL
+//                        },
+//                    horizontalArrangement = Arrangement.SpaceBetween,
+//                    verticalAlignment = Alignment.CenterVertically,
+//                ) {
+//                    Text(
+//                        modifier = Modifier.weight(1f),
+//                        text = "Use SSL",
+//                    )
+//                    Switch(
+//                        checked = useSSL,
+//                        onCheckedChange = {
+//                            useSSL = !useSSL
+//                            Settings.useSSL = !Settings.useSSL
+//                        },
+//                    )
+//                }
+//            }
             item {
                 Box(
                     Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
                     ElevatedButton(
-                        onClick = onApplyChanges,
+                        onClick = {
+                            if (host.text.isNotBlank() && isIpValid(host.text) && port.text.isDigitsOnly() && port.text.isNotBlank()) {
+                                Settings.port = port.text.toInt()
+                                Settings.host = host.text
+                                onApplyChanges()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Invalid host or port",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        },
                         content = {
                             Text("Apply changes")
                         },
@@ -204,9 +224,6 @@ fun SettingsScreen(
                     }
                 }
             }
-            items(allowedPubKeys.size) { index ->
-                Text(allowedPubKeys.elementAt(index))
-            }
             item {
                 Row(
                     modifier = Modifier
@@ -224,8 +241,20 @@ fun SettingsScreen(
                                 onClick = {
                                     clipboardManager.getText()?.let {
                                         signedBy = TextFieldValue(it)
+
+                                        val key = signedBy.text.toNostrKey()
+
+                                        if (key == null) {
+                                            Toast.makeText(
+                                                context,
+                                                "Invalid key",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@IconButton
+                                        }
+
                                         val users = Settings.allowedPubKeys.toMutableSet()
-                                        users.add(signedBy.text)
+                                        users.add(key)
                                         Settings.allowedPubKeys = users
                                         allowedPubKeys = Settings.allowedPubKeys
                                         signedBy = TextFieldValue("")
@@ -242,8 +271,18 @@ fun SettingsScreen(
                     )
                     IconButton(
                         onClick = {
+                            val key = signedBy.text.toNostrKey()
+                            if (key == null) {
+                                Toast.makeText(
+                                    context,
+                                    "Invalid key",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                return@IconButton
+                            }
+
                             val users = Settings.allowedPubKeys.toMutableSet()
-                            users.add(signedBy.text)
+                            users.add(key)
                             Settings.allowedPubKeys = users
                             allowedPubKeys = Settings.allowedPubKeys
                             signedBy = TextFieldValue("")
@@ -252,6 +291,35 @@ fun SettingsScreen(
                         Icon(
                             Icons.Default.Add,
                             contentDescription = "Add",
+                        )
+                    }
+                }
+            }
+            items(allowedPubKeys.size) { index ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        allowedPubKeys.elementAt(index).toShortenHex(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(0.9f),
+                    )
+                    IconButton(
+                        onClick = {
+                            val users = Settings.allowedPubKeys.toMutableSet()
+                            users.remove(allowedPubKeys.elementAt(index))
+                            Settings.allowedPubKeys = users
+                            allowedPubKeys = Settings.allowedPubKeys
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
                         )
                     }
                 }
@@ -293,8 +361,19 @@ fun SettingsScreen(
                                 onClick = {
                                     clipboardManager.getText()?.let {
                                         referredBy = TextFieldValue(it)
+
+                                        val key = referredBy.text.toNostrKey()
+                                        if (key == null) {
+                                            Toast.makeText(
+                                                context,
+                                                "Invalid key",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@IconButton
+                                        }
+
                                         val users = Settings.allowedTaggedPubKeys.toMutableSet()
-                                        users.add(referredBy.text)
+                                        users.add(key)
                                         Settings.allowedTaggedPubKeys = users
                                         allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
                                         referredBy = TextFieldValue("")
@@ -311,8 +390,18 @@ fun SettingsScreen(
                     )
                     IconButton(
                         onClick = {
+                            val key = referredBy.text.toNostrKey()
+                            if (key == null) {
+                                Toast.makeText(
+                                    context,
+                                    "Invalid key",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                return@IconButton
+                            }
+
                             val users = Settings.allowedTaggedPubKeys.toMutableSet()
-                            users.add(referredBy.text)
+                            users.add(key)
                             Settings.allowedTaggedPubKeys = users
                             allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
                             referredBy = TextFieldValue("")
@@ -326,7 +415,33 @@ fun SettingsScreen(
                 }
             }
             items(allowedTaggedPubKeys.size) { index ->
-                Text(allowedTaggedPubKeys.elementAt(index))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        allowedTaggedPubKeys.elementAt(index).toShortenHex(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(0.9f),
+                    )
+                    IconButton(
+                        onClick = {
+                            val users = Settings.allowedTaggedPubKeys.toMutableSet()
+                            users.remove(allowedTaggedPubKeys.elementAt(index))
+                            Settings.allowedTaggedPubKeys = users
+                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                        )
+                    }
+                }
             }
             stickyHeader {
                 Row(
@@ -365,6 +480,16 @@ fun SettingsScreen(
                                 onClick = {
                                     clipboardManager.getText()?.let {
                                         kind = TextFieldValue(it)
+
+                                        if (kind.text.toIntOrNull() == null) {
+                                            Toast.makeText(
+                                                context,
+                                                "Invalid kind",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@IconButton
+                                        }
+
                                         val users = Settings.allowedKinds.toMutableSet()
                                         users.add(kind.text.toInt())
                                         Settings.allowedKinds = users
@@ -384,6 +509,11 @@ fun SettingsScreen(
                     IconButton(
                         onClick = {
                             if (kind.text.toIntOrNull() == null) {
+                                Toast.makeText(
+                                    context,
+                                    "Invalid kind",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
                                 return@IconButton
                             }
 
@@ -402,7 +532,33 @@ fun SettingsScreen(
                 }
             }
             items(allowedKinds.size) { index ->
-                Text(allowedKinds.elementAt(index).toString())
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        allowedKinds.elementAt(index).toString(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(0.9f),
+                    )
+                    IconButton(
+                        onClick = {
+                            val users = Settings.allowedKinds.toMutableSet()
+                            users.remove(allowedKinds.elementAt(index))
+                            Settings.allowedKinds = users
+                            allowedKinds = Settings.allowedKinds
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                        )
+                    }
+                }
             }
             stickyHeader {
                 Row(
@@ -494,4 +650,43 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+fun String.toShortenHex(): String {
+    if (length <= 16) return this
+    return replaceRange(8, length - 8, ":")
+}
+
+fun isIpValid(ip: String): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        isNumericAddress(ip)
+    } else {
+        @Suppress("DEPRECATION")
+        Patterns.IP_ADDRESS.matcher(ip).matches()
+    }
+}
+
+fun String.toNostrKey(): String? {
+    val key = try {
+        Hex.decode(this)
+    } catch (e: Exception) {
+        null
+    }
+    if (key != null) {
+        return this
+    }
+
+    val pubKeyParsed =
+        when (val parsed = Nip19Bech32.uriToRoute(this)?.entity) {
+            is Nip19Bech32.NSec -> null
+            is Nip19Bech32.NPub -> parsed.hex.hexToByteArray()
+            is Nip19Bech32.NProfile -> parsed.hex.hexToByteArray()
+            is Nip19Bech32.Note -> null
+            is Nip19Bech32.NEvent -> null
+            is Nip19Bech32.NEmbed -> null
+            is Nip19Bech32.NRelay -> null
+            is Nip19Bech32.NAddress -> null
+            else -> null
+        }
+    return pubKeyParsed?.toHexKey()
 }
