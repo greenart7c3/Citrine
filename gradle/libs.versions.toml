@@ -21,6 +21,7 @@ kotlin = "2.0.0"
 agp = "8.5.2"
 ksp = "2.0.0-1.0.22"
 ktlint = "12.1.1"
+securityCryptoKtx = "1.1.0-alpha06"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -53,6 +54,7 @@ quartz = { module = "com.github.vitorpamplona.amethyst:quartz", version.ref = "q
 ammolite = { module = "com.github.vitorpamplona.amethyst:ammolite", version.ref = "quartz" }
 storage = { module = "com.anggrayudi:storage", version.ref = "storage" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
+security-crypto-ktx = { module = "androidx.security:security-crypto-ktx", version.ref = "securityCryptoKtx" }
 
 [plugins]
 jetbrainsComposeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

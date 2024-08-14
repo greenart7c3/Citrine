@@ -47,8 +47,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.text.isDigitsOnly
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.OlderThanType
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.SettingsRow
 import com.greenart7c3.citrine.ui.components.TitleExplainer
 import com.vitorpamplona.quartz.encoders.Hex
@@ -189,6 +191,7 @@ fun SettingsScreen(
                             if (host.text.isNotBlank() && isIpValid(host.text) && port.text.isDigitsOnly() && port.text.isNotBlank()) {
                                 Settings.port = port.text.toInt()
                                 Settings.host = host.text
+                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                                 onApplyChanges()
                             } else {
                                 Toast.makeText(
@@ -257,6 +260,7 @@ fun SettingsScreen(
                                         users.add(key)
                                         Settings.allowedPubKeys = users
                                         allowedPubKeys = Settings.allowedPubKeys
+                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                                         signedBy = TextFieldValue("")
                                     }
                                     signedBy = TextFieldValue("")
@@ -285,6 +289,7 @@ fun SettingsScreen(
                             users.add(key)
                             Settings.allowedPubKeys = users
                             allowedPubKeys = Settings.allowedPubKeys
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             signedBy = TextFieldValue("")
                         },
                     ) {
@@ -314,6 +319,7 @@ fun SettingsScreen(
                             val users = Settings.allowedPubKeys.toMutableSet()
                             users.remove(allowedPubKeys.elementAt(index))
                             Settings.allowedPubKeys = users
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             allowedPubKeys = Settings.allowedPubKeys
                         },
                     ) {
@@ -376,6 +382,7 @@ fun SettingsScreen(
                                         users.add(key)
                                         Settings.allowedTaggedPubKeys = users
                                         allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                                         referredBy = TextFieldValue("")
                                     }
                                     referredBy = TextFieldValue("")
@@ -404,6 +411,7 @@ fun SettingsScreen(
                             users.add(key)
                             Settings.allowedTaggedPubKeys = users
                             allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             referredBy = TextFieldValue("")
                         },
                     ) {
@@ -433,6 +441,7 @@ fun SettingsScreen(
                             val users = Settings.allowedTaggedPubKeys.toMutableSet()
                             users.remove(allowedTaggedPubKeys.elementAt(index))
                             Settings.allowedTaggedPubKeys = users
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
                         },
                     ) {
@@ -494,6 +503,7 @@ fun SettingsScreen(
                                         users.add(kind.text.toInt())
                                         Settings.allowedKinds = users
                                         allowedKinds = Settings.allowedKinds
+                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                                         kind = TextFieldValue("")
                                     }
                                     kind = TextFieldValue("")
@@ -521,6 +531,7 @@ fun SettingsScreen(
                             users.add(kind.text.toInt())
                             Settings.allowedKinds = users
                             allowedKinds = Settings.allowedKinds
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             kind = TextFieldValue("")
                         },
                     ) {
@@ -550,6 +561,7 @@ fun SettingsScreen(
                             val users = Settings.allowedKinds.toMutableSet()
                             users.remove(allowedKinds.elementAt(index))
                             Settings.allowedKinds = users
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             allowedKinds = Settings.allowedKinds
                         },
                     ) {
@@ -587,6 +599,7 @@ fun SettingsScreen(
                         .clickable {
                             deleteExpiredEvents = !deleteExpiredEvents
                             Settings.deleteExpiredEvents = !Settings.deleteExpiredEvents
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
@@ -600,6 +613,7 @@ fun SettingsScreen(
                         onCheckedChange = {
                             deleteExpiredEvents = it
                             Settings.deleteExpiredEvents = it
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         },
                     )
                 }
@@ -611,6 +625,7 @@ fun SettingsScreen(
                         .clickable {
                             deleteEphemeralEvents = !deleteEphemeralEvents
                             Settings.deleteEphemeralEvents = !Settings.deleteEphemeralEvents
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
@@ -624,6 +639,7 @@ fun SettingsScreen(
                         onCheckedChange = {
                             deleteEphemeralEvents = it
                             Settings.deleteEphemeralEvents = it
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         },
                     )
                 }
@@ -637,7 +653,7 @@ fun SettingsScreen(
                     TitleExplainer(stringResource(OlderThanType.YEAR.resourceId)),
                 )
                 var olderThanTypeIndex by remember {
-                    mutableIntStateOf(OlderThanType.NEVER.screenCode)
+                    mutableIntStateOf(OlderThanType.entries.toTypedArray().indexOfFirst { it.name == Settings.deleteEventsOlderThan.toString() })
                 }
                 SettingsRow(
                     name = R.string.delete_events_older_than,
@@ -646,6 +662,15 @@ fun SettingsScreen(
                     selectedIndex = olderThanTypeIndex,
                 ) {
                     olderThanTypeIndex = it
+                    Settings.deleteEventsOlderThan = when (it) {
+                        OlderThanType.NEVER.screenCode -> OlderThan.NEVER
+                        OlderThanType.DAY.screenCode -> OlderThan.DAY
+                        OlderThanType.WEEK.screenCode -> OlderThan.WEEK
+                        OlderThanType.MONTH.screenCode -> OlderThan.MONTH
+                        OlderThanType.YEAR.screenCode -> OlderThan.YEAR
+                        else -> OlderThan.NEVER
+                    }
+                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                 }
             }
         }

@@ -190,4 +190,5 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.storage)
     implementation(libs.material.icons.extended)
+    implementation(libs.security.crypto.ktx)
 }
