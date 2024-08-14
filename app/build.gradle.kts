@@ -189,4 +189,6 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.okhttp)
     implementation(libs.storage)
+    implementation(libs.material.icons.extended)
+    implementation(libs.security.crypto.ktx)
 }

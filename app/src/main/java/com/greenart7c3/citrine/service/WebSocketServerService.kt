@@ -76,8 +76,15 @@ class WebSocketServerService : Service() {
                             until = until.toInt(),
                         ),
                     )
-                    Log.d("timer", "Deleting ${oldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
-                    database.eventDao().delete(oldEvents.map { it.event.id })
+                    if (Settings.neverDeleteFrom.isNotEmpty()) {
+                        val neverDeleteFrom = Settings.neverDeleteFrom
+                        val filteredOldEvents = oldEvents.filter { it.event.pubkey !in neverDeleteFrom }
+                        Log.d("timer", "Deleting ${filteredOldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
+                        database.eventDao().delete(filteredOldEvents.map { it.event.id })
+                    } else {
+                        Log.d("timer", "Deleting ${oldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
+                        database.eventDao().delete(oldEvents.map { it.event.id })
+                    }
                 }
             }
         }

@@ -25,7 +25,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +47,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.makeFile
@@ -55,10 +63,12 @@ import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.WebSocketServerService
+import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.DatabaseButtons
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
+import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.vitorpamplona.quartz.events.Event
 import kotlinx.coroutines.CancellationException
@@ -156,192 +166,251 @@ class MainActivity : ComponentActivity() {
                 },
             )
 
+            val items = listOf(Route.Home, Route.Settings)
+
             CitrineTheme {
-                var showDialog by remember { mutableStateOf(false) }
-                val selectedFiles = remember {
-                    mutableListOf<DocumentFile>()
-                }
+                val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val destinationRoute = navBackStackEntry?.destination?.route ?: ""
 
-                storageHelper.onFolderSelected = { _, folder ->
-                    exportDatabase(
-                        folder = folder,
-                        onProgress = {
-                            progress.value = it
-                        },
-                    )
-                }
-
-                storageHelper.onFileSelected = { _, files ->
-                    selectedFiles.clear()
-                    selectedFiles.addAll(files)
-                    showDialog = true
-                }
-
-                if (showDialog) {
-                    AlertDialog(
-                        onDismissRequest = {
-                            showDialog = false
-                        },
-                        title = {
-                            Text(getString(R.string.import_events))
-                        },
-                        text = {
-                            Text(getString(R.string.import_events_warning))
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    showDialog = false
-                                    importDatabase(
-                                        files = selectedFiles,
-                                        shouldDelete = true,
-                                        onProgress = {
-                                            progress.value = it
-                                        },
-                                        onFinished = {
-                                            selectedFiles.clear()
-                                        },
-                                    )
-                                },
-                            ) {
-                                Text(getString(R.string.yes))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(
-                                onClick = {
-                                    showDialog = false
-                                    importDatabase(
-                                        files = selectedFiles,
-                                        shouldDelete = false,
-                                        onProgress = {
-                                            progress.value = it
-                                        },
-                                        onFinished = {
-                                            selectedFiles.clear()
-                                        },
-                                    )
-                                },
-                            ) {
-                                Text(getString(R.string.no))
-                            }
-                        },
-                    )
-                }
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    if (pubKey.isNotBlank()) {
-                        ContactsDialog(pubKey = pubKey) {
-                            pubKey = ""
-                        }
-                    }
-
-                    Column(
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        if (isLoading.value) {
-                            CircularProgressIndicator()
-                            if (progress2.value.isNotBlank()) {
-                                Spacer(modifier = Modifier.padding(4.dp))
-                                Text(progress2.value)
-                            }
-                        } else {
-                            val clipboardManager = LocalClipboardManager.current
-                            val isStarted = service?.isStarted() ?: false
-                            if (isStarted) {
-                                Text(stringResource(R.string.relay_started_at))
-                                Text(
-                                    "ws://${Settings.host}:${Settings.port}",
-                                    modifier = Modifier.clickable {
-                                        clipboardManager.setText(AnnotatedString("ws://${Settings.host}:${Settings.port}"))
+                Scaffold(
+                    bottomBar = {
+                        NavigationBar(tonalElevation = 0.dp) {
+                            items.forEach {
+                                val selected = destinationRoute == it.route
+                                NavigationBarItem(
+                                    selected = selected,
+                                    onClick = {
+                                        navController.navigate(it.route) {
+                                            popUpTo(0)
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            if (selected) it.selectedIcon else it.icon,
+                                            it.route,
+                                        )
+                                    },
+                                    label = {
+                                        Text(it.route)
                                     },
                                 )
-                                ElevatedButton(
-                                    onClick = {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            isLoading.value = true
-                                            stop()
-                                            delay(1000)
-                                            isLoading.value = false
-                                        }
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.stop))
+                            }
+                        }
+                    },
+                ) { padding ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = Route.Home.route,
+                    ) {
+                        composable(Route.Home.route) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                                    .verticalScroll(rememberScrollState()),
+                                color = MaterialTheme.colorScheme.background,
+                            ) {
+                                var showDialog by remember { mutableStateOf(false) }
+                                val selectedFiles = remember {
+                                    mutableListOf<DocumentFile>()
                                 }
-                            } else {
-                                Text(stringResource(R.string.relay_not_running))
-                                ElevatedButton(
-                                    onClick = {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            isLoading.value = true
-                                            start()
-                                            delay(1000)
-                                            isLoading.value = false
-                                        }
-                                    },
+
+                                storageHelper.onFolderSelected = { _, folder ->
+                                    exportDatabase(
+                                        folder = folder,
+                                        onProgress = {
+                                            progress.value = it
+                                        },
+                                    )
+                                }
+
+                                storageHelper.onFileSelected = { _, files ->
+                                    selectedFiles.clear()
+                                    selectedFiles.addAll(files)
+                                    showDialog = true
+                                }
+
+                                if (showDialog) {
+                                    AlertDialog(
+                                        onDismissRequest = {
+                                            showDialog = false
+                                        },
+                                        title = {
+                                            Text(getString(R.string.import_events))
+                                        },
+                                        text = {
+                                            Text(getString(R.string.import_events_warning))
+                                        },
+                                        confirmButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    showDialog = false
+                                                    importDatabase(
+                                                        files = selectedFiles,
+                                                        shouldDelete = true,
+                                                        onProgress = {
+                                                            progress.value = it
+                                                        },
+                                                        onFinished = {
+                                                            selectedFiles.clear()
+                                                        },
+                                                    )
+                                                },
+                                            ) {
+                                                Text(getString(R.string.yes))
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    showDialog = false
+                                                    importDatabase(
+                                                        files = selectedFiles,
+                                                        shouldDelete = false,
+                                                        onProgress = {
+                                                            progress.value = it
+                                                        },
+                                                        onFinished = {
+                                                            selectedFiles.clear()
+                                                        },
+                                                    )
+                                                },
+                                            ) {
+                                                Text(getString(R.string.no))
+                                            }
+                                        },
+                                    )
+                                }
+
+                                if (pubKey.isNotBlank()) {
+                                    ContactsDialog(pubKey = pubKey) {
+                                        pubKey = ""
+                                    }
+                                }
+
+                                Column(
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
-                                    Text(stringResource(R.string.start))
+                                    if (isLoading.value) {
+                                        CircularProgressIndicator()
+                                        if (progress2.value.isNotBlank()) {
+                                            Spacer(modifier = Modifier.padding(4.dp))
+                                            Text(progress2.value)
+                                        }
+                                    } else {
+                                        val isStarted = service?.isStarted() ?: false
+                                        val clipboardManager = LocalClipboardManager.current
+                                        if (isStarted) {
+                                            Text(stringResource(R.string.relay_started_at))
+                                            Text(
+                                                "ws://${Settings.host}:${Settings.port}",
+                                                modifier = Modifier.clickable {
+                                                    clipboardManager.setText(AnnotatedString("ws://${Settings.host}:${Settings.port}"))
+                                                },
+                                            )
+                                            ElevatedButton(
+                                                onClick = {
+                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                        isLoading.value = true
+                                                        stop()
+                                                        delay(1000)
+                                                        isLoading.value = false
+                                                    }
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.stop))
+                                            }
+                                        } else {
+                                            Text(stringResource(R.string.relay_not_running))
+                                            ElevatedButton(
+                                                onClick = {
+                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                        isLoading.value = true
+                                                        start()
+                                                        delay(1000)
+                                                        isLoading.value = false
+                                                    }
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.start))
+                                            }
+                                        }
+
+                                        ElevatedButton(
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
+                                                    val signerType = "get_public_key"
+                                                    intent.putExtra("type", signerType)
+                                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                                    launcherLogin.launch(intent)
+                                                } catch (e: Exception) {
+                                                    Log.d("intent", e.message ?: "", e)
+                                                    coroutineScope.launch(Dispatchers.Main) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            getString(R.string.no_external_signer_installed),
+                                                            Toast.LENGTH_SHORT,
+                                                        ).show()
+                                                    }
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+                                                    launcherLogin.launch(intent)
+                                                }
+                                            },
+                                        ) {
+                                            Text(stringResource(R.string.restore_follows))
+                                        }
+
+                                        DatabaseButtons(
+                                            onExport = {
+                                                storageHelper.openFolderPicker()
+                                            },
+                                            onImport = {
+                                                storageHelper.openFilePicker()
+                                            },
+                                        )
+                                        Spacer(modifier = Modifier.padding(4.dp))
+
+                                        if (countByKind == null) {
+                                            countByKind = database.eventDao().countByKind()
+                                        }
+                                        val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
+                                        val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
+
+                                        RelayInfo(
+                                            modifier = Modifier
+                                                .fillMaxWidth(),
+                                            connections = service?.webSocketServer?.connections?.size ?: 0,
+                                            subscriptions = count.value,
+                                        )
+                                        Spacer(modifier = Modifier.padding(4.dp))
+                                        DatabaseInfo(
+                                            modifier = Modifier
+                                                .fillMaxWidth(),
+                                            flow = flow,
+                                        )
+                                    }
                                 }
                             }
+                        }
 
-                            ElevatedButton(
-                                onClick = {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
-                                        val signerType = "get_public_key"
-                                        intent.putExtra("type", signerType)
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                        launcherLogin.launch(intent)
-                                    } catch (e: Exception) {
-                                        Log.d("intent", e.message ?: "", e)
-                                        coroutineScope.launch(Dispatchers.Main) {
-                                            Toast.makeText(
-                                                context,
-                                                getString(R.string.no_external_signer_installed),
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
-                                        launcherLogin.launch(intent)
+                        composable(Route.Settings.route) {
+                            SettingsScreen(
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                                    .padding(16.dp),
+                                onApplyChanges = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        isLoading.value = true
+                                        stop()
+                                        delay(1000)
+                                        start()
+                                        isLoading.value = false
                                     }
                                 },
-                            ) {
-                                Text(stringResource(R.string.restore_follows))
-                            }
-
-                            DatabaseButtons(
-                                onExport = {
-                                    storageHelper.openFolderPicker()
-                                },
-                                onImport = {
-                                    storageHelper.openFilePicker()
-                                },
-                            )
-                            Spacer(modifier = Modifier.padding(4.dp))
-
-                            if (countByKind == null) {
-                                countByKind = database.eventDao().countByKind()
-                            }
-                            val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
-                            val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
-
-                            RelayInfo(
-                                modifier = Modifier
-                                    .fillMaxWidth(),
-                                connections = service?.webSocketServer?.connections?.size ?: 0,
-                                subscriptions = count.value,
-                            )
-                            Spacer(modifier = Modifier.padding(4.dp))
-                            DatabaseInfo(
-                                modifier = Modifier
-                                    .fillMaxWidth(),
-                                flow = flow,
                             )
                         }
                     }

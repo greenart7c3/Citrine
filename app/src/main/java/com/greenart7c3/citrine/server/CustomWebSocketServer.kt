@@ -95,7 +95,6 @@ class CustomWebSocketServer(
                 subscribe(subscriptionId, msgArray.drop(2), connection)
             }
             "EVENT" -> {
-                Log.d("EVENT", newMessage)
                 processEvent(msgArray.get(1), connection)
             }
             "CLOSE" -> {
