@@ -15,6 +15,7 @@ object PrefKeys {
     const val USE_SSL = "use_ssl"
     const val HOST = "host"
     const val PORT = "port"
+    const val NEVER_DELETE_FROM = "never_delete_from"
 }
 
 object LocalPreferences {
@@ -39,6 +40,7 @@ object LocalPreferences {
             putBoolean(PrefKeys.USE_SSL, settings.useSSL)
             putString(PrefKeys.HOST, settings.host)
             putInt(PrefKeys.PORT, settings.port)
+            putStringSet(PrefKeys.NEVER_DELETE_FROM, settings.neverDeleteFrom)
         }.apply()
     }
 
@@ -53,5 +55,6 @@ object LocalPreferences {
         Settings.useSSL = prefs.getBoolean(PrefKeys.USE_SSL, false)
         Settings.host = prefs.getString(PrefKeys.HOST, "127.0.0.1") ?: "127.0.0.1"
         Settings.port = prefs.getInt(PrefKeys.PORT, 4869)
+        Settings.neverDeleteFrom = prefs.getStringSet(PrefKeys.NEVER_DELETE_FROM, emptySet()) ?: emptySet()
     }
 }

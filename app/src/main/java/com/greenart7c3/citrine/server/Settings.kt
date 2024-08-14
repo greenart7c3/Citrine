@@ -12,6 +12,7 @@ object Settings {
     var useSSL: Boolean = false
     var host: String = "127.0.0.1"
     var port: Int = 4869
+    var neverDeleteFrom: Set<String> = emptySet()
 }
 
 enum class OlderThan {

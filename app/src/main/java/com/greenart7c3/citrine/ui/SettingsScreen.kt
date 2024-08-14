@@ -93,6 +93,9 @@ fun SettingsScreen(
         var kind by remember {
             mutableStateOf(TextFieldValue(""))
         }
+        var deleteFrom by remember {
+            mutableStateOf(TextFieldValue(""))
+        }
         var allowedPubKeys by remember {
             mutableStateOf(Settings.allowedPubKeys)
         }
@@ -101,6 +104,9 @@ fun SettingsScreen(
         }
         var allowedKinds by remember {
             mutableStateOf(Settings.allowedKinds)
+        }
+        var neverDeleteFrom by remember {
+            mutableStateOf(Settings.neverDeleteFrom)
         }
 
         LazyColumn(
@@ -671,6 +677,129 @@ fun SettingsScreen(
                         else -> OlderThan.NEVER
                     }
                     LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                }
+            }
+            stickyHeader {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Never delete from",
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                    IconButton(onClick = { /*TODO*/ }) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                        )
+                    }
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(0.9f),
+                        value = deleteFrom,
+                        onValueChange = {
+                            deleteFrom = it
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.getText()?.let {
+                                        deleteFrom = TextFieldValue(it)
+
+                                        val key = deleteFrom.text.toNostrKey()
+
+                                        if (key == null) {
+                                            Toast.makeText(
+                                                context,
+                                                "Invalid key",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@IconButton
+                                        }
+
+                                        val users = Settings.neverDeleteFrom.toMutableSet()
+                                        users.add(key)
+                                        Settings.neverDeleteFrom = users
+                                        neverDeleteFrom = Settings.neverDeleteFrom
+                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                        deleteFrom = TextFieldValue("")
+                                    }
+                                    deleteFrom = TextFieldValue("")
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentPaste,
+                                    contentDescription = "Paste from clipboard",
+                                )
+                            }
+                        },
+                    )
+                    IconButton(
+                        onClick = {
+                            val key = deleteFrom.text.toNostrKey()
+                            if (key == null) {
+                                Toast.makeText(
+                                    context,
+                                    "Invalid key",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                return@IconButton
+                            }
+
+                            val users = Settings.neverDeleteFrom.toMutableSet()
+                            users.add(key)
+                            Settings.neverDeleteFrom = users
+                            neverDeleteFrom = Settings.neverDeleteFrom
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            deleteFrom = TextFieldValue("")
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add",
+                        )
+                    }
+                }
+            }
+            items(neverDeleteFrom.size) { index ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        neverDeleteFrom.elementAt(index).toShortenHex(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(0.9f),
+                    )
+                    IconButton(
+                        onClick = {
+                            val users = Settings.neverDeleteFrom.toMutableSet()
+                            users.remove(neverDeleteFrom.elementAt(index))
+                            Settings.neverDeleteFrom = users
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            neverDeleteFrom = Settings.neverDeleteFrom
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                        )
+                    }
                 }
             }
         }
