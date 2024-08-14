@@ -18,6 +18,13 @@
     <string name="import_failed">Import fehlgeschlagen</string>
     <string name="invalid_file_extension">Datei nicht unterstützt</string>
     <string name="imported_events_successfully">%1$d Events erfolgreich importiert</string>
+    <string name="never">Never</string>
+    <string name="day">One Day</string>
+    <string name="one_week">One Week</string>
+    <string name="one_month">One Month</string>
+    <string name="one_year">One Year</string>
+    <string name="delete_events_older_than">Delete events</string>
+    <string name="delete_events_older_than_description">Delete events older than</string>
     <string name="import_events">Events importieren</string>
     <string name="import_events_warning">Vorhandene Events löschen? Diese Aktion kann nicht rückgängig gemacht werden.</string>
     <string name="yes">Ja</string>
