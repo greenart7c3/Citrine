@@ -144,9 +144,11 @@ class CustomWebSocketServer(
             return
         }
 
-        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
-            connection.session.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
-            return
+        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
+            if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
+                connection.session.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
+                return
+            }
         }
 
         if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
