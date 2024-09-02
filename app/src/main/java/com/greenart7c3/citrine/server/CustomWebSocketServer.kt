@@ -45,10 +45,6 @@ class CustomWebSocketServer(
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-    fun port(): Int? {
-        return server?.environment?.connectors?.first()?.port
-    }
-
     fun start() {
         if (server == null) {
             server = startKtorHttpServer(host, port)
