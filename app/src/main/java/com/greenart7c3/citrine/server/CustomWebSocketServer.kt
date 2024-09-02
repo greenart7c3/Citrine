@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.BuildConfig
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
+import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
 import com.greenart7c3.citrine.utils.shouldOverwrite
@@ -244,14 +246,17 @@ class CustomWebSocketServer(
                     if (call.request.httpMethod == HttpMethod.Options) {
                         call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
+                        LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.getInstance())
                         val json = """
                         {
-                            "name": "Citrine",
-                            "description": "A Nostr relay in your phone",
-                            "pubkey": "",
+                            "name": "${Settings.name}",
+                            "description": "${Settings.description}",
+                            "pubkey": "${Settings.ownerPubkey}",
+                            "contact": "${Settings.contact}",
                             "supported_nips": [1,2,4,9,11,45,50],
                             "software": "https://github.com/greenart7c3/Citrine",
-                            "version": "${BuildConfig.VERSION_NAME}"
+                            "version": "${BuildConfig.VERSION_NAME}",
+                            "icon": "${Settings.relayIcon}"
                         }
                         """
                         call.respondText(json, ContentType.Application.Json)

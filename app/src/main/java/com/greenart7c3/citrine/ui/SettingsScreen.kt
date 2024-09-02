@@ -3,6 +3,7 @@
 package com.greenart7c3.citrine.ui
 
 import android.net.InetAddresses.isNumericAddress
+import android.net.Uri
 import android.os.Build
 import android.util.Patterns
 import android.widget.Toast
@@ -10,11 +11,13 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -80,6 +83,21 @@ fun SettingsScreen(
         }
         var deleteEphemeralEvents by remember {
             mutableStateOf(Settings.deleteEphemeralEvents)
+        }
+        var relayName by remember {
+            mutableStateOf(TextFieldValue(Settings.name))
+        }
+        var relayOwnerPubkey by remember {
+            mutableStateOf(TextFieldValue(Settings.ownerPubkey))
+        }
+        var relayContact by remember {
+            mutableStateOf(TextFieldValue(Settings.contact))
+        }
+        var relayDescription by remember {
+            mutableStateOf(TextFieldValue(Settings.description))
+        }
+        var relayIconUrl by remember {
+            mutableStateOf(TextFieldValue(Settings.relayIcon))
         }
 //        var useSSL by remember {
 //            mutableStateOf(Settings.useSSL)
@@ -163,6 +181,76 @@ fun SettingsScreen(
                     },
                 )
             }
+            item {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    value = relayName,
+                    label = {
+                        Text(text = "Relay Name")
+                    },
+                    onValueChange = {
+                        relayName = it
+                    },
+                )
+            }
+            item {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    value = relayOwnerPubkey,
+                    label = {
+                        Text(text = "Relay Owner Pubkey")
+                    },
+                    onValueChange = {
+                        relayOwnerPubkey = it
+                    },
+                )
+            }
+            item {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    value = relayContact,
+                    label = {
+                        Text(text = "Relay Contact")
+                    },
+                    onValueChange = {
+                        relayContact = it
+                    },
+                )
+            }
+            item {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    value = relayDescription,
+                    label = {
+                        Text(text = "Relay Description")
+                    },
+                    onValueChange = {
+                        relayDescription = it
+                    },
+                )
+            }
+            item {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    value = relayIconUrl,
+                    label = {
+                        Text(text = "Relay Icon URL")
+                    },
+                    onValueChange = {
+                        relayIconUrl = it
+                    },
+                )
+            }
 //            item {
 //                Row(
 //                    modifier = Modifier
@@ -188,15 +276,73 @@ fun SettingsScreen(
 //                }
 //            }
             item {
-                Box(
+                Column(
                     Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
+                    Arrangement.Center,
+                    Alignment.CenterHorizontally,
                 ) {
                     ElevatedButton(
                         onClick = {
+                            Settings.defaultValues()
+                            host = TextFieldValue(Settings.host)
+                            port = TextFieldValue(Settings.port.toString())
+                            deleteExpiredEvents = Settings.deleteExpiredEvents
+                            deleteEphemeralEvents = Settings.deleteEphemeralEvents
+                            relayName = TextFieldValue(Settings.name)
+                            relayOwnerPubkey = TextFieldValue(Settings.ownerPubkey)
+                            relayContact = TextFieldValue(Settings.contact)
+                            relayDescription = TextFieldValue(Settings.description)
+                            relayIconUrl = TextFieldValue(Settings.relayIcon)
+                            signedBy = TextFieldValue("")
+                            referredBy = TextFieldValue("")
+                            kind = TextFieldValue("")
+                            deleteFrom = TextFieldValue("")
+                            allowedPubKeys = Settings.allowedPubKeys
+                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                            allowedKinds = Settings.allowedKinds
+                            neverDeleteFrom = Settings.neverDeleteFrom
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            onApplyChanges()
+                        },
+                        content = {
+                            Text("Default")
+                        },
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    ElevatedButton(
+                        onClick = {
                             if (host.text.isNotBlank() && isIpValid(host.text) && port.text.isDigitsOnly() && port.text.isNotBlank()) {
+                                if (relayOwnerPubkey.text.isNotBlank() && relayOwnerPubkey.text.toNostrKey() == null) {
+                                    Toast.makeText(
+                                        context,
+                                        "Invalid owner pubkey",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                    return@ElevatedButton
+                                }
+
+                                if (relayIconUrl.text.isNotBlank()) {
+                                    try {
+                                        Uri.parse(relayIconUrl.text)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            "Invalid icon URL",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                        return@ElevatedButton
+                                    }
+                                }
+
                                 Settings.port = port.text.toInt()
                                 Settings.host = host.text
+                                Settings.name = relayName.text
+                                Settings.ownerPubkey = relayOwnerPubkey.text.toNostrKey() ?: ""
+                                Settings.contact = relayContact.text
+                                Settings.description = relayDescription.text
+                                Settings.relayIcon = relayIconUrl.text
                                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                                 onApplyChanges()
                             } else {

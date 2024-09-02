@@ -16,6 +16,11 @@ object PrefKeys {
     const val HOST = "host"
     const val PORT = "port"
     const val NEVER_DELETE_FROM = "never_delete_from"
+    const val RELAY_NAME = "relay_name"
+    const val RELAY_OWNER_PUBKEY = "relay_owner_pubkey"
+    const val RELAY_CONTACT = "relay_contact"
+    const val RELAY_DESCRIPTION = "relay_description"
+    const val RELAY_ICON = "relay_icon"
 }
 
 object LocalPreferences {
@@ -41,6 +46,11 @@ object LocalPreferences {
             putString(PrefKeys.HOST, settings.host)
             putInt(PrefKeys.PORT, settings.port)
             putStringSet(PrefKeys.NEVER_DELETE_FROM, settings.neverDeleteFrom)
+            putString(PrefKeys.RELAY_NAME, settings.name)
+            putString(PrefKeys.RELAY_OWNER_PUBKEY, settings.ownerPubkey)
+            putString(PrefKeys.RELAY_CONTACT, settings.contact)
+            putString(PrefKeys.RELAY_DESCRIPTION, settings.description)
+            putString(PrefKeys.RELAY_ICON, settings.relayIcon)
         }.apply()
     }
 
@@ -56,5 +66,10 @@ object LocalPreferences {
         Settings.host = prefs.getString(PrefKeys.HOST, "127.0.0.1") ?: "127.0.0.1"
         Settings.port = prefs.getInt(PrefKeys.PORT, 4869)
         Settings.neverDeleteFrom = prefs.getStringSet(PrefKeys.NEVER_DELETE_FROM, emptySet()) ?: emptySet()
+        Settings.name = prefs.getString(PrefKeys.RELAY_NAME, "Citrine") ?: "Citrine"
+        Settings.ownerPubkey = prefs.getString(PrefKeys.RELAY_OWNER_PUBKEY, "") ?: ""
+        Settings.contact = prefs.getString(PrefKeys.RELAY_CONTACT, "") ?: ""
+        Settings.description = prefs.getString(PrefKeys.RELAY_DESCRIPTION, "A Nostr relay in your phone") ?: "A Nostr relay in your phone"
+        Settings.relayIcon = prefs.getString(PrefKeys.RELAY_ICON, "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true") ?: "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
     }
 }

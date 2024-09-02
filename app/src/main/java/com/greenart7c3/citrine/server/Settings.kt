@@ -13,6 +13,29 @@ object Settings {
     var host: String = "127.0.0.1"
     var port: Int = 4869
     var neverDeleteFrom: Set<String> = emptySet()
+    var name: String = "Citrine"
+    var ownerPubkey: String = ""
+    var contact: String = ""
+    var description: String = "A Nostr relay in your phone"
+    var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+
+    fun defaultValues() {
+        allowedKinds = emptySet()
+        allowedPubKeys = emptySet()
+        allowedTaggedPubKeys = emptySet()
+        deleteEventsOlderThan = OlderThan.NEVER
+        deleteExpiredEvents = true
+        deleteEphemeralEvents = true
+        useSSL = false
+        host = "127.0.0.1"
+        port = 4869
+        neverDeleteFrom = emptySet()
+        name = "Citrine"
+        ownerPubkey = ""
+        contact = ""
+        description = "A Nostr relay in your phone"
+        relayIcon = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+    }
 }
 
 enum class OlderThan {
