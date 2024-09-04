@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name_release">Citrine</string>
+    <string name="app_name_debug">Citrine 调试</string>
+    <string name="no_follow_list_found">未找到关注列表</string>
+    <string name="no_relays_found">未找到中继</string>
+    <string name="restore">恢复</string>
+    <string name="make_sure_the_signer_application_has_authorized_this_transaction">请确保签名器已授权本次请求</string>
+    <string name="sign_request_rejected">签名请求已被拒绝</string>
+    <string name="relay_started_at">中继运行于</string>
+    <string name="relay_not_running">中继未运行</string>
+    <string name="stop">停止</string>
+    <string name="start">启动</string>
+    <string name="no_external_signer_installed">未安装外部签名器</string>
+    <string name="restore_follows">恢复关注列表</string>
+    <string name="export_database">导出数据库</string>
+    <string name="import_database">导入数据库</string>
+    <string name="import_failed">导入失败</string>
+    <string name="invalid_file_extension">不支持的文件类型</string>
+    <string name="imported_events_successfully">成功导入 %1$d 个事件</string>
+    <string name="never">从不</string>
+    <string name="day">一天</string>
+    <string name="one_week">一周</string>
+    <string name="one_month">一个月</string>
+    <string name="one_year">一年</string>
+    <string name="delete_events_older_than">删除事件</string>
+    <string name="delete_events_older_than_description">删除早于该时间的事件</string>
+    <string name="import_events">导入事件</string>
+    <string name="import_events_warning">删除已有事件？该操作无法撤销。</string>
+    <string name="yes">确定</string>
+    <string name="no">取消</string>
+    <string name="cancel">取消</string>
+</resources>
