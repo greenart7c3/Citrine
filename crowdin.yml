@@ -3,7 +3,6 @@ api_token_env: CROWDIN_PERSONAL_TOKEN
 base_path: .
 base_url: 'https://api.crowdin.com'
 preserve_hierarchy: true
-crowdin_language_code: us
 files:
   - source: app/src/main/res/values/strings.xml
     translation: app/src/main/res/values-%android_code%/%original_file_name%
@@ -14,11 +13,11 @@ files:
         cs: cs
         de: de
         eo: eo
-        es: es
+        es-ES: es
         fa: fa
         fr: fr
         hu: hu
-        in: in
+        id: in
         ja: ja
         nl: nl
         ru: ru
@@ -26,5 +25,5 @@ files:
         th: th
         tr: tr
         uk: uk
-        zh: zh
+        zh-CN: zh
         sw: sw
