@@ -83,7 +83,7 @@ object EventRepository {
             }
         }
 
-        val predicatesSql = whereClause.joinToString(" AND ", prefix = "WHERE ")
+        val predicatesSql = if (whereClause.isNotEmpty()) whereClause.joinToString(" AND ", prefix = "WHERE ") else ""
 
         var query = """
             SELECT EventEntity.*

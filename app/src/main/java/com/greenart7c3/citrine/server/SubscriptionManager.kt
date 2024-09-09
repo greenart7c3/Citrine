@@ -23,7 +23,7 @@ class SubscriptionManager(val subscription: Subscription) {
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
 
-                Log.d("error", "Error reading data from database", e)
+                Log.d("error", "Error reading data from database $filter", e)
                 subscription.connection.session.send(
                     NoticeResult.invalid("Error reading data from database").toJson(),
                 )

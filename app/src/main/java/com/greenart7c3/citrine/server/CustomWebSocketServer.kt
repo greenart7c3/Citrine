@@ -253,7 +253,7 @@ class CustomWebSocketServer(
                             "description": "${Settings.description}",
                             "pubkey": "${Settings.ownerPubkey}",
                             "contact": "${Settings.contact}",
-                            "supported_nips": [1,2,4,9,11,45,50],
+                            "supported_nips": [1,2,4,9,11,40,45,50,59],
                             "software": "https://github.com/greenart7c3/Citrine",
                             "version": "${BuildConfig.VERSION_NAME}",
                             "icon": "${Settings.relayIcon}"
@@ -271,26 +271,29 @@ class CustomWebSocketServer(
                     connections += thisConnection
                     try {
                         for (frame in incoming) {
-                            when (frame) {
-                                is Frame.Text -> {
-                                    val message = frame.readText()
-                                    processNewRelayMessage(message, thisConnection)
+                            try {
+                                when (frame) {
+                                    is Frame.Text -> {
+                                        val message = frame.readText()
+                                        processNewRelayMessage(message, thisConnection)
+                                    }
+
+                                    else -> {
+                                        Log.d("error", frame.toString())
+                                        send(NoticeResult.invalid("Error processing message").toJson())
+                                    }
                                 }
-                                else -> {
-                                    Log.d("error", frame.toString())
-                                    send(NoticeResult.invalid("Error processing message").toJson())
+                            } catch (e: Throwable) {
+                                if (e is CancellationException) throw e
+                                Log.d("error", e.toString(), e)
+                                try {
+                                    if (!thisConnection.session.outgoing.isClosedForSend) {
+                                        send(NoticeResult.invalid("Error processing message").toJson())
+                                    }
+                                } catch (e: Exception) {
+                                    Log.d("error", e.toString(), e)
                                 }
                             }
-                        }
-                    } catch (e: Throwable) {
-                        if (e is CancellationException) throw e
-                        Log.d("error", e.toString(), e)
-                        try {
-                            if (!thisConnection.session.outgoing.isClosedForSend) {
-                                send(NoticeResult.invalid(closeReason.await()?.message ?: "").toJson())
-                            }
-                        } catch (e: Exception) {
-                            Log.d("error", e.toString(), e)
                         }
                     } finally {
                         Log.d("connection", "Removing ${thisConnection.name}!")
