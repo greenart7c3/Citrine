@@ -13,6 +13,7 @@
 /captures
 .cxx
 .kotlin/
+keystore.properties
 
 
 # Built application files

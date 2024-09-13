@@ -26,21 +26,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build AAB
-        run: ./gradlew clean bundleRelease --stacktrace
-
-      - name: Sign AAB
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: app/build/outputs/bundle/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-        env:
-          # override default build-tools version (29.0.3) -- optional
-          BUILD_TOOLS_VERSION: "34.0.0"
-
       - name: Build APK
         run: ./gradlew assembleRelease --stacktrace
 
@@ -82,60 +67,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: app/build/outputs/apk/release/app-universal-release-unsigned-signed.apk
-          asset_name: citrine-universal-${{ github.ref_name }}.apk
-          asset_content_type: application/zip
-
-      - name: Upload APK x86 Asset
-        id: upload-release-asset-x86-apk
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/apk/release/app-x86-release-unsigned-signed.apk
-          asset_name: citrine-x86-${{ github.ref_name }}.apk
-          asset_content_type: application/zip
-
-      - name: Upload APK x86_64 Asset
-        id: upload-release-asset-x86-64-apk
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/apk/release/app-x86_64-release-unsigned-signed.apk
-          asset_name: citrine-x86_64-${{ github.ref_name }}.apk
-          asset_content_type: application/zip
-
-      - name: Upload APK arm64-v8a Asset
-        id: upload-release-asset-arm64-v8a-apk
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/apk/release/app-arm64-v8a-release-unsigned-signed.apk
-          asset_name: citrine-arm64-v8a-${{ github.ref_name }}.apk
-          asset_content_type: application/zip
-
-      - name: Upload APK armeabi-v7a Asset
-        id: upload-release-asset-armeabi-v7a-apk
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/apk/release/app-armeabi-v7a-release-unsigned-signed.apk
-          asset_name: citrine-armeabi-v7a-${{ github.ref_name }}.apk
-          asset_content_type: application/zip
-
-      - name: Upload AAB Asset
-        id: upload-release-asset-aab
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/bundle/release/app-release.aab
-          asset_name: citrine-${{ github.ref_name }}.aab
+          asset_name: citrine-fdroid-universal-${{ github.ref_name }}.apk
           asset_content_type: application/zip
