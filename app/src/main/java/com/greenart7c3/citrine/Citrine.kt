@@ -12,6 +12,8 @@ class Citrine : Application() {
     }
 
     companion object {
+        const val TAG = "Citrine"
+
         @Volatile
         private var instance: Citrine? = null
 

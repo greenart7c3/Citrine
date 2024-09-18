@@ -3,6 +3,7 @@ package com.greenart7c3.citrine.server
 import android.util.Log
 import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
@@ -30,7 +31,6 @@ object EventSubscription {
 
     @OptIn(DelicateCoroutinesApi::class)
     fun executeAll(dbEvent: EventWithTags) {
-        Log.d("executeAll", "executeAll")
         GlobalScope.launch(Dispatchers.IO) {
             subscriptions.snapshot().values.forEach {
                 it.subscription.filters.forEach { filter ->
@@ -52,10 +52,10 @@ object EventSubscription {
     }
 
     fun closeAll(connectionName: String) {
-        Log.d("connection", "finalizing subscriptions from $connectionName")
+        Log.d(Citrine.TAG, "finalizing subscriptions from $connectionName")
         subscriptions.snapshot().keys.forEach {
             if (subscriptions[it].subscription.connection.name == connectionName) {
-                Log.d("connection", "closing subscription $it")
+                Log.d(Citrine.TAG, "closing subscription $it")
                 close(it)
             }
         }
@@ -70,7 +70,6 @@ object EventSubscription {
     fun close(subscriptionId: String) {
         subscriptions.remove(subscriptionId)
         _subscriptionCount.value = subscriptions.size()
-        Log.d("subscriptions", subscriptions.size().toString())
     }
 
     suspend fun subscribe(
@@ -81,7 +80,6 @@ object EventSubscription {
         objectMapper: ObjectMapper,
         count: Boolean,
     ) {
-        Log.d("subscriptions", "new subscription $subscriptionId")
         close(subscriptionId)
         val manager = SubscriptionManager(
             Subscription(

@@ -63,6 +63,7 @@ import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.WebSocketServerService
+import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.DatabaseButtons
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
@@ -175,26 +176,28 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        NavigationBar(tonalElevation = 0.dp) {
-                            items.forEach {
-                                val selected = destinationRoute == it.route
-                                NavigationBarItem(
-                                    selected = selected,
-                                    onClick = {
-                                        navController.navigate(it.route) {
-                                            popUpTo(0)
-                                        }
-                                    },
-                                    icon = {
-                                        Icon(
-                                            if (selected) it.selectedIcon else it.icon,
-                                            it.route,
-                                        )
-                                    },
-                                    label = {
-                                        Text(it.route)
-                                    },
-                                )
+                        if (destinationRoute != Route.Logs.route) {
+                            NavigationBar(tonalElevation = 0.dp) {
+                                items.forEach {
+                                    val selected = destinationRoute == it.route
+                                    NavigationBarItem(
+                                        selected = selected,
+                                        onClick = {
+                                            navController.navigate(it.route) {
+                                                popUpTo(0)
+                                            }
+                                        },
+                                        icon = {
+                                            Icon(
+                                                if (selected) it.selectedIcon else it.icon,
+                                                it.route,
+                                            )
+                                        },
+                                        label = {
+                                            Text(it.route)
+                                        },
+                                    )
+                                }
                             }
                         }
                     },
@@ -203,6 +206,14 @@ class MainActivity : ComponentActivity() {
                         navController = navController,
                         startDestination = Route.Home.route,
                     ) {
+                        composable(Route.Logs.route) {
+                            LogcatScreen(
+                                onClose = {
+                                    navController.navigateUp()
+                                },
+                            )
+                        }
+
                         composable(Route.Home.route) {
                             Surface(
                                 modifier = Modifier
@@ -347,7 +358,7 @@ class MainActivity : ComponentActivity() {
                                                     intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                                     launcherLogin.launch(intent)
                                                 } catch (e: Exception) {
-                                                    Log.d("intent", e.message ?: "", e)
+                                                    Log.d(Citrine.TAG, e.message ?: "", e)
                                                     coroutineScope.launch(Dispatchers.Main) {
                                                         Toast.makeText(
                                                             context,
@@ -371,6 +382,15 @@ class MainActivity : ComponentActivity() {
                                                 storageHelper.openFilePicker()
                                             },
                                         )
+
+                                        ElevatedButton(
+                                            onClick = {
+                                                navController.navigate(Route.Logs.route)
+                                            },
+                                        ) {
+                                            Text(stringResource(R.string.logs))
+                                        }
+
                                         Spacer(modifier = Modifier.padding(4.dp))
 
                                         if (countByKind == null) {
@@ -509,7 +529,7 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                Log.d("import", e.message ?: "", e)
+                Log.d(Citrine.TAG, e.message ?: "", e)
                 GlobalScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         this@MainActivity,

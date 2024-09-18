@@ -42,7 +42,7 @@ class CustomWebSocketServer(
     private val port: Int,
     private val appDatabase: AppDatabase,
 ) {
-    val connections = Collections.synchronizedSet<Connection?>(LinkedHashSet())
+    val connections: MutableSet<Connection> = Collections.synchronizedSet(LinkedHashSet())
     var server: ApplicationEngine? = null
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -81,7 +81,7 @@ class CustomWebSocketServer(
     }
 
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection) {
-        Log.d("message", newMessage)
+        Log.d(Citrine.TAG, newMessage + " from ${connection.session.call.request.local.remoteHost} ${connection.session.call.request.headers["User-Agent"]}")
         val msgArray = Event.mapper.readTree(newMessage)
         when (val type = msgArray.get(0).asText()) {
             "COUNT" -> {
@@ -103,7 +103,7 @@ class CustomWebSocketServer(
             }
             else -> {
                 val errorMessage = NoticeResult.invalid("unknown message type $type").toJson()
-                Log.d("message", errorMessage)
+                Log.d(Citrine.TAG, errorMessage)
                 connection.session.send(errorMessage)
             }
         }
@@ -269,6 +269,7 @@ class CustomWebSocketServer(
                 webSocket("/") {
                     val thisConnection = Connection(this)
                     connections += thisConnection
+                    Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
                     try {
                         for (frame in incoming) {
                             try {
@@ -279,24 +280,24 @@ class CustomWebSocketServer(
                                     }
 
                                     else -> {
-                                        Log.d("error", frame.toString())
+                                        Log.d(Citrine.TAG, frame.toString())
                                         send(NoticeResult.invalid("Error processing message").toJson())
                                     }
                                 }
                             } catch (e: Throwable) {
                                 if (e is CancellationException) throw e
-                                Log.d("error", e.toString(), e)
+                                Log.d(Citrine.TAG, e.toString(), e)
                                 try {
                                     if (!thisConnection.session.outgoing.isClosedForSend) {
                                         send(NoticeResult.invalid("Error processing message").toJson())
                                     }
                                 } catch (e: Exception) {
-                                    Log.d("error", e.toString(), e)
+                                    Log.d(Citrine.TAG, e.toString(), e)
                                 }
                             }
                         }
                     } finally {
-                        Log.d("connection", "Removing ${thisConnection.name}!")
+                        Log.d(Citrine.TAG, "Removing ${thisConnection.name}!")
                         thisConnection.finalize()
                         connections -= thisConnection
                     }

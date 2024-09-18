@@ -1,9 +1,9 @@
 package com.greenart7c3.citrine.server
 
-import io.ktor.websocket.DefaultWebSocketSession
+import io.ktor.server.websocket.DefaultWebSocketServerSession
 import java.util.concurrent.atomic.AtomicInteger
 
-class Connection(val session: DefaultWebSocketSession) {
+class Connection(val session: DefaultWebSocketServerSession) {
     companion object {
         val lastId = AtomicInteger(0)
     }

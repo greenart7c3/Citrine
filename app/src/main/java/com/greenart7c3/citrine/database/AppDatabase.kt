@@ -7,6 +7,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.greenart7c3.citrine.BuildConfig
+import com.greenart7c3.citrine.Citrine
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
@@ -40,9 +41,9 @@ abstract class AppDatabase : RoomDatabase() {
 class AppDatabaseCallback : RoomDatabase.QueryCallback {
     override fun onQuery(sqlQuery: String, bindArgs: List<Any?>) {
         if (BuildConfig.DEBUG) {
-            Log.d("AppDatabase", "Query: $sqlQuery")
+            Log.d(Citrine.TAG, "Query: $sqlQuery")
             bindArgs.forEach {
-                Log.d("AppDatabase", "BindArg: $it")
+                Log.d(Citrine.TAG, "BindArg: $it")
             }
         }
     }

@@ -13,6 +13,7 @@ import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
@@ -44,7 +45,7 @@ class WebSocketServerService : Service() {
         GlobalScope.launch(Dispatchers.IO) {
             if (Settings.deleteEphemeralEvents) {
                 val ephemeralEvents = database.eventDao().getEphemeralEvents()
-                Log.d("timer", "Deleting ${ephemeralEvents.size} ephemeral events")
+                Log.d(Citrine.TAG, "Deleting ${ephemeralEvents.size} ephemeral events")
                 database.eventDao().delete(ephemeralEvents.map { it.event.id })
             }
 
@@ -57,7 +58,7 @@ class WebSocketServerService : Service() {
                         null
                     }
                 }
-                Log.d("timer", "Deleting ${expiredEvents.size} expired events")
+                Log.d(Citrine.TAG, "Deleting ${expiredEvents.size} expired events")
                 database.eventDao().delete(expiredEvents.map { it.event.id })
             }
 
@@ -79,10 +80,10 @@ class WebSocketServerService : Service() {
                     if (Settings.neverDeleteFrom.isNotEmpty()) {
                         val neverDeleteFrom = Settings.neverDeleteFrom
                         val filteredOldEvents = oldEvents.filter { it.event.pubkey !in neverDeleteFrom }
-                        Log.d("timer", "Deleting ${filteredOldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
+                        Log.d(Citrine.TAG, "Deleting ${filteredOldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
                         database.eventDao().delete(filteredOldEvents.map { it.event.id })
                     } else {
-                        Log.d("timer", "Deleting ${oldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
+                        Log.d(Citrine.TAG, "Deleting ${oldEvents.size} old events (older than ${Settings.deleteEventsOlderThan})")
                         database.eventDao().delete(oldEvents.map { it.event.id })
                     }
                 }

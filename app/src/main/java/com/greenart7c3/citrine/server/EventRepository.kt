@@ -2,6 +2,7 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
@@ -123,7 +124,7 @@ object EventRepository {
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {
-                Log.d("event", "sending event ${event.id} subscription ${subscription.id} filter $filter")
+                Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
                 subscription.connection.session.send(
                     subscription.objectMapper.writeValueAsString(
                         listOf(

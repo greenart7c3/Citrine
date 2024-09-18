@@ -22,6 +22,7 @@ package com.greenart7c3.citrine.utils
 
 import android.util.Log
 import com.greenart7c3.citrine.BuildConfig
+import com.greenart7c3.citrine.Citrine
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -50,7 +51,7 @@ object HttpClientManager {
 
     fun setDefaultProxy(proxy: Proxy?) {
         if (internalProxy != proxy) {
-            Log.d("HttpClient", "Changing proxy to: ${proxy != null}")
+            Log.d(Citrine.TAG, "Changing proxy to: ${proxy != null}")
             internalProxy = proxy
 
             // recreates singleton
@@ -59,7 +60,7 @@ object HttpClientManager {
     }
 
     fun setDefaultTimeout(timeout: Duration) {
-        Log.d("HttpClient", "Changing timeout to: $timeout")
+        Log.d(Citrine.TAG, "Changing timeout to: $timeout")
         if (defaultTimeout.seconds != timeout.seconds) {
             defaultTimeout = timeout
 

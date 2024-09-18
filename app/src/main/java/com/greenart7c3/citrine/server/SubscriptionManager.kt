@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.server
 
 import android.util.Log
+import com.greenart7c3.citrine.Citrine
 import io.ktor.websocket.send
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -10,7 +11,7 @@ class SubscriptionManager(val subscription: Subscription) {
     suspend fun execute() {
         if (subscription.connection.session.outgoing.isClosedForSend) {
             EventSubscription.close(subscription.id)
-            Log.d("timer", "cancelling subscription isClosedForSend: ${subscription.id}")
+            Log.d(Citrine.TAG, "cancelling subscription isClosedForSend: ${subscription.id}")
             return
         }
 
@@ -23,7 +24,7 @@ class SubscriptionManager(val subscription: Subscription) {
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
 
-                Log.d("error", "Error reading data from database $filter", e)
+                Log.d(Citrine.TAG, "Error reading data from database $filter", e)
                 subscription.connection.session.send(
                     NoticeResult.invalid("Error reading data from database").toJson(),
                 )
