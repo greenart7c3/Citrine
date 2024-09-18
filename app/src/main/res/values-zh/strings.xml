@@ -30,4 +30,5 @@
     <string name="yes">确定</string>
     <string name="no">取消</string>
     <string name="cancel">取消</string>
+    <string name="logs">Logs</string>
 </resources>
