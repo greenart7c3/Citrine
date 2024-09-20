@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,12 +62,18 @@ import com.vitorpamplona.quartz.encoders.Nip19Bech32
 import com.vitorpamplona.quartz.encoders.hexToByteArray
 import com.vitorpamplona.quartz.encoders.toHexKey
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     onApplyChanges: () -> Unit,
 ) {
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     Surface(
         modifier,
     ) {
@@ -282,27 +289,35 @@ fun SettingsScreen(
                     Alignment.CenterHorizontally,
                 ) {
                     ElevatedButton(
+                        enabled = !isLoading,
                         onClick = {
-                            Settings.defaultValues()
-                            host = TextFieldValue(Settings.host)
-                            port = TextFieldValue(Settings.port.toString())
-                            deleteExpiredEvents = Settings.deleteExpiredEvents
-                            deleteEphemeralEvents = Settings.deleteEphemeralEvents
-                            relayName = TextFieldValue(Settings.name)
-                            relayOwnerPubkey = TextFieldValue(Settings.ownerPubkey)
-                            relayContact = TextFieldValue(Settings.contact)
-                            relayDescription = TextFieldValue(Settings.description)
-                            relayIconUrl = TextFieldValue(Settings.relayIcon)
-                            signedBy = TextFieldValue("")
-                            referredBy = TextFieldValue("")
-                            kind = TextFieldValue("")
-                            deleteFrom = TextFieldValue("")
-                            allowedPubKeys = Settings.allowedPubKeys
-                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
-                            allowedKinds = Settings.allowedKinds
-                            neverDeleteFrom = Settings.neverDeleteFrom
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            onApplyChanges()
+                            if (isLoading) return@ElevatedButton
+
+                            scope.launch(Dispatchers.IO) {
+                                isLoading = true
+                                Settings.defaultValues()
+                                host = TextFieldValue(Settings.host)
+                                port = TextFieldValue(Settings.port.toString())
+                                deleteExpiredEvents = Settings.deleteExpiredEvents
+                                deleteEphemeralEvents = Settings.deleteEphemeralEvents
+                                relayName = TextFieldValue(Settings.name)
+                                relayOwnerPubkey = TextFieldValue(Settings.ownerPubkey)
+                                relayContact = TextFieldValue(Settings.contact)
+                                relayDescription = TextFieldValue(Settings.description)
+                                relayIconUrl = TextFieldValue(Settings.relayIcon)
+                                signedBy = TextFieldValue("")
+                                referredBy = TextFieldValue("")
+                                kind = TextFieldValue("")
+                                deleteFrom = TextFieldValue("")
+                                allowedPubKeys = Settings.allowedPubKeys
+                                allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                                allowedKinds = Settings.allowedKinds
+                                neverDeleteFrom = Settings.neverDeleteFrom
+                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                onApplyChanges()
+                                delay(1500)
+                                isLoading = false
+                            }
                         },
                         content = {
                             Text("Default")
@@ -312,6 +327,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     ElevatedButton(
+                        enabled = !isLoading,
                         onClick = {
                             if (host.text.isNotBlank() && isIpValid(host.text) && port.text.isDigitsOnly() && port.text.isNotBlank()) {
                                 if (relayOwnerPubkey.text.isNotBlank() && relayOwnerPubkey.text.toNostrKey() == null) {
@@ -336,15 +352,22 @@ fun SettingsScreen(
                                     }
                                 }
 
-                                Settings.port = port.text.toInt()
-                                Settings.host = host.text
-                                Settings.name = relayName.text
-                                Settings.ownerPubkey = relayOwnerPubkey.text.toNostrKey() ?: ""
-                                Settings.contact = relayContact.text
-                                Settings.description = relayDescription.text
-                                Settings.relayIcon = relayIconUrl.text
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                onApplyChanges()
+                                if (isLoading) return@ElevatedButton
+
+                                scope.launch(Dispatchers.IO) {
+                                    isLoading = true
+                                    Settings.port = port.text.toInt()
+                                    Settings.host = host.text
+                                    Settings.name = relayName.text
+                                    Settings.ownerPubkey = relayOwnerPubkey.text.toNostrKey() ?: ""
+                                    Settings.contact = relayContact.text
+                                    Settings.description = relayDescription.text
+                                    Settings.relayIcon = relayIconUrl.text
+                                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                    onApplyChanges()
+                                    delay(1500)
+                                    isLoading = false
+                                }
                             } else {
                                 Toast.makeText(
                                     context,

@@ -116,7 +116,7 @@ class MainActivity : ComponentActivity() {
         isLoading.value = true
         val intent = Intent(applicationContext, WebSocketServerService::class.java)
         stopService(intent)
-        unbindService(connection)
+        if (bound) unbindService(connection)
         bound = false
         service = null
         delay(1000)
