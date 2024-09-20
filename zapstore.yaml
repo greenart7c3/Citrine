@@ -1,0 +1,8 @@
+citrine:
+  android:
+    identifier: com.greenart7c3.citrine
+    name: Citrine
+    description: Citrine is a nostr relay for android. It allows any nostr client that supports Android to send and receive events from this application.
+    repository: https://github.com/greenart7c3/Citrine
+    artifacts:
+      - citrine-arm64-v8a-v%v.apk
