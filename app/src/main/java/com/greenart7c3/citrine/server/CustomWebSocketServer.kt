@@ -55,7 +55,7 @@ class CustomWebSocketServer(
         }
     }
 
-    fun stop() {
+    suspend fun stop() {
         server!!.stop(1000)
         server = null
     }

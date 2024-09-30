@@ -103,33 +103,37 @@ class MainActivity : ComponentActivity() {
             val binder = service as WebSocketServerService.LocalBinder
             this@MainActivity.service = binder.getService()
             bound = true
-            this@MainActivity.isLoading.value = false
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             bound = false
-            this@MainActivity.isLoading.value = true
         }
     }
 
     private suspend fun stop() {
-        isLoading.value = true
-        val intent = Intent(applicationContext, WebSocketServerService::class.java)
-        stopService(intent)
-        if (bound) unbindService(connection)
-        bound = false
-        service = null
-        delay(1000)
-        isLoading.value = false
+        try {
+            isLoading.value = true
+            val intent = Intent(applicationContext, WebSocketServerService::class.java)
+            stopService(intent)
+            if (bound) unbindService(connection)
+            bound = false
+            service = null
+            delay(2000)
+        } finally {
+            isLoading.value = false
+        }
     }
 
     private suspend fun start() {
-        isLoading.value = true
-        val intent = Intent(applicationContext, WebSocketServerService::class.java)
-        startService(intent)
-        bindService(intent, connection, Context.BIND_AUTO_CREATE)
-        delay(1000)
-        isLoading.value = false
+        try {
+            isLoading.value = true
+            val intent = Intent(applicationContext, WebSocketServerService::class.java)
+            startService(intent)
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            delay(2000)
+        } finally {
+            isLoading.value = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -324,10 +328,7 @@ class MainActivity : ComponentActivity() {
                                             ElevatedButton(
                                                 onClick = {
                                                     coroutineScope.launch(Dispatchers.IO) {
-                                                        isLoading.value = true
                                                         stop()
-                                                        delay(1000)
-                                                        isLoading.value = false
                                                     }
                                                 },
                                             ) {
@@ -424,11 +425,9 @@ class MainActivity : ComponentActivity() {
                                     .padding(16.dp),
                                 onApplyChanges = {
                                     coroutineScope.launch(Dispatchers.IO) {
-                                        isLoading.value = true
                                         stop()
                                         delay(1000)
                                         start()
-                                        isLoading.value = false
                                     }
                                 },
                             )

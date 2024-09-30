@@ -27,12 +27,15 @@ import com.greenart7c3.citrine.server.Settings
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
 import java.util.TimerTask
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class WebSocketServerService : Service() {
+    val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     lateinit var webSocketServer: CustomWebSocketServer
     private val binder = LocalBinder()
     private var timer: Timer? = null
@@ -122,10 +125,12 @@ class WebSocketServerService : Service() {
     }
 
     override fun onDestroy() {
-        timer?.cancel()
-        timer = null
-        EventSubscription.closeAll()
-        webSocketServer.stop()
+        scope.launch(Dispatchers.IO) {
+            timer?.cancel()
+            timer = null
+            EventSubscription.closeAll()
+            webSocketServer.stop()
+        }
         super.onDestroy()
     }
 
