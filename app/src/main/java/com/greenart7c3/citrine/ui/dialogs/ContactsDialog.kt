@@ -39,7 +39,9 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.ui.CloseButton
 import com.greenart7c3.citrine.utils.toDateString
+import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
 import com.vitorpamplona.ammolite.relays.Client
+import com.vitorpamplona.ammolite.relays.RelaySetupInfo
 import com.vitorpamplona.quartz.encoders.bechToBytes
 import com.vitorpamplona.quartz.encoders.toHexKey
 import com.vitorpamplona.quartz.events.ContactListEvent
@@ -212,12 +214,23 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                 event.tags,
                                                 signer,
                                             ) { signedEvent ->
-                                                relays.forEach { relay ->
+                                                val localRelays = relays.mapNotNull { relay ->
                                                     if (relay.value.write) {
-                                                        Client.send(signedEvent, relay = relay.key)
+                                                        RelaySetupInfo(
+                                                            relay.key,
+                                                            relay.value.read,
+                                                            relay.value.write,
+                                                            COMMON_FEED_TYPES,
+                                                        )
+                                                    } else {
+                                                        null
                                                     }
                                                 }
-                                                onClose()
+
+                                                coroutineScope.launch(Dispatchers.IO) {
+                                                    Client.sendAndWaitForResponse(signedEvent, relayList = localRelays)
+                                                    onClose()
+                                                }
                                             }
                                         },
                                         modifier = Modifier.padding(
