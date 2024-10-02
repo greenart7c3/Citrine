@@ -119,6 +119,9 @@ class MainActivity : ComponentActivity() {
             bound = false
             service = null
             delay(2000)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.d(Citrine.TAG, e.message ?: "", e)
         } finally {
             isLoading.value = false
         }
@@ -131,6 +134,9 @@ class MainActivity : ComponentActivity() {
             startService(intent)
             bindService(intent, connection, Context.BIND_AUTO_CREATE)
             delay(2000)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.d(Citrine.TAG, e.message ?: "", e)
         } finally {
             isLoading.value = false
         }
