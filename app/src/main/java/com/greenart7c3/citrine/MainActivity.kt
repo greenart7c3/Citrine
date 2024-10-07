@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,17 +53,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.anggrayudi.storage.SimpleStorageHelper
-import com.anggrayudi.storage.file.CreateMode
 import com.anggrayudi.storage.file.extension
-import com.anggrayudi.storage.file.makeFile
 import com.anggrayudi.storage.file.openInputStream
-import com.anggrayudi.storage.file.openOutputStream
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
@@ -72,8 +70,8 @@ import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
+import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.events.Event
-import java.util.Date
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +84,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var database: AppDatabase
     private var countByKind: Flow<List<EventDao.CountResult>>? = null
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
+    var saveToPreferences = false
 
     @OptIn(DelicateCoroutinesApi::class)
     private val requestPermissionLauncher = registerForActivityResult(
@@ -235,8 +234,15 @@ class MainActivity : ComponentActivity() {
                                 color = MaterialTheme.colorScheme.background,
                             ) {
                                 var showDialog by remember { mutableStateOf(false) }
+                                var showAutoBackupDialog by remember { mutableStateOf(false) }
                                 val selectedFiles = remember {
                                     mutableListOf<DocumentFile>()
+                                }
+
+                                LaunchedEffect(Unit) {
+                                    if (LocalPreferences.shouldShowAutoBackupDialog(context)) {
+                                        showAutoBackupDialog = true
+                                    }
                                 }
 
                                 storageHelper.onFolderSelected = { _, folder ->
@@ -301,6 +307,43 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             ) {
                                                 Text(getString(R.string.no))
+                                            }
+                                        },
+                                    )
+                                }
+
+                                if (showAutoBackupDialog) {
+                                    AlertDialog(
+                                        onDismissRequest = {
+                                            showAutoBackupDialog = false
+                                        },
+                                        title = {
+                                            Text(stringResource(R.string.auto_backup))
+                                        },
+                                        text = {
+                                            Text(stringResource(R.string.select_a_folder_to_backup_to))
+                                        },
+                                        confirmButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    showAutoBackupDialog = false
+                                                    saveToPreferences = true
+                                                    storageHelper.openFolderPicker()
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.select_folder))
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    Settings.autoBackup = false
+                                                    Settings.autoBackupFolder = ""
+                                                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                                    showAutoBackupDialog = false
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.never_auto_backup))
                                             }
                                         },
                                     )
@@ -385,6 +428,7 @@ class MainActivity : ComponentActivity() {
 
                                         DatabaseButtons(
                                             onExport = {
+                                                saveToPreferences = false
                                                 storageHelper.openFolderPicker()
                                             },
                                             onImport = {
@@ -450,22 +494,16 @@ class MainActivity : ComponentActivity() {
     private fun exportDatabase(folder: DocumentFile, onProgress: (String) -> Unit) {
         GlobalScope.launch(Dispatchers.IO) {
             isLoading.value = true
+
+            if (saveToPreferences) {
+                Settings.autoBackup = true
+                Settings.autoBackupFolder = folder.uri.toString()
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, this@MainActivity)
+                saveToPreferences = false
+            }
+
             try {
-                val file = folder.makeFile(
-                    this@MainActivity,
-                    "citrine-${Date().time}.jsonl",
-                    mode = CreateMode.CREATE_NEW,
-                )
-                val op = file?.openOutputStream(this@MainActivity)
-                op?.writer().use { writer ->
-                    val events = database.eventDao().getAllIds()
-                    events.forEachIndexed { index, it ->
-                        val event = database.eventDao().getById(it)!!
-                        val json = event.toEvent().toJson() + "\n"
-                        writer?.write(json)
-                        onProgress("Exported ${index + 1}/${events.size}")
-                    }
-                }
+                ExportDatabaseUtils.exportDatabase(database, applicationContext, folder, onProgress)
             } finally {
                 onProgress("")
                 isLoading.value = false
@@ -491,7 +529,7 @@ class MainActivity : ComponentActivity() {
             try {
                 isLoading.value = true
                 var totalLines = 0
-                onProgress("Reading file ${file.name}")
+                onProgress(getString(R.string.reading_file, file.name))
                 val input = file.openInputStream(this@MainActivity) ?: return@launch
                 input.use { ip ->
                     ip.bufferedReader().use {
@@ -509,7 +547,7 @@ class MainActivity : ComponentActivity() {
                         var linesRead = 0
 
                         if (shouldDelete) {
-                            onProgress("deleting all events")
+                            onProgress(getString(R.string.deleting_all_events))
                             database.eventDao().deleteAll()
                         }
 
@@ -522,7 +560,7 @@ class MainActivity : ComponentActivity() {
                                 val eventWithTags = event.toEventWithTags()
                                 database.eventDao().insertEventWithTags(eventWithTags, false)
                                 linesRead++
-                                onProgress("Imported $linesRead/$totalLines")
+                                onProgress(getString(R.string.imported, linesRead.toString(), totalLines.toString()))
                             }
                         }
                     }

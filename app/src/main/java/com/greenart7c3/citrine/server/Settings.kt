@@ -18,6 +18,8 @@ object Settings {
     var contact: String = ""
     var description: String = "A Nostr relay in your phone"
     var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+    var autoBackup = false
+    var autoBackupFolder = ""
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -35,6 +37,8 @@ object Settings {
         contact = ""
         description = "A Nostr relay in your phone"
         relayIcon = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+        autoBackup = false
+        autoBackupFolder = ""
     }
 }
 

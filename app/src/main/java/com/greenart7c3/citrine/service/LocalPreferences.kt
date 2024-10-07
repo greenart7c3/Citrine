@@ -21,6 +21,8 @@ object PrefKeys {
     const val RELAY_CONTACT = "relay_contact"
     const val RELAY_DESCRIPTION = "relay_description"
     const val RELAY_ICON = "relay_icon"
+    const val AUTO_BACKUP = "auto_backup"
+    const val AUTO_BACKUP_FOLDER = "auto_backup_folder"
 }
 
 object LocalPreferences {
@@ -28,6 +30,10 @@ object LocalPreferences {
         context: Context,
     ): SharedPreferences {
         return EncryptedStorage.preferences(context)
+    }
+
+    fun shouldShowAutoBackupDialog(context: Context): Boolean {
+        return !encryptedPreferences(context).contains(PrefKeys.AUTO_BACKUP)
     }
 
     fun saveSettingsToEncryptedStorage(settings: Settings, context: Context) {
@@ -51,6 +57,8 @@ object LocalPreferences {
             putString(PrefKeys.RELAY_CONTACT, settings.contact)
             putString(PrefKeys.RELAY_DESCRIPTION, settings.description)
             putString(PrefKeys.RELAY_ICON, settings.relayIcon)
+            putBoolean(PrefKeys.AUTO_BACKUP, settings.autoBackup)
+            putString(PrefKeys.AUTO_BACKUP_FOLDER, settings.autoBackupFolder)
         }.apply()
     }
 
@@ -71,5 +79,7 @@ object LocalPreferences {
         Settings.contact = prefs.getString(PrefKeys.RELAY_CONTACT, "") ?: ""
         Settings.description = prefs.getString(PrefKeys.RELAY_DESCRIPTION, "A Nostr relay in your phone") ?: "A Nostr relay in your phone"
         Settings.relayIcon = prefs.getString(PrefKeys.RELAY_ICON, "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true") ?: "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+        Settings.autoBackup = prefs.getBoolean(PrefKeys.AUTO_BACKUP, false)
+        Settings.autoBackupFolder = prefs.getString(PrefKeys.AUTO_BACKUP_FOLDER, "") ?: ""
     }
 }

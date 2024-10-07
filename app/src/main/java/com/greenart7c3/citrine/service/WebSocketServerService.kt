@@ -13,6 +13,8 @@ import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
+import androidx.documentfile.provider.DocumentFile
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
@@ -24,6 +26,7 @@ import com.greenart7c3.citrine.server.EventRepository
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
 import java.util.TimerTask
@@ -35,7 +38,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class WebSocketServerService : Service() {
-    val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     lateinit var webSocketServer: CustomWebSocketServer
     private val binder = LocalBinder()
     private var timer: Timer? = null
@@ -106,6 +109,26 @@ class WebSocketServerService : Service() {
             object : TimerTask() {
                 override fun run() {
                     eventsToDelete(database)
+
+                    if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank()) {
+                        val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
+                        folder?.let {
+                            val lastModifiedTime = folder.lastModified()
+                            val currentTime = System.currentTimeMillis()
+                            val twentyFourHoursAgo = currentTime - (24 * 60 * 60 * 1000)
+
+                            if (lastModifiedTime < twentyFourHoursAgo) {
+                                ExportDatabaseUtils.exportDatabase(
+                                    database,
+                                    this@WebSocketServerService,
+                                    it,
+                                    onProgress = {
+                                        Log.d(Citrine.TAG, it)
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
             },
             0,
