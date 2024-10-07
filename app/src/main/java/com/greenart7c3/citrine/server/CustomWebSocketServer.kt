@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.server
 
 import android.util.Log
+import android.widget.Toast
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -32,6 +33,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
+import java.net.ServerSocket
 import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.zip.Deflater
@@ -48,6 +50,16 @@ class CustomWebSocketServer(
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     fun start() {
+        val serverSocket = try {
+            ServerSocket(Settings.port)
+        } catch (e: Exception) {
+            Log.d(Citrine.TAG, e.toString(), e)
+            Toast.makeText(Citrine.getInstance(), "Port ${Settings.port} is already in use", Toast.LENGTH_LONG).show()
+            null
+        }
+        if (serverSocket == null) return
+        serverSocket.close()
+
         if (server == null) {
             server = startKtorHttpServer(host, port)
         } else {
@@ -56,7 +68,7 @@ class CustomWebSocketServer(
     }
 
     suspend fun stop() {
-        server!!.stop(1000)
+        server?.stop(1000)
         server = null
     }
 
