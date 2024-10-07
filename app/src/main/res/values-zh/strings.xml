@@ -33,4 +33,11 @@
     <string name="logs">日志</string>
     <string name="use_proxy">Use proxy</string>
     <string name="proxy_port">Proxy port</string>
+    <string name="imported">Imported %1$s/%2$s</string>
+    <string name="deleting_all_events">deleting all events</string>
+    <string name="reading_file">Reading file %1$s</string>
+    <string name="never_auto_backup">Never auto backup</string>
+    <string name="select_folder">Select folder</string>
+    <string name="select_a_folder_to_backup_to">Select a folder to backup to</string>
+    <string name="auto_backup">Auto Backup</string>
 </resources>
