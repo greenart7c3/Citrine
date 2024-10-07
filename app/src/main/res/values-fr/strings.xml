@@ -31,4 +31,6 @@
     <string name="no">Non</string>
     <string name="cancel">Annuler</string>
     <string name="logs">Logs</string>
+    <string name="use_proxy">Use proxy</string>
+    <string name="proxy_port">Proxy port</string>
 </resources>
