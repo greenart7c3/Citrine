@@ -51,6 +51,7 @@ import com.vitorpamplona.ammolite.relays.RelaySetupInfo
 import com.vitorpamplona.ammolite.service.HttpClientManager
 import com.vitorpamplona.quartz.encoders.bechToBytes
 import com.vitorpamplona.quartz.encoders.toHexKey
+import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.events.ContactListEvent
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
@@ -109,6 +110,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
     )
 
     val events = mutableListOf<ContactListEvent>()
+    var outboxRelays: AdvertisedRelayListEvent? = null
     LaunchedEffect(Unit) {
         coroutineScope.launch(Dispatchers.IO) {
             loading = true
@@ -116,6 +118,9 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
             dataBaseEvents.forEach {
                 events.add(it.toEvent() as ContactListEvent)
             }
+            val dataBaseOutboxRelays = AppDatabase.getDatabase(context).eventDao().getAdvertisedRelayList(pubKey.bechToBytes().toHexKey())
+            outboxRelays = dataBaseOutboxRelays?.toEvent() as? AdvertisedRelayListEvent
+
             loading = false
         }
     }
@@ -258,7 +263,7 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                     ElevatedButton(
                                         onClick = {
                                             val relays = event.relays()
-                                            if (relays.isNullOrEmpty()) {
+                                            if (relays.isNullOrEmpty() && outboxRelays == null) {
                                                 coroutineScope.launch {
                                                     Toast.makeText(
                                                         context,
@@ -274,7 +279,15 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                 event.tags,
                                                 signer,
                                             ) { signedEvent ->
-                                                val localRelays = relays.mapNotNull { relay ->
+                                                val outbox = outboxRelays?.writeRelays()?.map { relay ->
+                                                    RelaySetupInfo(
+                                                        url = relay,
+                                                        read = true,
+                                                        write = true,
+                                                        feedTypes = COMMON_FEED_TYPES,
+                                                    )
+                                                }
+                                                val localRelays = outbox ?: relays?.mapNotNull { relay ->
                                                     if (relay.value.write) {
                                                         RelaySetupInfo(
                                                             relay.key,
@@ -286,6 +299,8 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                         null
                                                     }
                                                 }
+
+                                                if (localRelays == null) return@create
 
                                                 coroutineScope.launch(Dispatchers.IO) {
                                                     loading = true

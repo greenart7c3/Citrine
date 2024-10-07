@@ -42,6 +42,10 @@ interface EventDao {
     @Transaction
     fun getContactLists(pubkey: String): List<EventWithTags>
 
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10002 ORDER BY createdAt DESC, id ASC LIMIT 1")
+    @Transaction
+    fun getAdvertisedRelayList(pubkey: String): EventWithTags?
+
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC, id ASC")
     @Transaction
     fun getByKind(kind: Int, pubkey: String): List<String>
