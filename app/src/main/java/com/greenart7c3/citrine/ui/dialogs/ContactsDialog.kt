@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +18,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -41,7 +45,10 @@ import com.greenart7c3.citrine.ui.CloseButton
 import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
 import com.vitorpamplona.ammolite.relays.Client
+import com.vitorpamplona.ammolite.relays.Relay
+import com.vitorpamplona.ammolite.relays.RelayPool
 import com.vitorpamplona.ammolite.relays.RelaySetupInfo
+import com.vitorpamplona.ammolite.service.HttpClientManager
 import com.vitorpamplona.quartz.encoders.bechToBytes
 import com.vitorpamplona.quartz.encoders.toHexKey
 import com.vitorpamplona.quartz.events.ContactListEvent
@@ -49,6 +56,7 @@ import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -127,6 +135,13 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                     CircularProgressIndicator()
                 }
             } else {
+                var useProxy by remember {
+                    mutableStateOf(false)
+                }
+                var proxyPort by remember {
+                    mutableStateOf(TextFieldValue("9050"))
+                }
+
                 Column(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.background)
@@ -160,6 +175,51 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                     LazyColumn(
                         Modifier.fillMaxSize(),
                     ) {
+                        item {
+                            Column {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp)
+                                        .clickable {
+                                            useProxy = !useProxy
+                                        },
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        modifier = Modifier.weight(1f),
+                                        text = stringResource(R.string.use_proxy),
+                                    )
+                                    Switch(
+                                        checked = useProxy,
+                                        onCheckedChange = {
+                                            useProxy = !useProxy
+                                        },
+                                    )
+                                }
+                                OutlinedTextField(
+                                    proxyPort,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(4.dp),
+                                    onValueChange = {
+                                        if (it.text.toIntOrNull() == null) {
+                                            Toast.makeText(
+                                                context,
+                                                "Invalid port",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@OutlinedTextField
+                                        }
+                                        proxyPort = it
+                                    },
+                                    label = {
+                                        Text(stringResource(R.string.proxy_port))
+                                    },
+                                )
+                            }
+                        }
                         items(events.size) {
                             val event = events[it]
                             Card(
@@ -228,7 +288,21 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                 }
 
                                                 coroutineScope.launch(Dispatchers.IO) {
-                                                    Client.sendAndWaitForResponse(signedEvent, relayList = localRelays)
+                                                    loading = true
+                                                    if (useProxy) {
+                                                        HttpClientManager.setDefaultProxyOnPort(proxyPort.text.toInt())
+                                                    } else {
+                                                        HttpClientManager.setDefaultProxy(null)
+                                                    }
+
+                                                    localRelays.forEach { relayInfo ->
+                                                        RelayPool.addRelay(Relay(relayInfo.url, relayInfo.read, relayInfo.write, useProxy, relayInfo.feedTypes))
+                                                    }
+                                                    RelayPool.requestAndWatch()
+                                                    delay(1000)
+                                                    Client.sendAndWaitForResponse(signedEvent, forceProxy = useProxy, relayList = localRelays)
+                                                    RelayPool.disconnect()
+                                                    loading = false
                                                     onClose()
                                                 }
                                             }
