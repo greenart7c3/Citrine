@@ -52,6 +52,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.anggrayudi.storage.SimpleStorageHelper
+import com.anggrayudi.storage.file.CreateMode
 import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.makeFile
 import com.anggrayudi.storage.file.openInputStream
@@ -72,6 +73,7 @@ import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.vitorpamplona.quartz.events.Event
+import java.util.Date
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -449,7 +451,11 @@ class MainActivity : ComponentActivity() {
         GlobalScope.launch(Dispatchers.IO) {
             isLoading.value = true
             try {
-                val file = folder.makeFile(this@MainActivity, "citrine.jsonl")
+                val file = folder.makeFile(
+                    this@MainActivity,
+                    "citrine-${Date().time}.jsonl",
+                    mode = CreateMode.CREATE_NEW,
+                )
                 val op = file?.openOutputStream(this@MainActivity)
                 op?.writer().use { writer ->
                     val events = database.eventDao().getAllIds()
