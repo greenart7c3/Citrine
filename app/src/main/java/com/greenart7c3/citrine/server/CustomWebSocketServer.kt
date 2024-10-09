@@ -35,8 +35,8 @@ import io.ktor.websocket.readText
 import io.ktor.websocket.send
 import java.net.ServerSocket
 import java.util.Collections
-import java.util.concurrent.CancellationException
 import java.util.zip.Deflater
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 
 class CustomWebSocketServer(

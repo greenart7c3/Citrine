@@ -30,6 +30,7 @@ import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -111,22 +112,26 @@ class WebSocketServerService : Service() {
                     eventsToDelete(database)
 
                     if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank()) {
-                        val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
-                        folder?.let {
-                            val lastModifiedTime = folder.lastModified()
-                            val currentTime = System.currentTimeMillis()
-                            val twentyFourHoursAgo = currentTime - (24 * 60 * 60 * 1000)
+                        try {
+                            val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
+                            folder?.let {
+                                val lastModifiedTime = folder.lastModified()
+                                val currentTime = System.currentTimeMillis()
+                                val twentyFourHoursAgo = currentTime - (24 * 60 * 60 * 1000)
 
-                            if (lastModifiedTime < twentyFourHoursAgo) {
-                                ExportDatabaseUtils.exportDatabase(
-                                    database,
-                                    this@WebSocketServerService,
-                                    it,
-                                    onProgress = {
-                                        Log.d(Citrine.TAG, it)
-                                    },
-                                )
+                                if (lastModifiedTime < twentyFourHoursAgo) {
+                                    Log.d(Citrine.TAG, "Backing up database")
+                                    ExportDatabaseUtils.exportDatabase(
+                                        database,
+                                        this@WebSocketServerService,
+                                        it,
+                                        onProgress = {},
+                                    )
+                                }
                             }
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Log.e(Citrine.TAG, "Error backing up database", e)
                         }
                     }
                 }
