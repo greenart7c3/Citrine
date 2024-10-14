@@ -102,8 +102,10 @@ class WebSocketServerService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        Log.d(Citrine.TAG, "Starting WebSocket service")
         val database = AppDatabase.getDatabase(this@WebSocketServerService)
 
+        Log.d(Citrine.TAG, "Starting timer")
         timer?.cancel()
         timer = Timer()
         timer?.schedule(
@@ -140,6 +142,7 @@ class WebSocketServerService : Service() {
             300000,
         )
 
+        Log.d(Citrine.TAG, "Starting WebSocket server")
         // Start the WebSocket server
         webSocketServer = CustomWebSocketServer(
             host = Settings.host,
@@ -148,8 +151,17 @@ class WebSocketServerService : Service() {
         )
         webSocketServer.start()
 
-        // Create a notification to keep the service in the foreground
-        startForeground(1, createNotification())
+        var error = true
+        var attempts = 0
+        while (error && attempts < 5) {
+            try {
+                startForeground(1, createNotification())
+                error = false
+            } catch (e: Exception) {
+                Log.e(Citrine.TAG, "Error starting foreground service attempt $attempts", e)
+            }
+            attempts++
+        }
     }
 
     override fun onDestroy() {
@@ -167,6 +179,7 @@ class WebSocketServerService : Service() {
     }
 
     private fun createNotification(): Notification {
+        Log.d(Citrine.TAG, "Creating notification")
         val channelId = "WebSocketServerServiceChannel"
         val channel = NotificationChannel(channelId, "WebSocket Server", NotificationManager.IMPORTANCE_DEFAULT)
         channel.setSound(null, null)

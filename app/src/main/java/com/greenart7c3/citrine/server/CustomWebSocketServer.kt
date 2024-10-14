@@ -60,6 +60,7 @@ class CustomWebSocketServer(
         if (serverSocket == null) return
         serverSocket.close()
 
+        Log.d(Citrine.TAG, "Starting server on $host:$port isNull: ${server == null}")
         if (server == null) {
             server = startKtorHttpServer(host, port)
         } else {
@@ -68,6 +69,7 @@ class CustomWebSocketServer(
     }
 
     suspend fun stop() {
+        Log.d(Citrine.TAG, "Stopping server")
         server?.stop(1000)
         server = null
     }

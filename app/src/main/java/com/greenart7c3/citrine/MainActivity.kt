@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var database: AppDatabase
     private var countByKind: Flow<List<EventDao.CountResult>>? = null
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
-    var saveToPreferences = false
+    private var saveToPreferences = false
 
     @OptIn(DelicateCoroutinesApi::class)
     private val requestPermissionLauncher = registerForActivityResult(
@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
 
     private var service: WebSocketServerService? = null
     private var bound = false
-    private var isLoading = mutableStateOf(true)
+    private var isLoading = mutableStateOf(false)
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun stop() {
         try {
-            isLoading.value = true
+            isLoading.value = false // TODO: return this to true after finding where its getting the loading stuck forever
             val intent = Intent(applicationContext, WebSocketServerService::class.java)
             stopService(intent)
             if (bound) unbindService(connection)
@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun start() {
         try {
-            isLoading.value = true
+            isLoading.value = false // TODO: return this to true after finding where its getting the loading stuck forever
             val intent = Intent(applicationContext, WebSocketServerService::class.java)
             startService(intent)
             bindService(intent, connection, Context.BIND_AUTO_CREATE)
@@ -146,8 +146,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val progress = mutableStateOf("")
         super.onCreate(savedInstanceState)
-
-        requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
 
         setContent {
             val coroutineScope = rememberCoroutineScope()
@@ -184,6 +182,10 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val destinationRoute = navBackStackEntry?.destination?.route ?: ""
+
+                LaunchedEffect(Unit) {
+                    requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
+                }
 
                 Scaffold(
                     bottomBar = {
@@ -390,10 +392,7 @@ class MainActivity : ComponentActivity() {
                                             ElevatedButton(
                                                 onClick = {
                                                     coroutineScope.launch(Dispatchers.IO) {
-                                                        isLoading.value = true
                                                         start()
-                                                        delay(1000)
-                                                        isLoading.value = false
                                                     }
                                                 },
                                             ) {
