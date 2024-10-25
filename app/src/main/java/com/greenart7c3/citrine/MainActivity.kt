@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun stop() {
         try {
-            isLoading.value = false // TODO: return this to true after finding where its getting the loading stuck forever
+            isLoading.value = true
             val intent = Intent(applicationContext, WebSocketServerService::class.java)
             stopService(intent)
             if (bound) unbindService(connection)
@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
             service = null
             delay(2000)
         } catch (e: Exception) {
+            isLoading.value = false
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, e.message ?: "", e)
         } finally {
@@ -130,12 +131,13 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun start() {
         try {
-            isLoading.value = false // TODO: return this to true after finding where its getting the loading stuck forever
+            isLoading.value = true
             val intent = Intent(applicationContext, WebSocketServerService::class.java)
             startService(intent)
             bindService(intent, connection, Context.BIND_AUTO_CREATE)
             delay(2000)
         } catch (e: Exception) {
+            isLoading.value = false
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, e.message ?: "", e)
         } finally {
