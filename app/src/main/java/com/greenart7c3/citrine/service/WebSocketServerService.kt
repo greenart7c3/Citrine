@@ -207,7 +207,7 @@ class WebSocketServerService : Service() {
 
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")
             .setContentTitle("Relay running at ws://${Settings.host}:${Settings.port}")
-            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
+            .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .addAction(R.drawable.ic_launcher_background, "Copy Address", copyPendingIntent)
             .setContentIntent(resultPendingIntent)
