@@ -195,7 +195,7 @@ class CustomWebSocketServer(
 
     private fun override(event: Event) {
         save(event)
-        val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(5)
+        val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
         appDatabase.eventDao().delete(ids, event.pubKey)
     }

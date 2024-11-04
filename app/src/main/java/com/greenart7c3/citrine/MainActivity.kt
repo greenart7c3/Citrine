@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -402,30 +401,30 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
 
-                                        ElevatedButton(
-                                            onClick = {
-                                                try {
-                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
-                                                    val signerType = "get_public_key"
-                                                    intent.putExtra("type", signerType)
-                                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                                    launcherLogin.launch(intent)
-                                                } catch (e: Exception) {
-                                                    Log.d(Citrine.TAG, e.message ?: "", e)
-                                                    coroutineScope.launch(Dispatchers.Main) {
-                                                        Toast.makeText(
-                                                            context,
-                                                            getString(R.string.no_external_signer_installed),
-                                                            Toast.LENGTH_SHORT,
-                                                        ).show()
-                                                    }
-                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
-                                                    launcherLogin.launch(intent)
-                                                }
-                                            },
-                                        ) {
-                                            Text(stringResource(R.string.restore_follows))
-                                        }
+//                                        ElevatedButton(
+//                                            onClick = {
+//                                                try {
+//                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
+//                                                    val signerType = "get_public_key"
+//                                                    intent.putExtra("type", signerType)
+//                                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+//                                                    launcherLogin.launch(intent)
+//                                                } catch (e: Exception) {
+//                                                    Log.d(Citrine.TAG, e.message ?: "", e)
+//                                                    coroutineScope.launch(Dispatchers.Main) {
+//                                                        Toast.makeText(
+//                                                            context,
+//                                                            getString(R.string.no_external_signer_installed),
+//                                                            Toast.LENGTH_SHORT,
+//                                                        ).show()
+//                                                    }
+//                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+//                                                    launcherLogin.launch(intent)
+//                                                }
+//                                            },
+//                                        ) {
+//                                            Text(stringResource(R.string.restore_follows))
+//                                        }
 
                                         DatabaseButtons(
                                             onExport = {
