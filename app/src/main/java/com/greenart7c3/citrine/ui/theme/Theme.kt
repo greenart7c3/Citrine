@@ -37,6 +37,7 @@ private val LightColorScheme = lightColorScheme(
      */
 )
 
+@Suppress("DEPRECATION")
 @Composable
 fun CitrineTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -57,7 +58,9 @@ fun CitrineTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                window.statusBarColor = colorScheme.primary.toArgb()
+            }
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
         }
     }
