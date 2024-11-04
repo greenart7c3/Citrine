@@ -120,8 +120,16 @@ class WebSocketServerService : Service() {
                                 val lastModifiedTime = folder.lastModified()
                                 val currentTime = System.currentTimeMillis()
                                 val twentyFourHoursAgo = currentTime - (24 * 60 * 60 * 1000)
+                                val fiveDaysAgo = currentTime - (5 * 24 * 60 * 60 * 1000)
 
                                 if (lastModifiedTime < twentyFourHoursAgo) {
+                                    Log.d(Citrine.TAG, "Deleting old backups")
+                                    folder.listFiles().forEach { file ->
+                                        if (file.lastModified() < fiveDaysAgo) {
+                                            file.delete()
+                                        }
+                                    }
+
                                     Log.d(Citrine.TAG, "Backing up database")
                                     ExportDatabaseUtils.exportDatabase(
                                         database,
