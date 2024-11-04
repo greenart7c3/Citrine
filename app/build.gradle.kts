@@ -65,7 +65,6 @@ android {
                 "ku-rTR",
                 "lt-rLT",
                 "ne-rNP",
-                "night",
                 "nl",
                 "nl-rBE",
                 "pcm-rNG",
