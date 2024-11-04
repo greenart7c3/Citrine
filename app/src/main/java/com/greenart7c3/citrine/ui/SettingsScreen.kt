@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -141,7 +140,8 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -149,12 +149,6 @@ fun SettingsScreen(
                         text = "Server",
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                        )
-                    }
                 }
             }
             item {
@@ -386,7 +380,8 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -394,12 +389,6 @@ fun SettingsScreen(
                         text = "Accept events signed by",
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                        )
-                    }
                 }
             }
             item {
@@ -509,7 +498,8 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -517,12 +507,6 @@ fun SettingsScreen(
                         text = "Accept events that refer to",
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                        )
-                    }
                 }
             }
             item {
@@ -631,7 +615,8 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -639,12 +624,6 @@ fun SettingsScreen(
                         text = "Allowed kinds",
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                        )
-                    }
                 }
             }
             item {
@@ -751,7 +730,8 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -759,12 +739,6 @@ fun SettingsScreen(
                         text = "Others",
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                        )
-                    }
                 }
             }
             item {
@@ -852,7 +826,8 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -860,12 +835,6 @@ fun SettingsScreen(
                         text = "Never delete from",
                         style = MaterialTheme.typography.headlineSmall,
                     )
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                        )
-                    }
                 }
             }
             item {
