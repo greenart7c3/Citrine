@@ -17,10 +17,10 @@ import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
-import io.ktor.server.engine.ApplicationEngine
+import io.ktor.server.cio.CIOApplicationEngine
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.httpMethod
 import io.ktor.server.response.appendIfAbsent
@@ -45,7 +45,7 @@ class CustomWebSocketServer(
     private val appDatabase: AppDatabase,
 ) {
     val connections: MutableSet<Connection> = Collections.synchronizedSet(LinkedHashSet())
-    var server: ApplicationEngine? = null
+    var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
@@ -226,7 +226,7 @@ class CustomWebSocketServer(
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun startKtorHttpServer(host: String, port: Int): ApplicationEngine {
+    private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
         return embeddedServer(
             CIO,
             port = port,
