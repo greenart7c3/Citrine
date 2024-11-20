@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -41,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -56,20 +58,25 @@ import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.openInputStream
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
-import com.greenart7c3.citrine.database.toEventWithTags
-import com.greenart7c3.citrine.server.EventSubscription
+import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
-import com.greenart7c3.citrine.ui.components.DatabaseButtons
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
-import com.greenart7c3.citrine.ui.dialogs.ContactsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
+import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
+import com.vitorpamplona.ammolite.relays.Client
+import com.vitorpamplona.ammolite.relays.Relay
+import com.vitorpamplona.ammolite.relays.RelayPool
+import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
+import com.vitorpamplona.quartz.encoders.Nip19Bech32
+import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
+import com.vitorpamplona.quartz.events.ContactListEvent
 import com.vitorpamplona.quartz.events.Event
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -171,7 +178,19 @@ class MainActivity : ComponentActivity() {
                         ).show()
                     } else {
                         result.data?.let {
-                            pubKey = it.getStringExtra("signature") ?: ""
+                            try {
+                                val key = it.getStringExtra("signature") ?: ""
+                                pubKey = if (key.startsWith("npub")) {
+                                    when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
+                                        is Nip19Bech32.NPub -> parsed.hex
+                                        else -> ""
+                                    }
+                                } else {
+                                    key
+                                }
+                            } catch (e: Exception) {
+                                Log.d(Citrine.TAG, e.message ?: "", e)
+                            }
                         }
                     }
                 },
@@ -216,6 +235,11 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                 ) { padding ->
+                    val configuration = LocalConfiguration.current
+                    val screenWidthDp = configuration.screenWidthDp.dp
+                    val percentage = (screenWidthDp * 0.93f)
+                    val verticalPadding = (screenWidthDp - percentage)
+
                     NavHost(
                         navController = navController,
                         startDestination = Route.Home.route,
@@ -232,8 +256,10 @@ class MainActivity : ComponentActivity() {
                             Surface(
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
                                     .padding(padding)
-                                    .verticalScroll(rememberScrollState()),
+                                    .padding(horizontal = verticalPadding)
+                                    .padding(top = verticalPadding * 1.5f),
                                 color = MaterialTheme.colorScheme.background,
                             ) {
                                 var showDialog by remember { mutableStateOf(false) }
@@ -245,6 +271,164 @@ class MainActivity : ComponentActivity() {
                                 LaunchedEffect(Unit) {
                                     if (LocalPreferences.shouldShowAutoBackupDialog(context)) {
                                         showAutoBackupDialog = true
+                                    }
+                                }
+
+                                LaunchedEffect(pubKey) {
+                                    if (pubKey.isNotBlank()) {
+                                        progress2.value = "loading contact list"
+                                        isLoading.value = true
+
+                                        launch(Dispatchers.IO) {
+                                            val citrineRelay = RelaySetupInfoToConnect(
+                                                url = "ws://127.0.0.1:${Settings.port}",
+                                                read = false,
+                                                write = true,
+                                                feedTypes = COMMON_FEED_TYPES,
+                                                forceProxy = false,
+                                            )
+                                            Client.reconnect(arrayOf(citrineRelay), false)
+                                            delay(5000)
+
+                                            var contactList = database.eventDao().getContactList(pubKey)
+                                            if (contactList == null) {
+                                                Citrine.getInstance().fetchContactList(
+                                                    pubKey = pubKey,
+                                                    onDone = {
+                                                        progress2.value = "loading relays"
+                                                        contactList = database.eventDao().getContactList(pubKey)
+                                                        launch(Dispatchers.IO) {
+                                                            var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
+                                                            contactList?.let {
+                                                                generalRelays = (it.toEvent() as ContactListEvent).relays()
+                                                            }
+
+                                                            generalRelays?.forEach {
+                                                                if (RelayPool.getRelay(it.key) == null) {
+                                                                    RelayPool.addRelay(
+                                                                        Relay(
+                                                                            url = it.key,
+                                                                            read = true,
+                                                                            write = false,
+                                                                            forceProxy = false,
+                                                                            activeTypes = COMMON_FEED_TYPES,
+                                                                        ),
+                                                                    )
+                                                                }
+                                                            }
+
+                                                            Citrine.getInstance().fetchOutbox(
+                                                                pubKey = pubKey,
+                                                                onDone = {
+                                                                    launch(Dispatchers.IO) {
+                                                                        val advertisedRelayList = database.eventDao().getAdvertisedRelayList(pubKey)
+                                                                        advertisedRelayList?.let {
+                                                                            val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                                                            relays.forEach { relay ->
+                                                                                if (RelayPool.getRelay(relay.relayUrl) == null) {
+                                                                                    RelayPool.addRelay(
+                                                                                        Relay(
+                                                                                            url = relay.relayUrl,
+                                                                                            read = true,
+                                                                                            write = false,
+                                                                                            forceProxy = false,
+                                                                                            activeTypes = COMMON_FEED_TYPES,
+                                                                                        ),
+                                                                                    )
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        Citrine.getInstance().fetchEvents(
+                                                                            pubKey,
+                                                                            isLoading,
+                                                                            progress2,
+                                                                        )
+                                                                        pubKey = ""
+                                                                    }
+                                                                },
+                                                            )
+                                                        }
+                                                    },
+                                                )
+                                            } else {
+                                                progress2.value = "loading relays"
+                                                var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
+                                                contactList?.let {
+                                                    generalRelays = (it.toEvent() as ContactListEvent).relays()
+                                                }
+
+                                                generalRelays?.forEach {
+                                                    if (RelayPool.getRelay(it.key) == null) {
+                                                        RelayPool.addRelay(
+                                                            Relay(
+                                                                url = it.key,
+                                                                read = true,
+                                                                write = false,
+                                                                forceProxy = false,
+                                                                activeTypes = COMMON_FEED_TYPES,
+                                                            ),
+                                                        )
+                                                    }
+                                                }
+                                                var advertisedRelayList = database.eventDao().getAdvertisedRelayList(pubKey)
+                                                if (advertisedRelayList == null) {
+                                                    Citrine.getInstance().fetchOutbox(
+                                                        pubKey = pubKey,
+                                                        onDone = {
+                                                            launch(Dispatchers.IO) {
+                                                                advertisedRelayList = database.eventDao().getAdvertisedRelayList(pubKey)
+                                                                advertisedRelayList?.let {
+                                                                    val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                                                    relays.forEach { relay ->
+                                                                        if (RelayPool.getRelay(relay.relayUrl) == null) {
+                                                                            RelayPool.addRelay(
+                                                                                Relay(
+                                                                                    url = relay.relayUrl,
+                                                                                    read = true,
+                                                                                    write = false,
+                                                                                    forceProxy = false,
+                                                                                    activeTypes = COMMON_FEED_TYPES,
+                                                                                ),
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                }
+                                                                Citrine.getInstance().fetchEvents(
+                                                                    pubKey,
+                                                                    isLoading,
+                                                                    progress2,
+                                                                )
+                                                                pubKey = ""
+                                                            }
+                                                        },
+                                                    )
+                                                } else {
+                                                    advertisedRelayList?.let {
+                                                        val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                                        relays.forEach { relay ->
+                                                            if (RelayPool.getRelay(relay.relayUrl) == null) {
+                                                                RelayPool.addRelay(
+                                                                    Relay(
+                                                                        url = relay.relayUrl,
+                                                                        read = true,
+                                                                        write = false,
+                                                                        forceProxy = false,
+                                                                        activeTypes = COMMON_FEED_TYPES,
+                                                                    ),
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Citrine.getInstance().fetchEvents(
+                                                        pubKey,
+                                                        isLoading,
+                                                        progress2,
+                                                    )
+                                                    pubKey = ""
+                                                }
+                                            }
+                                        }
                                     }
                                 }
 
@@ -352,12 +536,6 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
-                                if (pubKey.isNotBlank()) {
-                                    ContactsDialog(pubKey = pubKey) {
-                                        pubKey = ""
-                                    }
-                                }
-
                                 Column(
                                     verticalArrangement = Arrangement.Center,
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -380,6 +558,7 @@ class MainActivity : ComponentActivity() {
                                                 },
                                             )
                                             ElevatedButton(
+                                                modifier = Modifier.fillMaxWidth(),
                                                 onClick = {
                                                     coroutineScope.launch(Dispatchers.IO) {
                                                         stop()
@@ -391,14 +570,16 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             Text(stringResource(R.string.relay_not_running))
                                             ElevatedButton(
+                                                modifier = Modifier.fillMaxWidth(),
                                                 onClick = {
                                                     coroutineScope.launch(Dispatchers.IO) {
                                                         start()
                                                     }
                                                 },
-                                            ) {
-                                                Text(stringResource(R.string.start))
-                                            }
+                                                content = {
+                                                    Text(stringResource(R.string.start))
+                                                },
+                                            )
                                         }
 
 //                                        ElevatedButton(
@@ -426,17 +607,68 @@ class MainActivity : ComponentActivity() {
 //                                            Text(stringResource(R.string.restore_follows))
 //                                        }
 
-                                        DatabaseButtons(
-                                            onExport = {
+                                        ElevatedButton(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = {
                                                 saveToPreferences = false
                                                 storageHelper.openFolderPicker()
                                             },
-                                            onImport = {
+                                        ) {
+                                            Text(stringResource(R.string.export_database))
+                                        }
+
+                                        ElevatedButton(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = {
                                                 storageHelper.openFilePicker()
+                                            },
+                                        ) {
+                                            Text(stringResource(R.string.import_database))
+                                        }
+
+                                        ElevatedButton(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = {
+                                                coroutineScope.launch(Dispatchers.IO) {
+                                                    isLoading.value = true
+                                                    database.eventDao().deleteAll()
+                                                    isLoading.value = false
+                                                }
+                                            },
+                                            content = {
+                                                Text("Delete all events")
                                             },
                                         )
 
                                         ElevatedButton(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
+                                                    val signerType = "get_public_key"
+                                                    intent.putExtra("type", signerType)
+                                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                                    launcherLogin.launch(intent)
+                                                } catch (e: Exception) {
+                                                    Log.d(Citrine.TAG, e.message ?: "", e)
+                                                    coroutineScope.launch(Dispatchers.Main) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            getString(R.string.no_external_signer_installed),
+                                                            Toast.LENGTH_SHORT,
+                                                        ).show()
+                                                    }
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+                                                    launcherLogin.launch(intent)
+                                                }
+                                            },
+                                            content = {
+                                                Text("Download your events")
+                                            },
+                                        )
+
+                                        ElevatedButton(
+                                            modifier = Modifier.fillMaxWidth(),
                                             onClick = {
                                                 navController.navigate(Route.Logs.route)
                                             },
@@ -450,13 +682,11 @@ class MainActivity : ComponentActivity() {
                                             countByKind = database.eventDao().countByKind()
                                         }
                                         val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
-                                        val count = EventSubscription.subscriptionCount.collectAsStateWithLifecycle(0)
 
                                         RelayInfo(
                                             modifier = Modifier
                                                 .fillMaxWidth(),
                                             connections = service?.webSocketServer?.connections?.size ?: 0,
-                                            subscriptions = count.value,
                                         )
                                         Spacer(modifier = Modifier.padding(4.dp))
                                         DatabaseInfo(
@@ -551,18 +781,33 @@ class MainActivity : ComponentActivity() {
                             database.eventDao().deleteAll()
                         }
 
+                        val citrineRelay = RelaySetupInfoToConnect(
+                            url = "ws://127.0.0.1:${Settings.port}",
+                            read = false,
+                            write = true,
+                            feedTypes = COMMON_FEED_TYPES,
+                            forceProxy = false,
+                        )
+                        Client.reconnect(arrayOf(citrineRelay), false)
+                        delay(5000)
+
                         it.useLines { lines ->
                             lines.forEach { line ->
                                 if (line.isBlank()) {
                                     return@forEach
                                 }
                                 val event = Event.fromJson(line)
-                                val eventWithTags = event.toEventWithTags()
-                                database.eventDao().insertEventWithTags(eventWithTags, false)
+                                Client.sendAndWaitForResponse(
+                                    event,
+                                )
+
                                 linesRead++
                                 onProgress(getString(R.string.imported, linesRead.toString(), totalLines.toString()))
                             }
                         }
+                        RelayPool.disconnect()
+                        delay(3000)
+                        RelayPool.unloadRelays()
                     }
                 }
 

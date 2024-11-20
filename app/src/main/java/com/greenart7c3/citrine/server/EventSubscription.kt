@@ -11,8 +11,6 @@ import io.ktor.websocket.send
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class Subscription(
@@ -26,8 +24,6 @@ data class Subscription(
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
-    private val _subscriptionCount = MutableStateFlow(0)
-    val subscriptionCount = _subscriptionCount.asStateFlow()
 
     @OptIn(DelicateCoroutinesApi::class)
     fun executeAll(dbEvent: EventWithTags) {
@@ -69,7 +65,6 @@ object EventSubscription {
 
     fun close(subscriptionId: String) {
         subscriptions.remove(subscriptionId)
-        _subscriptionCount.value = subscriptions.size()
     }
 
     suspend fun subscribe(
@@ -97,6 +92,5 @@ object EventSubscription {
         )
         manager.execute()
         connection.session.send(EOSE(subscriptionId).toJson())
-        _subscriptionCount.value = subscriptions.size()
     }
 }

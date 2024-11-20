@@ -49,5 +49,6 @@ fun DatabaseInfo(
                 Text("${item.count}")
             }
         }
+        Text("Total: ${flow?.value?.sumOf { it.count }}")
     }
 }

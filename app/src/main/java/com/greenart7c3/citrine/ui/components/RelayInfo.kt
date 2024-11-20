@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 fun RelayInfo(
     modifier: Modifier = Modifier,
     connections: Int,
-    subscriptions: Int,
 ) {
     Column(
         modifier = modifier,
@@ -29,6 +28,5 @@ fun RelayInfo(
         Spacer(modifier = Modifier.padding(4.dp))
 
         Text("Connections: $connections")
-        Text("Subscriptions: $subscriptions")
     }
 }
