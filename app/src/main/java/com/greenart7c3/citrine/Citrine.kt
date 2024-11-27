@@ -1,12 +1,12 @@
 package com.greenart7c3.citrine
 
 import android.app.Application
+import android.content.ContentResolver
 import android.util.Log
 import androidx.compose.runtime.MutableState
-import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.Client
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.ammolite.relays.RelayPool
 import com.vitorpamplona.ammolite.relays.TypedFilter
@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 class Citrine : Application() {
+
     override fun onCreate() {
         super.onCreate()
 
@@ -34,6 +35,7 @@ class Citrine : Application() {
     }
 
     suspend fun fetchContactList(
+        customWebSocketServer: CustomWebSocketServer,
         pubKey: HexKey,
         onDone: () -> Unit,
     ) {
@@ -62,7 +64,7 @@ class Citrine : Application() {
             onReceiveEvent = { relay, _, event ->
                 Log.d(TAG, "Received event ${event.toJson()} from relay")
                 runBlocking {
-                    Client.sendAndWaitForResponse(event, "ws://127.0.0.1:${Settings.port}")
+                    customWebSocketServer.innerProccesEvent(event, null)
                 }
                 finishedRelays[relay.url] = true
             },
@@ -98,6 +100,7 @@ class Citrine : Application() {
     }
 
     suspend fun fetchOutbox(
+        customWebSocketServer: CustomWebSocketServer,
         pubKey: HexKey,
         onDone: () -> Unit,
     ) {
@@ -126,7 +129,7 @@ class Citrine : Application() {
             onReceiveEvent = { relay, _, event ->
                 Log.d(TAG, "Received event ${event.toJson()} from relay")
                 runBlocking {
-                    Client.sendAndWaitForResponse(event, "ws://127.0.0.1:${Settings.port}")
+                    customWebSocketServer.innerProccesEvent(event, null)
                 }
                 finishedRelays[relay.url] = true
             },
@@ -163,21 +166,31 @@ class Citrine : Application() {
 
     @OptIn(DelicateCoroutinesApi::class)
     private suspend fun fetchEventsFrom(
+        listeners: MutableMap<String, Relay.Listener>,
+        customWebSocketServer: CustomWebSocketServer,
         relayParam: Relay,
         pubKey: HexKey,
         until: Long,
+        onEvent: () -> Unit,
+        onAuth: (relay: Relay, challenge: String) -> Unit,
         onDone: () -> Unit,
     ) {
         val subId = UUID.randomUUID().toString().substring(0, 4)
         val eventCount = mutableMapOf<String, Int>()
         var lastEventCreatedAt = until
-        val listeners = mutableMapOf<String, Relay.Listener>()
+
+        listeners[relayParam.url]?.let {
+            relayParam.unregister(it)
+        }
+
         val listener = RelayListener2(
             onReceiveEvent = { relay, _, event ->
+                onEvent()
                 eventCount[relay.url] = eventCount[relay.url]?.plus(1) ?: 1
                 lastEventCreatedAt = event.createdAt
+
                 runBlocking {
-                    Client.sendAndWaitForResponse(event, "ws://127.0.0.1:${Settings.port}")
+                    customWebSocketServer.innerProccesEvent(event, null)
                 }
             },
             onEOSE = { relay ->
@@ -191,7 +204,7 @@ class Citrine : Application() {
                         if (lastEventCreatedAt == until) {
                             onDone()
                         } else {
-                            fetchEventsFrom(relay, pubKey, lastEventCreatedAt, onDone)
+                            fetchEventsFrom(listeners, customWebSocketServer, relay, pubKey, lastEventCreatedAt, onEvent, onAuth, onDone)
                         }
                     } else {
                         onDone()
@@ -209,6 +222,19 @@ class Citrine : Application() {
                     onDone()
                 }
             },
+            onAuthFunc = { relay, challenge ->
+                onAuth(relay, challenge)
+            },
+        )
+
+        val filters = listOf(
+            TypedFilter(
+                types = COMMON_FEED_TYPES,
+                filter = SincePerRelayFilter(
+                    authors = listOf(pubKey),
+                    until = until,
+                ),
+            ),
         )
 
         eventCount[relayParam.url] = 0
@@ -218,71 +244,78 @@ class Citrine : Application() {
             relayParam.connectAndRun { relay ->
                 relay.sendFilter(
                     subId,
-                    filters = listOf(
-                        TypedFilter(
-                            types = COMMON_FEED_TYPES,
-                            filter = SincePerRelayFilter(
-                                authors = listOf(pubKey),
-                                until = until,
-                            ),
-                        ),
-                        TypedFilter(
-                            types = COMMON_FEED_TYPES,
-                            filter = SincePerRelayFilter(
-                                kinds = listOf(AdvertisedRelayListEvent.KIND),
-                                tags = mapOf("a" to listOf(pubKey)),
-                                until = until,
-                            ),
-                        ),
-                    ),
+                    filters = filters,
                 )
             }
         } else {
             relayParam.sendFilter(
                 subId,
-                filters = listOf(
-                    TypedFilter(
-                        types = COMMON_FEED_TYPES,
-                        filter = SincePerRelayFilter(
-                            authors = listOf(pubKey),
-                            until = until,
-                        ),
-                    ),
-                    TypedFilter(
-                        types = COMMON_FEED_TYPES,
-                        filter = SincePerRelayFilter(
-                            kinds = listOf(AdvertisedRelayListEvent.KIND),
-                            tags = mapOf("a" to listOf(pubKey)),
-                            until = until,
-                        ),
-                    ),
-                ),
+                filters = filters,
             )
         }
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     suspend fun fetchEvents(
+        customWebSocketServer: CustomWebSocketServer,
         pubKey: HexKey,
         isLoading: MutableState<Boolean>,
         progress: MutableState<String>,
+        onAuth: (relay: Relay, challenge: String) -> Unit,
     ) {
         val finishedLoading = mutableMapOf<String, Boolean>()
+
         RelayPool.getAll().filter { !it.url.contains("127.0.0.1") }.forEach {
             finishedLoading[it.url] = false
         }
 
         RelayPool.getAll().forEach {
+            var count = 0
             progress.value = "loading events from ${it.url}"
+            val listeners = mutableMapOf<String, Relay.Listener>()
+
             fetchEventsFrom(
+                listeners = listeners,
+                customWebSocketServer = customWebSocketServer,
                 relayParam = it,
                 pubKey = pubKey,
                 until = TimeUtils.now(),
+                onAuth = { relay, challenge ->
+                    onAuth(relay, challenge)
+                    GlobalScope.launch(Dispatchers.IO) {
+                        delay(5000)
+
+                        fetchEventsFrom(
+                            listeners = listeners,
+                            customWebSocketServer = customWebSocketServer,
+                            relayParam = it,
+                            pubKey = pubKey,
+                            until = TimeUtils.now(),
+                            onAuth = { _, _ ->
+                                finishedLoading[it.url] = true
+                            },
+                            onEvent = {
+                                count++
+                                progress.value = "loading events from ${it.url} ($count)"
+                            },
+                            onDone = {
+                                finishedLoading[it.url] = true
+                            },
+                        )
+                    }
+                },
+                onEvent = {
+                    count++
+                    progress.value = "loading events from ${it.url} ($count)"
+                },
                 onDone = {
                     finishedLoading[it.url] = true
                 },
             )
-            while (finishedLoading[it.url] == false) {
+            var timeElapsed = 0
+            while (finishedLoading[it.url] == false && timeElapsed < 300) {
                 delay(1000)
+                timeElapsed++
             }
         }
 
@@ -292,6 +325,8 @@ class Citrine : Application() {
         isLoading.value = false
         progress.value = ""
     }
+
+    fun contentResolverFn(): ContentResolver = contentResolver
 
     companion object {
         const val TAG = "Citrine"
@@ -347,10 +382,11 @@ class RelayListener2(
     val onReceiveEvent: (relay: Relay, subscriptionId: String, event: Event) -> Unit,
     val onEOSE: (relay: Relay) -> Unit,
     val onErrorFunc: (relay: Relay, subscriptionId: String, error: Error) -> Unit,
+    val onAuthFunc: (relay: Relay, challenge: String) -> Unit,
 ) : Relay.Listener {
     override fun onAuth(relay: Relay, challenge: String) {
         Log.d("RelayListener", "Received auth challenge $challenge from relay ${relay.url}")
-        onEOSE(relay)
+        onAuthFunc(relay, challenge)
     }
 
     override fun onBeforeSend(relay: Relay, event: EventInterface) {
@@ -373,7 +409,7 @@ class RelayListener2(
 
     override fun onRelayStateChange(relay: Relay, type: Relay.StateType, channel: String?) {
         Log.d("RelayListener", "Relay ${relay.url} state changed to $type")
-        if (type == Relay.StateType.EOSE) {
+        if (type == Relay.StateType.EOSE || type == Relay.StateType.DISCONNECTING) {
             onEOSE(relay)
         }
     }

@@ -9,7 +9,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 @OptIn(DelicateCoroutinesApi::class)
 class SubscriptionManager(val subscription: Subscription) {
     suspend fun execute() {
-        if (subscription.connection.session.outgoing.isClosedForSend) {
+        if (subscription.connection?.session?.outgoing?.isClosedForSend == true) {
             EventSubscription.close(subscription.id)
             Log.d(Citrine.TAG, "cancelling subscription isClosedForSend: ${subscription.id}")
             return
@@ -25,7 +25,7 @@ class SubscriptionManager(val subscription: Subscription) {
                 if (e is CancellationException) throw e
 
                 Log.d(Citrine.TAG, "Error reading data from database $filter", e)
-                subscription.connection.session.send(
+                subscription.connection?.session?.send(
                     NoticeResult.invalid("Error reading data from database").toJson(),
                 )
             }

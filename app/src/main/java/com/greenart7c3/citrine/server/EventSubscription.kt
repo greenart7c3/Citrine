@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 data class Subscription(
     val id: String,
-    val connection: Connection,
+    val connection: Connection?,
     val filters: Set<EventFilter>,
     val appDatabase: AppDatabase,
     val objectMapper: ObjectMapper,
@@ -32,7 +32,7 @@ object EventSubscription {
                 it.subscription.filters.forEach { filter ->
                     val event = dbEvent.toEvent()
                     if (filter.test(event)) {
-                        it.subscription.connection.session.send(
+                        it.subscription.connection?.session?.send(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(
                                     "EVENT",
@@ -50,7 +50,7 @@ object EventSubscription {
     fun closeAll(connectionName: String) {
         Log.d(Citrine.TAG, "finalizing subscriptions from $connectionName")
         subscriptions.snapshot().keys.forEach {
-            if (subscriptions[it].subscription.connection.name == connectionName) {
+            if (subscriptions[it].subscription.connection?.name == connectionName) {
                 Log.d(Citrine.TAG, "closing subscription $it")
                 close(it)
             }
@@ -70,7 +70,7 @@ object EventSubscription {
     suspend fun subscribe(
         subscriptionId: String,
         filters: Set<EventFilter>,
-        connection: Connection,
+        connection: Connection?,
         appDatabase: AppDatabase,
         objectMapper: ObjectMapper,
         count: Boolean,
@@ -91,6 +91,6 @@ object EventSubscription {
             manager,
         )
         manager.execute()
-        connection.session.send(EOSE(subscriptionId).toJson())
+        connection?.session?.send(EOSE(subscriptionId).toJson())
     }
 }

@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -14,7 +15,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,14 +70,16 @@ import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.Client
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.ammolite.relays.RelayPool
-import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
 import com.vitorpamplona.quartz.encoders.Nip19Bech32
 import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.events.ContactListEvent
 import com.vitorpamplona.quartz.events.Event
+import com.vitorpamplona.quartz.events.RelayAuthEvent
+import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
+import com.vitorpamplona.quartz.signers.NostrSignerExternal
+import com.vitorpamplona.quartz.signers.Permission
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -161,11 +163,31 @@ class MainActivity : ComponentActivity() {
             var pubKey by remember {
                 mutableStateOf("")
             }
+            var signer = NostrSignerExternal("", ExternalSignerLauncher("", ""))
             val progress2 = remember {
                 progress
             }
 
             database = AppDatabase.getDatabase(this)
+
+            val launcher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartActivityForResult(),
+                onResult = { result ->
+                    if (result.resultCode != Activity.RESULT_OK) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.sign_request_rejected),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    } else {
+                        result.data?.let {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                signer.launcher.newResult(it)
+                            }
+                        }
+                    }
+                },
+            )
 
             val launcherLogin = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.StartActivityForResult(),
@@ -180,7 +202,9 @@ class MainActivity : ComponentActivity() {
                         result.data?.let {
                             try {
                                 val key = it.getStringExtra("signature") ?: ""
-                                pubKey = if (key.startsWith("npub")) {
+                                val packageName = it.getStringExtra("package") ?: ""
+
+                                val returnedKey = if (key.startsWith("npub")) {
                                     when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
                                         is Nip19Bech32.NPub -> parsed.hex
                                         else -> ""
@@ -188,6 +212,20 @@ class MainActivity : ComponentActivity() {
                                 } else {
                                     key
                                 }
+
+                                signer = NostrSignerExternal(
+                                    returnedKey,
+                                    ExternalSignerLauncher(returnedKey, packageName),
+                                )
+
+                                signer.launcher.registerLauncher(
+                                    contentResolver = Citrine.getInstance()::contentResolverFn,
+                                    launcher = { intent ->
+                                        launcher.launch(intent)
+                                    },
+                                )
+
+                                pubKey = returnedKey
                             } catch (e: Exception) {
                                 Log.d(Citrine.TAG, e.message ?: "", e)
                             }
@@ -280,23 +318,14 @@ class MainActivity : ComponentActivity() {
                                         isLoading.value = true
 
                                         launch(Dispatchers.IO) {
-                                            val citrineRelay = RelaySetupInfoToConnect(
-                                                url = "ws://127.0.0.1:${Settings.port}",
-                                                read = false,
-                                                write = true,
-                                                feedTypes = COMMON_FEED_TYPES,
-                                                forceProxy = false,
-                                            )
-                                            Client.reconnect(arrayOf(citrineRelay), false)
-                                            delay(5000)
-
-                                            var contactList = database.eventDao().getContactList(pubKey)
+                                            var contactList = database.eventDao().getContactList(signer.pubKey)
                                             if (contactList == null) {
                                                 Citrine.getInstance().fetchContactList(
-                                                    pubKey = pubKey,
+                                                    customWebSocketServer = service!!.webSocketServer,
+                                                    pubKey = signer.pubKey,
                                                     onDone = {
                                                         progress2.value = "loading relays"
-                                                        contactList = database.eventDao().getContactList(pubKey)
+                                                        contactList = database.eventDao().getContactList(signer.pubKey)
                                                         launch(Dispatchers.IO) {
                                                             var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
                                                             contactList?.let {
@@ -318,10 +347,11 @@ class MainActivity : ComponentActivity() {
                                                             }
 
                                                             Citrine.getInstance().fetchOutbox(
-                                                                pubKey = pubKey,
+                                                                customWebSocketServer = service!!.webSocketServer,
+                                                                pubKey = signer.pubKey,
                                                                 onDone = {
                                                                     launch(Dispatchers.IO) {
-                                                                        val advertisedRelayList = database.eventDao().getAdvertisedRelayList(pubKey)
+                                                                        val advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
                                                                         advertisedRelayList?.let {
                                                                             val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
                                                                             relays.forEach { relay ->
@@ -339,9 +369,20 @@ class MainActivity : ComponentActivity() {
                                                                             }
                                                                         }
                                                                         Citrine.getInstance().fetchEvents(
-                                                                            pubKey,
+                                                                            customWebSocketServer = service!!.webSocketServer,
+                                                                            signer.pubKey,
                                                                             isLoading,
                                                                             progress2,
+                                                                            onAuth = { relay, challenge ->
+                                                                                RelayAuthEvent.create(
+                                                                                    relay.url,
+                                                                                    challenge,
+                                                                                    signer,
+                                                                                    onReady = {
+                                                                                        relay.send(it)
+                                                                                    },
+                                                                                )
+                                                                            },
                                                                         )
                                                                         pubKey = ""
                                                                     }
@@ -370,13 +411,14 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                     }
                                                 }
-                                                var advertisedRelayList = database.eventDao().getAdvertisedRelayList(pubKey)
+                                                var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
                                                 if (advertisedRelayList == null) {
                                                     Citrine.getInstance().fetchOutbox(
-                                                        pubKey = pubKey,
+                                                        customWebSocketServer = service!!.webSocketServer,
+                                                        pubKey = signer.pubKey,
                                                         onDone = {
                                                             launch(Dispatchers.IO) {
-                                                                advertisedRelayList = database.eventDao().getAdvertisedRelayList(pubKey)
+                                                                advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
                                                                 advertisedRelayList?.let {
                                                                     val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
                                                                     relays.forEach { relay ->
@@ -394,9 +436,20 @@ class MainActivity : ComponentActivity() {
                                                                     }
                                                                 }
                                                                 Citrine.getInstance().fetchEvents(
-                                                                    pubKey,
+                                                                    customWebSocketServer = service!!.webSocketServer,
+                                                                    signer.pubKey,
                                                                     isLoading,
                                                                     progress2,
+                                                                    onAuth = { relay, challenge ->
+                                                                        RelayAuthEvent.create(
+                                                                            relay.url,
+                                                                            challenge,
+                                                                            signer,
+                                                                            onReady = {
+                                                                                relay.send(it)
+                                                                            },
+                                                                        )
+                                                                    },
                                                                 )
                                                                 pubKey = ""
                                                             }
@@ -421,9 +474,20 @@ class MainActivity : ComponentActivity() {
                                                     }
 
                                                     Citrine.getInstance().fetchEvents(
+                                                        customWebSocketServer = service!!.webSocketServer,
                                                         pubKey,
                                                         isLoading,
                                                         progress2,
+                                                        onAuth = { relay, challenge ->
+                                                            RelayAuthEvent.create(
+                                                                relay.url,
+                                                                challenge,
+                                                                signer,
+                                                                onReady = {
+                                                                    relay.send(it)
+                                                                },
+                                                            )
+                                                        },
                                                     )
                                                     pubKey = ""
                                                 }
@@ -537,7 +601,6 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 Column(
-                                    verticalArrangement = Arrangement.Center,
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     if (isLoading.value) {
@@ -647,6 +710,24 @@ class MainActivity : ComponentActivity() {
                                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
                                                     val signerType = "get_public_key"
                                                     intent.putExtra("type", signerType)
+
+                                                    val permissions =
+                                                        listOf(
+                                                            Permission(
+                                                                "sign_event",
+                                                                22242,
+                                                            ),
+                                                        )
+                                                    val jsonArray = StringBuilder("[")
+                                                    permissions.forEachIndexed { index, permission ->
+                                                        jsonArray.append(permission.toJson())
+                                                        if (index < permissions.size - 1) {
+                                                            jsonArray.append(",")
+                                                        }
+                                                    }
+                                                    jsonArray.append("]")
+
+                                                    intent.putExtra("permissions", jsonArray.toString())
                                                     intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                                     launcherLogin.launch(intent)
                                                 } catch (e: Exception) {
@@ -781,25 +862,13 @@ class MainActivity : ComponentActivity() {
                             database.eventDao().deleteAll()
                         }
 
-                        val citrineRelay = RelaySetupInfoToConnect(
-                            url = "ws://127.0.0.1:${Settings.port}",
-                            read = false,
-                            write = true,
-                            feedTypes = COMMON_FEED_TYPES,
-                            forceProxy = false,
-                        )
-                        Client.reconnect(arrayOf(citrineRelay), false)
-                        delay(5000)
-
                         it.useLines { lines ->
                             lines.forEach { line ->
                                 if (line.isBlank()) {
                                     return@forEach
                                 }
                                 val event = Event.fromJson(line)
-                                Client.sendAndWaitForResponse(
-                                    event,
-                                )
+                                service!!.webSocketServer.innerProccesEvent(event, null)
 
                                 linesRead++
                                 onProgress(getString(R.string.imported, linesRead.toString(), totalLines.toString()))

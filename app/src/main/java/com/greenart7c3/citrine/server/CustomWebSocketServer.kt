@@ -77,7 +77,7 @@ class CustomWebSocketServer(
     private suspend fun subscribe(
         subscriptionId: String,
         filterNodes: List<JsonNode>,
-        connection: Connection,
+        connection: Connection?,
         count: Boolean = false,
     ) {
         val filters = filterNodes.map { jsonNode ->
@@ -94,8 +94,8 @@ class CustomWebSocketServer(
         EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper, count)
     }
 
-    private suspend fun processNewRelayMessage(newMessage: String, connection: Connection) {
-        Log.d(Citrine.TAG, newMessage + " from ${connection.session.call.request.local.remoteHost} ${connection.session.call.request.headers["User-Agent"]}")
+    private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
+        Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
         val msgArray = Event.mapper.readTree(newMessage)
         when (val type = msgArray.get(0).asText()) {
             "COUNT" -> {
@@ -113,21 +113,19 @@ class CustomWebSocketServer(
                 EventSubscription.close(msgArray.get(1).asText())
             }
             "PING" -> {
-                connection.session.send(NoticeResult("PONG").toJson())
+                connection?.session?.send(NoticeResult("PONG").toJson())
             }
             else -> {
                 val errorMessage = NoticeResult.invalid("unknown message type $type").toJson()
                 Log.d(Citrine.TAG, errorMessage)
-                connection.session.send(errorMessage)
+                connection?.session?.send(errorMessage)
             }
         }
     }
 
-    private suspend fun processEvent(eventNode: JsonNode, connection: Connection) {
-        val event = objectMapper.treeToValue(eventNode, Event::class.java)
-
+    suspend fun innerProccesEvent(event: Event, connection: Connection?) {
         if (!event.hasCorrectIDHash()) {
-            connection.session.send(
+            connection?.session?.send(
                 CommandResult.invalid(
                     event,
                     "event id hash verification failed",
@@ -137,7 +135,7 @@ class CustomWebSocketServer(
         }
 
         if (!event.hasVerifiedSignature()) {
-            connection.session.send(
+            connection?.session?.send(
                 CommandResult.invalid(
                     event,
                     "event signature verification failed",
@@ -147,25 +145,25 @@ class CustomWebSocketServer(
         }
 
         if (event.isExpired()) {
-            connection.session.send(CommandResult.invalid(event, "event expired").toJson())
+            connection?.session?.send(CommandResult.invalid(event, "event expired").toJson())
             return
         }
 
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
-            connection.session.send(CommandResult.invalid(event, "kind not allowed").toJson())
+            connection?.session?.send(CommandResult.invalid(event, "kind not allowed").toJson())
             return
         }
 
         if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
             if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
-                connection.session.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
+                connection?.session?.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
                 return
             }
         }
 
         if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
             if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
-                connection.session.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
+                connection?.session?.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
                 return
             }
         }
@@ -177,14 +175,19 @@ class CustomWebSocketServer(
             else -> {
                 val eventEntity = appDatabase.eventDao().getById(event.id)
                 if (eventEntity != null) {
-                    connection.session.send(CommandResult.duplicated(event).toJson())
+                    connection?.session?.send(CommandResult.duplicated(event).toJson())
                     return
                 }
                 save(event)
             }
         }
 
-        connection.session.send(CommandResult.ok(event).toJson())
+        connection?.session?.send(CommandResult.ok(event).toJson())
+    }
+
+    private suspend fun processEvent(eventNode: JsonNode, connection: Connection?) {
+        val event = objectMapper.treeToValue(eventNode, Event::class.java)
+        innerProccesEvent(event, connection)
     }
 
     private fun handleParameterizedReplaceable(event: Event) {

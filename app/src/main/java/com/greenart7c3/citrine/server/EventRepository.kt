@@ -109,7 +109,7 @@ object EventRepository {
         val events = query(subscription.appDatabase, filter)
 
         if (subscription.count) {
-            subscription.connection.session.send(
+            subscription.connection?.session?.send(
                 subscription.objectMapper.writeValueAsString(
                     listOf(
                         "COUNT",
@@ -125,7 +125,7 @@ object EventRepository {
             val event = it.toEvent()
             if (!event.isExpired()) {
                 Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
-                subscription.connection.session.send(
+                subscription.connection?.session?.send(
                     subscription.objectMapper.writeValueAsString(
                         listOf(
                             "EVENT",
