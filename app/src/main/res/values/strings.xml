@@ -41,5 +41,6 @@
     <string name="auto_backup">Auto Backup</string>
     <string name="delete_all_events">Delete all events</string>
     <string name="delete_all_events_warning">Are you sure you want to delete all events from the database?</string>
+    <string name="feed">Feed</string>
 
 </resources>

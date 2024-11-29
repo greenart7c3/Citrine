@@ -125,4 +125,7 @@ interface EventDao {
             }
         }
     }
+
+    @Query("SELECT * FROM EventEntity WHERE kind = :kind ORDER BY createdAt DESC, id ASC")
+    fun getByKind(kind: Int): Flow<List<EventWithTags>>
 }

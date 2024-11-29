@@ -14,16 +14,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -49,16 +55,19 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.openInputStream
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.WebSocketServerService
@@ -68,7 +77,9 @@ import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
+import com.greenart7c3.citrine.ui.toShortenHex
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
+import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.ammolite.relays.RelayPool
@@ -336,6 +347,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val progress = mutableStateOf("")
         super.onCreate(savedInstanceState)
@@ -430,7 +442,7 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        if (destinationRoute != Route.Logs.route) {
+                        if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed")) {
                             NavigationBar(tonalElevation = 0.dp) {
                                 items.forEach {
                                     val selected = destinationRoute == it.route
@@ -453,6 +465,17 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+                        }
+                    },
+                    topBar = {
+                        if (destinationRoute.startsWith("Feed")) {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        text = stringResource(R.string.feed),
+                                    )
+                                },
+                            )
                         }
                     },
                 ) { padding ->
@@ -823,11 +846,61 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier
                                                 .fillMaxWidth(),
                                             flow = flow,
+                                            navController = navController,
                                         )
                                     }
                                 }
                             }
                         }
+
+                        composable(
+                            Route.Feed.route,
+                            arguments = listOf(navArgument("kind") { type = NavType.IntType }),
+                            content = {
+                                it.arguments?.getInt("kind")?.let { kind ->
+                                    val events = database.eventDao().getByKind(kind).collectAsStateWithLifecycle(emptyList())
+
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(padding),
+                                    ) {
+                                        items(events.value) { event ->
+                                            var showTags by remember { mutableStateOf(false) }
+
+                                            Column(
+                                                modifier = Modifier.padding(16.dp),
+                                            ) {
+                                                Text(event.event.kind.toString())
+                                                Text(event.event.createdAt.toDateString())
+                                                Text(event.event.pubkey.toShortenHex())
+                                                Text(event.event.content)
+                                                if (event.tags.isNotEmpty()) {
+                                                    Row(
+                                                        Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.Center,
+                                                    ) {
+                                                        ElevatedButton(
+                                                            onClick = {
+                                                                showTags = !showTags
+                                                            },
+                                                            content = {
+                                                                Text("Show/Hide tags")
+                                                            },
+                                                        )
+                                                    }
+                                                    if (showTags) {
+                                                        event.tags.forEach { tag ->
+                                                            Text(tag.toTags().toList().toString())
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        )
 
                         composable(Route.Settings.route) {
                             SettingsScreen(

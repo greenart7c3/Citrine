@@ -31,4 +31,10 @@ sealed class Route(
         icon = Icons.Outlined.Settings,
         selectedIcon = Icons.Default.Settings,
     )
+
+    data object Feed : Route(
+        route = "Feed/{kind}",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
 }

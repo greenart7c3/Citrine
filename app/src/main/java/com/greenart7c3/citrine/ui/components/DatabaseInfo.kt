@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -13,12 +14,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import com.greenart7c3.citrine.database.EventDao
 
 @Composable
 fun DatabaseInfo(
     modifier: Modifier = Modifier,
     flow: State<List<EventDao.CountResult>>?,
+    navController: NavController,
 ) {
     Column(
         modifier = modifier,
@@ -39,14 +42,22 @@ fun DatabaseInfo(
         }
 
         flow?.value?.forEach { item ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+            ElevatedButton(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                onClick = {
+                    navController.navigate("Feed/${item.kind}")
+                },
             ) {
-                Text("${item.kind}")
-                Text("${item.count}")
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("${item.kind}")
+                    Text("${item.count}")
+                }
             }
         }
         Text("Total: ${flow?.value?.sumOf { it.count }}")
