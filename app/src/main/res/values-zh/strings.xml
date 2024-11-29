@@ -40,4 +40,6 @@
     <string name="select_folder">选择文件夹</string>
     <string name="select_a_folder_to_backup_to">选择要备份到的文件夹</string>
     <string name="auto_backup">自动备份</string>
+    <string name="delete_all_events">Delete all events</string>
+    <string name="delete_all_events_warning">Are you sure you want to delete all events from the database?</string>
 </resources>
