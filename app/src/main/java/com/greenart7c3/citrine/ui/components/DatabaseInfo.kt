@@ -29,6 +29,7 @@ fun DatabaseInfo(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Database", fontWeight = FontWeight.Bold)
+        Text("Total: ${flow?.value?.sumOf { it.count }}")
         Spacer(modifier = Modifier.padding(4.dp))
 
         Row(
@@ -60,6 +61,5 @@ fun DatabaseInfo(
                 }
             }
         }
-        Text("Total: ${flow?.value?.sumOf { it.count }}")
     }
 }
