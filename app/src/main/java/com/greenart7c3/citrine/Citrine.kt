@@ -313,9 +313,15 @@ class Citrine : Application() {
                 },
             )
             var timeElapsed = 0
-            while (finishedLoading[it.url] == false && timeElapsed < 300) {
+            while (finishedLoading[it.url] == false) {
                 delay(1000)
                 timeElapsed++
+                if (timeElapsed > 60 && count == 0) {
+                    break
+                }
+            }
+            if (it.isConnected()) {
+                it.disconnect()
             }
         }
 

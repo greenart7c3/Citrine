@@ -564,10 +564,10 @@ class MainActivity : ComponentActivity() {
                                         confirmButton = {
                                             TextButton(
                                                 onClick = {
+                                                    deleteAllDialog = false
                                                     coroutineScope.launch(Dispatchers.IO) {
                                                         isLoading.value = true
                                                         database.eventDao().deleteAll()
-                                                        deleteAllDialog = false
                                                         isLoading.value = false
                                                     }
                                                 },
