@@ -1,6 +1,5 @@
 package com.greenart7c3.citrine
 
-import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -34,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +81,7 @@ import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import com.vitorpamplona.quartz.signers.Permission
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -153,6 +154,188 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private suspend fun getAllEventsFromPubKey(
+        signer: NostrSignerExternal,
+        progress2: MutableState<String>,
+        scope: CoroutineScope,
+        pubKey: MutableState<String>,
+    ) {
+        var contactList = database.eventDao().getContactList(signer.pubKey)
+        if (contactList == null) {
+            Citrine.getInstance().fetchContactList(
+                customWebSocketServer = service!!.webSocketServer,
+                pubKey = signer.pubKey,
+                onDone = {
+                    progress2.value = "loading relays"
+                    contactList = database.eventDao().getContactList(signer.pubKey)
+                    scope.launch(Dispatchers.IO) {
+                        var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
+                        contactList?.let {
+                            generalRelays = (it.toEvent() as ContactListEvent).relays()
+                        }
+
+                        generalRelays?.forEach {
+                            if (RelayPool.getRelay(it.key) == null) {
+                                RelayPool.addRelay(
+                                    Relay(
+                                        url = it.key,
+                                        read = true,
+                                        write = false,
+                                        forceProxy = false,
+                                        activeTypes = COMMON_FEED_TYPES,
+                                    ),
+                                )
+                            }
+                        }
+
+                        Citrine.getInstance().fetchOutbox(
+                            customWebSocketServer = service!!.webSocketServer,
+                            pubKey = signer.pubKey,
+                            onDone = {
+                                launch(Dispatchers.IO) {
+                                    val advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
+                                    advertisedRelayList?.let {
+                                        val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                        relays.forEach { relay ->
+                                            if (RelayPool.getRelay(relay.relayUrl) == null) {
+                                                RelayPool.addRelay(
+                                                    Relay(
+                                                        url = relay.relayUrl,
+                                                        read = true,
+                                                        write = false,
+                                                        forceProxy = false,
+                                                        activeTypes = COMMON_FEED_TYPES,
+                                                    ),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Citrine.getInstance().fetchEvents(
+                                        customWebSocketServer = service!!.webSocketServer,
+                                        signer.pubKey,
+                                        isLoading,
+                                        progress2,
+                                        onAuth = { relay, challenge ->
+                                            RelayAuthEvent.create(
+                                                relay.url,
+                                                challenge,
+                                                signer,
+                                                onReady = {
+                                                    relay.send(it)
+                                                },
+                                            )
+                                        },
+                                    )
+                                    pubKey.value = ""
+                                }
+                            },
+                        )
+                    }
+                },
+            )
+        } else {
+            progress2.value = "loading relays"
+            var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
+            contactList?.let {
+                generalRelays = (it.toEvent() as ContactListEvent).relays()
+            }
+
+            generalRelays?.forEach {
+                if (RelayPool.getRelay(it.key) == null) {
+                    RelayPool.addRelay(
+                        Relay(
+                            url = it.key,
+                            read = true,
+                            write = false,
+                            forceProxy = false,
+                            activeTypes = COMMON_FEED_TYPES,
+                        ),
+                    )
+                }
+            }
+            var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
+            if (advertisedRelayList == null) {
+                Citrine.getInstance().fetchOutbox(
+                    customWebSocketServer = service!!.webSocketServer,
+                    pubKey = signer.pubKey,
+                    onDone = {
+                        scope.launch(Dispatchers.IO) {
+                            advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
+                            advertisedRelayList?.let {
+                                val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                relays.forEach { relay ->
+                                    if (RelayPool.getRelay(relay.relayUrl) == null) {
+                                        RelayPool.addRelay(
+                                            Relay(
+                                                url = relay.relayUrl,
+                                                read = true,
+                                                write = false,
+                                                forceProxy = false,
+                                                activeTypes = COMMON_FEED_TYPES,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                            Citrine.getInstance().fetchEvents(
+                                customWebSocketServer = service!!.webSocketServer,
+                                signer.pubKey,
+                                isLoading,
+                                progress2,
+                                onAuth = { relay, challenge ->
+                                    RelayAuthEvent.create(
+                                        relay.url,
+                                        challenge,
+                                        signer,
+                                        onReady = {
+                                            relay.send(it)
+                                        },
+                                    )
+                                },
+                            )
+                            pubKey.value = ""
+                        }
+                    },
+                )
+            } else {
+                advertisedRelayList?.let {
+                    val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                    relays.forEach { relay ->
+                        if (RelayPool.getRelay(relay.relayUrl) == null) {
+                            RelayPool.addRelay(
+                                Relay(
+                                    url = relay.relayUrl,
+                                    read = true,
+                                    write = false,
+                                    forceProxy = false,
+                                    activeTypes = COMMON_FEED_TYPES,
+                                ),
+                            )
+                        }
+                    }
+                }
+
+                Citrine.getInstance().fetchEvents(
+                    customWebSocketServer = service!!.webSocketServer,
+                    pubKey.value,
+                    isLoading,
+                    progress2,
+                    onAuth = { relay, challenge ->
+                        RelayAuthEvent.create(
+                            relay.url,
+                            challenge,
+                            signer,
+                            onReady = {
+                                relay.send(it)
+                            },
+                        )
+                    },
+                )
+                pubKey.value = ""
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val progress = mutableStateOf("")
         super.onCreate(savedInstanceState)
@@ -160,7 +343,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val coroutineScope = rememberCoroutineScope()
             val context = LocalContext.current
-            var pubKey by remember {
+            val pubKey = remember {
                 mutableStateOf("")
             }
             var signer = NostrSignerExternal("", ExternalSignerLauncher("", ""))
@@ -173,7 +356,7 @@ class MainActivity : ComponentActivity() {
             val launcher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.StartActivityForResult(),
                 onResult = { result ->
-                    if (result.resultCode != Activity.RESULT_OK) {
+                    if (result.resultCode != RESULT_OK) {
                         Toast.makeText(
                             context,
                             context.getString(R.string.sign_request_rejected),
@@ -225,7 +408,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                 )
 
-                                pubKey = returnedKey
+                                pubKey.value = returnedKey
                             } catch (e: Exception) {
                                 Log.d(Citrine.TAG, e.message ?: "", e)
                             }
@@ -300,6 +483,7 @@ class MainActivity : ComponentActivity() {
                                     .padding(top = verticalPadding * 1.5f),
                                 color = MaterialTheme.colorScheme.background,
                             ) {
+                                var deleteAllDialog by remember { mutableStateOf(false) }
                                 var showDialog by remember { mutableStateOf(false) }
                                 var showAutoBackupDialog by remember { mutableStateOf(false) }
                                 val selectedFiles = remember {
@@ -312,186 +496,18 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                LaunchedEffect(pubKey) {
-                                    if (pubKey.isNotBlank()) {
+                                LaunchedEffect(pubKey.value) {
+                                    if (pubKey.value.isNotBlank()) {
                                         progress2.value = "loading contact list"
                                         isLoading.value = true
 
                                         launch(Dispatchers.IO) {
-                                            var contactList = database.eventDao().getContactList(signer.pubKey)
-                                            if (contactList == null) {
-                                                Citrine.getInstance().fetchContactList(
-                                                    customWebSocketServer = service!!.webSocketServer,
-                                                    pubKey = signer.pubKey,
-                                                    onDone = {
-                                                        progress2.value = "loading relays"
-                                                        contactList = database.eventDao().getContactList(signer.pubKey)
-                                                        launch(Dispatchers.IO) {
-                                                            var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
-                                                            contactList?.let {
-                                                                generalRelays = (it.toEvent() as ContactListEvent).relays()
-                                                            }
-
-                                                            generalRelays?.forEach {
-                                                                if (RelayPool.getRelay(it.key) == null) {
-                                                                    RelayPool.addRelay(
-                                                                        Relay(
-                                                                            url = it.key,
-                                                                            read = true,
-                                                                            write = false,
-                                                                            forceProxy = false,
-                                                                            activeTypes = COMMON_FEED_TYPES,
-                                                                        ),
-                                                                    )
-                                                                }
-                                                            }
-
-                                                            Citrine.getInstance().fetchOutbox(
-                                                                customWebSocketServer = service!!.webSocketServer,
-                                                                pubKey = signer.pubKey,
-                                                                onDone = {
-                                                                    launch(Dispatchers.IO) {
-                                                                        val advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
-                                                                        advertisedRelayList?.let {
-                                                                            val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                                                            relays.forEach { relay ->
-                                                                                if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                                                                    RelayPool.addRelay(
-                                                                                        Relay(
-                                                                                            url = relay.relayUrl,
-                                                                                            read = true,
-                                                                                            write = false,
-                                                                                            forceProxy = false,
-                                                                                            activeTypes = COMMON_FEED_TYPES,
-                                                                                        ),
-                                                                                    )
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        Citrine.getInstance().fetchEvents(
-                                                                            customWebSocketServer = service!!.webSocketServer,
-                                                                            signer.pubKey,
-                                                                            isLoading,
-                                                                            progress2,
-                                                                            onAuth = { relay, challenge ->
-                                                                                RelayAuthEvent.create(
-                                                                                    relay.url,
-                                                                                    challenge,
-                                                                                    signer,
-                                                                                    onReady = {
-                                                                                        relay.send(it)
-                                                                                    },
-                                                                                )
-                                                                            },
-                                                                        )
-                                                                        pubKey = ""
-                                                                    }
-                                                                },
-                                                            )
-                                                        }
-                                                    },
-                                                )
-                                            } else {
-                                                progress2.value = "loading relays"
-                                                var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
-                                                contactList?.let {
-                                                    generalRelays = (it.toEvent() as ContactListEvent).relays()
-                                                }
-
-                                                generalRelays?.forEach {
-                                                    if (RelayPool.getRelay(it.key) == null) {
-                                                        RelayPool.addRelay(
-                                                            Relay(
-                                                                url = it.key,
-                                                                read = true,
-                                                                write = false,
-                                                                forceProxy = false,
-                                                                activeTypes = COMMON_FEED_TYPES,
-                                                            ),
-                                                        )
-                                                    }
-                                                }
-                                                var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
-                                                if (advertisedRelayList == null) {
-                                                    Citrine.getInstance().fetchOutbox(
-                                                        customWebSocketServer = service!!.webSocketServer,
-                                                        pubKey = signer.pubKey,
-                                                        onDone = {
-                                                            launch(Dispatchers.IO) {
-                                                                advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
-                                                                advertisedRelayList?.let {
-                                                                    val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                                                    relays.forEach { relay ->
-                                                                        if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                                                            RelayPool.addRelay(
-                                                                                Relay(
-                                                                                    url = relay.relayUrl,
-                                                                                    read = true,
-                                                                                    write = false,
-                                                                                    forceProxy = false,
-                                                                                    activeTypes = COMMON_FEED_TYPES,
-                                                                                ),
-                                                                            )
-                                                                        }
-                                                                    }
-                                                                }
-                                                                Citrine.getInstance().fetchEvents(
-                                                                    customWebSocketServer = service!!.webSocketServer,
-                                                                    signer.pubKey,
-                                                                    isLoading,
-                                                                    progress2,
-                                                                    onAuth = { relay, challenge ->
-                                                                        RelayAuthEvent.create(
-                                                                            relay.url,
-                                                                            challenge,
-                                                                            signer,
-                                                                            onReady = {
-                                                                                relay.send(it)
-                                                                            },
-                                                                        )
-                                                                    },
-                                                                )
-                                                                pubKey = ""
-                                                            }
-                                                        },
-                                                    )
-                                                } else {
-                                                    advertisedRelayList?.let {
-                                                        val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                                        relays.forEach { relay ->
-                                                            if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                                                RelayPool.addRelay(
-                                                                    Relay(
-                                                                        url = relay.relayUrl,
-                                                                        read = true,
-                                                                        write = false,
-                                                                        forceProxy = false,
-                                                                        activeTypes = COMMON_FEED_TYPES,
-                                                                    ),
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-
-                                                    Citrine.getInstance().fetchEvents(
-                                                        customWebSocketServer = service!!.webSocketServer,
-                                                        pubKey,
-                                                        isLoading,
-                                                        progress2,
-                                                        onAuth = { relay, challenge ->
-                                                            RelayAuthEvent.create(
-                                                                relay.url,
-                                                                challenge,
-                                                                signer,
-                                                                onReady = {
-                                                                    relay.send(it)
-                                                                },
-                                                            )
-                                                        },
-                                                    )
-                                                    pubKey = ""
-                                                }
-                                            }
+                                            getAllEventsFromPubKey(
+                                                signer = signer,
+                                                progress2 = progress2,
+                                                scope = this,
+                                                pubKey = pubKey,
+                                            )
                                         }
                                     }
                                 }
@@ -509,6 +525,43 @@ class MainActivity : ComponentActivity() {
                                     selectedFiles.clear()
                                     selectedFiles.addAll(files)
                                     showDialog = true
+                                }
+
+                                if (deleteAllDialog) {
+                                    AlertDialog(
+                                        onDismissRequest = {
+                                            deleteAllDialog = false
+                                        },
+                                        title = {
+                                            Text(stringResource(R.string.delete_all_events))
+                                        },
+                                        text = {
+                                            Text(stringResource(R.string.delete_all_events_warning))
+                                        },
+                                        confirmButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                        isLoading.value = true
+                                                        database.eventDao().deleteAll()
+                                                        deleteAllDialog = false
+                                                        isLoading.value = false
+                                                    }
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.yes))
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(
+                                                onClick = {
+                                                    deleteAllDialog = false
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.no))
+                                            }
+                                        },
+                                    )
                                 }
 
                                 if (showDialog) {
@@ -692,14 +745,10 @@ class MainActivity : ComponentActivity() {
                                         ElevatedButton(
                                             modifier = Modifier.fillMaxWidth(),
                                             onClick = {
-                                                coroutineScope.launch(Dispatchers.IO) {
-                                                    isLoading.value = true
-                                                    database.eventDao().deleteAll()
-                                                    isLoading.value = false
-                                                }
+                                                deleteAllDialog = true
                                             },
                                             content = {
-                                                Text("Delete all events")
+                                                Text(stringResource(R.string.delete_all_events))
                                             },
                                         )
 

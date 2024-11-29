@@ -39,5 +39,7 @@
     <string name="select_folder">Select folder</string>
     <string name="select_a_folder_to_backup_to">Select a folder to backup to</string>
     <string name="auto_backup">Auto Backup</string>
+    <string name="delete_all_events">Delete all events</string>
+    <string name="delete_all_events_warning">Are you sure you want to delete all events from the database?</string>
 
 </resources>
