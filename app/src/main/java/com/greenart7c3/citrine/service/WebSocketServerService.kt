@@ -40,7 +40,6 @@ import kotlinx.coroutines.launch
 
 class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    lateinit var webSocketServer: CustomWebSocketServer
     private val binder = LocalBinder()
     private var timer: Timer? = null
     inner class LocalBinder : Binder() {
@@ -152,12 +151,12 @@ class WebSocketServerService : Service() {
 
         Log.d(Citrine.TAG, "Starting WebSocket server")
         // Start the WebSocket server
-        webSocketServer = CustomWebSocketServer(
+        CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
             port = Settings.port,
             appDatabase = database,
         )
-        webSocketServer.start()
+        CustomWebSocketService.server?.start()
 
         var error = true
         var attempts = 0
@@ -177,7 +176,7 @@ class WebSocketServerService : Service() {
             timer?.cancel()
             timer = null
             EventSubscription.closeAll()
-            webSocketServer.stop()
+            CustomWebSocketService.server?.stop()
         }
         super.onDestroy()
     }
@@ -224,6 +223,6 @@ class WebSocketServerService : Service() {
     }
 
     fun isStarted(): Boolean {
-        return webSocketServer.server != null
+        return CustomWebSocketService.server != null
     }
 }

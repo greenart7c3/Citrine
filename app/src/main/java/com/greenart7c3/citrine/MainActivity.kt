@@ -1,12 +1,8 @@
 package com.greenart7c3.citrine
 
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Bundle
-import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -38,8 +34,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +50,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -62,15 +61,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anggrayudi.storage.SimpleStorageHelper
-import com.anggrayudi.storage.file.extension
-import com.anggrayudi.storage.file.openInputStream
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
-import com.greenart7c3.citrine.service.WebSocketServerService
+import com.greenart7c3.citrine.ui.HomeViewModel
 import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
@@ -78,21 +75,11 @@ import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.greenart7c3.citrine.ui.toShortenHex
-import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.greenart7c3.citrine.utils.toDateString
-import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.Relay
-import com.vitorpamplona.ammolite.relays.RelayPool
 import com.vitorpamplona.quartz.encoders.Nip19Bech32
-import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
-import com.vitorpamplona.quartz.events.ContactListEvent
-import com.vitorpamplona.quartz.events.Event
-import com.vitorpamplona.quartz.events.RelayAuthEvent
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import com.vitorpamplona.quartz.signers.Permission
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -101,344 +88,21 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private lateinit var database: AppDatabase
     private var countByKind: Flow<List<EventDao.CountResult>>? = null
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
-    private var saveToPreferences = false
-
-    @OptIn(DelicateCoroutinesApi::class)
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) {
-        GlobalScope.launch(Dispatchers.IO) {
-            start()
-        }
-    }
-
-    private var service: WebSocketServerService? = null
-    private var bound = false
-    private var isLoading = mutableStateOf(false)
-
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val binder = service as WebSocketServerService.LocalBinder
-            this@MainActivity.service = binder.getService()
-            bound = true
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            bound = false
-        }
-    }
-
-    private suspend fun stop() {
-        try {
-            isLoading.value = true
-            val intent = Intent(applicationContext, WebSocketServerService::class.java)
-            stopService(intent)
-            if (bound) unbindService(connection)
-            bound = false
-            service = null
-            delay(2000)
-        } catch (e: Exception) {
-            isLoading.value = false
-            if (e is CancellationException) throw e
-            Log.d(Citrine.TAG, e.message ?: "", e)
-        } finally {
-            isLoading.value = false
-        }
-    }
-
-    private suspend fun start() {
-        try {
-            isLoading.value = true
-            val intent = Intent(applicationContext, WebSocketServerService::class.java)
-            startService(intent)
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
-            delay(2000)
-        } catch (e: Exception) {
-            isLoading.value = false
-            if (e is CancellationException) throw e
-            Log.d(Citrine.TAG, e.message ?: "", e)
-        } finally {
-            isLoading.value = false
-        }
-    }
-
-    private suspend fun getAllEventsFromPubKey(
-        signer: NostrSignerExternal,
-        progress2: MutableState<String>,
-        scope: CoroutineScope,
-        pubKey: MutableState<String>,
-    ) {
-        var contactList = database.eventDao().getContactList(signer.pubKey)
-        if (contactList == null) {
-            Citrine.getInstance().fetchContactList(
-                customWebSocketServer = service!!.webSocketServer,
-                pubKey = signer.pubKey,
-                onDone = {
-                    progress2.value = "loading relays"
-                    contactList = database.eventDao().getContactList(signer.pubKey)
-                    scope.launch(Dispatchers.IO) {
-                        var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
-                        contactList?.let {
-                            generalRelays = (it.toEvent() as ContactListEvent).relays()
-                        }
-
-                        generalRelays?.forEach {
-                            if (RelayPool.getRelay(it.key) == null) {
-                                RelayPool.addRelay(
-                                    Relay(
-                                        url = it.key,
-                                        read = true,
-                                        write = false,
-                                        forceProxy = false,
-                                        activeTypes = COMMON_FEED_TYPES,
-                                    ),
-                                )
-                            }
-                        }
-
-                        Citrine.getInstance().fetchOutbox(
-                            customWebSocketServer = service!!.webSocketServer,
-                            pubKey = signer.pubKey,
-                            onDone = {
-                                launch(Dispatchers.IO) {
-                                    val advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
-                                    advertisedRelayList?.let {
-                                        val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                        relays.forEach { relay ->
-                                            if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                                RelayPool.addRelay(
-                                                    Relay(
-                                                        url = relay.relayUrl,
-                                                        read = true,
-                                                        write = false,
-                                                        forceProxy = false,
-                                                        activeTypes = COMMON_FEED_TYPES,
-                                                    ),
-                                                )
-                                            }
-                                        }
-                                    }
-                                    Citrine.getInstance().fetchEvents(
-                                        customWebSocketServer = service!!.webSocketServer,
-                                        signer.pubKey,
-                                        isLoading,
-                                        progress2,
-                                        onAuth = { relay, challenge ->
-                                            RelayAuthEvent.create(
-                                                relay.url,
-                                                challenge,
-                                                signer,
-                                                onReady = {
-                                                    relay.send(it)
-                                                },
-                                            )
-                                        },
-                                    )
-                                    pubKey.value = ""
-                                }
-                            },
-                        )
-                    }
-                },
-            )
-        } else {
-            progress2.value = "loading relays"
-            var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
-            contactList?.let {
-                generalRelays = (it.toEvent() as ContactListEvent).relays()
-            }
-
-            generalRelays?.forEach {
-                if (RelayPool.getRelay(it.key) == null) {
-                    RelayPool.addRelay(
-                        Relay(
-                            url = it.key,
-                            read = true,
-                            write = false,
-                            forceProxy = false,
-                            activeTypes = COMMON_FEED_TYPES,
-                        ),
-                    )
-                }
-            }
-            var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
-            if (advertisedRelayList == null) {
-                Citrine.getInstance().fetchOutbox(
-                    customWebSocketServer = service!!.webSocketServer,
-                    pubKey = signer.pubKey,
-                    onDone = {
-                        scope.launch(Dispatchers.IO) {
-                            advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
-                            advertisedRelayList?.let {
-                                val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                relays.forEach { relay ->
-                                    if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                        RelayPool.addRelay(
-                                            Relay(
-                                                url = relay.relayUrl,
-                                                read = true,
-                                                write = false,
-                                                forceProxy = false,
-                                                activeTypes = COMMON_FEED_TYPES,
-                                            ),
-                                        )
-                                    }
-                                }
-                            }
-                            Citrine.getInstance().fetchEvents(
-                                customWebSocketServer = service!!.webSocketServer,
-                                signer.pubKey,
-                                isLoading,
-                                progress2,
-                                onAuth = { relay, challenge ->
-                                    RelayAuthEvent.create(
-                                        relay.url,
-                                        challenge,
-                                        signer,
-                                        onReady = {
-                                            relay.send(it)
-                                        },
-                                    )
-                                },
-                            )
-                            pubKey.value = ""
-                        }
-                    },
-                )
-            } else {
-                advertisedRelayList?.let {
-                    val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                    relays.forEach { relay ->
-                        if (RelayPool.getRelay(relay.relayUrl) == null) {
-                            RelayPool.addRelay(
-                                Relay(
-                                    url = relay.relayUrl,
-                                    read = true,
-                                    write = false,
-                                    forceProxy = false,
-                                    activeTypes = COMMON_FEED_TYPES,
-                                ),
-                            )
-                        }
-                    }
-                }
-
-                Citrine.getInstance().fetchEvents(
-                    customWebSocketServer = service!!.webSocketServer,
-                    pubKey.value,
-                    isLoading,
-                    progress2,
-                    onAuth = { relay, challenge ->
-                        RelayAuthEvent.create(
-                            relay.url,
-                            challenge,
-                            signer,
-                            onReady = {
-                                relay.send(it)
-                            },
-                        )
-                    },
-                )
-                pubKey.value = ""
-            }
-        }
-    }
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
-        val progress = mutableStateOf("")
         super.onCreate(savedInstanceState)
 
         setContent {
             val coroutineScope = rememberCoroutineScope()
-            val context = LocalContext.current
-            val pubKey = remember {
-                mutableStateOf("")
-            }
-            var signer = NostrSignerExternal("", ExternalSignerLauncher("", ""))
-            val progress2 = remember {
-                progress
-            }
-
-            database = AppDatabase.getDatabase(this)
-
-            val launcher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.StartActivityForResult(),
-                onResult = { result ->
-                    if (result.resultCode != RESULT_OK) {
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.sign_request_rejected),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    } else {
-                        result.data?.let {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                signer.launcher.newResult(it)
-                            }
-                        }
-                    }
-                },
-            )
-
-            val launcherLogin = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.StartActivityForResult(),
-                onResult = { result ->
-                    if (result.resultCode != RESULT_OK) {
-                        Toast.makeText(
-                            context,
-                            getString(R.string.sign_request_rejected),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    } else {
-                        result.data?.let {
-                            try {
-                                val key = it.getStringExtra("signature") ?: ""
-                                val packageName = it.getStringExtra("package") ?: ""
-
-                                val returnedKey = if (key.startsWith("npub")) {
-                                    when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
-                                        is Nip19Bech32.NPub -> parsed.hex
-                                        else -> ""
-                                    }
-                                } else {
-                                    key
-                                }
-
-                                signer = NostrSignerExternal(
-                                    returnedKey,
-                                    ExternalSignerLauncher(returnedKey, packageName),
-                                )
-
-                                signer.launcher.registerLauncher(
-                                    contentResolver = Citrine.getInstance()::contentResolverFn,
-                                    launcher = { intent ->
-                                        launcher.launch(intent)
-                                    },
-                                )
-
-                                pubKey.value = returnedKey
-                            } catch (e: Exception) {
-                                Log.d(Citrine.TAG, e.message ?: "", e)
-                            }
-                        }
-                    }
-                },
-            )
-
             val items = listOf(Route.Home, Route.Settings)
 
             CitrineTheme {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val destinationRoute = navBackStackEntry?.destination?.route ?: ""
-
-                LaunchedEffect(Unit) {
-                    requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
-                }
 
                 Scaffold(
                     bottomBar = {
@@ -483,6 +147,7 @@ class MainActivity : ComponentActivity() {
                     val screenWidthDp = configuration.screenWidthDp.dp
                     val percentage = (screenWidthDp * 0.93f)
                     val verticalPadding = (screenWidthDp - percentage)
+                    val homeViewModel: HomeViewModel = viewModel()
 
                     NavHost(
                         navController = navController,
@@ -497,6 +162,8 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Route.Home.route) {
+                            val context = LocalContext.current
+
                             Surface(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -506,12 +173,102 @@ class MainActivity : ComponentActivity() {
                                     .padding(top = verticalPadding * 1.5f),
                                 color = MaterialTheme.colorScheme.background,
                             ) {
+                                @OptIn(DelicateCoroutinesApi::class)
+                                val requestPermissionLauncher = rememberLauncherForActivityResult(
+                                    ActivityResultContracts.RequestPermission(),
+                                ) { _ ->
+                                    GlobalScope.launch(Dispatchers.IO) {
+                                        homeViewModel.start(context)
+                                    }
+                                }
+
+                                LaunchedEffect(Unit) {
+                                    requestPermissionLauncher.launch("android.permission.POST_NOTIFICATIONS")
+                                }
+
+                                val state = homeViewModel.state.collectAsStateWithLifecycle()
                                 var deleteAllDialog by remember { mutableStateOf(false) }
                                 var showDialog by remember { mutableStateOf(false) }
                                 var showAutoBackupDialog by remember { mutableStateOf(false) }
                                 val selectedFiles = remember {
                                     mutableListOf<DocumentFile>()
                                 }
+                                var saveToPreferences = false
+
+                                val database = AppDatabase.getDatabase(context)
+                                val launcher = rememberLauncherForActivityResult(
+                                    contract = ActivityResultContracts.StartActivityForResult(),
+                                    onResult = { result ->
+                                        if (result.resultCode != RESULT_OK) {
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.sign_request_rejected),
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        } else {
+                                            result.data?.let {
+                                                coroutineScope.launch(Dispatchers.IO) {
+                                                    homeViewModel.signer.launcher.newResult(it)
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
+
+                                val lifeCycleOwner = LocalLifecycleOwner.current
+                                DisposableEffect(lifeCycleOwner) {
+                                    val observer = LifecycleEventObserver { _, _ ->
+                                        homeViewModel.signer.launcher.registerLauncher(
+                                            contentResolver = Citrine.getInstance()::contentResolverFn,
+                                            launcher = { intent ->
+                                                launcher.launch(intent)
+                                            },
+                                        )
+                                    }
+                                    lifeCycleOwner.lifecycle.addObserver(observer)
+                                    onDispose {
+                                        lifeCycleOwner.lifecycle.removeObserver(observer)
+                                    }
+                                }
+
+                                val launcherLogin = rememberLauncherForActivityResult(
+                                    contract = ActivityResultContracts.StartActivityForResult(),
+                                    onResult = { result ->
+                                        if (result.resultCode != RESULT_OK) {
+                                            Toast.makeText(
+                                                context,
+                                                getString(R.string.sign_request_rejected),
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        } else {
+                                            result.data?.let {
+                                                try {
+                                                    val key = it.getStringExtra("signature") ?: ""
+                                                    val packageName = it.getStringExtra("package") ?: ""
+
+                                                    val returnedKey = if (key.startsWith("npub")) {
+                                                        when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
+                                                            is Nip19Bech32.NPub -> parsed.hex
+                                                            else -> ""
+                                                        }
+                                                    } else {
+                                                        key
+                                                    }
+
+                                                    homeViewModel.signer = NostrSignerExternal(
+                                                        returnedKey,
+                                                        ExternalSignerLauncher(returnedKey, packageName),
+                                                    )
+
+                                                    homeViewModel.setPubKey(returnedKey)
+                                                    homeViewModel.loadEventsFromPubKey(database)
+                                                } catch (e: Exception) {
+                                                    Log.d(Citrine.TAG, e.message ?: "", e)
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
 
                                 LaunchedEffect(Unit) {
                                     if (LocalPreferences.shouldShowAutoBackupDialog(context)) {
@@ -519,28 +276,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                LaunchedEffect(pubKey.value) {
-                                    if (pubKey.value.isNotBlank()) {
-                                        progress2.value = "loading contact list"
-                                        isLoading.value = true
-
-                                        launch(Dispatchers.IO) {
-                                            getAllEventsFromPubKey(
-                                                signer = signer,
-                                                progress2 = progress2,
-                                                scope = this,
-                                                pubKey = pubKey,
-                                            )
-                                        }
-                                    }
-                                }
-
                                 storageHelper.onFolderSelected = { _, folder ->
-                                    exportDatabase(
+                                    if (saveToPreferences) {
+                                        Settings.autoBackup = true
+                                        Settings.autoBackupFolder = folder.uri.toString()
+                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, this@MainActivity)
+                                        saveToPreferences = false
+                                    }
+                                    homeViewModel.exportDatabase(
                                         folder = folder,
-                                        onProgress = {
-                                            progress.value = it
-                                        },
+                                        database = database,
+                                        context = context,
                                     )
                                 }
 
@@ -566,9 +312,9 @@ class MainActivity : ComponentActivity() {
                                                 onClick = {
                                                     deleteAllDialog = false
                                                     coroutineScope.launch(Dispatchers.IO) {
-                                                        isLoading.value = true
+                                                        homeViewModel.setLoading(true)
                                                         database.eventDao().deleteAll()
-                                                        isLoading.value = false
+                                                        homeViewModel.setLoading(false)
                                                     }
                                                 },
                                             ) {
@@ -602,12 +348,11 @@ class MainActivity : ComponentActivity() {
                                             TextButton(
                                                 onClick = {
                                                     showDialog = false
-                                                    importDatabase(
+                                                    homeViewModel.importDatabase(
                                                         files = selectedFiles,
                                                         shouldDelete = true,
-                                                        onProgress = {
-                                                            progress.value = it
-                                                        },
+                                                        context = context,
+                                                        database = database,
                                                         onFinished = {
                                                             selectedFiles.clear()
                                                         },
@@ -621,12 +366,11 @@ class MainActivity : ComponentActivity() {
                                             TextButton(
                                                 onClick = {
                                                     showDialog = false
-                                                    importDatabase(
+                                                    homeViewModel.importDatabase(
                                                         files = selectedFiles,
                                                         shouldDelete = false,
-                                                        onProgress = {
-                                                            progress.value = it
-                                                        },
+                                                        context = context,
+                                                        database = database,
                                                         onFinished = {
                                                             selectedFiles.clear()
                                                         },
@@ -679,14 +423,14 @@ class MainActivity : ComponentActivity() {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
-                                    if (isLoading.value) {
+                                    if (state.value.loading) {
                                         CircularProgressIndicator()
-                                        if (progress2.value.isNotBlank()) {
+                                        if (state.value.progress.isNotBlank()) {
                                             Spacer(modifier = Modifier.padding(4.dp))
-                                            Text(progress2.value)
+                                            Text(state.value.progress)
                                         }
                                     } else {
-                                        val isStarted = service?.isStarted() ?: false
+                                        val isStarted = homeViewModel.state.value.service?.isStarted() ?: false
                                         val clipboardManager = LocalClipboardManager.current
                                         if (isStarted) {
                                             Text(stringResource(R.string.relay_started_at))
@@ -700,7 +444,7 @@ class MainActivity : ComponentActivity() {
                                                 modifier = Modifier.fillMaxWidth(),
                                                 onClick = {
                                                     coroutineScope.launch(Dispatchers.IO) {
-                                                        stop()
+                                                        homeViewModel.stop(context)
                                                     }
                                                 },
                                             ) {
@@ -712,7 +456,7 @@ class MainActivity : ComponentActivity() {
                                                 modifier = Modifier.fillMaxWidth(),
                                                 onClick = {
                                                     coroutineScope.launch(Dispatchers.IO) {
-                                                        start()
+                                                        homeViewModel.start(context)
                                                     }
                                                 },
                                                 content = {
@@ -839,7 +583,7 @@ class MainActivity : ComponentActivity() {
                                         RelayInfo(
                                             modifier = Modifier
                                                 .fillMaxWidth(),
-                                            connections = service?.webSocketServer?.connections?.size ?: 0,
+                                            connections = CustomWebSocketService.server?.connections?.size ?: 0,
                                         )
                                         Spacer(modifier = Modifier.padding(4.dp))
                                         DatabaseInfo(
@@ -858,6 +602,8 @@ class MainActivity : ComponentActivity() {
                             arguments = listOf(navArgument("kind") { type = NavType.IntType }),
                             content = {
                                 it.arguments?.getInt("kind")?.let { kind ->
+                                    val context = LocalContext.current
+                                    val database = AppDatabase.getDatabase(context)
                                     val events = database.eventDao().getByKind(kind).collectAsStateWithLifecycle(emptyList())
 
                                     LazyColumn(
@@ -903,6 +649,7 @@ class MainActivity : ComponentActivity() {
                         )
 
                         composable(Route.Settings.route) {
+                            val context = LocalContext.current
                             SettingsScreen(
                                 Modifier
                                     .fillMaxSize()
@@ -910,9 +657,9 @@ class MainActivity : ComponentActivity() {
                                     .padding(16.dp),
                                 onApplyChanges = {
                                     coroutineScope.launch(Dispatchers.IO) {
-                                        stop()
+                                        homeViewModel.stop(context)
                                         delay(1000)
-                                        start()
+                                        homeViewModel.start(context)
                                     }
                                 },
                             )
@@ -921,119 +668,5 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    private fun exportDatabase(folder: DocumentFile, onProgress: (String) -> Unit) {
-        GlobalScope.launch(Dispatchers.IO) {
-            isLoading.value = true
-
-            if (saveToPreferences) {
-                Settings.autoBackup = true
-                Settings.autoBackupFolder = folder.uri.toString()
-                LocalPreferences.saveSettingsToEncryptedStorage(Settings, this@MainActivity)
-                saveToPreferences = false
-            }
-
-            try {
-                ExportDatabaseUtils.exportDatabase(database, applicationContext, folder, onProgress)
-            } finally {
-                onProgress("")
-                isLoading.value = false
-            }
-        }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    private fun importDatabase(files: List<DocumentFile>, shouldDelete: Boolean, onProgress: (String) -> Unit, onFinished: () -> Unit) {
-        GlobalScope.launch(Dispatchers.IO) {
-            val file = files.first()
-            if (file.extension != "jsonl") {
-                GlobalScope.launch(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.invalid_file_extension),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-                return@launch
-            }
-
-            try {
-                isLoading.value = true
-                var totalLines = 0
-                onProgress(getString(R.string.reading_file, file.name))
-                val input = file.openInputStream(this@MainActivity) ?: return@launch
-                input.use { ip ->
-                    ip.bufferedReader().use {
-                        var line: String?
-                        while (it.readLine().also { readLine -> line = readLine } != null) {
-                            if (line?.isNotBlank() == true) {
-                                totalLines++
-                            }
-                        }
-                    }
-                }
-                val input2 = file.openInputStream(this@MainActivity) ?: return@launch
-                input2.use { ip ->
-                    ip.bufferedReader().use {
-                        var linesRead = 0
-
-                        if (shouldDelete) {
-                            onProgress(getString(R.string.deleting_all_events))
-                            database.eventDao().deleteAll()
-                        }
-
-                        it.useLines { lines ->
-                            lines.forEach { line ->
-                                if (line.isBlank()) {
-                                    return@forEach
-                                }
-                                val event = Event.fromJson(line)
-                                service!!.webSocketServer.innerProccesEvent(event, null)
-
-                                linesRead++
-                                onProgress(getString(R.string.imported, linesRead.toString(), totalLines.toString()))
-                            }
-                        }
-                        RelayPool.disconnect()
-                        delay(3000)
-                        RelayPool.unloadRelays()
-                    }
-                }
-
-                onProgress("")
-                isLoading.value = false
-                onFinished()
-                GlobalScope.launch(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.imported_events_successfully, totalLines),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                Log.d(Citrine.TAG, e.message ?: "", e)
-                GlobalScope.launch(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.import_failed),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-                onProgress("")
-                isLoading.value = false
-                onFinished()
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        if (bound) {
-            unbindService(connection)
-            bound = false
-        }
-        super.onDestroy()
     }
 }
