@@ -38,13 +38,14 @@ import java.util.Collections
 import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class CustomWebSocketServer(
     private val host: String,
     private val port: Int,
     private val appDatabase: AppDatabase,
 ) {
-    val connections: MutableSet<Connection> = Collections.synchronizedSet(LinkedHashSet())
+    val connections = MutableStateFlow(Collections.synchronizedList<Connection>(mutableListOf()))
     var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -285,7 +286,7 @@ class CustomWebSocketServer(
                 // WebSocket endpoint
                 webSocket("/") {
                     val thisConnection = Connection(this)
-                    connections += thisConnection
+                    connections.emit(connections.value + thisConnection)
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
                     try {
                         for (frame in incoming) {
@@ -316,7 +317,7 @@ class CustomWebSocketServer(
                     } finally {
                         Log.d(Citrine.TAG, "Removing ${thisConnection.name}!")
                         thisConnection.finalize()
-                        connections -= thisConnection
+                        connections.emit(connections.value - thisConnection)
                     }
                 }
             }

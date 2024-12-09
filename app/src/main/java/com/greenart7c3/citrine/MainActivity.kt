@@ -579,11 +579,12 @@ class MainActivity : ComponentActivity() {
                                             countByKind = database.eventDao().countByKind()
                                         }
                                         val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
+                                        val connectionFlow = CustomWebSocketService.server?.connections?.collectAsStateWithLifecycle(initialValue = listOf())
 
                                         RelayInfo(
                                             modifier = Modifier
                                                 .fillMaxWidth(),
-                                            connections = CustomWebSocketService.server?.connections?.size ?: 0,
+                                            connections = connectionFlow?.value?.size ?: 0,
                                         )
                                         Spacer(modifier = Modifier.padding(4.dp))
                                         DatabaseInfo(
