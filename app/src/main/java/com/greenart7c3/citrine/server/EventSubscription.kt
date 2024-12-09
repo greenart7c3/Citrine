@@ -8,9 +8,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import io.ktor.websocket.send
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 data class Subscription(
@@ -25,13 +23,17 @@ data class Subscription(
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
 
-    @OptIn(DelicateCoroutinesApi::class)
-    fun executeAll(dbEvent: EventWithTags) {
-        GlobalScope.launch(Dispatchers.IO) {
+    fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
+        Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             subscriptions.snapshot().values.forEach {
-                it.subscription.filters.forEach { filter ->
+                it.subscription.filters.forEach filter@{ filter ->
                     val event = dbEvent.toEvent()
                     if (filter.test(event)) {
+                        if (connection != null && it.subscription.connection?.name == connection.name) {
+                            Log.d(Citrine.TAG, "skipping event to same connection")
+                            return@filter
+                        }
+
                         it.subscription.connection?.session?.send(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(

@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.greenart7c3.citrine.server.Connection
 import com.greenart7c3.citrine.server.EventSubscription
 import kotlinx.coroutines.flow.Flow
 
@@ -18,6 +19,7 @@ interface EventDao {
     }
 
     @RawQuery
+    @Transaction
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
     @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
@@ -25,9 +27,11 @@ interface EventDao {
     fun countByKind(): Flow<List<CountResult>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Transaction
     fun insertEvent(event: EventEntity): Long?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Transaction
     fun insertTags(tags: List<TagEntity>): List<Long>?
 
     @Query("SELECT * FROM EventEntity WHERE id = :id")
@@ -111,7 +115,11 @@ interface EventDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
-    fun insertEventWithTags(dbEvent: EventWithTags, sendEventToSubscriptions: Boolean = true) {
+    fun insertEventWithTags(
+        dbEvent: EventWithTags,
+        connection: Connection?,
+        sendEventToSubscriptions: Boolean = true,
+    ) {
         deletetags(dbEvent.event.id)
         insertEvent(dbEvent.event)?.let {
             dbEvent.tags.forEach {
@@ -120,8 +128,8 @@ interface EventDao {
 
             insertTags(dbEvent.tags)
 
-            if (sendEventToSubscriptions) {
-                EventSubscription.executeAll(dbEvent)
+            if (sendEventToSubscriptions && connection != null) {
+                EventSubscription.executeAll(dbEvent, connection)
             }
         }
     }

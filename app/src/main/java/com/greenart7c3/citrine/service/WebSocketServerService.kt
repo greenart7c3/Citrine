@@ -32,9 +32,7 @@ import java.util.Timer
 import java.util.TimerTask
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
@@ -46,9 +44,8 @@ class WebSocketServerService : Service() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun eventsToDelete(database: AppDatabase) {
-        GlobalScope.launch(Dispatchers.IO) {
+        Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             if (Settings.deleteEphemeralEvents) {
                 val ephemeralEvents = database.eventDao().getEphemeralEvents()
                 Log.d(Citrine.TAG, "Deleting ${ephemeralEvents.size} ephemeral events")

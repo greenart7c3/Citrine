@@ -35,9 +35,7 @@ import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -435,7 +433,6 @@ class HomeViewModel : ViewModel() {
         onDone()
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private suspend fun fetchEventsFrom(
         listeners: MutableMap<String, Relay.Listener>,
         relayParam: Relay,
@@ -468,7 +465,7 @@ class HomeViewModel : ViewModel() {
                 listeners[relay.url]?.let {
                     relayParam.unregister(it)
                 }
-                GlobalScope.launch(Dispatchers.IO) {
+                Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
                     if ((eventCount[relay.url] ?: 0) > 0) {
                         if (lastEventCreatedAt == until) {
                             onDone()
@@ -524,8 +521,7 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
-    suspend fun fetchEvents(
+    private suspend fun fetchEvents(
         onAuth: (relay: Relay, challenge: String) -> Unit,
     ) {
         val finishedLoading = mutableMapOf<String, Boolean>()
@@ -547,7 +543,7 @@ class HomeViewModel : ViewModel() {
                 until = TimeUtils.now(),
                 onAuth = { relay, challenge ->
                     onAuth(relay, challenge)
-                    GlobalScope.launch(Dispatchers.IO) {
+                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
                         delay(5000)
 
                         fetchEventsFrom(
@@ -608,13 +604,12 @@ class HomeViewModel : ViewModel() {
         )
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     fun exportDatabase(
         folder: DocumentFile,
         database: AppDatabase,
         context: Context,
     ) {
-        GlobalScope.launch(Dispatchers.IO) {
+        Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             setLoading(true)
 
             try {
@@ -636,7 +631,6 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     fun importDatabase(
         files: List<DocumentFile>,
         shouldDelete: Boolean,
@@ -644,10 +638,10 @@ class HomeViewModel : ViewModel() {
         context: Context,
         onFinished: () -> Unit,
     ) {
-        GlobalScope.launch(Dispatchers.IO) {
+        Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {
-                GlobalScope.launch(Dispatchers.Main) {
+                Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.invalid_file_extension),
@@ -713,7 +707,7 @@ class HomeViewModel : ViewModel() {
                 )
 
                 onFinished()
-                GlobalScope.launch(Dispatchers.Main) {
+                Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.imported_events_successfully, totalLines),
@@ -723,7 +717,7 @@ class HomeViewModel : ViewModel() {
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.d(Citrine.TAG, e.message ?: "", e)
-                GlobalScope.launch(Dispatchers.Main) {
+                Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.import_failed),

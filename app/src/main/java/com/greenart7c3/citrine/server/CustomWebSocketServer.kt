@@ -170,16 +170,16 @@ class CustomWebSocketServer(
         }
 
         when {
-            event.shouldDelete() -> deleteEvent(event)
-            event.isParameterizedReplaceable() -> handleParameterizedReplaceable(event)
-            event.shouldOverwrite() -> override(event)
+            event.shouldDelete() -> deleteEvent(event, connection)
+            event.isParameterizedReplaceable() -> handleParameterizedReplaceable(event, connection)
+            event.shouldOverwrite() -> override(event, connection)
             else -> {
                 val eventEntity = appDatabase.eventDao().getById(event.id)
                 if (eventEntity != null) {
                     connection?.session?.send(CommandResult.duplicated(event).toJson())
                     return
                 }
-                save(event)
+                save(event, connection)
             }
         }
 
@@ -191,25 +191,25 @@ class CustomWebSocketServer(
         innerProccesEvent(event, connection)
     }
 
-    private fun handleParameterizedReplaceable(event: Event) {
-        save(event)
+    private fun handleParameterizedReplaceable(event: Event, connection: Connection?) {
+        save(event, connection)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
         appDatabase.eventDao().delete(ids, event.pubKey)
     }
 
-    private fun override(event: Event) {
-        save(event)
+    private fun override(event: Event, connection: Connection?) {
+        save(event, connection)
         val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
         appDatabase.eventDao().delete(ids, event.pubKey)
     }
 
-    private fun save(event: Event) {
-        appDatabase.eventDao().insertEventWithTags(event.toEventWithTags())
+    private fun save(event: Event, connection: Connection?) {
+        appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
     }
 
-    private fun deleteEvent(event: Event) {
-        save(event)
+    private fun deleteEvent(event: Event, connection: Connection?) {
+        save(event, connection)
         appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
         val taggedAddresses = event.taggedAddresses()
         if (taggedAddresses.isEmpty()) return

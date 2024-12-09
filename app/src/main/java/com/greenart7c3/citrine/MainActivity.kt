@@ -80,9 +80,7 @@ import com.vitorpamplona.quartz.encoders.Nip19Bech32
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import com.vitorpamplona.quartz.signers.Permission
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -173,11 +171,10 @@ class MainActivity : ComponentActivity() {
                                     .padding(top = verticalPadding * 1.5f),
                                 color = MaterialTheme.colorScheme.background,
                             ) {
-                                @OptIn(DelicateCoroutinesApi::class)
                                 val requestPermissionLauncher = rememberLauncherForActivityResult(
                                     ActivityResultContracts.RequestPermission(),
                                 ) { _ ->
-                                    GlobalScope.launch(Dispatchers.IO) {
+                                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
                                         homeViewModel.start(context)
                                     }
                                 }

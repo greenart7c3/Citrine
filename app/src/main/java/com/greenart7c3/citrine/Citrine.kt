@@ -7,8 +7,13 @@ import com.greenart7c3.citrine.service.LocalPreferences
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.quartz.events.Event
 import com.vitorpamplona.quartz.events.EventInterface
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class Citrine : Application() {
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
 
