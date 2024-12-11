@@ -124,7 +124,7 @@ class CustomWebSocketServer(
         }
     }
 
-    suspend fun innerProccesEvent(event: Event, connection: Connection?) {
+    suspend fun innerProcessEvent(event: Event, connection: Connection?) {
         if (!event.hasCorrectIDHash()) {
             connection?.session?.send(
                 CommandResult.invalid(
@@ -188,7 +188,7 @@ class CustomWebSocketServer(
 
     private suspend fun processEvent(eventNode: JsonNode, connection: Connection?) {
         val event = objectMapper.treeToValue(eventNode, Event::class.java)
-        innerProccesEvent(event, connection)
+        innerProcessEvent(event, connection)
     }
 
     private fun handleParameterizedReplaceable(event: Event, connection: Connection?) {

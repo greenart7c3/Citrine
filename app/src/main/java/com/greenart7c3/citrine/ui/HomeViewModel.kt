@@ -335,7 +335,7 @@ class HomeViewModel : ViewModel() {
             onReceiveEvent = { relay, _, event ->
                 Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
                 runBlocking {
-                    CustomWebSocketService.server?.innerProccesEvent(event, null)
+                    CustomWebSocketService.server?.innerProcessEvent(event, null)
                 }
                 finishedRelays[relay.url] = true
             },
@@ -398,7 +398,7 @@ class HomeViewModel : ViewModel() {
             onReceiveEvent = { relay, _, event ->
                 Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
                 runBlocking {
-                    CustomWebSocketService.server?.innerProccesEvent(event, null)
+                    CustomWebSocketService.server?.innerProcessEvent(event, null)
                 }
                 finishedRelays[relay.url] = true
             },
@@ -456,7 +456,7 @@ class HomeViewModel : ViewModel() {
                 lastEventCreatedAt = event.createdAt
 
                 runBlocking {
-                    CustomWebSocketService.server?.innerProccesEvent(event, null)
+                    CustomWebSocketService.server?.innerProcessEvent(event, null)
                 }
             },
             onEOSE = { relay ->
@@ -687,7 +687,7 @@ class HomeViewModel : ViewModel() {
                                     return@forEach
                                 }
                                 val event = Event.fromJson(line)
-                                CustomWebSocketService.server?.innerProccesEvent(event, null)
+                                CustomWebSocketService.server?.innerProcessEvent(event, null)
 
                                 linesRead++
                                 _state.value = _state.value.copy(

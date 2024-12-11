@@ -38,9 +38,9 @@ interface EventDao {
     @Transaction
     fun getById(id: String): EventWithTags?
 
-    @Query("SELECT EventEntity.* FROM EventEntity EventEntity INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent AND TagEntity.col0Name = 'expiration'")
+    @Query("DELETE FROM EventEntity WHERE EXISTS (SELECT 1 FROM TagEntity TagEntity WHERE id = TagEntity.pkEvent AND TagEntity.col0Name = 'expiration' AND CASE WHEN TagEntity.col1Value IS NULL THEN :now ELSE CAST(TagEntity.col1Value as INTEGER) END < :now)")
     @Transaction
-    fun getEventsWithExpirations(): List<EventWithTags>
+    fun deleteEventsWithExpirations(now: Long)
 
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC LIMIT 5")
     @Transaction
@@ -78,7 +78,7 @@ interface EventDao {
     @Transaction
     fun deleteOldestByKind(kind: Int, pubkey: String)
 
-    @Query("SELECT * FROM EventEntity WHERE kind >= 20000 AND kind < 30000")
+    @Query("SELECT * FROM EventEntity WHERE kind >= 20000 AND kind < 30000 LIMIT 1000")
     @Transaction
     fun getEphemeralEvents(): List<EventWithTags>
 
@@ -137,4 +137,16 @@ interface EventDao {
     @Query("SELECT * FROM EventEntity WHERE kind = :kind ORDER BY createdAt DESC, id ASC")
     @Transaction
     fun getByKind(kind: Int): Flow<List<EventWithTags>>
+
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until")
+    @Transaction
+    fun deleteAll(until: Long)
+
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until and pubkey NOT IN (:pubKeys)")
+    @Transaction
+    fun deleteAll(until: Long, pubKeys: String)
+
+    @Query("DELETE FROM EventEntity WHERE kind >= 20000 AND kind < 30000")
+    @Transaction
+    fun deleteEphemeralEvents()
 }
