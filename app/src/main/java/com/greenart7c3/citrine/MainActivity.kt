@@ -64,7 +64,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
@@ -84,11 +83,9 @@ import com.vitorpamplona.quartz.signers.NostrSignerExternal
 import com.vitorpamplona.quartz.signers.Permission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private var countByKind: Flow<List<EventDao.CountResult>>? = null
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
 
     @OptIn(ExperimentalMaterial3Api::class)

@@ -33,8 +33,9 @@ fun DatabaseInfo(
     val flow = countByKind.collectAsStateWithLifecycle(initialValue = listOf())
 
     Column(
-        Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
+        Modifier
+            .fillMaxSize()
+            .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Database", fontWeight = FontWeight.Bold)
