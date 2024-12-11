@@ -28,12 +28,14 @@ import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -572,10 +574,6 @@ class MainActivity : ComponentActivity() {
 
                                         Spacer(modifier = Modifier.padding(4.dp))
 
-                                        if (countByKind == null) {
-                                            countByKind = database.eventDao().countByKind()
-                                        }
-                                        val flow = countByKind?.collectAsStateWithLifecycle(initialValue = listOf())
                                         val connectionFlow = CustomWebSocketService.server?.connections?.collectAsStateWithLifecycle(initialValue = listOf())
 
                                         RelayInfo(
@@ -584,12 +582,29 @@ class MainActivity : ComponentActivity() {
                                             connections = connectionFlow?.value?.size ?: 0,
                                         )
                                         Spacer(modifier = Modifier.padding(4.dp))
-                                        DatabaseInfo(
-                                            modifier = Modifier
-                                                .fillMaxWidth(),
-                                            flow = flow,
-                                            navController = navController,
-                                        )
+
+                                        var showEvents by remember { mutableStateOf(false) }
+                                        ElevatedButton(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = {
+                                                showEvents = true
+                                            },
+                                        ) {
+                                            Text(stringResource(R.string.show_events))
+                                        }
+                                        if (showEvents) {
+                                            ModalBottomSheet(
+                                                onDismissRequest = { showEvents = false },
+                                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                                            ) {
+                                                DatabaseInfo(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth(),
+                                                    database = database,
+                                                    navController = navController,
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }

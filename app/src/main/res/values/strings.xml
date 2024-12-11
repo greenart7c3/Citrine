@@ -42,5 +42,6 @@
     <string name="delete_all_events">Delete all events</string>
     <string name="delete_all_events_warning">Are you sure you want to delete all events from the database?</string>
     <string name="feed">Feed</string>
+    <string name="show_events">Show events</string>
 
 </resources>
