@@ -38,9 +38,17 @@ interface EventDao {
     @Transaction
     fun getById(id: String): EventWithTags?
 
-    @Query("DELETE FROM EventEntity WHERE EXISTS (SELECT 1 FROM TagEntity TagEntity WHERE id = TagEntity.pkEvent AND TagEntity.col0Name = 'expiration' AND CASE WHEN TagEntity.col1Value IS NULL THEN :now ELSE CAST(TagEntity.col1Value as INTEGER) END < :now)")
     @Transaction
-    fun deleteEventsWithExpirations(now: Long)
+    fun deleteEventsWithExpirations(now: Long) {
+        val ids = countEventsWithExpirations(now)
+        if (ids.isNotEmpty()) {
+            delete(ids)
+        }
+    }
+
+    @Query("SELECT TagEntity.pkEvent FROM TagEntity TagEntity WHERE TagEntity.col0Name = 'expiration' AND CAST(TagEntity.col1Value as INTEGER) < :now")
+    @Transaction
+    fun countEventsWithExpirations(now: Long): List<String>
 
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC LIMIT 5")
     @Transaction
@@ -57,6 +65,10 @@ interface EventDao {
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC, id ASC")
     @Transaction
     fun getByKind(kind: Int, pubkey: String): List<String>
+
+    @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey AND createdAt >= :createdAt")
+    @Transaction
+    fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long): List<String>
 
     @Query("DELETE FROM EventEntity WHERE id in (:ids) and pubkey = :pubkey")
     @Transaction
@@ -78,9 +90,9 @@ interface EventDao {
     @Transaction
     fun deleteOldestByKind(kind: Int, pubkey: String)
 
-    @Query("SELECT * FROM EventEntity WHERE kind >= 20000 AND kind < 30000 LIMIT 1000")
+    @Query("SELECT id FROM EventEntity WHERE kind >= 20000 AND kind < 30000")
     @Transaction
-    fun getEphemeralEvents(): List<EventWithTags>
+    fun getEphemeralEvents(): List<String>
 
     @Query(
         """
@@ -108,6 +120,26 @@ interface EventDao {
     )
     @Transaction
     fun getOldestReplaceable(kind: Int, pubkey: String, dTagValue: String): List<String>
+
+    @Query(
+        """
+        SELECT EventEntity.id
+          FROM EventEntity EventEntity
+         WHERE EventEntity.pubkey = :pubkey
+           AND EventEntity.kind = :kind
+           AND EventEntity.createdAt >= :createdAt
+          and EventEntity.id in (SELECT EventEntity.id
+                       FROM EventEntity EventEntity
+                      INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
+                      WHERE EventEntity.pubkey = :pubkey
+                        AND EventEntity.kind = :kind
+                        AND TagEntity.col0Name = 'd'
+                        AND TagEntity.col1Value = :dTagValue
+                    )
+        """,
+    )
+    @Transaction
+    fun getNewestReplaceable(kind: Int, pubkey: String, dTagValue: String, createdAt: Long): List<String>
 
     @Query("DELETE FROM EventEntity")
     @Transaction
@@ -146,7 +178,11 @@ interface EventDao {
     @Transaction
     fun deleteAll(until: Long, pubKeys: String)
 
-    @Query("DELETE FROM EventEntity WHERE kind >= 20000 AND kind < 30000")
     @Transaction
-    fun deleteEphemeralEvents()
+    fun deleteEphemeralEvents() {
+        val ids = getEphemeralEvents()
+        if (ids.isNotEmpty()) {
+            delete(ids)
+        }
+    }
 }

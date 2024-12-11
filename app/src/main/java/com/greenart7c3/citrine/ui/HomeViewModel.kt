@@ -652,6 +652,7 @@ class HomeViewModel : ViewModel() {
             }
 
             try {
+                Citrine.getInstance().isImportingEvents = true
                 state.value = state.value.copy(
                     loading = true,
                     progress = context.getString(R.string.reading_file, file.name),
@@ -705,7 +706,7 @@ class HomeViewModel : ViewModel() {
                     progress = "",
                     loading = false,
                 )
-
+                Citrine.getInstance().isImportingEvents = false
                 onFinished()
                 Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
@@ -715,6 +716,7 @@ class HomeViewModel : ViewModel() {
                     ).show()
                 }
             } catch (e: Exception) {
+                Citrine.getInstance().isImportingEvents = false
                 if (e is CancellationException) throw e
                 Log.d(Citrine.TAG, e.message ?: "", e)
                 Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
@@ -742,5 +744,11 @@ class HomeViewModel : ViewModel() {
             )
         }
         super.onCleared()
+    }
+
+    fun setProgress(message: String) {
+        _state.value = _state.value.copy(
+            progress = message,
+        )
     }
 }

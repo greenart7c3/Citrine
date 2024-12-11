@@ -3,16 +3,27 @@ package com.greenart7c3.citrine
 import android.app.Application
 import android.content.ContentResolver
 import android.util.Log
+import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.server.OlderThan
+import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.quartz.events.Event
 import com.vitorpamplona.quartz.events.EventInterface
+import com.vitorpamplona.quartz.utils.TimeUtils
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class Citrine : Application() {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    var isImportingEvents = false
+    var job: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -22,6 +33,53 @@ class Citrine : Application() {
     }
 
     fun contentResolverFn(): ContentResolver = contentResolver
+
+    fun cancelJob() {
+        job?.cancelChildren(null)
+        job?.cancel(null)
+    }
+
+    suspend fun eventsToDelete(database: AppDatabase) {
+        if (isImportingEvents) return
+
+        job?.cancel()
+        job = applicationScope.launch(Dispatchers.IO) {
+            try {
+                if (Settings.deleteEphemeralEvents && isActive) {
+                    Log.d(Citrine.TAG, "Deleting ephemeral events")
+                    database.eventDao().deleteEphemeralEvents()
+                }
+
+                if (Settings.deleteExpiredEvents && isActive) {
+                    Log.d(Citrine.TAG, "Deleting expired events")
+                    database.eventDao().deleteEventsWithExpirations(TimeUtils.now())
+                }
+
+                if (Settings.deleteEventsOlderThan != OlderThan.NEVER && isActive) {
+                    val until = when (Settings.deleteEventsOlderThan) {
+                        OlderThan.DAY -> TimeUtils.oneDayAgo()
+                        OlderThan.WEEK -> TimeUtils.oneWeekAgo()
+                        OlderThan.MONTH -> TimeUtils.now() - TimeUtils.ONE_MONTH
+                        OlderThan.YEAR -> TimeUtils.now() - TimeUtils.ONE_YEAR
+                        else -> 0
+                    }
+                    if (until > 0) {
+                        Log.d(Citrine.TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
+                        if (Settings.neverDeleteFrom.isNotEmpty()) {
+                            val pubKeys = Settings.neverDeleteFrom.joinToString(separator = ",") { "'$it'" }
+                            database.eventDao().deleteAll(until, pubKeys)
+                        } else {
+                            database.eventDao().deleteAll(until)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.e(Citrine.TAG, "Error deleting events", e)
+            }
+        }
+        job?.join()
+    }
 
     companion object {
         const val TAG = "Citrine"

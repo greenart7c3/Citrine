@@ -21,65 +21,23 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
-import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
-import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val binder = LocalBinder()
     private var timer: Timer? = null
-    private var job: Job? = null
     inner class LocalBinder : Binder() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
-    }
-
-    private fun eventsToDelete(database: AppDatabase) {
-        job?.cancel()
-        job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
-            try {
-                if (Settings.deleteEphemeralEvents) {
-                    Log.d(Citrine.TAG, "Deleting ephemeral events")
-                    database.eventDao().deleteEphemeralEvents()
-                }
-
-                if (Settings.deleteExpiredEvents) {
-                    Log.d(Citrine.TAG, "Deleting expired events")
-                    database.eventDao().deleteEventsWithExpirations(TimeUtils.now())
-                }
-
-                if (Settings.deleteEventsOlderThan != OlderThan.NEVER) {
-                    val until = when (Settings.deleteEventsOlderThan) {
-                        OlderThan.DAY -> TimeUtils.oneDayAgo()
-                        OlderThan.WEEK -> TimeUtils.oneWeekAgo()
-                        OlderThan.MONTH -> TimeUtils.now() - TimeUtils.ONE_MONTH
-                        OlderThan.YEAR -> TimeUtils.now() - TimeUtils.ONE_YEAR
-                        else -> 0
-                    }
-                    if (until > 0) {
-                        Log.d(Citrine.TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
-                        if (Settings.neverDeleteFrom.isNotEmpty()) {
-                            val pubKeys = Settings.neverDeleteFrom.joinToString(separator = ",") { "'$it'" }
-                            database.eventDao().deleteAll(until, pubKeys)
-                        } else {
-                            database.eventDao().deleteAll(until)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                Log.e(Citrine.TAG, "Error deleting events", e)
-            }
-        }
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -95,9 +53,11 @@ class WebSocketServerService : Service() {
         timer?.schedule(
             object : TimerTask() {
                 override fun run() {
-                    eventsToDelete(database)
+                    runBlocking {
+                        Citrine.getInstance().eventsToDelete(database)
+                    }
 
-                    if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank()) {
+                    if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank() && !Citrine.getInstance().isImportingEvents) {
                         try {
                             val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
                             folder?.let {

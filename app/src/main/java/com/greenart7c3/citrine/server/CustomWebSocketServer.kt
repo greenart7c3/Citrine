@@ -108,7 +108,8 @@ class CustomWebSocketServer(
                 subscribe(subscriptionId, msgArray.drop(2), connection)
             }
             "EVENT" -> {
-                processEvent(msgArray.get(1), connection)
+                val event = Event.fromJson(msgArray.get(1))
+                processEvent(event, connection)
             }
             "CLOSE" -> {
                 EventSubscription.close(msgArray.get(1).asText())
@@ -126,6 +127,7 @@ class CustomWebSocketServer(
 
     suspend fun innerProcessEvent(event: Event, connection: Connection?) {
         if (!event.hasCorrectIDHash()) {
+            Log.d(Citrine.TAG, "event id hash verification failed ${event.toJson()}")
             connection?.session?.send(
                 CommandResult.invalid(
                     event,
@@ -136,6 +138,7 @@ class CustomWebSocketServer(
         }
 
         if (!event.hasVerifiedSignature()) {
+            Log.d(Citrine.TAG, "event signature verification failed ${event.toJson()}")
             connection?.session?.send(
                 CommandResult.invalid(
                     event,
@@ -146,17 +149,20 @@ class CustomWebSocketServer(
         }
 
         if (event.isExpired()) {
+            Log.d(Citrine.TAG, "event expired ${event.toJson()}")
             connection?.session?.send(CommandResult.invalid(event, "event expired").toJson())
             return
         }
 
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
+            Log.d(Citrine.TAG, "kind not allowed ${event.toJson()}")
             connection?.session?.send(CommandResult.invalid(event, "kind not allowed").toJson())
             return
         }
 
         if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
             if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
+                Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.toJson()}")
                 connection?.session?.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
                 return
             }
@@ -164,6 +170,7 @@ class CustomWebSocketServer(
 
         if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
             if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
+                Log.d(Citrine.TAG, "pubkey not allowed ${event.toJson()}")
                 connection?.session?.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
                 return
             }
@@ -171,11 +178,28 @@ class CustomWebSocketServer(
 
         when {
             event.shouldDelete() -> deleteEvent(event, connection)
-            event.isParameterizedReplaceable() -> handleParameterizedReplaceable(event, connection)
-            event.shouldOverwrite() -> override(event, connection)
+            event.isParameterizedReplaceable() -> {
+                val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt)
+                if (newest.isNotEmpty()) {
+                    Log.d(Citrine.TAG, "newest event already in database ${event.toJson()}")
+                    connection?.session?.send(CommandResult.invalid(event, "newest event already in database").toJson())
+                    return
+                }
+                handleParameterizedReplaceable(event, connection)
+            }
+            event.shouldOverwrite() -> {
+                val newest = appDatabase.eventDao().getByKindNewest(event.kind, event.pubKey, event.createdAt)
+                if (newest.isNotEmpty()) {
+                    Log.d(Citrine.TAG, "newest event already in database ${event.toJson()}")
+                    connection?.session?.send(CommandResult.invalid(event, "newest event already in database").toJson())
+                    return
+                }
+                override(event, connection)
+            }
             else -> {
                 val eventEntity = appDatabase.eventDao().getById(event.id)
                 if (eventEntity != null) {
+                    Log.d(Citrine.TAG, "Event already in database ${event.toJson()}")
                     connection?.session?.send(CommandResult.duplicated(event).toJson())
                     return
                 }
@@ -186,8 +210,7 @@ class CustomWebSocketServer(
         connection?.session?.send(CommandResult.ok(event).toJson())
     }
 
-    private suspend fun processEvent(eventNode: JsonNode, connection: Connection?) {
-        val event = objectMapper.treeToValue(eventNode, Event::class.java)
+    private suspend fun processEvent(event: Event, connection: Connection?) {
         innerProcessEvent(event, connection)
     }
 

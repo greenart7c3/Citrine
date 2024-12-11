@@ -6,12 +6,14 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
-    version = 1,
+    version = 2,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -29,12 +31,19 @@ abstract class AppDatabase : RoomDatabase() {
                     "citrine_database",
                 )
                     // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                    .addMigrations(MIGRATION_1_2)
                     .build()
 
                 database = instance
                 instance
             }
         }
+    }
+}
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS `most_common_search_is_kind` ON `EventEntity` (`kind` ASC)")
     }
 }
 

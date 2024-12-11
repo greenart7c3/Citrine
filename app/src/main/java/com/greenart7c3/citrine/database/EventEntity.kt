@@ -25,6 +25,11 @@ import com.vitorpamplona.quartz.events.EventFactory
             name = "most_common_search_is_pubkey_kind",
             orders = [Index.Order.ASC, Index.Order.ASC],
         ),
+        Index(
+            value = ["kind"],
+            name = "most_common_search_is_kind",
+            orders = [Index.Order.ASC],
+        ),
     ],
 )
 data class EventEntity(

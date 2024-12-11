@@ -307,9 +307,20 @@ class MainActivity : ComponentActivity() {
                                             TextButton(
                                                 onClick = {
                                                     deleteAllDialog = false
-                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
                                                         homeViewModel.setLoading(true)
-                                                        database.eventDao().deleteAll()
+                                                        Citrine.getInstance().job?.join()
+                                                        Citrine.getInstance().isImportingEvents = true
+                                                        homeViewModel.setProgress("Calculating database size")
+                                                        val ids = database.eventDao().getAllIds()
+                                                        val size = ids.size
+                                                        val batchSize = 500
+                                                        ids.chunked(batchSize).forEachIndexed { index, chunk ->
+                                                            homeViewModel.setProgress("Deleting ${index * batchSize}/$size")
+                                                            database.eventDao().delete(chunk)
+                                                        }
+
+                                                        Citrine.getInstance().isImportingEvents = false
                                                         homeViewModel.setLoading(false)
                                                     }
                                                 },
