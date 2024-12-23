@@ -185,7 +185,15 @@ class CustomWebSocketServer(
         }
 
         when {
-            event.shouldDelete() -> deleteEvent(event, connection)
+            event.shouldDelete() -> {
+                val eventEntity = appDatabase.eventDao().getById(event.id)
+                if (eventEntity != null) {
+                    Log.d(Citrine.TAG, "Event already in database ${event.toJson()}")
+                    connection?.session?.send(CommandResult.duplicated(event).toJson())
+                    return
+                }
+                deleteEvent(event, connection)
+            }
             event.isParameterizedReplaceable() -> {
                 val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt)
                 if (newest.isNotEmpty()) {

@@ -43,7 +43,8 @@ class Citrine : Application() {
     suspend fun eventsToDelete(database: AppDatabase) {
         if (isImportingEvents) return
 
-        job?.cancel()
+        job?.join()
+        cancelJob()
         job = applicationScope.launch(Dispatchers.IO) {
             try {
                 if (Settings.deleteEphemeralEvents && isActive) {
@@ -88,7 +89,6 @@ class Citrine : Application() {
                 Log.e(Citrine.TAG, "Error deleting events", e)
             }
         }
-        job?.join()
     }
 
     companion object {

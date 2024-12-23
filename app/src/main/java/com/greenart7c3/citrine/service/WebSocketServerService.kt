@@ -31,8 +31,8 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -56,11 +56,15 @@ class WebSocketServerService : Service() {
             object : TimerTask() {
                 override fun run() {
                     if (Citrine.getInstance().job == null || Citrine.getInstance().job?.isCompleted == true) {
-                        RelayPool.disconnect()
-                        RelayPool.unloadRelays()
+                        NotificationManagerCompat.from(Citrine.getInstance()).cancel(2)
+                        Citrine.getInstance().applicationScope.launch {
+                            RelayPool.disconnect()
+                            delay(3000)
+                            RelayPool.unloadRelays()
+                        }
                     }
 
-                    runBlocking {
+                    Citrine.getInstance().applicationScope.launch {
                         Citrine.getInstance().eventsToDelete(database)
                     }
 
