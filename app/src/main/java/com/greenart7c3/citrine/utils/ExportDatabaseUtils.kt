@@ -30,7 +30,9 @@ object ExportDatabaseUtils {
                 database.eventDao().getById(it)?.let { event ->
                     val json = event.toEvent().toJson() + "\n"
                     writer?.write(json)
-                    onProgress("Exported ${index + 1}/${events.size}")
+                    if (index % 100 == 0) {
+                        onProgress("Exported ${index + 1}/${events.size}")
+                    }
                 }
             }
         }

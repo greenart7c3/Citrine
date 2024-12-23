@@ -6,6 +6,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.core.app.NotificationManagerCompat
+import com.greenart7c3.citrine.Citrine
+import com.vitorpamplona.ammolite.relays.RelayPool
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class ClipboardReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
@@ -19,6 +24,14 @@ class ClipboardReceiver : BroadcastReceiver() {
 
             // Show a toast message
             Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+        } else if (intent != null && intent.hasExtra("job")) {
+            Citrine.getInstance().cancelJob()
+            NotificationManagerCompat.from(context).cancel(2)
+            Citrine.getInstance().applicationScope.launch {
+                RelayPool.disconnect()
+                delay(3000)
+                RelayPool.unloadRelays()
+            }
         }
     }
 }

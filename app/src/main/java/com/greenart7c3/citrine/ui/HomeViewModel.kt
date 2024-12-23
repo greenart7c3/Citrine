@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.ui
 
 import android.Manifest
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -23,6 +24,7 @@ import com.greenart7c3.citrine.RelayListener
 import com.greenart7c3.citrine.RelayListener2
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.service.ClipboardReceiver
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
@@ -561,7 +563,9 @@ class HomeViewModel : ViewModel() {
                             },
                             onEvent = {
                                 count++
-                                setProgress("loading events from ${it.url} ($count)")
+                                if (count % 100 == 0) {
+                                    setProgress("loading events from ${it.url} ($count)")
+                                }
                             },
                             onDone = {
                                 finishedLoading[it.url] = true
@@ -571,7 +575,9 @@ class HomeViewModel : ViewModel() {
                 },
                 onEvent = {
                     count++
-                    setProgress("loading events from ${it.url} ($count)")
+                    if (count % 100 == 0) {
+                        setProgress("loading events from ${it.url} ($count)")
+                    }
                 },
                 onDone = {
                     finishedLoading[it.url] = true
@@ -667,7 +673,9 @@ class HomeViewModel : ViewModel() {
                                 CustomWebSocketService.server?.innerProcessEvent(event, null)
 
                                 linesRead++
-                                setProgress(context.getString(R.string.imported2, linesRead.toString()))
+                                if (linesRead % 100 == 0) {
+                                    setProgress(context.getString(R.string.imported2, linesRead.toString()))
+                                }
                             }
                         }
                         RelayPool.disconnect()
@@ -732,11 +740,22 @@ class HomeViewModel : ViewModel() {
 
         notificationManager.createNotificationChannel(channel)
 
+        val copyIntent = Intent(Citrine.getInstance(), ClipboardReceiver::class.java)
+        copyIntent.putExtra("job", "cancel")
+
+        val copyPendingIntent = PendingIntent.getBroadcast(
+            Citrine.getInstance(),
+            0,
+            copyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+
         val notification = NotificationCompat.Builder(Citrine.getInstance(), "citrine")
             .setContentTitle("Citrine")
             .setContentText(message)
             .setSmallIcon(R.drawable.ic_notification)
             .setOnlyAlertOnce(true)
+            .addAction(R.drawable.ic_launcher_background, Citrine.getInstance().getString(R.string.cancel), copyPendingIntent)
             .build()
 
         if (ActivityCompat.checkSelfPermission(Citrine.getInstance(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
