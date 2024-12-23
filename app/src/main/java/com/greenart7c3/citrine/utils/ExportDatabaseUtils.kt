@@ -27,10 +27,11 @@ object ExportDatabaseUtils {
         op?.writer().use { writer ->
             val events = database.eventDao().getAllIds()
             events.forEachIndexed { index, it ->
-                val event = database.eventDao().getById(it)!!
-                val json = event.toEvent().toJson() + "\n"
-                writer?.write(json)
-                onProgress("Exported ${index + 1}/${events.size}")
+                database.eventDao().getById(it)?.let { event ->
+                    val json = event.toEvent().toJson() + "\n"
+                    writer?.write(json)
+                    onProgress("Exported ${index + 1}/${events.size}")
+                }
             }
         }
     }

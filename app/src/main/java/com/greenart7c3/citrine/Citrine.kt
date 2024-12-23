@@ -36,8 +36,8 @@ class Citrine : Application() {
     fun contentResolverFn(): ContentResolver = contentResolver
 
     fun cancelJob() {
-        job?.cancelChildren(null)
-        job?.cancel(null)
+        job?.cancelChildren()
+        job?.cancel()
     }
 
     suspend fun eventsToDelete(database: AppDatabase) {

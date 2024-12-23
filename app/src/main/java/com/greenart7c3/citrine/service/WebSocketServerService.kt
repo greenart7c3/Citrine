@@ -2,17 +2,18 @@ package com.greenart7c3.citrine.service
 
 import android.annotation.SuppressLint
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.app.TaskStackBuilder
-import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationChannelGroupCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.greenart7c3.citrine.Citrine
@@ -23,6 +24,7 @@ import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
+import com.vitorpamplona.ammolite.relays.RelayPool
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.coroutines.cancellation.CancellationException
@@ -53,6 +55,11 @@ class WebSocketServerService : Service() {
         timer?.schedule(
             object : TimerTask() {
                 override fun run() {
+                    if (Citrine.getInstance().job == null || Citrine.getInstance().job?.isCompleted == true) {
+                        RelayPool.disconnect()
+                        RelayPool.unloadRelays()
+                    }
+
                     runBlocking {
                         Citrine.getInstance().eventsToDelete(database)
                     }
@@ -134,10 +141,19 @@ class WebSocketServerService : Service() {
 
     private fun createNotification(): Notification {
         Log.d(Citrine.TAG, "Creating notification")
+        val notificationManager = NotificationManagerCompat.from(this)
         val channelId = "WebSocketServerServiceChannel"
-        val channel = NotificationChannel(channelId, "WebSocket Server", NotificationManager.IMPORTANCE_DEFAULT)
-        channel.setSound(null, null)
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val groupId = "WebSocketServerServiceGroup"
+        val group = NotificationChannelGroupCompat.Builder(groupId)
+            .setName("WebSocket Server")
+            .build()
+        notificationManager.createNotificationChannelGroup(group)
+
+        val channel = NotificationChannelCompat.Builder(channelId, NotificationManager.IMPORTANCE_DEFAULT)
+            .setName("WebSocket Server")
+            .setGroup(groupId)
+            .setSound(null, null)
+            .build()
         notificationManager.createNotificationChannel(channel)
 
         val copyIntent = Intent(this, ClipboardReceiver::class.java)
@@ -160,11 +176,12 @@ class WebSocketServerService : Service() {
         }
 
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")
-            .setContentTitle("Relay running at ws://${Settings.host}:${Settings.port}")
+            .setContentTitle(getString(R.string.relay_running_at_ws, Settings.host, Settings.port.toString()))
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_launcher_background, "Copy Address", copyPendingIntent)
+            .addAction(R.drawable.ic_launcher_background, getString(R.string.copy_address), copyPendingIntent)
             .setContentIntent(resultPendingIntent)
+            .setGroup(groupId)
 
         return notificationBuilder.build()
     }

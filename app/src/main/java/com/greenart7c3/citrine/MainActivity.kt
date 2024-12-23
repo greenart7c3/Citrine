@@ -307,21 +307,14 @@ class MainActivity : ComponentActivity() {
                                             TextButton(
                                                 onClick = {
                                                     deleteAllDialog = false
+                                                    Citrine.getInstance().cancelJob()
                                                     Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
-                                                        homeViewModel.setLoading(true)
                                                         Citrine.getInstance().job?.join()
                                                         Citrine.getInstance().isImportingEvents = true
-                                                        homeViewModel.setProgress("Calculating database size")
-                                                        val ids = database.eventDao().getAllIds()
-                                                        val size = ids.size
-                                                        val batchSize = 500
-                                                        ids.chunked(batchSize).forEachIndexed { index, chunk ->
-                                                            homeViewModel.setProgress("Deleting ${index * batchSize}/$size")
-                                                            database.eventDao().delete(chunk)
-                                                        }
-
+                                                        homeViewModel.setProgress("Deleting all events")
+                                                        database.clearAllTables()
+                                                        homeViewModel.setProgress("")
                                                         Citrine.getInstance().isImportingEvents = false
-                                                        homeViewModel.setLoading(false)
                                                     }
                                                 },
                                             ) {
@@ -432,10 +425,6 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     if (state.value.loading) {
                                         CircularProgressIndicator()
-                                        if (state.value.progress.isNotBlank()) {
-                                            Spacer(modifier = Modifier.padding(4.dp))
-                                            Text(state.value.progress)
-                                        }
                                     } else {
                                         val isStarted = homeViewModel.state.value.service?.isStarted() ?: false
                                         val clipboardManager = LocalClipboardManager.current
