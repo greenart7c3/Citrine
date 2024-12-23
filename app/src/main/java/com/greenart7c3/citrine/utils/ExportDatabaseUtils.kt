@@ -8,14 +8,16 @@ import com.anggrayudi.storage.file.openOutputStream
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import java.util.Date
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object ExportDatabaseUtils {
-    fun exportDatabase(
+    suspend fun exportDatabase(
         database: AppDatabase,
         context: Context,
         folder: DocumentFile,
         onProgress: (String) -> Unit,
-    ) {
+    ) = withContext(Dispatchers.IO) {
         val file = folder.makeFile(
             context,
             "citrine-${Date().time}.jsonl",

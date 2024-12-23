@@ -83,68 +83,70 @@ class HomeViewModel : ViewModel() {
         if (contactList == null) {
             fetchContactList(
                 onDone = {
-                    state.value = state.value.copy(
-                        progress = "loading relays",
-                    )
-                    contactList = database.eventDao().getContactList(signer.pubKey)
-                    viewModelScope.launch(Dispatchers.IO) {
-                        var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
-                        contactList?.let {
-                            generalRelays = (it.toEvent() as ContactListEvent).relays()
-                        }
-
-                        generalRelays?.forEach {
-                            if (RelayPool.getRelay(it.key) == null) {
-                                RelayPool.addRelay(
-                                    Relay(
-                                        url = it.key,
-                                        read = true,
-                                        write = false,
-                                        forceProxy = false,
-                                        activeTypes = COMMON_FEED_TYPES,
-                                    ),
-                                )
+                    Citrine.getInstance().applicationScope.launch {
+                        state.value = state.value.copy(
+                            progress = "loading relays",
+                        )
+                        contactList = database.eventDao().getContactList(signer.pubKey)
+                        viewModelScope.launch(Dispatchers.IO) {
+                            var generalRelays: Map<String, ContactListEvent.ReadWrite>? = null
+                            contactList?.let {
+                                generalRelays = (it.toEvent() as ContactListEvent).relays()
                             }
-                        }
 
-                        fetchOutbox(
-                            onDone = {
-                                launch(Dispatchers.IO) {
-                                    val advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
-                                    advertisedRelayList?.let {
-                                        val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                        relays.forEach { relay ->
-                                            if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                                RelayPool.addRelay(
-                                                    Relay(
-                                                        url = relay.relayUrl,
-                                                        read = true,
-                                                        write = false,
-                                                        forceProxy = false,
-                                                        activeTypes = COMMON_FEED_TYPES,
-                                                    ),
-                                                )
-                                            }
-                                        }
-                                    }
-                                    fetchEvents(
-                                        onAuth = { relay, challenge ->
-                                            RelayAuthEvent.create(
-                                                relay.url,
-                                                challenge,
-                                                signer,
-                                                onReady = {
-                                                    relay.send(it)
-                                                },
-                                            )
-                                        },
-                                    )
-                                    state.value = state.value.copy(
-                                        pubKey = "",
+                            generalRelays?.forEach {
+                                if (RelayPool.getRelay(it.key) == null) {
+                                    RelayPool.addRelay(
+                                        Relay(
+                                            url = it.key,
+                                            read = true,
+                                            write = false,
+                                            forceProxy = false,
+                                            activeTypes = COMMON_FEED_TYPES,
+                                        ),
                                     )
                                 }
-                            },
-                        )
+                            }
+
+                            fetchOutbox(
+                                onDone = {
+                                    launch(Dispatchers.IO) {
+                                        val advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
+                                        advertisedRelayList?.let {
+                                            val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                            relays.forEach { relay ->
+                                                if (RelayPool.getRelay(relay.relayUrl) == null) {
+                                                    RelayPool.addRelay(
+                                                        Relay(
+                                                            url = relay.relayUrl,
+                                                            read = true,
+                                                            write = false,
+                                                            forceProxy = false,
+                                                            activeTypes = COMMON_FEED_TYPES,
+                                                        ),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        fetchEvents(
+                                            onAuth = { relay, challenge ->
+                                                RelayAuthEvent.create(
+                                                    relay.url,
+                                                    challenge,
+                                                    signer,
+                                                    onReady = {
+                                                        relay.send(it)
+                                                    },
+                                                )
+                                            },
+                                        )
+                                        state.value = state.value.copy(
+                                            pubKey = "",
+                                        )
+                                    }
+                                },
+                            )
+                        }
                     }
                 },
             )
@@ -448,6 +450,7 @@ class HomeViewModel : ViewModel() {
         listeners[relayParam.url]?.let {
             relayParam.unregister(it)
         }
+        val limit = 100
 
         val listener = RelayListener2(
             onReceiveEvent = { relay, _, event ->
@@ -466,14 +469,11 @@ class HomeViewModel : ViewModel() {
                     relayParam.unregister(it)
                 }
                 Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
-                    if ((eventCount[relay.url] ?: 0) > 0) {
-                        if (lastEventCreatedAt == until) {
-                            onDone()
-                        } else {
-                            fetchEventsFrom(listeners, relay, lastEventCreatedAt, onEvent, onAuth, onDone)
-                        }
-                    } else {
+                    val localEventCount = eventCount[relay.url] ?: 0
+                    if (localEventCount < limit) {
                         onDone()
+                    } else {
+                        fetchEventsFrom(listeners, relay, lastEventCreatedAt, onEvent, onAuth, onDone)
                     }
                 }
             },
@@ -499,6 +499,7 @@ class HomeViewModel : ViewModel() {
                 filter = SincePerRelayFilter(
                     authors = listOf(signer.pubKey),
                     until = until,
+                    limit = limit,
                 ),
             ),
         )
@@ -657,24 +658,10 @@ class HomeViewModel : ViewModel() {
                     loading = true,
                     progress = context.getString(R.string.reading_file, file.name),
                 )
-                var totalLines = 0
-
-                val input = file.openInputStream(context) ?: return@launch
-                input.use { ip ->
-                    ip.bufferedReader().use {
-                        var line: String?
-                        while (it.readLine().also { readLine -> line = readLine } != null) {
-                            if (line?.isNotBlank() == true) {
-                                totalLines++
-                            }
-                        }
-                    }
-                }
+                var linesRead = 0
                 val input2 = file.openInputStream(context) ?: return@launch
                 input2.use { ip ->
                     ip.bufferedReader().use {
-                        var linesRead = 0
-
                         if (shouldDelete) {
                             _state.value = _state.value.copy(
                                 progress = context.getString(R.string.deleting_all_events),
@@ -692,7 +679,7 @@ class HomeViewModel : ViewModel() {
 
                                 linesRead++
                                 _state.value = _state.value.copy(
-                                    progress = context.getString(R.string.imported, linesRead.toString(), totalLines.toString()),
+                                    progress = context.getString(R.string.imported2, linesRead.toString()),
                                 )
                             }
                         }
@@ -711,7 +698,7 @@ class HomeViewModel : ViewModel() {
                 Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.imported_events_successfully, totalLines),
+                        context.getString(R.string.imported_events_successfully, linesRead),
                         Toast.LENGTH_SHORT,
                     ).show()
                 }

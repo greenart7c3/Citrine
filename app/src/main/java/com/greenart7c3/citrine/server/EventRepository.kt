@@ -9,7 +9,7 @@ import com.greenart7c3.citrine.database.toEvent
 import io.ktor.websocket.send
 
 object EventRepository {
-    fun query(
+    suspend fun query(
         database: AppDatabase,
         filter: EventFilter,
     ): List<EventWithTags> {

@@ -75,12 +75,14 @@ class WebSocketServerService : Service() {
                                     }
 
                                     Log.d(Citrine.TAG, "Backing up database")
-                                    ExportDatabaseUtils.exportDatabase(
-                                        database,
-                                        this@WebSocketServerService,
-                                        it,
-                                        onProgress = {},
-                                    )
+                                    scope.launch(Dispatchers.IO) {
+                                        ExportDatabaseUtils.exportDatabase(
+                                            database,
+                                            this@WebSocketServerService,
+                                            it,
+                                            onProgress = {},
+                                        )
+                                    }
                                 }
                             }
                         } catch (e: Exception) {

@@ -12,6 +12,7 @@ import com.vitorpamplona.quartz.events.Event
 import com.vitorpamplona.quartz.events.EventInterface
 import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.measureTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,13 +47,19 @@ class Citrine : Application() {
         job = applicationScope.launch(Dispatchers.IO) {
             try {
                 if (Settings.deleteEphemeralEvents && isActive) {
-                    Log.d(Citrine.TAG, "Deleting ephemeral events")
-                    database.eventDao().deleteEphemeralEvents()
+                    val duration = measureTime {
+                        Log.d(Citrine.TAG, "Deleting ephemeral events")
+                        database.eventDao().deleteEphemeralEvents()
+                    }
+                    Log.d(Citrine.TAG, "Deleted ephemeral events in $duration")
                 }
 
                 if (Settings.deleteExpiredEvents && isActive) {
-                    Log.d(Citrine.TAG, "Deleting expired events")
-                    database.eventDao().deleteEventsWithExpirations(TimeUtils.now())
+                    val duration = measureTime {
+                        Log.d(Citrine.TAG, "Deleting expired events")
+                        database.eventDao().deleteEventsWithExpirations(TimeUtils.now())
+                    }
+                    Log.d(Citrine.TAG, "Deleted expired events in $duration")
                 }
 
                 if (Settings.deleteEventsOlderThan != OlderThan.NEVER && isActive) {
@@ -64,13 +71,16 @@ class Citrine : Application() {
                         else -> 0
                     }
                     if (until > 0) {
-                        Log.d(Citrine.TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
-                        if (Settings.neverDeleteFrom.isNotEmpty()) {
-                            val pubKeys = Settings.neverDeleteFrom.joinToString(separator = ",") { "'$it'" }
-                            database.eventDao().deleteAll(until, pubKeys)
-                        } else {
-                            database.eventDao().deleteAll(until)
+                        val duration = measureTime {
+                            Log.d(Citrine.TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
+                            if (Settings.neverDeleteFrom.isNotEmpty()) {
+                                val pubKeys = Settings.neverDeleteFrom.joinToString(separator = ",") { "'$it'" }
+                                database.eventDao().deleteAll(until, pubKeys)
+                            } else {
+                                database.eventDao().deleteAll(until)
+                            }
                         }
+                        Log.d(Citrine.TAG, "Deleted old events in $duration")
                     }
                 }
             } catch (e: Exception) {

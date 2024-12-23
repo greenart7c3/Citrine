@@ -20,7 +20,7 @@ interface EventDao {
 
     @RawQuery
     @Transaction
-    fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
+    suspend fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
     @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
     @Transaction
@@ -28,18 +28,18 @@ interface EventDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
-    fun insertEvent(event: EventEntity): Long?
+    suspend fun insertEvent(event: EventEntity): Long?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
-    fun insertTags(tags: List<TagEntity>): List<Long>?
+    suspend fun insertTags(tags: List<TagEntity>): List<Long>?
 
     @Query("SELECT * FROM EventEntity WHERE id = :id")
     @Transaction
-    fun getById(id: String): EventWithTags?
+    suspend fun getById(id: String): EventWithTags?
 
     @Transaction
-    fun deleteEventsWithExpirations(now: Long) {
+    suspend fun deleteEventsWithExpirations(now: Long) {
         val ids = countEventsWithExpirations(now)
         if (ids.isNotEmpty()) {
             delete(ids)
@@ -48,51 +48,51 @@ interface EventDao {
 
     @Query("SELECT TagEntity.pkEvent FROM TagEntity TagEntity WHERE TagEntity.col0Name = 'expiration' AND CAST(TagEntity.col1Value as INTEGER) < :now")
     @Transaction
-    fun countEventsWithExpirations(now: Long): List<String>
+    suspend fun countEventsWithExpirations(now: Long): List<String>
 
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC LIMIT 5")
     @Transaction
-    fun getContactLists(pubkey: String): List<EventWithTags>
+    suspend fun getContactLists(pubkey: String): List<EventWithTags>
 
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC LIMIT 1")
     @Transaction
-    fun getContactList(pubkey: String): EventWithTags?
+    suspend fun getContactList(pubkey: String): EventWithTags?
 
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10002 ORDER BY createdAt DESC, id ASC LIMIT 1")
     @Transaction
-    fun getAdvertisedRelayList(pubkey: String): EventWithTags?
+    suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?
 
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC, id ASC")
     @Transaction
-    fun getByKind(kind: Int, pubkey: String): List<String>
+    suspend fun getByKind(kind: Int, pubkey: String): List<String>
 
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey AND createdAt >= :createdAt")
     @Transaction
-    fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long): List<String>
+    suspend fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long): List<String>
 
     @Query("DELETE FROM EventEntity WHERE id in (:ids) and pubkey = :pubkey")
     @Transaction
-    fun delete(ids: List<String>, pubkey: String)
+    suspend fun delete(ids: List<String>, pubkey: String)
 
     @Query("DELETE FROM EventEntity WHERE id in (:ids)")
     @Transaction
-    fun delete(ids: List<String>)
+    suspend fun delete(ids: List<String>)
 
     @Query("DELETE FROM TagEntity WHERE pkEvent = :id")
     @Transaction
-    fun deletetags(id: String)
+    suspend fun deletetags(id: String)
 
     @Query("SELECT id from EventEntity")
     @Transaction
-    fun getAllIds(): List<String>
+    suspend fun getAllIds(): List<String>
 
     @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind AND createdAt < (SELECT MAX(createdAt) FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind)")
     @Transaction
-    fun deleteOldestByKind(kind: Int, pubkey: String)
+    suspend fun deleteOldestByKind(kind: Int, pubkey: String)
 
     @Query("SELECT id FROM EventEntity WHERE kind >= 20000 AND kind < 30000")
     @Transaction
-    fun getEphemeralEvents(): List<String>
+    suspend fun getEphemeralEvents(): List<String>
 
     @Query(
         """
@@ -119,7 +119,7 @@ interface EventDao {
         """,
     )
     @Transaction
-    fun getOldestReplaceable(kind: Int, pubkey: String, dTagValue: String): List<String>
+    suspend fun getOldestReplaceable(kind: Int, pubkey: String, dTagValue: String): List<String>
 
     @Query(
         """
@@ -139,15 +139,15 @@ interface EventDao {
         """,
     )
     @Transaction
-    fun getNewestReplaceable(kind: Int, pubkey: String, dTagValue: String, createdAt: Long): List<String>
+    suspend fun getNewestReplaceable(kind: Int, pubkey: String, dTagValue: String, createdAt: Long): List<String>
 
     @Query("DELETE FROM EventEntity")
     @Transaction
-    fun deleteAll()
+    suspend fun deleteAll()
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
-    fun insertEventWithTags(
+    suspend fun insertEventWithTags(
         dbEvent: EventWithTags,
         connection: Connection?,
         sendEventToSubscriptions: Boolean = true,
@@ -172,14 +172,14 @@ interface EventDao {
 
     @Query("DELETE FROM EventEntity WHERE createdAt <= :until")
     @Transaction
-    fun deleteAll(until: Long)
+    suspend fun deleteAll(until: Long)
 
     @Query("DELETE FROM EventEntity WHERE createdAt <= :until and pubkey NOT IN (:pubKeys)")
     @Transaction
-    fun deleteAll(until: Long, pubKeys: String)
+    suspend fun deleteAll(until: Long, pubKeys: String)
 
     @Transaction
-    fun deleteEphemeralEvents() {
+    suspend fun deleteEphemeralEvents() {
         val ids = getEphemeralEvents()
         if (ids.isNotEmpty()) {
             delete(ids)

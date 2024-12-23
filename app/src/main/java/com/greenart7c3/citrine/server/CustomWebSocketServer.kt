@@ -214,24 +214,25 @@ class CustomWebSocketServer(
         innerProcessEvent(event, connection)
     }
 
-    private fun handleParameterizedReplaceable(event: Event, connection: Connection?) {
+    private suspend fun handleParameterizedReplaceable(event: Event, connection: Connection?) {
         save(event, connection)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
         appDatabase.eventDao().delete(ids, event.pubKey)
     }
 
-    private fun override(event: Event, connection: Connection?) {
+    private suspend fun override(event: Event, connection: Connection?) {
         save(event, connection)
         val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
         appDatabase.eventDao().delete(ids, event.pubKey)
     }
 
-    private fun save(event: Event, connection: Connection?) {
+    private suspend fun save(event: Event, connection: Connection?) {
+        Log.d(Citrine.TAG, "Saving event ${event.toJson()}")
         appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
     }
 
-    private fun deleteEvent(event: Event, connection: Connection?) {
+    private suspend fun deleteEvent(event: Event, connection: Connection?) {
         save(event, connection)
         appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
         val taggedAddresses = event.taggedAddresses()
