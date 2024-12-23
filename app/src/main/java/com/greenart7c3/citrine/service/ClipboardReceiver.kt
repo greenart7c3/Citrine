@@ -1,11 +1,13 @@
 package com.greenart7c3.citrine.service
 
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import com.greenart7c3.citrine.Citrine
 
 class ClipboardReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
@@ -19,6 +21,13 @@ class ClipboardReceiver : BroadcastReceiver() {
 
             // Show a toast message
             Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+        } else if (intent != null && intent.hasExtra("cancel")) {
+            Citrine.getInstance().job?.cancel()
+            Citrine.getInstance().localJob?.cancel()
+            Citrine.getInstance().isImportingEvents = false
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(2)
+            Citrine.getInstance().job = null
         }
     }
 }

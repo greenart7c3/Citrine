@@ -2,12 +2,22 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.utils.KINDS_EVENT_EPHEMERAL
 import io.ktor.websocket.send
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
+import rust.nostr.sdk.Filter
+import rust.nostr.sdk.Kind
+import rust.nostr.sdk.RelayMessage
 
 @OptIn(DelicateCoroutinesApi::class)
 class SubscriptionManager(val subscription: Subscription) {
+    private suspend fun isEphemeral(): Boolean {
+        return subscription.filters.any {
+            return it.asRecord().kinds?.any { kind -> kind == KINDS_EVENT_EPHEMERAL.map { ep -> Kind(ep.toUShort()) } } == true
+        }
+    }
+
     suspend fun execute() {
         if (subscription.connection?.session?.outgoing?.isClosedForSend == true) {
             EventSubscription.close(subscription.id)
@@ -15,19 +25,38 @@ class SubscriptionManager(val subscription: Subscription) {
             return
         }
 
-        for (filter in subscription.filters) {
-            try {
-                EventRepository.subscribe(
-                    subscription,
-                    filter,
-                )
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
+        val isEphemeral = isEphemeral()
+        Log.d(Citrine.TAG, "subscription ${subscription.id} is ephemeral: $isEphemeral")
 
-                Log.d(Citrine.TAG, "Error reading data from database $filter", e)
-                subscription.connection?.session?.send(
-                    NoticeResult.invalid("Error reading data from database").toJson(),
-                )
+        val database = if (isEphemeral) {
+            AppDatabase.getNostrEphemeralDatabase()
+        } else {
+            AppDatabase.getNostrDatabase()
+        }
+
+        if (subscription.count) {
+            val count = database.count(subscription.filters)
+            subscription.connection?.session?.send(
+                RelayMessage.count(subscription.id, count.toDouble()).asJson(),
+            )
+            return
+        } else {
+            val events = database.query(subscription.filters)
+            events.toVec().forEach { event ->
+                if (!event.isExpired()) {
+                    val filtersString = subscription.filters.joinToString(",", prefix = "[", postfix = "]") { it.asJson() }
+
+                    Log.d(Citrine.TAG, "sending event ${event.id().toHex()} subscription ${subscription.id} filter $filtersString")
+
+                    subscription.connection?.session?.send(
+                        RelayMessage.event(subscription.id, event).asJson(),
+                    )
+                } else if (Settings.deleteExpiredEvents) {
+                    Log.d(Citrine.TAG, "event ${event.id().toHex()} is expired deleting")
+                    AppDatabase.getNostrDatabase().delete(
+                        Filter().id(event.id()),
+                    )
+                }
             }
         }
     }

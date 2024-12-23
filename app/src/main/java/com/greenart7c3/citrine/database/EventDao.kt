@@ -8,7 +8,6 @@ import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.greenart7c3.citrine.server.Connection
-import com.greenart7c3.citrine.server.EventSubscription
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -161,7 +160,7 @@ interface EventDao {
             insertTags(dbEvent.tags)
 
             if (sendEventToSubscriptions && connection != null) {
-                EventSubscription.executeAll(dbEvent, connection)
+                // EventSubscription.executeAll(dbEvent, connection)
             }
         }
     }

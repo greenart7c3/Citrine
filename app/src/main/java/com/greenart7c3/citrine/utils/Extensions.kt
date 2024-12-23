@@ -3,7 +3,7 @@ package com.greenart7c3.citrine.utils
 import com.vitorpamplona.quartz.events.Event
 
 private const val KIND_EVENT_DELETION = 5
-private val KINDS_EVENT_EPHEMERAL = 20000 until 30000
+val KINDS_EVENT_EPHEMERAL = 20000 until 30000
 private val KINDS_EVENT_REPLACEABLE = setOf(
     0..0,
     3..3,

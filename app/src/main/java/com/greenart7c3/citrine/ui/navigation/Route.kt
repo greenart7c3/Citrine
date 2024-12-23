@@ -33,7 +33,7 @@ sealed class Route(
     )
 
     data object Feed : Route(
-        route = "Feed/{kind}",
+        route = "Feed",
         icon = Icons.Outlined.Settings,
         selectedIcon = Icons.Default.Settings,
     )

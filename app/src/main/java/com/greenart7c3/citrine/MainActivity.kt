@@ -21,24 +21,26 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,22 +58,18 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.HomeViewModel
 import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
-import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
@@ -84,6 +82,9 @@ import com.vitorpamplona.quartz.signers.Permission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import rust.nostr.sdk.Event
+import rust.nostr.sdk.Filter
+import rust.nostr.sdk.Timestamp
 
 class MainActivity : ComponentActivity() {
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
@@ -131,6 +132,19 @@ class MainActivity : ComponentActivity() {
                     topBar = {
                         if (destinationRoute.startsWith("Feed")) {
                             CenterAlignedTopAppBar(
+                                navigationIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            navController.navigateUp()
+                                        },
+                                        content = {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                contentDescription = stringResource(R.string.back),
+                                            )
+                                        },
+                                    )
+                                },
                                 title = {
                                     Text(
                                         text = stringResource(R.string.feed),
@@ -191,7 +205,6 @@ class MainActivity : ComponentActivity() {
                                 }
                                 var saveToPreferences = false
 
-                                val database = AppDatabase.getDatabase(context)
                                 val launcher = rememberLauncherForActivityResult(
                                     contract = ActivityResultContracts.StartActivityForResult(),
                                     onResult = { result ->
@@ -204,7 +217,7 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             result.data?.let {
                                                 coroutineScope.launch(Dispatchers.IO) {
-                                                    homeViewModel.signer.launcher.newResult(it)
+                                                    Citrine.getInstance().signer.launcher.newResult(it)
                                                 }
                                             }
                                         }
@@ -214,7 +227,7 @@ class MainActivity : ComponentActivity() {
                                 val lifeCycleOwner = LocalLifecycleOwner.current
                                 DisposableEffect(lifeCycleOwner) {
                                     val observer = LifecycleEventObserver { _, _ ->
-                                        homeViewModel.signer.launcher.registerLauncher(
+                                        Citrine.getInstance().signer.launcher.registerLauncher(
                                             contentResolver = Citrine.getInstance()::contentResolverFn,
                                             launcher = { intent ->
                                                 launcher.launch(intent)
@@ -251,13 +264,12 @@ class MainActivity : ComponentActivity() {
                                                         key
                                                     }
 
-                                                    homeViewModel.signer = NostrSignerExternal(
+                                                    Citrine.getInstance().signer = NostrSignerExternal(
                                                         returnedKey,
                                                         ExternalSignerLauncher(returnedKey, packageName),
                                                     )
 
-                                                    homeViewModel.setPubKey(returnedKey)
-                                                    homeViewModel.loadEventsFromPubKey(database)
+                                                    homeViewModel.loadEventsFromPubKey(returnedKey)
                                                 } catch (e: Exception) {
                                                     Log.d(Citrine.TAG, e.message ?: "", e)
                                                 }
@@ -281,7 +293,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                     homeViewModel.exportDatabase(
                                         folder = folder,
-                                        database = database,
                                         context = context,
                                     )
                                 }
@@ -311,15 +322,8 @@ class MainActivity : ComponentActivity() {
                                                         homeViewModel.setLoading(true)
                                                         Citrine.getInstance().job?.join()
                                                         Citrine.getInstance().isImportingEvents = true
-                                                        homeViewModel.setProgress("Calculating database size")
-                                                        val ids = database.eventDao().getAllIds()
-                                                        val size = ids.size
-                                                        val batchSize = 500
-                                                        ids.chunked(batchSize).forEachIndexed { index, chunk ->
-                                                            homeViewModel.setProgress("Deleting ${index * batchSize}/$size")
-                                                            database.eventDao().delete(chunk)
-                                                        }
-
+                                                        homeViewModel.setProgress("Deleting all events")
+                                                        AppDatabase.getNostrDatabase().wipe()
                                                         Citrine.getInstance().isImportingEvents = false
                                                         homeViewModel.setLoading(false)
                                                     }
@@ -359,7 +363,6 @@ class MainActivity : ComponentActivity() {
                                                         files = selectedFiles,
                                                         shouldDelete = true,
                                                         context = context,
-                                                        database = database,
                                                         onFinished = {
                                                             selectedFiles.clear()
                                                         },
@@ -377,7 +380,6 @@ class MainActivity : ComponentActivity() {
                                                         files = selectedFiles,
                                                         shouldDelete = false,
                                                         context = context,
-                                                        database = database,
                                                         onFinished = {
                                                             selectedFiles.clear()
                                                         },
@@ -591,27 +593,13 @@ class MainActivity : ComponentActivity() {
                                         )
                                         Spacer(modifier = Modifier.padding(4.dp))
 
-                                        var showEvents by remember { mutableStateOf(false) }
                                         ElevatedButton(
                                             modifier = Modifier.fillMaxWidth(),
                                             onClick = {
-                                                showEvents = true
+                                                navController.navigate(Route.Feed.route)
                                             },
                                         ) {
                                             Text(stringResource(R.string.show_events))
-                                        }
-                                        if (showEvents) {
-                                            ModalBottomSheet(
-                                                onDismissRequest = { showEvents = false },
-                                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                                            ) {
-                                                DatabaseInfo(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth(),
-                                                    database = database,
-                                                    navController = navController,
-                                                )
-                                            }
                                         }
                                     }
                                 }
@@ -620,29 +608,76 @@ class MainActivity : ComponentActivity() {
 
                         composable(
                             Route.Feed.route,
-                            arguments = listOf(navArgument("kind") { type = NavType.IntType }),
                             content = {
-                                it.arguments?.getInt("kind")?.let { kind ->
-                                    val context = LocalContext.current
-                                    val database = AppDatabase.getDatabase(context)
-                                    val events = database.eventDao().getByKind(kind).collectAsStateWithLifecycle(emptyList())
+                                var total by remember { mutableIntStateOf(0) }
+                                var events by remember { mutableStateOf<List<Event>>(emptyList()) }
+                                var page by remember { mutableIntStateOf(0) } // Track the current page
+                                var isLoading by remember { mutableStateOf(false) } // Loading state to prevent multiple requests
+                                val itemsPerPage = 20 // Number of items to load per page
 
+                                LaunchedEffect(Unit) {
+                                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                                        while (Citrine.getInstance().job?.isActive == true) {
+                                            delay(200)
+                                        }
+
+                                        total = AppDatabase.getNostrDatabase().count(listOf(Filter())).toInt()
+                                    }
+                                }
+
+                                LaunchedEffect(page) {
+                                    if (!isLoading) {
+                                        isLoading = true
+                                        Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                                            while (Citrine.getInstance().job?.isActive == true) {
+                                                delay(200)
+                                            }
+
+                                            val until = if (events.isEmpty()) Timestamp.now() else events.last().createdAt()
+                                            val newEvents = AppDatabase.getNostrDatabase()
+                                                .query(
+                                                    listOf(
+                                                        Filter()
+                                                            .until(until)
+                                                            .limit(itemsPerPage.toULong()),
+                                                    ),
+                                                )
+                                                .toVec()
+
+                                            events = events + newEvents // Append new events to the existing list
+                                            isLoading = false
+                                        }
+                                    }
+                                }
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(padding),
+                                ) {
                                     LazyColumn(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(padding),
+                                        reverseLayout = false,
                                     ) {
-                                        items(events.value) { event ->
+                                        item {
+                                            Row(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Text("Total events: $total")
+                                            }
+                                        }
+                                        items(events) { event ->
                                             var showTags by remember { mutableStateOf(false) }
 
                                             Column(
                                                 modifier = Modifier.padding(16.dp),
                                             ) {
-                                                Text(event.event.kind.toString())
-                                                Text(event.event.createdAt.toDateString())
-                                                Text(event.event.pubkey.toShortenHex())
-                                                Text(event.event.content)
-                                                if (event.tags.isNotEmpty()) {
+                                                Text(event.kind().asU16().toString())
+                                                Text(event.createdAt().asSecs().toLong().toDateString())
+                                                Text(event.author().toHex().toShortenHex())
+                                                Text(event.content())
+                                                if (event.tags().toVec().isNotEmpty()) {
                                                     Row(
                                                         Modifier.fillMaxWidth(),
                                                         horizontalArrangement = Arrangement.Center,
@@ -657,10 +692,26 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                     }
                                                     if (showTags) {
-                                                        event.tags.forEach { tag ->
-                                                            Text(tag.toTags().toList().toString())
+                                                        event.tags().toVec().forEach { tag ->
+                                                            Text(tag.asVec().toList().toString())
                                                         }
                                                     }
+                                                }
+                                            }
+                                        }
+
+                                        // Detect when we are at the end of the list and load more
+                                        item {
+                                            if (!isLoading) {
+                                                LaunchedEffect(Unit) {
+                                                    page += 1 // Increment the page number to load more events
+                                                }
+                                            } else {
+                                                Row(
+                                                    Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.Center,
+                                                ) {
+                                                    CircularProgressIndicator()
                                                 }
                                             }
                                         }

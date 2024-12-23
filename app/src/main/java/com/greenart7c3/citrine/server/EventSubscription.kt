@@ -2,46 +2,43 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import android.util.LruCache
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventWithTags
-import com.greenart7c3.citrine.database.toEvent
 import io.ktor.websocket.send
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import rust.nostr.sdk.Event
+import rust.nostr.sdk.Filter
+import rust.nostr.sdk.RelayMessage
 
 data class Subscription(
     val id: String,
     val connection: Connection?,
-    val filters: Set<EventFilter>,
-    val appDatabase: AppDatabase,
-    val objectMapper: ObjectMapper,
+    val filters: List<Filter>,
     val count: Boolean,
 )
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
 
-    fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
+    fun executeAll(event: Event, connection: Connection?) {
+        if (connection == null) {
+            return
+        }
+
         Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             subscriptions.snapshot().values.forEach {
                 it.subscription.filters.forEach filter@{ filter ->
-                    val event = dbEvent.toEvent()
-                    if (filter.test(event)) {
-                        if (connection != null && it.subscription.connection?.name == connection.name) {
+                    if (filter.matchEvent(event)) {
+                        if (it.subscription.connection?.name == connection.name) {
                             Log.d(Citrine.TAG, "skipping event to same connection")
                             return@filter
                         }
 
                         it.subscription.connection?.session?.send(
-                            it.subscription.objectMapper.writeValueAsString(
-                                listOf(
-                                    "EVENT",
-                                    it.subscription.id,
-                                    event.toJsonObject(),
-                                ),
-                            ),
+                            RelayMessage.event(
+                                it.subscription.id,
+                                event,
+                            ).asJson(),
                         )
                     }
                 }
@@ -71,10 +68,8 @@ object EventSubscription {
 
     suspend fun subscribe(
         subscriptionId: String,
-        filters: Set<EventFilter>,
+        filters: List<Filter>,
         connection: Connection?,
-        appDatabase: AppDatabase,
-        objectMapper: ObjectMapper,
         count: Boolean,
     ) {
         close(subscriptionId)
@@ -83,8 +78,6 @@ object EventSubscription {
                 subscriptionId,
                 connection,
                 filters,
-                appDatabase,
-                objectMapper,
                 count,
             ),
         )
@@ -93,6 +86,6 @@ object EventSubscription {
             manager,
         )
         manager.execute()
-        connection?.session?.send(EOSE(subscriptionId).toJson())
+        connection?.session?.send(RelayMessage.eose(subscriptionId).asJson())
     }
 }

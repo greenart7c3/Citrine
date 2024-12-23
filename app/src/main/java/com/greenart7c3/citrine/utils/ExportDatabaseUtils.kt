@@ -6,12 +6,11 @@ import com.anggrayudi.storage.file.CreateMode
 import com.anggrayudi.storage.file.makeFile
 import com.anggrayudi.storage.file.openOutputStream
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.toEvent
 import java.util.Date
+import rust.nostr.sdk.Filter
 
 object ExportDatabaseUtils {
-    fun exportDatabase(
-        database: AppDatabase,
+    suspend fun exportDatabase(
         context: Context,
         folder: DocumentFile,
         onProgress: (String) -> Unit,
@@ -23,12 +22,13 @@ object ExportDatabaseUtils {
         )
         val op = file?.openOutputStream(context)
         op?.writer().use { writer ->
-            val events = database.eventDao().getAllIds()
-            events.forEachIndexed { index, it ->
-                val event = database.eventDao().getById(it)!!
-                val json = event.toEvent().toJson() + "\n"
+            onProgress("Fetching events from database")
+            val events = AppDatabase.getNostrDatabase().query(listOf(Filter()))
+            val size = events.len()
+            events.toVec().forEachIndexed { index, it ->
+                val json = it.asJson() + "\n"
                 writer?.write(json)
-                onProgress("Exported ${index + 1}/${events.size}")
+                onProgress("Exported ${index + 1}/$size")
             }
         }
     }

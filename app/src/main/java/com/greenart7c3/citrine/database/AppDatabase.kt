@@ -10,6 +10,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
+import rust.nostr.sdk.NostrDatabase
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
@@ -22,6 +23,29 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var database: AppDatabase? = null
+        private var nostrdb: NostrDatabase? = null
+        private var nostrEphemeraldb: NostrDatabase? = null
+
+        fun getNostrDatabase(): NostrDatabase {
+            return nostrdb ?: synchronized(this) {
+                val instance = NostrDatabase.lmdb(
+                    Citrine.getInstance().filesDir.path + "/citrine_nostrdb",
+                )
+
+                nostrdb = instance
+                instance
+            }
+        }
+
+        fun getNostrEphemeralDatabase(): NostrDatabase {
+            return nostrEphemeraldb ?: synchronized(this) {
+                val instance = NostrDatabase.lmdb(
+                    Citrine.getInstance().filesDir.path + "/citrine_ephemeral_nostrdb",
+                )
+                nostrEphemeraldb = instance
+                instance
+            }
+        }
 
         fun getDatabase(context: Context): AppDatabase {
             return database ?: synchronized(this) {

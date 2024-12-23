@@ -2,18 +2,10 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import android.widget.Toast
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.service.LocalPreferences
-import com.greenart7c3.citrine.utils.isParameterizedReplaceable
-import com.greenart7c3.citrine.utils.shouldDelete
-import com.greenart7c3.citrine.utils.shouldOverwrite
-import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -39,16 +31,19 @@ import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import rust.nostr.sdk.ClientMessage
+import rust.nostr.sdk.ClientMessageEnum
+import rust.nostr.sdk.Filter
+import rust.nostr.sdk.RejectedReason
+import rust.nostr.sdk.RelayMessage
+import rust.nostr.sdk.SaveEventStatus
 
 class CustomWebSocketServer(
     private val host: String,
     private val port: Int,
-    private val appDatabase: AppDatabase,
 ) {
     val connections = MutableStateFlow(Collections.synchronizedList<Connection>(mutableListOf()))
     var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
-    private val objectMapper = jacksonObjectMapper()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     fun start() {
         val serverSocket = try {
@@ -77,179 +72,157 @@ class CustomWebSocketServer(
 
     private suspend fun subscribe(
         subscriptionId: String,
-        filterNodes: List<JsonNode>,
+        filters: List<Filter>,
         connection: Connection?,
         count: Boolean = false,
     ) {
-        val filters = filterNodes.map { jsonNode ->
-            val tags = jsonNode.fields().asSequence()
-                .filter { it.key.startsWith("#") }
-                .map { it.key.substringAfter("#") to it.value.map { item -> item.asText() }.toSet() }
-                .toMap()
-
-            val filter = objectMapper.treeToValue(jsonNode, EventFilter::class.java)
-
-            filter.copy(tags = tags)
-        }.toSet()
-
-        EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper, count)
+        EventSubscription.subscribe(subscriptionId, filters, connection, count)
     }
 
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
         Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
-        val msgArray = Event.mapper.readTree(newMessage)
-        when (val type = msgArray.get(0).asText()) {
-            "COUNT" -> {
-                val subscriptionId = msgArray.get(1).asText()
-                subscribe(subscriptionId, msgArray.drop(2), connection, true)
+        when (val type = ClientMessage.fromJson(newMessage).asEnum()) {
+            is ClientMessageEnum.Count -> {
+                subscribe(type.subscriptionId, type.filters, connection, true)
             }
-            "REQ" -> {
-                val subscriptionId = msgArray.get(1).asText()
-                subscribe(subscriptionId, msgArray.drop(2), connection)
+            is ClientMessageEnum.Req -> {
+                subscribe(type.subscriptionId, type.filters, connection)
             }
-            "EVENT" -> {
-                val event = Event.fromJson(msgArray.get(1))
-                processEvent(event, connection)
+            is ClientMessageEnum.EventMsg -> {
+                processEvent(type.event, connection)
             }
-            "CLOSE" -> {
-                EventSubscription.close(msgArray.get(1).asText())
-            }
-            "PING" -> {
-                connection?.session?.send(NoticeResult("PONG").toJson())
+            is ClientMessageEnum.Close -> {
+                EventSubscription.close(type.subscriptionId)
             }
             else -> {
-                val errorMessage = NoticeResult.invalid("unknown message type $type").toJson()
+                val errorMessage = RelayMessage.notice("unknown message type $type").asJson()
                 Log.d(Citrine.TAG, errorMessage)
                 connection?.session?.send(errorMessage)
             }
         }
     }
 
-    suspend fun innerProcessEvent(event: Event, connection: Connection?) {
-        if (!event.hasCorrectIDHash()) {
-            Log.d(Citrine.TAG, "event id hash verification failed ${event.toJson()}")
+    suspend fun innerProcessEvent(event: rust.nostr.sdk.Event, connection: Connection?) {
+        if (!event.verifySignature()) {
+            // Log.d(Citrine.TAG, "event signature verification failed ${event.asJson()}")
             connection?.session?.send(
-                CommandResult.invalid(
-                    event,
-                    "event id hash verification failed",
-                ).toJson(),
+                RelayMessage.ok(event.id(), false, "event signature verification failed").asJson(),
             )
             return
         }
 
-        if (!event.hasVerifiedSignature()) {
-            Log.d(Citrine.TAG, "event signature verification failed ${event.toJson()}")
-            connection?.session?.send(
-                CommandResult.invalid(
-                    event,
-                    "event signature verification failed",
-                ).toJson(),
-            )
+        if (event.kind().isEphemeral()) {
+            when (val saved = AppDatabase.getNostrEphemeralDatabase().saveEvent(event)) {
+                is SaveEventStatus.Rejected -> {
+                    val reason = saved.v1
+                    when (reason) {
+                        RejectedReason.EPHEMERAL -> {
+                            Log.d(Citrine.TAG, "Event rejected ephemeral ${event.asJson()}")
+                            connection?.session?.send(RelayMessage.ok(event.id(), false, "ephemeral").asJson())
+                        }
+                        RejectedReason.DUPLICATE -> {
+                            Log.d(Citrine.TAG, "Event rejected duplicated ${event.asJson()}")
+                            connection?.session?.send(RelayMessage.ok(event.id(), true, "duplicate:").asJson())
+                        }
+                        RejectedReason.DELETED -> {
+                            Log.d(Citrine.TAG, "Event rejected deleted ${event.asJson()}")
+                            connection?.session?.send(RelayMessage.ok(event.id(), false, "deleted").asJson())
+                        }
+                        RejectedReason.EXPIRED -> {
+                            Log.d(Citrine.TAG, "Event rejected expired ${event.asJson()}")
+                            connection?.session?.send(RelayMessage.ok(event.id(), false, "expired").asJson())
+                        }
+                        RejectedReason.REPLACED -> {
+                            Log.d(Citrine.TAG, "Event rejected replaced ${event.asJson()}")
+                            connection?.session?.send(RelayMessage.ok(event.id(), false, "replaced").asJson())
+                        }
+                        RejectedReason.INVALID_DELETE -> {
+                            Log.d(Citrine.TAG, "Event rejected invalid delete ${event.asJson()}")
+                            connection?.session?.send(RelayMessage.ok(event.id(), false, "invalid delete").asJson())
+                        }
+                        RejectedReason.OTHER -> {
+                            Log.d(Citrine.TAG, "Event rejected other ${event.asJson()}")
+                            connection?.session?.send(RelayMessage.ok(event.id(), false, "other").asJson())
+                        }
+                    }
+                }
+
+                SaveEventStatus.Success -> {
+                    Log.d(Citrine.TAG, "Event saved ${event.asJson()}")
+                    connection?.session?.send(RelayMessage.ok(event.id(), true, "").asJson())
+                    EventSubscription.executeAll(event, connection)
+                }
+            }
             return
         }
 
-        if (event.isExpired()) {
-            Log.d(Citrine.TAG, "event expired ${event.toJson()}")
-            connection?.session?.send(CommandResult.invalid(event, "event expired").toJson())
+        if (Settings.allowedKinds.isNotEmpty() && event.kind().asU16().toInt() !in Settings.allowedKinds) {
+            // Log.d(Citrine.TAG, "kind not allowed ${event.asJson()}")
+            connection?.session?.send(RelayMessage.ok(event.id(), false, "kind not allowed").asJson())
             return
         }
 
-        if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
-            Log.d(Citrine.TAG, "kind not allowed ${event.toJson()}")
-            connection?.session?.send(CommandResult.invalid(event, "kind not allowed").toJson())
-            return
-        }
-
-        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
-            if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
-                Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.toJson()}")
-                connection?.session?.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
+        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.tags().publicKeys().isNotEmpty() && event.tags().publicKeys().none { it.toHex() in Settings.allowedTaggedPubKeys }) {
+            if (Settings.allowedPubKeys.isEmpty() || (event.author().toHex() !in Settings.allowedPubKeys)) {
+                // Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.asJson()}")
+                connection?.session?.send(RelayMessage.ok(event.id(), false, "tagged pubkey not allowed").asJson())
                 return
             }
         }
 
-        if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
-            if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
-                Log.d(Citrine.TAG, "pubkey not allowed ${event.toJson()}")
-                connection?.session?.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
+        if (Settings.allowedPubKeys.isNotEmpty() && event.author().toHex() !in Settings.allowedPubKeys) {
+            if (Settings.allowedTaggedPubKeys.isEmpty() || event.tags().publicKeys().none { it.toHex() in Settings.allowedTaggedPubKeys }) {
+                Log.d(Citrine.TAG, "pubkey not allowed ${event.asJson()}")
+                connection?.session?.send(RelayMessage.ok(event.id(), false, "pubkey not allowed").asJson())
                 return
             }
         }
 
-        when {
-            event.shouldDelete() -> deleteEvent(event, connection)
-            event.isParameterizedReplaceable() -> {
-                val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt)
-                if (newest.isNotEmpty()) {
-                    Log.d(Citrine.TAG, "newest event already in database ${event.toJson()}")
-                    connection?.session?.send(CommandResult.invalid(event, "newest event already in database").toJson())
-                    return
+        when (val saved = AppDatabase.getNostrDatabase().saveEvent(event)) {
+            is SaveEventStatus.Rejected -> {
+                val reason = saved.v1
+                when (reason) {
+                    RejectedReason.EPHEMERAL -> {
+                        Log.d(Citrine.TAG, "Event rejected ephemeral ${event.asJson()}")
+                        connection?.session?.send(RelayMessage.ok(event.id(), false, "ephemeral").asJson())
+                    }
+                    RejectedReason.DUPLICATE -> {
+                        Log.d(Citrine.TAG, "Event rejected duplicated ${event.asJson()}")
+                        connection?.session?.send(RelayMessage.ok(event.id(), true, "duplicate:").asJson())
+                    }
+                    RejectedReason.DELETED -> {
+                        Log.d(Citrine.TAG, "Event rejected deleted ${event.asJson()}")
+                        connection?.session?.send(RelayMessage.ok(event.id(), false, "deleted").asJson())
+                    }
+                    RejectedReason.EXPIRED -> {
+                        Log.d(Citrine.TAG, "Event rejected expired ${event.asJson()}")
+                        connection?.session?.send(RelayMessage.ok(event.id(), false, "expired").asJson())
+                    }
+                    RejectedReason.REPLACED -> {
+                        Log.d(Citrine.TAG, "Event rejected replaced ${event.asJson()}")
+                        connection?.session?.send(RelayMessage.ok(event.id(), false, "replaced").asJson())
+                    }
+                    RejectedReason.INVALID_DELETE -> {
+                        Log.d(Citrine.TAG, "Event rejected invalid delete ${event.asJson()}")
+                        connection?.session?.send(RelayMessage.ok(event.id(), false, "invalid delete").asJson())
+                    }
+                    RejectedReason.OTHER -> {
+                        Log.d(Citrine.TAG, "Event rejected other ${event.asJson()}")
+                        connection?.session?.send(RelayMessage.ok(event.id(), false, "other").asJson())
+                    }
                 }
-                handleParameterizedReplaceable(event, connection)
             }
-            event.shouldOverwrite() -> {
-                val newest = appDatabase.eventDao().getByKindNewest(event.kind, event.pubKey, event.createdAt)
-                if (newest.isNotEmpty()) {
-                    Log.d(Citrine.TAG, "newest event already in database ${event.toJson()}")
-                    connection?.session?.send(CommandResult.invalid(event, "newest event already in database").toJson())
-                    return
-                }
-                override(event, connection)
-            }
-            else -> {
-                val eventEntity = appDatabase.eventDao().getById(event.id)
-                if (eventEntity != null) {
-                    Log.d(Citrine.TAG, "Event already in database ${event.toJson()}")
-                    connection?.session?.send(CommandResult.duplicated(event).toJson())
-                    return
-                }
-                save(event, connection)
+
+            SaveEventStatus.Success -> {
+                Log.d(Citrine.TAG, "Event saved ${event.asJson()}")
+                connection?.session?.send(RelayMessage.ok(event.id(), true, "").asJson())
+                EventSubscription.executeAll(event, connection)
             }
         }
-
-        connection?.session?.send(CommandResult.ok(event).toJson())
     }
 
-    private suspend fun processEvent(event: Event, connection: Connection?) {
+    private suspend fun processEvent(event: rust.nostr.sdk.Event, connection: Connection?) {
         innerProcessEvent(event, connection)
-    }
-
-    private fun handleParameterizedReplaceable(event: Event, connection: Connection?) {
-        save(event, connection)
-        val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
-        appDatabase.eventDao().delete(ids, event.pubKey)
-    }
-
-    private fun override(event: Event, connection: Connection?) {
-        save(event, connection)
-        val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
-        if (ids.isEmpty()) return
-        appDatabase.eventDao().delete(ids, event.pubKey)
-    }
-
-    private fun save(event: Event, connection: Connection?) {
-        appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
-    }
-
-    private fun deleteEvent(event: Event, connection: Connection?) {
-        save(event, connection)
-        appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
-        val taggedAddresses = event.taggedAddresses()
-        if (taggedAddresses.isEmpty()) return
-
-        event.taggedAddresses().forEach { aTag ->
-            val events = EventRepository.query(
-                appDatabase,
-                EventFilter(
-                    authors = setOf(aTag.pubKeyHex),
-                    kinds = setOf(aTag.kind),
-                    tags = mapOf("d" to setOf(aTag.dTag)),
-                    until = event.createdAt.toInt(),
-                ),
-            )
-
-            appDatabase.eventDao().delete(events.map { it.event.id }, event.pubKey)
-        }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -322,7 +295,7 @@ class CustomWebSocketServer(
 
                                     else -> {
                                         Log.d(Citrine.TAG, frame.toString())
-                                        send(NoticeResult.invalid("Error processing message").toJson())
+                                        send(RelayMessage.notice("Error processing message").asJson())
                                     }
                                 }
                             } catch (e: Throwable) {
@@ -330,7 +303,7 @@ class CustomWebSocketServer(
                                 Log.d(Citrine.TAG, e.toString(), e)
                                 try {
                                     if (!thisConnection.session.outgoing.isClosedForSend) {
-                                        send(NoticeResult.invalid("Error processing message").toJson())
+                                        send(RelayMessage.notice("Error processing message").asJson())
                                     }
                                 } catch (e: Exception) {
                                     Log.d(Citrine.TAG, e.toString(), e)

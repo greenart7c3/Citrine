@@ -18,7 +18,6 @@ import androidx.documentfile.provider.DocumentFile
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
@@ -30,7 +29,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -45,16 +43,14 @@ class WebSocketServerService : Service() {
         super.onCreate()
 
         Log.d(Citrine.TAG, "Starting WebSocket service")
-        val database = AppDatabase.getDatabase(this@WebSocketServerService)
-
         Log.d(Citrine.TAG, "Starting timer")
         timer?.cancel()
         timer = Timer()
         timer?.schedule(
             object : TimerTask() {
                 override fun run() {
-                    runBlocking {
-                        Citrine.getInstance().eventsToDelete(database)
+                    Citrine.getInstance().applicationScope.launch {
+                        Citrine.getInstance().eventsToDelete()
                     }
 
                     if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank() && !Citrine.getInstance().isImportingEvents) {
@@ -75,12 +71,13 @@ class WebSocketServerService : Service() {
                                     }
 
                                     Log.d(Citrine.TAG, "Backing up database")
-                                    ExportDatabaseUtils.exportDatabase(
-                                        database,
-                                        this@WebSocketServerService,
-                                        it,
-                                        onProgress = {},
-                                    )
+                                    Citrine.getInstance().applicationScope.launch {
+                                        ExportDatabaseUtils.exportDatabase(
+                                            this@WebSocketServerService,
+                                            it,
+                                            onProgress = {},
+                                        )
+                                    }
                                 }
                             }
                         } catch (e: Exception) {
@@ -99,7 +96,6 @@ class WebSocketServerService : Service() {
         CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
             port = Settings.port,
-            appDatabase = database,
         )
         CustomWebSocketService.server?.start()
 
