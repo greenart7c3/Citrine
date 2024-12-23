@@ -34,6 +34,7 @@
     <string name="use_proxy">使用代理服务器</string>
     <string name="proxy_port">端口</string>
     <string name="imported">已导入 %1$s/%2$s</string>
+    <string name="imported2">Imported %1$s</string>
     <string name="deleting_all_events">删除所有事件</string>
     <string name="reading_file">正在读取文件 %1$s</string>
     <string name="never_auto_backup">禁用自动备份</string>
