@@ -45,4 +45,6 @@
     <string name="delete_all_events_warning">Êtes-vous sûr de vouloir supprimer tous les événements de la base de données ?</string>
     <string name="feed">Fil</string>
     <string name="show_events">Show events</string>
+    <string name="copy_address">Copy Address</string>
+    <string name="relay_running_at_ws">Relay running at ws://%1$s:%2$s</string>
 </resources>
