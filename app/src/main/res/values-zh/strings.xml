@@ -34,17 +34,17 @@
     <string name="use_proxy">使用代理服务器</string>
     <string name="proxy_port">端口</string>
     <string name="imported">已导入 %1$s/%2$s</string>
-    <string name="imported2">Imported %1$s</string>
+    <string name="imported2">已导入 %1$s</string>
     <string name="deleting_all_events">删除所有事件</string>
     <string name="reading_file">正在读取文件 %1$s</string>
     <string name="never_auto_backup">禁用自动备份</string>
     <string name="select_folder">选择文件夹</string>
     <string name="select_a_folder_to_backup_to">选择要备份到的文件夹</string>
     <string name="auto_backup">自动备份</string>
-    <string name="delete_all_events">Delete all events</string>
-    <string name="delete_all_events_warning">Are you sure you want to delete all events from the database?</string>
+    <string name="delete_all_events">删除所有事件</string>
+    <string name="delete_all_events_warning">确定要从数据库中删除所有事件吗？</string>
     <string name="feed">Feed</string>
-    <string name="show_events">Show events</string>
-    <string name="copy_address">Copy Address</string>
-    <string name="relay_running_at_ws">Relay running at ws://%1$s:%2$s</string>
+    <string name="show_events">显示事件</string>
+    <string name="copy_address">复制地址</string>
+    <string name="relay_running_at_ws">中继运行在 ws://%1$s:%2$s</string>
 </resources>
