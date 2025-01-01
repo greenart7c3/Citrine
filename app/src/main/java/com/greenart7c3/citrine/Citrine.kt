@@ -75,8 +75,7 @@ class Citrine : Application() {
                         val duration = measureTime {
                             Log.d(Citrine.TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
                             if (Settings.neverDeleteFrom.isNotEmpty()) {
-                                val pubKeys = Settings.neverDeleteFrom.joinToString(separator = ",") { "'$it'" }
-                                database.eventDao().deleteAll(until, pubKeys)
+                                database.eventDao().deleteAll(until, Settings.neverDeleteFrom.toTypedArray())
                             } else {
                                 database.eventDao().deleteAll(until)
                             }

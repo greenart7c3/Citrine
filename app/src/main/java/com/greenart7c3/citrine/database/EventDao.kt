@@ -174,9 +174,9 @@ interface EventDao {
     @Transaction
     suspend fun deleteAll(until: Long)
 
-    @Query("DELETE FROM EventEntity WHERE createdAt <= :until and pubkey NOT IN (:pubKeys)")
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND pubkey NOT IN (:pubKeys)")
     @Transaction
-    suspend fun deleteAll(until: Long, pubKeys: String)
+    suspend fun deleteAll(until: Long, pubKeys: Array<String>)
 
     @Transaction
     suspend fun deleteEphemeralEvents() {
