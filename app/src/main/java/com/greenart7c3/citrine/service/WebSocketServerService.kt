@@ -74,23 +74,16 @@ class WebSocketServerService : Service() {
                             folder?.let {
                                 val lastModifiedTime = folder.lastModified()
                                 val currentTime = System.currentTimeMillis()
-                                val twentyFourHoursAgo = currentTime - (24 * 60 * 60 * 1000)
-                                val fiveDaysAgo = currentTime - (5 * 24 * 60 * 60 * 1000)
+                                val oneWeekAgo = currentTime - (7 * 24 * 60 * 60 * 1000)
 
-                                if (lastModifiedTime < twentyFourHoursAgo) {
-                                    Log.d(Citrine.TAG, "Deleting old backups")
-                                    folder.listFiles().forEach { file ->
-                                        if (file.lastModified() < fiveDaysAgo) {
-                                            file.delete()
-                                        }
-                                    }
-
+                                if (lastModifiedTime < oneWeekAgo) {
                                     Log.d(Citrine.TAG, "Backing up database")
                                     scope.launch(Dispatchers.IO) {
                                         ExportDatabaseUtils.exportDatabase(
-                                            database,
-                                            this@WebSocketServerService,
-                                            it,
+                                            database = database,
+                                            context = this@WebSocketServerService,
+                                            folder = it,
+                                            deleteOldFiles = true,
                                             onProgress = {},
                                         )
                                     }
