@@ -47,4 +47,5 @@
     <string name="show_events">Show events</string>
     <string name="copy_address">Copy Address</string>
     <string name="relay_running_at_ws">Relay running at ws://%1$s:%2$s</string>
+    <string name="go_back">Go back</string>
 </resources>
