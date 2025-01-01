@@ -189,7 +189,7 @@ class MainActivity : ComponentActivity() {
                                 val selectedFiles = remember {
                                     mutableListOf<DocumentFile>()
                                 }
-                                var saveToPreferences = false
+                                var saveToPreferences by remember { mutableStateOf(false) }
 
                                 val database = AppDatabase.getDatabase(context)
                                 val launcher = rememberLauncherForActivityResult(
