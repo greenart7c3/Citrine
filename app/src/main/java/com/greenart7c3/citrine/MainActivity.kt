@@ -35,14 +35,12 @@ import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -157,7 +155,7 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed")) {
+                        if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed") && destinationRoute != Route.DatabaseInfo.route) {
                             NavigationBar(tonalElevation = 0.dp) {
                                 items.forEach {
                                     val selected = destinationRoute == it.route
@@ -180,7 +178,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
-                        } else if (destinationRoute.startsWith("Feed")) {
+                        } else if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route) {
                             BottomAppBar {
                                 IconRow(
                                     center = true,
@@ -195,11 +193,15 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     topBar = {
-                        if (destinationRoute.startsWith("Feed")) {
+                        if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route) {
                             CenterAlignedTopAppBar(
                                 title = {
                                     Text(
-                                        text = stringResource(R.string.feed),
+                                        text = if (destinationRoute.startsWith("Feed")) {
+                                            stringResource(R.string.feed)
+                                        } else {
+                                            stringResource(R.string.database)
+                                        },
                                     )
                                 },
                             )
@@ -646,27 +648,13 @@ class MainActivity : ComponentActivity() {
                                         )
                                         Spacer(modifier = Modifier.padding(4.dp))
 
-                                        var showEvents by remember { mutableStateOf(false) }
                                         ElevatedButton(
                                             modifier = Modifier.fillMaxWidth(),
                                             onClick = {
-                                                showEvents = true
+                                                navController.navigate(Route.DatabaseInfo.route)
                                             },
                                         ) {
                                             Text(stringResource(R.string.show_events))
-                                        }
-                                        if (showEvents) {
-                                            ModalBottomSheet(
-                                                onDismissRequest = { showEvents = false },
-                                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                                            ) {
-                                                DatabaseInfo(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth(),
-                                                    database = database,
-                                                    navController = navController,
-                                                )
-                                            }
                                         }
                                     }
                                 }
@@ -738,6 +726,18 @@ class MainActivity : ComponentActivity() {
                                         homeViewModel.start(context)
                                     }
                                 },
+                            )
+                        }
+
+                        composable(Route.DatabaseInfo.route) {
+                            val context = LocalContext.current
+                            DatabaseInfo(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                                    .padding(16.dp),
+                                database = AppDatabase.getDatabase(context),
+                                navController = navController,
                             )
                         }
                     }

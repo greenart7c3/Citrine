@@ -14,10 +14,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import kotlinx.coroutines.flow.Flow
@@ -33,13 +35,11 @@ fun DatabaseInfo(
     val flow = countByKind.collectAsStateWithLifecycle(initialValue = listOf())
 
     Column(
-        Modifier
-            .fillMaxSize()
-            .padding(8.dp),
+        modifier
+            .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Database", fontWeight = FontWeight.Bold)
-        Text("Total: ${flow.value.sumOf { it.count }}")
+        Text(stringResource(R.string.total, flow.value.sumOf { it.count }))
         Spacer(modifier = Modifier.padding(4.dp))
         Row(
             Modifier
@@ -47,11 +47,10 @@ fun DatabaseInfo(
                 .padding(horizontal = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Kind", fontWeight = FontWeight.Bold)
-            Text("Count", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.kind), fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.count), fontWeight = FontWeight.Bold)
         }
         LazyColumn(
-            modifier = modifier,
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

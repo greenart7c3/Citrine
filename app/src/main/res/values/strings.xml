@@ -47,5 +47,9 @@
     <string name="copy_address">Copy Address</string>
     <string name="relay_running_at_ws">Relay running at ws://%1$s:%2$s</string>
     <string name="go_back">Go back</string>
+    <string name="total">Total: %1$s</string>
+    <string name="kind">Kind</string>
+    <string name="count">Count</string>
+    <string name="database">Database</string>
 
 </resources>
