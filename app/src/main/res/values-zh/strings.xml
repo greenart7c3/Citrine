@@ -47,9 +47,9 @@
     <string name="show_events">显示事件</string>
     <string name="copy_address">复制地址</string>
     <string name="relay_running_at_ws">中继运行在 ws://%1$s:%2$s</string>
-    <string name="go_back">Go back</string>
-    <string name="total">Total: %1$s</string>
-    <string name="kind">Kind</string>
-    <string name="count">Count</string>
-    <string name="database">Database</string>
+    <string name="go_back">返回</string>
+    <string name="total">总计：%1$s</string>
+    <string name="kind">类型</string>
+    <string name="count">计数</string>
+    <string name="database">数据库</string>
 </resources>
