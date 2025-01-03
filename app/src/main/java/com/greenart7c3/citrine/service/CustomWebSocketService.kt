@@ -4,4 +4,5 @@ import com.greenart7c3.citrine.server.CustomWebSocketServer
 
 object CustomWebSocketService {
     var server: CustomWebSocketServer? = null
+    var hasStarted = false
 }

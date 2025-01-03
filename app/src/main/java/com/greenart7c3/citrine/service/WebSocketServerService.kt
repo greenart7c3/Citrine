@@ -42,6 +42,11 @@ class WebSocketServerService : Service() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(Citrine.TAG, "onStartCommand ${CustomWebSocketService.hasStarted}")
+        return START_STICKY
+    }
+
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onCreate() {
         super.onCreate()

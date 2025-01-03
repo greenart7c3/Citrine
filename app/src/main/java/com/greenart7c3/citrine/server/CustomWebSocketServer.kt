@@ -9,6 +9,7 @@ import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
+import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
@@ -17,6 +18,8 @@ import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationStarted
+import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
@@ -276,6 +279,15 @@ class CustomWebSocketServer(
             port = port,
             host = host,
         ) {
+            monitor.subscribe(ApplicationStarted) {
+                Log.d(Citrine.TAG, "Server started on $host:$port")
+                CustomWebSocketService.hasStarted = true
+            }
+
+            monitor.subscribe(ApplicationStopped) {
+                Log.d(Citrine.TAG, "Server stopped")
+                CustomWebSocketService.hasStarted = false
+            }
             install(WebSockets) {
                 pingPeriodMillis = 1000L
                 timeoutMillis = 300000L
