@@ -185,4 +185,30 @@ interface EventDao {
             delete(ids)
         }
     }
+
+    @Query(
+        """
+        SELECT EventEntity.id
+          FROM EventEntity EventEntity
+         INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
+         WHERE TagEntity.col0Name = 'e'
+           AND TagEntity.col1Value = :eTagValue
+           AND EventEntity.kind = 5
+        """,
+    )
+    @Transaction
+    suspend fun getDeletedEvents(eTagValue: String): List<String>
+
+    @Query(
+        """
+        SELECT EventEntity.createdAt
+          FROM EventEntity EventEntity
+         INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
+         WHERE TagEntity.col0Name = 'a'
+           AND TagEntity.col1Value = :aTagValue
+           AND EventEntity.kind = 5
+        """,
+    )
+    @Transaction
+    suspend fun getDeletedEventsByATag(aTagValue: String): List<Long>
 }

@@ -14,6 +14,8 @@ import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
 import com.greenart7c3.citrine.utils.shouldOverwrite
+import com.vitorpamplona.quartz.encoders.ATag
+import com.vitorpamplona.quartz.events.AddressableEvent
 import com.vitorpamplona.quartz.events.Event
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
@@ -187,6 +189,24 @@ class CustomWebSocketServer(
             }
         }
 
+        val deletedEvents = appDatabase.eventDao().getDeletedEvents(event.id)
+        if (deletedEvents.isNotEmpty()) {
+            Log.d(Citrine.TAG, "Event deleted ${event.toJson()}")
+            connection?.session?.send(CommandResult.invalid(event, "Event deleted").toJson())
+            return
+        }
+
+        if (event is AddressableEvent) {
+            val events = appDatabase.eventDao().getDeletedEventsByATag(ATag.assembleATag(event.kind, event.pubKey, event.dTag()))
+            events.forEach { deletedAt ->
+                if (deletedAt >= event.createdAt) {
+                    Log.d(Citrine.TAG, "Event deleted ${event.toJson()}")
+                    connection?.session?.send(CommandResult.invalid(event, "Event deleted").toJson())
+                    return
+                }
+            }
+        }
+
         when {
             event.shouldDelete() -> {
                 val eventEntity = appDatabase.eventDao().getById(event.id)
@@ -194,6 +214,32 @@ class CustomWebSocketServer(
                     Log.d(Citrine.TAG, "Event already in database ${event.toJson()}")
                     connection?.session?.send(CommandResult.duplicated(event).toJson())
                     return
+                }
+                event.taggedEvents().forEach { taggedEvent ->
+                    val taggedEventEntity = appDatabase.eventDao().getById(taggedEvent)
+                    if (taggedEventEntity != null && taggedEventEntity.event.pubkey != event.pubKey) {
+                        Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.toJson()}")
+                        connection?.session?.send(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
+                        return
+                    }
+                }
+                event.taggedAddresses().forEach { aTag ->
+                    val taggedEvents = EventRepository.query(
+                        appDatabase,
+                        EventFilter(
+                            authors = setOf(aTag.pubKeyHex),
+                            kinds = setOf(aTag.kind),
+                            tags = mapOf("d" to setOf(aTag.dTag)),
+                            until = event.createdAt.toInt(),
+                        ),
+                    )
+                    taggedEvents.forEach {
+                        if (it.event.pubkey != event.pubKey) {
+                            Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.toJson()}")
+                            connection?.session?.send(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
+                            return
+                        }
+                    }
                 }
                 deleteEvent(event, connection)
             }
