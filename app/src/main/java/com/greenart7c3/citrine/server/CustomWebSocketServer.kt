@@ -369,7 +369,7 @@ class CustomWebSocketServer(
                             "description": "${Settings.description}",
                             "pubkey": "${Settings.ownerPubkey}",
                             "contact": "${Settings.contact}",
-                            "supported_nips": [1,2,4,9,11,40,45,50,59],
+                            "supported_nips": [1,2,4,9,11,40,45,50,59,65],
                             "software": "https://github.com/greenart7c3/Citrine",
                             "version": "${BuildConfig.VERSION_NAME}",
                             "icon": "${Settings.relayIcon}"
