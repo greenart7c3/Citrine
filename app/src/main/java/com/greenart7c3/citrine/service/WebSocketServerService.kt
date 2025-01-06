@@ -24,14 +24,12 @@ import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
-import com.vitorpamplona.ammolite.relays.RelayPool
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class WebSocketServerService : Service() {
@@ -63,9 +61,9 @@ class WebSocketServerService : Service() {
                     if (Citrine.getInstance().job == null || Citrine.getInstance().job?.isCompleted == true) {
                         NotificationManagerCompat.from(Citrine.getInstance()).cancel(2)
                         Citrine.getInstance().applicationScope.launch {
-                            RelayPool.disconnect()
-                            delay(3000)
-                            RelayPool.unloadRelays()
+                            Citrine.getInstance().client.getAll().forEach {
+                                it.disconnect()
+                            }
                         }
                     }
 

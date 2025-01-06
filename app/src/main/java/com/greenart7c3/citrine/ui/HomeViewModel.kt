@@ -24,13 +24,15 @@ import com.greenart7c3.citrine.RelayListener
 import com.greenart7c3.citrine.RelayListener2
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.service.ClipboardReceiver
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
+import com.vitorpamplona.ammolite.relays.MutableSubscriptionManager
 import com.vitorpamplona.ammolite.relays.Relay
-import com.vitorpamplona.ammolite.relays.RelayPool
+import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
 import com.vitorpamplona.ammolite.relays.TypedFilter
 import com.vitorpamplona.ammolite.relays.filters.SincePerRelayFilter
 import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
@@ -83,8 +85,8 @@ class HomeViewModel : ViewModel() {
     ) {
         Citrine.getInstance().cancelJob()
         Citrine.getInstance().job = Citrine.getInstance().applicationScope.launch {
-            RelayPool.disconnect()
-            RelayPool.unloadRelays()
+            val relays = mutableListOf<Relay>()
+            val socketBuilder = OkHttpWebSocket.Builder()
             var contactList = database.eventDao().getContactList(signer.pubKey)
             if (contactList == null) {
                 fetchContactList(
@@ -99,14 +101,16 @@ class HomeViewModel : ViewModel() {
                             }
 
                             generalRelays?.forEach {
-                                if (RelayPool.getRelay(it.key) == null) {
-                                    RelayPool.addRelay(
+                                if (!relays.any { relay -> relay.url == it.key }) {
+                                    relays.add(
                                         Relay(
                                             url = it.key,
                                             read = true,
                                             write = false,
                                             forceProxy = false,
                                             activeTypes = COMMON_FEED_TYPES,
+                                            socketBuilder = socketBuilder,
+                                            subs = MutableSubscriptionManager(),
                                         ),
                                     )
                                 }
@@ -117,21 +121,35 @@ class HomeViewModel : ViewModel() {
                                     launch(Dispatchers.IO) {
                                         val advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
                                         advertisedRelayList?.let {
-                                            val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                            relays.forEach { relay ->
-                                                if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                                    RelayPool.addRelay(
+                                            val localRelays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                            localRelays.forEach { relay ->
+                                                if (!relays.any { it.url == relay.relayUrl }) {
+                                                    relays.add(
                                                         Relay(
                                                             url = relay.relayUrl,
                                                             read = true,
                                                             write = false,
                                                             forceProxy = false,
                                                             activeTypes = COMMON_FEED_TYPES,
+                                                            socketBuilder = socketBuilder,
+                                                            subs = MutableSubscriptionManager(),
                                                         ),
                                                     )
                                                 }
                                             }
                                         }
+                                        Citrine.getInstance().client.reconnect(
+                                            relays = relays.map {
+                                                RelaySetupInfoToConnect(
+                                                    url = it.url,
+                                                    read = it.read,
+                                                    write = it.write,
+                                                    forceProxy = it.forceProxy,
+                                                    feedTypes = it.activeTypes,
+                                                )
+                                            }.toTypedArray(),
+                                        )
+                                        delay(5000)
                                         fetchEvents(
                                             scope = this,
                                             onAuth = { relay, challenge ->
@@ -162,14 +180,16 @@ class HomeViewModel : ViewModel() {
                 }
 
                 generalRelays?.forEach {
-                    if (RelayPool.getRelay(it.key) == null) {
-                        RelayPool.addRelay(
+                    if (!relays.any { relay2 -> relay2.url == it.key }) {
+                        relays.add(
                             Relay(
                                 url = it.key,
                                 read = true,
                                 write = false,
                                 forceProxy = false,
                                 activeTypes = COMMON_FEED_TYPES,
+                                socketBuilder = socketBuilder,
+                                subs = MutableSubscriptionManager(),
                             ),
                         )
                     }
@@ -181,21 +201,35 @@ class HomeViewModel : ViewModel() {
                             launch {
                                 advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)
                                 advertisedRelayList?.let {
-                                    val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                                    relays.forEach { relay ->
-                                        if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                            RelayPool.addRelay(
+                                    val localRelays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                                    localRelays.forEach { relay ->
+                                        if (!relays.any { it.url == relay.relayUrl }) {
+                                            relays.add(
                                                 Relay(
                                                     url = relay.relayUrl,
                                                     read = true,
                                                     write = false,
                                                     forceProxy = false,
                                                     activeTypes = COMMON_FEED_TYPES,
+                                                    socketBuilder = socketBuilder,
+                                                    subs = MutableSubscriptionManager(),
                                                 ),
                                             )
                                         }
                                     }
                                 }
+                                Citrine.getInstance().client.reconnect(
+                                    relays = relays.map {
+                                        RelaySetupInfoToConnect(
+                                            url = it.url,
+                                            read = it.read,
+                                            write = it.write,
+                                            forceProxy = it.forceProxy,
+                                            feedTypes = it.activeTypes,
+                                        )
+                                    }.toTypedArray(),
+                                )
+                                delay(5000)
                                 fetchEvents(
                                     scope = this,
                                     onAuth = { relay, challenge ->
@@ -217,22 +251,36 @@ class HomeViewModel : ViewModel() {
                     )
                 } else {
                     advertisedRelayList?.let {
-                        val relays = (it.toEvent() as AdvertisedRelayListEvent).relays()
-                        relays.forEach { relay ->
-                            if (RelayPool.getRelay(relay.relayUrl) == null) {
-                                RelayPool.addRelay(
+                        val localRelays = (it.toEvent() as AdvertisedRelayListEvent).relays()
+                        localRelays.forEach { relay ->
+                            if (!relays.any { it.url == relay.relayUrl }) {
+                                relays.add(
                                     Relay(
                                         url = relay.relayUrl,
                                         read = true,
                                         write = false,
                                         forceProxy = false,
                                         activeTypes = COMMON_FEED_TYPES,
+                                        socketBuilder = socketBuilder,
+                                        subs = MutableSubscriptionManager(),
                                     ),
                                 )
                             }
                         }
                     }
 
+                    Citrine.getInstance().client.reconnect(
+                        relays = relays.map {
+                            RelaySetupInfoToConnect(
+                                url = it.url,
+                                read = it.read,
+                                write = it.write,
+                                forceProxy = it.forceProxy,
+                                feedTypes = it.activeTypes,
+                            )
+                        }.toTypedArray(),
+                    )
+                    delay(5000)
                     fetchEvents(
                         scope = this,
                         onAuth = { relay, challenge ->
@@ -324,6 +372,8 @@ class HomeViewModel : ViewModel() {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
+                socketBuilder = OkHttpWebSocket.Builder(),
+                subs = MutableSubscriptionManager(),
             ),
             Relay(
                 url = "wss://relay.nostr.band",
@@ -331,6 +381,8 @@ class HomeViewModel : ViewModel() {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
+                socketBuilder = OkHttpWebSocket.Builder(),
+                subs = MutableSubscriptionManager(),
             ),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
@@ -387,6 +439,8 @@ class HomeViewModel : ViewModel() {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
+                subs = MutableSubscriptionManager(),
+                socketBuilder = OkHttpWebSocket.Builder(),
             ),
             Relay(
                 url = "wss://relay.nostr.band",
@@ -394,6 +448,8 @@ class HomeViewModel : ViewModel() {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
+                subs = MutableSubscriptionManager(),
+                socketBuilder = OkHttpWebSocket.Builder(),
             ),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
@@ -534,11 +590,11 @@ class HomeViewModel : ViewModel() {
     ) {
         val finishedLoading = mutableMapOf<String, Boolean>()
 
-        RelayPool.getAll().filter { !it.url.contains("127.0.0.1") }.forEach {
+        Citrine.getInstance().client.getAll().filter { !it.url.contains("127.0.0.1") }.forEach {
             finishedLoading[it.url] = false
         }
 
-        RelayPool.getAll().forEach {
+        Citrine.getInstance().client.getAll().forEach {
             var count = 0
             setProgress("loading events from ${it.url}")
             val listeners = mutableMapOf<String, Relay.Listener>()
@@ -596,8 +652,10 @@ class HomeViewModel : ViewModel() {
             }
         }
 
-        RelayPool.disconnect()
-        RelayPool.unloadRelays()
+        Citrine.getInstance().client.getAll().forEach {
+            it.disconnect()
+        }
+
         delay(5000)
 
         setProgress("")
@@ -678,9 +736,8 @@ class HomeViewModel : ViewModel() {
                                 }
                             }
                         }
-                        RelayPool.disconnect()
+                        Citrine.getInstance().client.getAll().forEach { relay -> relay.disconnect() }
                         delay(3000)
-                        RelayPool.unloadRelays()
                     }
                 }
 

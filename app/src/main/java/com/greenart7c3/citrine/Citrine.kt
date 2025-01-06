@@ -4,9 +4,11 @@ import android.app.Application
 import android.content.ContentResolver
 import android.util.Log
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.vitorpamplona.ammolite.relays.NostrClient
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.quartz.events.Event
 import com.vitorpamplona.quartz.events.EventInterface
@@ -23,6 +25,7 @@ import kotlinx.coroutines.launch
 
 class Citrine : Application() {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val client: NostrClient = NostrClient(OkHttpWebSocket.Builder())
     var isImportingEvents = false
     var job: Job? = null
 

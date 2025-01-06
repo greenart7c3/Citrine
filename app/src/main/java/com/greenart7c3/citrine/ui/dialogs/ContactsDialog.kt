@@ -38,17 +38,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.ui.CloseButton
 import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.Client
-import com.vitorpamplona.ammolite.relays.Relay
-import com.vitorpamplona.ammolite.relays.RelayPool
 import com.vitorpamplona.ammolite.relays.RelaySetupInfo
-import com.vitorpamplona.ammolite.service.HttpClientManager
+import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
 import com.vitorpamplona.quartz.encoders.bechToBytes
 import com.vitorpamplona.quartz.encoders.toHexKey
 import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
@@ -310,13 +309,22 @@ fun ContactsDialog(pubKey: String, onClose: () -> Unit) {
                                                         HttpClientManager.setDefaultProxy(null)
                                                     }
 
-                                                    localRelays.forEach { relayInfo ->
-                                                        RelayPool.addRelay(Relay(relayInfo.url, relayInfo.read, relayInfo.write, useProxy, relayInfo.feedTypes))
-                                                    }
-                                                    RelayPool.requestAndWatch()
+                                                    Citrine.getInstance().client.reconnect(
+                                                        localRelays.map {
+                                                            RelaySetupInfoToConnect(
+                                                                it.url,
+                                                                it.read,
+                                                                it.write,
+                                                                useProxy,
+                                                                it.feedTypes,
+                                                            )
+                                                        }.toTypedArray(),
+                                                    )
                                                     delay(1000)
-                                                    Client.sendAndWaitForResponse(signedEvent, forceProxy = useProxy, relayList = localRelays)
-                                                    RelayPool.disconnect()
+                                                    Citrine.getInstance().client.sendAndWaitForResponse(signedEvent, forceProxy = useProxy, relayList = localRelays)
+                                                    Citrine.getInstance().client.getAll().forEach {
+                                                        it.disconnect()
+                                                    }
                                                     loading = false
                                                     onClose()
                                                 }

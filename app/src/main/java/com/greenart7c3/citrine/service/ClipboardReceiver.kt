@@ -8,8 +8,6 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.core.app.NotificationManagerCompat
 import com.greenart7c3.citrine.Citrine
-import com.vitorpamplona.ammolite.relays.RelayPool
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class ClipboardReceiver : BroadcastReceiver() {
@@ -28,9 +26,9 @@ class ClipboardReceiver : BroadcastReceiver() {
             Citrine.getInstance().cancelJob()
             NotificationManagerCompat.from(context).cancel(2)
             Citrine.getInstance().applicationScope.launch {
-                RelayPool.disconnect()
-                delay(3000)
-                RelayPool.unloadRelays()
+                Citrine.getInstance().client.getAll().forEach {
+                    it.disconnect()
+                }
             }
         }
     }
