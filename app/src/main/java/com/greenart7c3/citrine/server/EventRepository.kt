@@ -93,7 +93,7 @@ object EventRepository {
               ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC
         """
 
-        if (filter.limit > 0) {
+        if (filter.limit != null) {
             query += " LIMIT ?"
             params.add(filter.limit)
         }

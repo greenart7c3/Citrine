@@ -95,7 +95,7 @@ class CustomWebSocketServer(
             val filter = objectMapper.treeToValue(jsonNode, EventFilter::class.java)
 
             var limit = filter.limit
-            if ((filter.since == null || filter.since == 0) && (filter.until == null || filter.until == 0) && filter.limit <= 0) {
+            if ((filter.since == null || filter.since == 0) && (filter.until == null || filter.until == 0) && filter.limit == null) {
                 Log.d(Citrine.TAG, "No filter provided, setting limit to 1_000")
                 limit = 1_000
             }
