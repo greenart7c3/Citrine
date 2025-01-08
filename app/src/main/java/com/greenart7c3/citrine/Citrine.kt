@@ -1,13 +1,17 @@
 package com.greenart7c3.citrine
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.ContentResolver
+import android.content.IntentFilter
+import android.os.Build
 import android.util.Log
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.service.PokeyReceiver
 import com.vitorpamplona.ammolite.relays.NostrClient
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.quartz.events.Event
@@ -28,12 +32,26 @@ class Citrine : Application() {
     val client: NostrClient = NostrClient(OkHttpWebSocket.Builder())
     var isImportingEvents = false
     var job: Job? = null
+    private val pokeyReceiver = PokeyReceiver()
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onCreate() {
         super.onCreate()
 
         instance = this
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                pokeyReceiver,
+                IntentFilter(PokeyReceiver.POKEY_ACTION),
+                RECEIVER_EXPORTED,
+            )
+        } else {
+            registerReceiver(
+                pokeyReceiver,
+                IntentFilter(PokeyReceiver.POKEY_ACTION),
+            )
+        }
     }
 
     fun contentResolverFn(): ContentResolver = contentResolver

@@ -50,6 +50,15 @@
         </service>
 
         <receiver
+            android:name=".service.PokeyReceiver"
+            android:exported="true"
+            >
+            <intent-filter>
+                <action android:name="com.shared.NOSTR" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".service.BootBroadcastReceiver"
             android:enabled="true"
             android:exported="false"
