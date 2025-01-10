@@ -96,7 +96,7 @@ class CustomWebSocketServer(
 
             var limit = filter.limit
             if ((filter.since == null || filter.since == 0) && (filter.until == null || filter.until == 0) && filter.limit == null) {
-                Log.d(Citrine.TAG, "No filter provided, setting limit to 1_000")
+                Log.d(Citrine.TAG, "No filter provided for subscription $subscriptionId filter $jsonNode, setting limit to 1_000")
                 limit = 1_000
             }
             filter.copy(
