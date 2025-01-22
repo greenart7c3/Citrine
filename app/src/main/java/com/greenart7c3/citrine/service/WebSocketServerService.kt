@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.service
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationManager
@@ -7,9 +8,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.app.TaskStackBuilder
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.IBinder
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationChannelGroupCompat
 import androidx.core.app.NotificationCompat
@@ -81,13 +84,48 @@ class WebSocketServerService : Service() {
 
                                 if (lastModifiedTime < oneWeekAgo) {
                                     Log.d(Citrine.TAG, "Backing up database")
-                                    scope.launch(Dispatchers.IO) {
+
+                                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                                        Citrine.getInstance().job?.join()
                                         ExportDatabaseUtils.exportDatabase(
                                             database = database,
                                             context = this@WebSocketServerService,
                                             folder = it,
                                             deleteOldFiles = true,
-                                            onProgress = {},
+                                            onProgress = {
+                                                val notificationManager = NotificationManagerCompat.from(Citrine.getInstance())
+
+                                                val channel = NotificationChannelCompat.Builder(
+                                                    "citrine",
+                                                    NotificationManagerCompat.IMPORTANCE_DEFAULT,
+                                                )
+                                                    .setName("Citrine")
+                                                    .build()
+
+                                                notificationManager.createNotificationChannel(channel)
+
+                                                val copyIntent = Intent(Citrine.getInstance(), ClipboardReceiver::class.java)
+                                                copyIntent.putExtra("job", "cancel")
+
+                                                val copyPendingIntent = PendingIntent.getBroadcast(
+                                                    Citrine.getInstance(),
+                                                    0,
+                                                    copyIntent,
+                                                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                                                )
+
+                                                val notification = NotificationCompat.Builder(Citrine.getInstance(), "citrine")
+                                                    .setContentTitle("Citrine")
+                                                    .setContentText(it)
+                                                    .setSmallIcon(R.drawable.ic_notification)
+                                                    .setOnlyAlertOnce(true)
+                                                    .addAction(R.drawable.ic_launcher_background, Citrine.getInstance().getString(R.string.cancel), copyPendingIntent)
+                                                    .build()
+
+                                                if (ActivityCompat.checkSelfPermission(Citrine.getInstance(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                                                    notificationManager.notify(2, notification)
+                                                }
+                                            },
                                         )
                                     }
                                 }
