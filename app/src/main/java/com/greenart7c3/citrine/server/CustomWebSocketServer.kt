@@ -8,6 +8,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -283,6 +284,7 @@ class CustomWebSocketServer(
         save(event, connection)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
         appDatabase.eventDao().delete(ids, event.pubKey)
+        HistoryDatabase.getDatabase(Citrine.getInstance()).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
     }
 
     private suspend fun override(event: Event, connection: Connection?) {
@@ -290,6 +292,7 @@ class CustomWebSocketServer(
         val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
         appDatabase.eventDao().delete(ids, event.pubKey)
+        HistoryDatabase.getDatabase(Citrine.getInstance()).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
     }
 
     private suspend fun save(event: Event, connection: Connection?) {

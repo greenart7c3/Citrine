@@ -23,12 +23,48 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var database: AppDatabase? = null
 
+        @Volatile
+        private var historyDatabase: AppDatabase? = null
+
         fun getDatabase(context: Context): AppDatabase {
             return database ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context,
                     AppDatabase::class.java,
                     "citrine_database",
+                )
+                    // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                    .addMigrations(MIGRATION_1_2)
+                    .build()
+
+                database = instance
+                instance
+            }
+        }
+    }
+}
+
+@Database(
+    entities = [EventEntity::class, TagEntity::class],
+    version = 2,
+)
+@TypeConverters(Converters::class)
+abstract class HistoryDatabase : RoomDatabase() {
+    abstract fun eventDao(): EventDao
+
+    companion object {
+        @Volatile
+        private var database: AppDatabase? = null
+
+        @Volatile
+        private var historyDatabase: AppDatabase? = null
+
+        fun getDatabase(context: Context): AppDatabase {
+            return database ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context,
+                    AppDatabase::class.java,
+                    "citrine_history_database",
                 )
                     // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
                     .addMigrations(MIGRATION_1_2)

@@ -50,7 +50,7 @@ interface EventDao {
     @Transaction
     suspend fun countEventsWithExpirations(now: Long): List<String>
 
-    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC LIMIT 5")
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC")
     @Transaction
     suspend fun getContactLists(pubkey: String): List<EventWithTags>
 

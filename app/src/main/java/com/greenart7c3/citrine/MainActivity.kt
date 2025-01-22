@@ -77,6 +77,7 @@ import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.ui.ContactsScreen
 import com.greenart7c3.citrine.ui.HomeViewModel
 import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
@@ -154,7 +155,7 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed") && destinationRoute != Route.DatabaseInfo.route) {
+                        if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed") && destinationRoute != Route.DatabaseInfo.route && !destinationRoute.startsWith("Contacts")) {
                             NavigationBar(tonalElevation = 0.dp) {
                                 items.forEach {
                                     val selected = destinationRoute == it.route
@@ -177,7 +178,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
-                        } else if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route) {
+                        } else if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts")) {
                             BottomAppBar {
                                 IconRow(
                                     center = true,
@@ -192,14 +193,16 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     topBar = {
-                        if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route) {
+                        if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts")) {
                             CenterAlignedTopAppBar(
                                 title = {
                                     Text(
                                         text = if (destinationRoute.startsWith("Feed")) {
                                             stringResource(R.string.feed)
-                                        } else {
+                                        } else if (destinationRoute == Route.DatabaseInfo.route) {
                                             stringResource(R.string.database)
+                                        } else {
+                                            stringResource(R.string.restore_follows)
                                         },
                                     )
                                 },
@@ -293,6 +296,45 @@ class MainActivity : ComponentActivity() {
                                         lifeCycleOwner.lifecycle.removeObserver(observer)
                                     }
                                 }
+
+                                val launcherLoginContacts = rememberLauncherForActivityResult(
+                                    contract = ActivityResultContracts.StartActivityForResult(),
+                                    onResult = { result ->
+                                        if (result.resultCode != RESULT_OK) {
+                                            Toast.makeText(
+                                                context,
+                                                getString(R.string.sign_request_rejected),
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        } else {
+                                            result.data?.let {
+                                                try {
+                                                    val key = it.getStringExtra("signature") ?: ""
+                                                    val packageName = it.getStringExtra("package") ?: ""
+
+                                                    val returnedKey = if (key.startsWith("npub")) {
+                                                        when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
+                                                            is Nip19Bech32.NPub -> parsed.hex
+                                                            else -> ""
+                                                        }
+                                                    } else {
+                                                        key
+                                                    }
+
+                                                    homeViewModel.signer = NostrSignerExternal(
+                                                        returnedKey,
+                                                        ExternalSignerLauncher(returnedKey, packageName),
+                                                    )
+
+                                                    homeViewModel.setPubKey(returnedKey)
+                                                    navController.navigate(Route.ContactsScreen.route.replace("{pubkey}", returnedKey))
+                                                } catch (e: Exception) {
+                                                    Log.d(Citrine.TAG, e.message ?: "", e)
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
 
                                 val launcherLogin = rememberLauncherForActivityResult(
                                     contract = ActivityResultContracts.StartActivityForResult(),
@@ -528,30 +570,31 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
-//                                        ElevatedButton(
-//                                            onClick = {
-//                                                try {
-//                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
-//                                                    val signerType = "get_public_key"
-//                                                    intent.putExtra("type", signerType)
-//                                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-//                                                    launcherLogin.launch(intent)
-//                                                } catch (e: Exception) {
-//                                                    Log.d(Citrine.TAG, e.message ?: "", e)
-//                                                    coroutineScope.launch(Dispatchers.Main) {
-//                                                        Toast.makeText(
-//                                                            context,
-//                                                            getString(R.string.no_external_signer_installed),
-//                                                            Toast.LENGTH_SHORT,
-//                                                        ).show()
-//                                                    }
-//                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
-//                                                    launcherLogin.launch(intent)
-//                                                }
-//                                            },
-//                                        ) {
-//                                            Text(stringResource(R.string.restore_follows))
-//                                        }
+                                        ElevatedButton(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
+                                                    val signerType = "get_public_key"
+                                                    intent.putExtra("type", signerType)
+                                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                                    launcherLoginContacts.launch(intent)
+                                                } catch (e: Exception) {
+                                                    Log.d(Citrine.TAG, e.message ?: "", e)
+                                                    coroutineScope.launch(Dispatchers.Main) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            getString(R.string.no_external_signer_installed),
+                                                            Toast.LENGTH_SHORT,
+                                                        ).show()
+                                                    }
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+                                                    launcherLoginContacts.launch(intent)
+                                                }
+                                            },
+                                        ) {
+                                            Text(stringResource(R.string.restore_follows))
+                                        }
 
                                         ElevatedButton(
                                             modifier = Modifier.fillMaxWidth(),
@@ -707,6 +750,23 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                     }
+                                }
+                            },
+                        )
+
+                        composable(
+                            Route.ContactsScreen.route,
+                            arguments = listOf(navArgument("pubkey") { type = NavType.StringType }),
+                            content = {
+                                it.arguments?.getString("pubkey")?.let { pubkey ->
+                                    ContactsScreen(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(padding)
+                                            .padding(16.dp),
+                                        pubKey = pubkey,
+                                        navController = navController,
+                                    )
                                 }
                             },
                         )
