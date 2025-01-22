@@ -48,6 +48,7 @@ object ExportDatabaseUtils {
                         }
                     }
                 }
+                onProgress("")
             }
         }
     }
