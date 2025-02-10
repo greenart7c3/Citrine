@@ -34,7 +34,7 @@
     <string name="use_proxy">Utiliser un proxy</string>
     <string name="proxy_port">Port du proxy</string>
     <string name="imported">Importé %1$s/%2$s</string>
-    <string name="imported2">Imported %1$s</string>
+    <string name="imported2">Importé %1$s</string>
     <string name="deleting_all_events">suppression de tous les événements</string>
     <string name="reading_file">Lecture du fichier %1$s</string>
     <string name="never_auto_backup">Ne jamais sauvegarder automatiquement</string>
@@ -44,12 +44,12 @@
     <string name="delete_all_events">Supprimer tous les événements</string>
     <string name="delete_all_events_warning">Êtes-vous sûr de vouloir supprimer tous les événements de la base de données ?</string>
     <string name="feed">Fil</string>
-    <string name="show_events">Show events</string>
-    <string name="copy_address">Copy Address</string>
-    <string name="relay_running_at_ws">Relay running at ws://%1$s:%2$s</string>
-    <string name="go_back">Go back</string>
-    <string name="total">Total: %1$s</string>
-    <string name="kind">Kind</string>
-    <string name="count">Count</string>
-    <string name="database">Database</string>
+    <string name="show_events">Afficher les événements</string>
+    <string name="copy_address">Copier l\'adresse</string>
+    <string name="relay_running_at_ws">Relais en cours d\'exécution à ws://%1$s:%2$s</string>
+    <string name="go_back">Retour</string>
+    <string name="total">Total %1$s</string>
+    <string name="kind">Type</string>
+    <string name="count">Compte</string>
+    <string name="database">Base de données</string>
 </resources>
