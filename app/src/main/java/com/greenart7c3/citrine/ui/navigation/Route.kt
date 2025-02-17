@@ -50,3 +50,5 @@ sealed class Route(
         selectedIcon = Icons.Default.Settings,
     )
 }
+
+val navigationItems = listOf(Route.Home, Route.Settings)
