@@ -83,6 +83,7 @@ import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
+import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 import com.greenart7c3.citrine.ui.toShortenHex
@@ -443,51 +444,33 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 if (showDialog) {
-                                    AlertDialog(
-                                        onDismissRequest = {
+                                    ImportEventsDialog(
+                                        onClose = {
                                             showDialog = false
                                         },
-                                        title = {
-                                            Text(getString(R.string.import_events))
-                                        },
-                                        text = {
-                                            Text(getString(R.string.import_events_warning))
-                                        },
-                                        confirmButton = {
-                                            TextButton(
-                                                onClick = {
-                                                    showDialog = false
-                                                    homeViewModel.importDatabase(
-                                                        files = selectedFiles,
-                                                        shouldDelete = true,
-                                                        context = context,
-                                                        database = database,
-                                                        onFinished = {
-                                                            selectedFiles.clear()
-                                                        },
-                                                    )
+                                        onConfirm = {
+                                            showDialog = false
+                                            homeViewModel.importDatabase(
+                                                files = selectedFiles,
+                                                shouldDelete = true,
+                                                context = context,
+                                                database = database,
+                                                onFinished = {
+                                                    selectedFiles.clear()
                                                 },
-                                            ) {
-                                                Text(getString(R.string.yes))
-                                            }
+                                            )
                                         },
-                                        dismissButton = {
-                                            TextButton(
-                                                onClick = {
-                                                    showDialog = false
-                                                    homeViewModel.importDatabase(
-                                                        files = selectedFiles,
-                                                        shouldDelete = false,
-                                                        context = context,
-                                                        database = database,
-                                                        onFinished = {
-                                                            selectedFiles.clear()
-                                                        },
-                                                    )
+                                        onDismiss = {
+                                            showDialog = false
+                                            homeViewModel.importDatabase(
+                                                files = selectedFiles,
+                                                shouldDelete = false,
+                                                context = context,
+                                                database = database,
+                                                onFinished = {
+                                                    selectedFiles.clear()
                                                 },
-                                            ) {
-                                                Text(getString(R.string.no))
-                                            }
+                                            )
                                         },
                                     )
                                 }
