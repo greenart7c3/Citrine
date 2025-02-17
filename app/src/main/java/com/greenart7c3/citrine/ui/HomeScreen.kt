@@ -47,6 +47,7 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.RelayInfo
+import com.greenart7c3.citrine.ui.dialogs.DeleteAllDialog
 import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.vitorpamplona.quartz.encoders.Nip19Bech32
@@ -232,41 +233,20 @@ fun HomeScreen(
         }
 
         if (deleteAllDialog) {
-            AlertDialog(
-                onDismissRequest = {
+            DeleteAllDialog(
+                onClose = {
                     deleteAllDialog = false
                 },
-                title = {
-                    Text(stringResource(R.string.delete_all_events))
-                },
-                text = {
-                    Text(stringResource(R.string.delete_all_events_warning))
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            deleteAllDialog = false
-                            Citrine.getInstance().cancelJob()
-                            Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
-                                Citrine.getInstance().job?.join()
-                                Citrine.getInstance().isImportingEvents = true
-                                homeViewModel.setProgress("Deleting all events")
-                                database.clearAllTables()
-                                homeViewModel.setProgress("")
-                                Citrine.getInstance().isImportingEvents = false
-                            }
-                        },
-                    ) {
-                        Text(stringResource(R.string.yes))
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            deleteAllDialog = false
-                        },
-                    ) {
-                        Text(stringResource(R.string.no))
+                onConfirm = {
+                    deleteAllDialog = false
+                    Citrine.getInstance().cancelJob()
+                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                        Citrine.getInstance().job?.join()
+                        Citrine.getInstance().isImportingEvents = true
+                        homeViewModel.setProgress("Deleting all events")
+                        database.clearAllTables()
+                        homeViewModel.setProgress("")
+                        Citrine.getInstance().isImportingEvents = false
                     }
                 },
             )
