@@ -22,10 +22,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -68,6 +66,7 @@ import com.greenart7c3.citrine.ui.HomeViewModel
 import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
+import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
@@ -86,7 +85,6 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
 
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -106,21 +104,9 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     topBar = {
-                        if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts")) {
-                            CenterAlignedTopAppBar(
-                                title = {
-                                    Text(
-                                        text = if (destinationRoute.startsWith("Feed")) {
-                                            stringResource(R.string.feed)
-                                        } else if (destinationRoute == Route.DatabaseInfo.route) {
-                                            stringResource(R.string.database)
-                                        } else {
-                                            stringResource(R.string.restore_follows)
-                                        },
-                                    )
-                                },
-                            )
-                        }
+                        CitrineTopAppBar(
+                            destinationRoute = destinationRoute,
+                        )
                     },
                 ) { padding ->
                     val configuration = LocalConfiguration.current
