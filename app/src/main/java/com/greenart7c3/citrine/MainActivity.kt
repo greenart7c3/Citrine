@@ -9,9 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,7 +38,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,16 +47,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -82,6 +75,7 @@ import com.greenart7c3.citrine.ui.HomeViewModel
 import com.greenart7c3.citrine.ui.LogcatScreen
 import com.greenart7c3.citrine.ui.SettingsScreen
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
+import com.greenart7c3.citrine.ui.components.IconRow
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
@@ -95,48 +89,6 @@ import com.vitorpamplona.quartz.signers.Permission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun IconRow(
-    center: Boolean = false,
-    title: String,
-    icon: ImageVector,
-    tint: Color,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 15.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (center) Arrangement.Center else Arrangement.Start,
-        ) {
-            Icon(
-                icon,
-                null,
-                modifier = Modifier.size(22.dp),
-                tint = tint,
-            )
-            Text(
-                modifier = Modifier.padding(start = 16.dp),
-                text = title,
-                fontSize = 18.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
 
 class MainActivity : ComponentActivity() {
     private val storageHelper = SimpleStorageHelper(this@MainActivity)
