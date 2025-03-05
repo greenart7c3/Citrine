@@ -51,5 +51,10 @@
     <string name="kind">Kind</string>
     <string name="count">Count</string>
     <string name="database">Database</string>
+    <string name="download_your_events">Download your events</string>
+    <string name="fetch_events">Fetch events</string>
+    <string name="login_with_external_signer">Login with external signer</string>
+    <string name="npub1">npub1...</string>
+    <string name="wss">wss://...</string>
 
 </resources>

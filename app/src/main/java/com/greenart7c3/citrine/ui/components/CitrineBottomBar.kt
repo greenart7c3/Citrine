@@ -21,7 +21,7 @@ fun CitrineBottomBar(
     destinationRoute: String,
     navController: NavController,
 ) {
-    if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed") && destinationRoute != Route.DatabaseInfo.route && !destinationRoute.startsWith("Contacts")) {
+    if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed") && destinationRoute != Route.DatabaseInfo.route && !destinationRoute.startsWith("Contacts") && destinationRoute != Route.DownloadYourEventsUserScreen.route) {
         NavigationBar(tonalElevation = 0.dp) {
             navigationItems.forEach {
                 val selected = destinationRoute == it.route
@@ -44,7 +44,7 @@ fun CitrineBottomBar(
                 )
             }
         }
-    } else if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts")) {
+    } else if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts") || destinationRoute == Route.DownloadYourEventsUserScreen.route) {
         BottomAppBar {
             IconRow(
                 center = true,

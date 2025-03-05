@@ -53,7 +53,6 @@ import com.greenart7c3.citrine.ui.navigation.Route
 import com.vitorpamplona.quartz.encoders.Nip19Bech32
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
-import com.vitorpamplona.quartz.signers.Permission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -420,45 +419,47 @@ fun HomeScreen(
                 ElevatedButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
-                            val signerType = "get_public_key"
-                            intent.putExtra("type", signerType)
+                        navController.navigate(Route.DownloadYourEventsUserScreen.route)
 
-                            val permissions =
-                                listOf(
-                                    Permission(
-                                        "sign_event",
-                                        22242,
-                                    ),
-                                )
-                            val jsonArray = StringBuilder("[")
-                            permissions.forEachIndexed { index, permission ->
-                                jsonArray.append(permission.toJson())
-                                if (index < permissions.size - 1) {
-                                    jsonArray.append(",")
-                                }
-                            }
-                            jsonArray.append("]")
-
-                            intent.putExtra("permissions", jsonArray.toString())
-                            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                            launcherLogin.launch(intent)
-                        } catch (e: Exception) {
-                            Log.d(Citrine.TAG, e.message ?: "", e)
-                            coroutineScope.launch(Dispatchers.Main) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.no_external_signer_installed),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
-                            launcherLogin.launch(intent)
-                        }
+//                        try {
+//                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
+//                            val signerType = "get_public_key"
+//                            intent.putExtra("type", signerType)
+//
+//                            val permissions =
+//                                listOf(
+//                                    Permission(
+//                                        "sign_event",
+//                                        22242,
+//                                    ),
+//                                )
+//                            val jsonArray = StringBuilder("[")
+//                            permissions.forEachIndexed { index, permission ->
+//                                jsonArray.append(permission.toJson())
+//                                if (index < permissions.size - 1) {
+//                                    jsonArray.append(",")
+//                                }
+//                            }
+//                            jsonArray.append("]")
+//
+//                            intent.putExtra("permissions", jsonArray.toString())
+//                            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+//                            launcherLogin.launch(intent)
+//                        } catch (e: Exception) {
+//                            Log.d(Citrine.TAG, e.message ?: "", e)
+//                            coroutineScope.launch(Dispatchers.Main) {
+//                                Toast.makeText(
+//                                    context,
+//                                    context.getString(R.string.no_external_signer_installed),
+//                                    Toast.LENGTH_SHORT,
+//                                ).show()
+//                            }
+//                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+//                            launcherLogin.launch(intent)
+//                        }
                     },
                     content = {
-                        Text("Download your events")
+                        Text(stringResource(R.string.download_your_events))
                     },
                 )
 
