@@ -11,6 +11,14 @@ Citrine is a nostr relay for android. It allows any nostr client that supports A
 - [ ] Broadcast events after coming back online
 - [ ] Add content resolvers
 
+# Download
+
+[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+     alt="Get it on F-Droid"
+     height="80">](https://f-droid.org/packages/com.greenart7c3.citrine/)
+
+Or download the latest APK from the [Releases Section](https://github.com/greenart7c3/Citrine/releases/latest).
+
 # Contributing
 
 [Issues](https://github.com/greenart7c3/Citrine/issues) and [pull requests](https://github.com/greenart7c3/Citrine/pulls) are very welcome.
