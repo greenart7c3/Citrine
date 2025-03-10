@@ -13,7 +13,7 @@ import com.greenart7c3.citrine.ui.navigation.Route
 fun CitrineTopAppBar(
     destinationRoute: String,
 ) {
-    if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts")) {
+    if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts") || destinationRoute == Route.DownloadYourEventsUserScreen.route) {
         CenterAlignedTopAppBar(
             title = {
                 Text(
@@ -21,6 +21,8 @@ fun CitrineTopAppBar(
                         stringResource(R.string.feed)
                     } else if (destinationRoute == Route.DatabaseInfo.route) {
                         stringResource(R.string.database)
+                    } else if (destinationRoute == Route.DownloadYourEventsUserScreen.route) {
+                        stringResource(R.string.download_your_events)
                     } else {
                         stringResource(R.string.restore_follows)
                     },

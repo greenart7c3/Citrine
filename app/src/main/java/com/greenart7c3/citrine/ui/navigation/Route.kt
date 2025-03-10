@@ -49,6 +49,12 @@ sealed class Route(
         icon = Icons.Outlined.Settings,
         selectedIcon = Icons.Default.Settings,
     )
+
+    data object DownloadYourEventsUserScreen : Route(
+        route = "DownloadYourEventsUserScreen",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
 }
 
 val navigationItems = listOf(Route.Home, Route.Settings)

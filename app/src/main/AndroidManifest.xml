@@ -35,6 +35,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Citrine"
         android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
         tools:targetApi="tiramisu">
         <receiver
             android:name=".service.ClipboardReceiver"
