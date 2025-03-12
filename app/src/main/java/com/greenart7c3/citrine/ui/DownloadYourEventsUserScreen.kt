@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -22,6 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,9 +41,15 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.service.EventDownloader
 import com.vitorpamplona.quartz.crypto.KeyPair
 import com.vitorpamplona.quartz.encoders.Hex
 import com.vitorpamplona.quartz.encoders.Nip19Bech32
+import com.vitorpamplona.quartz.encoders.toNpub
+import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
+import com.vitorpamplona.quartz.events.ContactListEvent
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
@@ -52,6 +61,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SelectRelayModal(
+    signer: NostrSigner,
     onDone: (List<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -60,6 +70,42 @@ fun SelectRelayModal(
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
     )
+    var loading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        launch(Dispatchers.IO) {
+            loading = true
+            try {
+                val database = AppDatabase.getDatabase(Citrine.getInstance())
+                var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
+                if (contactList == null) {
+                    contactList = EventDownloader.fetchContactList(
+                        signer = signer,
+                    )
+                }
+                contactList?.let {
+                    val contactListRelays = it.relays()
+                    contactListRelays?.forEach {
+                        relays.add(it.key)
+                    }
+                }
+                var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
+                if (advertisedRelayList == null) {
+                    advertisedRelayList = EventDownloader.fetchAdvertisedRelayList(
+                        signer = signer,
+                    )
+                }
+                advertisedRelayList?.let {
+                    it.relays().forEach {
+                        relays.add(it.relayUrl)
+                    }
+                }
+            } finally {
+                loading = false
+            }
+        }
+    }
+
     val scope = rememberCoroutineScope()
     ModalBottomSheet(
         modifier = Modifier
@@ -71,39 +117,51 @@ fun SelectRelayModal(
                     .fillMaxSize()
                     .padding(16.dp),
             ) {
-                OutlinedTextField(
-                    keyboardOptions = KeyboardOptions.Default.copy(
-                        autoCorrectEnabled = false,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            relays = (relays + relayText.text).toMutableList()
-                            keyboardController?.hide()
+                if (loading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    OutlinedTextField(
+                        keyboardOptions = KeyboardOptions.Default.copy(
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                relays = (relays + relayText.text).toMutableList()
+                                keyboardController?.hide()
+                            },
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        value = relayText,
+                        onValueChange = {
+                            relayText = it
                         },
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    value = relayText,
-                    onValueChange = {
-                        relayText = it
-                    },
-                    label = {
-                        Text(stringResource(R.string.wss))
-                    },
-                )
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(relays) { Text(it) }
+                        label = {
+                            Text(stringResource(R.string.wss))
+                        },
+                    )
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(0.9f),
+                    ) {
+                        items(relays) { Text(it) }
+                    }
+                    ElevatedButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, bottom = 4.dp),
+                        content = {
+                            Text(stringResource(R.string.fetch_events))
+                        },
+                        onClick = {
+                            onDone(relays)
+                        },
+                    )
                 }
-                ElevatedButton(
-                    content = {
-                        Text(stringResource(R.string.fetch_events))
-                    },
-                    onClick = {
-                        onDone(relays)
-                    },
-                )
             }
         },
         sheetState = sheetState,
@@ -124,7 +182,7 @@ fun DownloadYourEventsUserScreen(
     val context = LocalContext.current
     var shouldShowDialog by remember { mutableStateOf(false) }
     var npub by remember { mutableStateOf(TextFieldValue()) }
-    var signer: NostrSigner? = null
+    var signer by remember { mutableStateOf<NostrSigner?>(null) }
     var relays = remember { mutableListOf<String>() }
 
     val launcherLogin = rememberLauncherForActivityResult(
@@ -151,10 +209,13 @@ fun DownloadYourEventsUserScreen(
                             key
                         }
 
+                        val localNpub = Hex.decode(returnedKey).toNpub()
+
                         signer = NostrSignerExternal(
                             returnedKey,
                             ExternalSignerLauncher(returnedKey, packageName),
                         )
+                        npub = TextFieldValue(localNpub)
                     } catch (e: Exception) {
                         Log.d(Citrine.TAG, e.message ?: "", e)
                     }
@@ -165,7 +226,11 @@ fun DownloadYourEventsUserScreen(
 
     if (shouldShowDialog) {
         SelectRelayModal(
+            signer = signer!!,
             onDone = {
+                shouldShowDialog = false
+                relays.clear()
+                relays.addAll(it)
             },
             onDismiss = {
                 shouldShowDialog = false
