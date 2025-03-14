@@ -201,6 +201,7 @@ fun CitrineScaffold(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(16.dp),
+                    navController = navController,
                 )
             }
         }

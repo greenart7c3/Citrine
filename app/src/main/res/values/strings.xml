@@ -56,5 +56,6 @@
     <string name="login_with_external_signer">Login with external signer</string>
     <string name="npub1">npub1...</string>
     <string name="wss">wss://...</string>
+    <string name="delete">Delete</string>
 
 </resources>
