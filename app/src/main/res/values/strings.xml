@@ -57,5 +57,6 @@
     <string name="npub1">npub1...</string>
     <string name="wss">wss://...</string>
     <string name="delete">Delete</string>
+    <string name="are_you_sure_you_want_to_delete_all_events_of_kind">Are you sure you want to delete all events of kind %1$d?</string>
 
 </resources>
