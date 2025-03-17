@@ -53,7 +53,6 @@ import com.greenart7c3.citrine.ui.navigation.Route
 import com.vitorpamplona.quartz.encoders.Nip19Bech32
 import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
 import com.vitorpamplona.quartz.signers.NostrSignerExternal
-import com.vitorpamplona.quartz.signers.Permission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -159,45 +158,6 @@ fun HomeScreen(
 
                             homeViewModel.setPubKey(returnedKey)
                             navController.navigate(Route.ContactsScreen.route.replace("{pubkey}", returnedKey))
-                        } catch (e: Exception) {
-                            Log.d(Citrine.TAG, e.message ?: "", e)
-                        }
-                    }
-                }
-            },
-        )
-
-        val launcherLogin = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult(),
-            onResult = { result ->
-                if (result.resultCode != RESULT_OK) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.sign_request_rejected),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                } else {
-                    result.data?.let {
-                        try {
-                            val key = it.getStringExtra("signature") ?: ""
-                            val packageName = it.getStringExtra("package") ?: ""
-
-                            val returnedKey = if (key.startsWith("npub")) {
-                                when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
-                                    is Nip19Bech32.NPub -> parsed.hex
-                                    else -> ""
-                                }
-                            } else {
-                                key
-                            }
-
-                            homeViewModel.signer = NostrSignerExternal(
-                                returnedKey,
-                                ExternalSignerLauncher(returnedKey, packageName),
-                            )
-
-                            homeViewModel.setPubKey(returnedKey)
-                            homeViewModel.loadEventsFromPubKey(database)
                         } catch (e: Exception) {
                             Log.d(Citrine.TAG, e.message ?: "", e)
                         }
@@ -420,45 +380,10 @@ fun HomeScreen(
                 ElevatedButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
-                            val signerType = "get_public_key"
-                            intent.putExtra("type", signerType)
-
-                            val permissions =
-                                listOf(
-                                    Permission(
-                                        "sign_event",
-                                        22242,
-                                    ),
-                                )
-                            val jsonArray = StringBuilder("[")
-                            permissions.forEachIndexed { index, permission ->
-                                jsonArray.append(permission.toJson())
-                                if (index < permissions.size - 1) {
-                                    jsonArray.append(",")
-                                }
-                            }
-                            jsonArray.append("]")
-
-                            intent.putExtra("permissions", jsonArray.toString())
-                            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                            launcherLogin.launch(intent)
-                        } catch (e: Exception) {
-                            Log.d(Citrine.TAG, e.message ?: "", e)
-                            coroutineScope.launch(Dispatchers.Main) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.no_external_signer_installed),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
-                            launcherLogin.launch(intent)
-                        }
+                        navController.navigate(Route.DownloadYourEventsUserScreen.route)
                     },
                     content = {
-                        Text("Download your events")
+                        Text(stringResource(R.string.download_your_events))
                     },
                 )
 
