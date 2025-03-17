@@ -21,16 +21,20 @@ import com.vitorpamplona.ammolite.relays.TypedFilter
 import com.vitorpamplona.ammolite.relays.filters.SincePerRelayFilter
 import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.events.ContactListEvent
+import com.vitorpamplona.quartz.events.Event
 import com.vitorpamplona.quartz.signers.NostrSigner
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 object EventDownloader {
+    const val LIMIT = 300
+
     suspend fun fetchAdvertisedRelayList(
         signer: NostrSigner,
     ): AdvertisedRelayListEvent? {
@@ -185,9 +189,35 @@ object EventDownloader {
             setProgress("loading events from ${it.url}")
             val listeners = mutableMapOf<String, Relay.Listener>()
 
+            val channel = Channel<Event>(
+                capacity = 300,
+                onUndeliveredElement = {
+                    Log.d(Citrine.TAG, "Undelivered element: $it")
+                },
+            )
+
+            Citrine.getInstance().applicationScope.launch {
+                val eventList = mutableListOf<Event>()
+
+                for (message in channel) {
+                    eventList.add(message)
+                    if (eventList.size >= LIMIT) {
+                        Log.d(Citrine.TAG, "Events to insert inner: ${eventList.size}")
+                        for (event in eventList) {
+                            CustomWebSocketService.server?.innerProcessEvent(event, null)
+                        }
+                        eventList.clear()
+                    }
+                }
+                if (eventList.isNotEmpty()) Log.d(Citrine.TAG, "Events to insert: ${eventList.size}")
+                for (event in eventList) {
+                    CustomWebSocketService.server?.innerProcessEvent(event, null)
+                }
+            }
+
             fetchEventsFrom(
                 signer = signer,
-                scope = scope,
+                channel = channel,
                 listeners = listeners,
                 relayParam = it,
                 until = TimeUtils.now(),
@@ -198,7 +228,7 @@ object EventDownloader {
 
                         fetchEventsFrom(
                             signer = signer,
-                            scope = scope,
+                            channel = channel,
                             listeners = listeners,
                             relayParam = it,
                             until = TimeUtils.now(),
@@ -207,7 +237,7 @@ object EventDownloader {
                             },
                             onEvent = {
                                 count++
-                                if (count % 100 == 0) {
+                                if (count % LIMIT == 0) {
                                     setProgress("loading events from ${it.url} ($count)")
                                 }
                             },
@@ -219,7 +249,7 @@ object EventDownloader {
                 },
                 onEvent = {
                     count++
-                    if (count % 100 == 0) {
+                    if (count % LIMIT == 0) {
                         setProgress("loading events from ${it.url} ($count)")
                     }
                 },
@@ -235,6 +265,7 @@ object EventDownloader {
                     break
                 }
             }
+            channel.close()
             if (it.isConnected()) {
                 it.disconnect()
             }
@@ -251,9 +282,9 @@ object EventDownloader {
         Citrine.getInstance().isImportingEvents = false
     }
 
-    suspend fun fetchEventsFrom(
+    fun fetchEventsFrom(
         signer: NostrSigner,
-        scope: CoroutineScope,
+        channel: Channel<Event>,
         listeners: MutableMap<String, Relay.Listener>,
         relayParam: Relay,
         until: Long,
@@ -268,7 +299,6 @@ object EventDownloader {
         listeners[relayParam.url]?.let {
             relayParam.unregister(it)
         }
-        val limit = 100
 
         val listener = RelayListener2(
             onReceiveEvent = { relay, _, event ->
@@ -276,8 +306,12 @@ object EventDownloader {
                 eventCount[relay.url] = eventCount[relay.url]?.plus(1) ?: 1
                 lastEventCreatedAt = event.createdAt
 
-                scope.launch {
-                    CustomWebSocketService.server?.innerProcessEvent(event, null)
+                var result = channel.trySend(event)
+                while (result.isFailure) {
+                    result = channel.trySend(event)
+                }
+                if (result.isFailure) {
+                    Log.e(Citrine.TAG, "Failed to send event to channel")
                 }
             },
             onEOSE = { relay ->
@@ -286,13 +320,12 @@ object EventDownloader {
                 listeners[relay.url]?.let {
                     relayParam.unregister(it)
                 }
-                scope.launch(Dispatchers.IO) {
-                    val localEventCount = eventCount[relay.url] ?: 0
-                    if (localEventCount < limit) {
-                        onDone()
-                    } else {
-                        fetchEventsFrom(signer, scope, listeners, relay, lastEventCreatedAt, onEvent, onAuth, onDone)
-                    }
+
+                val localEventCount = eventCount[relay.url] ?: 0
+                if (localEventCount < LIMIT) {
+                    onDone()
+                } else {
+                    fetchEventsFrom(signer, channel, listeners, relay, lastEventCreatedAt, onEvent, onAuth, onDone)
                 }
             },
             onErrorFunc = { relay, sub, error ->
@@ -317,7 +350,7 @@ object EventDownloader {
                 filter = SincePerRelayFilter(
                     authors = listOf(signer.pubKey),
                     until = until,
-                    limit = limit,
+                    limit = LIMIT,
                 ),
             ),
         )
