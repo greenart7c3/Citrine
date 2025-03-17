@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -370,16 +372,6 @@ fun HomeScreen(
                 ElevatedButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        deleteAllDialog = true
-                    },
-                    content = {
-                        Text(stringResource(R.string.delete_all_events))
-                    },
-                )
-
-                ElevatedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
                         navController.navigate(Route.DownloadYourEventsUserScreen.route)
                     },
                     content = {
@@ -395,6 +387,21 @@ fun HomeScreen(
                 ) {
                     Text(stringResource(R.string.logs))
                 }
+
+                Spacer(modifier = Modifier.padding(8.dp))
+
+                ElevatedButton(
+                    colors = ButtonDefaults.elevatedButtonColors().copy(
+                        containerColor = Color.Red,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        deleteAllDialog = true
+                    },
+                    content = {
+                        Text(stringResource(R.string.delete_all_events), color = Color.White)
+                    },
+                )
 
                 Spacer(modifier = Modifier.padding(4.dp))
 
