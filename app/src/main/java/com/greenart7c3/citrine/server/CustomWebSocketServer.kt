@@ -119,6 +119,11 @@ class CustomWebSocketServer(
         Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
         val msgArray = EventMapper.mapper.readTree(newMessage)
         when (val type = msgArray.get(0).asText()) {
+            "AUTH" -> {
+                val event = Event.fromJson(msgArray.get(1))
+                connection?.user = event.pubKey
+                connection?.session?.send(CommandResult.ok(event).toJson())
+            }
             "COUNT" -> {
                 val subscriptionId = msgArray.get(1).asText()
                 subscribe(subscriptionId, msgArray.drop(2), connection, true)
