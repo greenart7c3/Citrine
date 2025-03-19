@@ -12,7 +12,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.onClosed
 import kotlinx.coroutines.launch
 
-class Connection(val session: DefaultWebSocketServerSession) {
+class Connection(
+    val session: DefaultWebSocketServerSession,
+    var user: HexKey? = null,
+    val authChallenge: String = UUID.randomUUID().toString().substring(0..10),
+) {
     val since = System.currentTimeMillis()
     val timer = Timer()
 
