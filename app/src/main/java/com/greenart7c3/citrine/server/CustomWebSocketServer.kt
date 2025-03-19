@@ -378,7 +378,7 @@ class CustomWebSocketServer(
                             "description": "${Settings.description}",
                             "pubkey": "${Settings.ownerPubkey}",
                             "contact": "${Settings.contact}",
-                            "supported_nips": [1,2,4,9,11,40,45,50,59,65],
+                            "supported_nips": [1,2,4,9,11,40,45,50,59,65,42],
                             "software": "https://github.com/greenart7c3/Citrine",
                             "version": "${BuildConfig.VERSION_NAME}",
                             "icon": "${Settings.relayIcon}"
@@ -395,6 +395,9 @@ class CustomWebSocketServer(
                     val thisConnection = Connection(this)
                     connections.emit(connections.value + thisConnection)
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
+
+                    send(AuthResult(thisConnection.authChallenge).toJson())
+
                     try {
                         for (frame in incoming) {
                             try {
