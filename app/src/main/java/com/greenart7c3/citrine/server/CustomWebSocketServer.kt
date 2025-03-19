@@ -130,6 +130,12 @@ class CustomWebSocketServer(
                     val subscriptionId = msgArray.get(1).asText()
                     subscribe(subscriptionId, msgArray.drop(2), connection)
                 }
+                
+                "AUTH" -> {
+                    val event = Event.fromJson(msgArray.get(1))
+                    connection?.user = event.pubKey
+                    connection?.session?.send(CommandResult.ok(event).toJson())
+                }
 
                 "EVENT" -> {
                     val event = Event.fromJson(msgArray.get(1).toString())
