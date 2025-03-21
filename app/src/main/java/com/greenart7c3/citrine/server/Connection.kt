@@ -1,6 +1,6 @@
 package com.greenart7c3.citrine.server
 
-import com.vitorpamplona.quartz.encoders.HexKey
+import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
