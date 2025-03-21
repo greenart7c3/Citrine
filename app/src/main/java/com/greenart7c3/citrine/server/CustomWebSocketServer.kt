@@ -132,7 +132,7 @@ class CustomWebSocketServer(
                 }
                 
                 "AUTH" -> {
-                    val event = Event.fromJson(msgArray.get(1))
+                    val event = Event.fromJson(msgArray.get(1).toString())
                     connection?.user = event.pubKey
                     connection?.session?.send(CommandResult.ok(event).toJson())
                 }
