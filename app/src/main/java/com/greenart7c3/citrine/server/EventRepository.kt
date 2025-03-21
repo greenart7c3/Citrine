@@ -2,10 +2,14 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
+import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.jackson.EventMapper.Companion.mapper
+import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import io.ktor.websocket.send
 
 object EventRepository {
@@ -136,5 +140,28 @@ object EventRepository {
                 )
             }
         }
+    }
+}
+
+fun Event.toJsonObject(): JsonNode {
+    val factory = mapper.nodeFactory
+
+    return factory.objectNode().apply {
+        put("id", id)
+        put("pubkey", pubKey)
+        put("created_at", createdAt)
+        put("kind", kind)
+        replace(
+            "tags",
+            factory.arrayNode(tags.size).apply {
+                tags.forEach { tag ->
+                    add(
+                        factory.arrayNode(tag.size).apply { tag.forEach { add(it) } },
+                    )
+                }
+            },
+        )
+        put("content", content)
+        put("sig", sig)
     }
 }

@@ -21,7 +21,7 @@
 package com.greenart7c3.citrine.okhttp
 
 import android.util.Log
-import com.vitorpamplona.quartz.crypto.nip17.NostrCipher
+import com.vitorpamplona.quartz.nip17Dm.files.encryption.NostrCipher
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.time.Duration

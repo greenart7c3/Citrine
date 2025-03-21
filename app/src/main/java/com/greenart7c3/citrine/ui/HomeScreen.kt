@@ -52,9 +52,10 @@ import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.DeleteAllDialog
 import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
-import com.vitorpamplona.quartz.encoders.Nip19Bech32
-import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
-import com.vitorpamplona.quartz.signers.NostrSignerExternal
+import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
+import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
+import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
+import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -145,8 +146,8 @@ fun HomeScreen(
                             val packageName = it.getStringExtra("package") ?: ""
 
                             val returnedKey = if (key.startsWith("npub")) {
-                                when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
-                                    is Nip19Bech32.NPub -> parsed.hex
+                                when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+                                    is NPub -> parsed.hex
                                     else -> ""
                                 }
                             } else {

@@ -25,9 +25,9 @@ import com.greenart7c3.citrine.service.ClipboardReceiver
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
-import com.vitorpamplona.quartz.events.Event
-import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
-import com.vitorpamplona.quartz.signers.NostrSignerExternal
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
+import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

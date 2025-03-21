@@ -1,6 +1,6 @@
 package com.greenart7c3.citrine.server
 
-import com.vitorpamplona.quartz.events.Event
+import com.vitorpamplona.quartz.nip01Core.core.Event
 import java.util.function.Predicate
 
 data class EventFilter(

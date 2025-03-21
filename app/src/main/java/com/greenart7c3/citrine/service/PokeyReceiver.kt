@@ -25,7 +25,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
-import com.vitorpamplona.quartz.events.Event
+import com.vitorpamplona.quartz.nip01Core.core.Event
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

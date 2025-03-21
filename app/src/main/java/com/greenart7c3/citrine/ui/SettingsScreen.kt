@@ -3,7 +3,6 @@
 package com.greenart7c3.citrine.ui
 
 import android.net.InetAddresses.isNumericAddress
-import android.net.Uri
 import android.os.Build
 import android.util.Patterns
 import android.widget.Toast
@@ -48,6 +47,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.core.text.isDigitsOnly
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.OlderThan
@@ -56,10 +56,12 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.SettingsRow
 import com.greenart7c3.citrine.ui.components.TitleExplainer
-import com.vitorpamplona.quartz.encoders.Hex
-import com.vitorpamplona.quartz.encoders.Nip19Bech32
-import com.vitorpamplona.quartz.encoders.hexToByteArray
-import com.vitorpamplona.quartz.encoders.toHexKey
+import com.vitorpamplona.quartz.nip01Core.core.hexToByteArray
+import com.vitorpamplona.quartz.nip01Core.core.toHexKey
+import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
+import com.vitorpamplona.quartz.nip19Bech32.entities.NProfile
+import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
+import com.vitorpamplona.quartz.utils.Hex
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -335,8 +337,8 @@ fun SettingsScreen(
 
                                 if (relayIconUrl.text.isNotBlank()) {
                                     try {
-                                        Uri.parse(relayIconUrl.text)
-                                    } catch (e: Exception) {
+                                        relayIconUrl.text.toUri()
+                                    } catch (_: Exception) {
                                         Toast.makeText(
                                             context,
                                             "Invalid icon URL",
@@ -961,7 +963,7 @@ fun isIpValid(ip: String): Boolean {
 fun String.toNostrKey(): String? {
     val key = try {
         Hex.decode(this)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
     if (key != null) {
@@ -969,15 +971,9 @@ fun String.toNostrKey(): String? {
     }
 
     val pubKeyParsed =
-        when (val parsed = Nip19Bech32.uriToRoute(this)?.entity) {
-            is Nip19Bech32.NSec -> null
-            is Nip19Bech32.NPub -> parsed.hex.hexToByteArray()
-            is Nip19Bech32.NProfile -> parsed.hex.hexToByteArray()
-            is Nip19Bech32.Note -> null
-            is Nip19Bech32.NEvent -> null
-            is Nip19Bech32.NEmbed -> null
-            is Nip19Bech32.NRelay -> null
-            is Nip19Bech32.NAddress -> null
+        when (val parsed = Nip19Parser.uriToRoute(this)?.entity) {
+            is NPub -> parsed.hex.hexToByteArray()
+            is NProfile -> parsed.hex.hexToByteArray()
             else -> null
         }
     return pubKeyParsed?.toHexKey()

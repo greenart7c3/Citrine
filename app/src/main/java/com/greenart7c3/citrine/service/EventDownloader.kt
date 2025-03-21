@@ -19,10 +19,10 @@ import com.vitorpamplona.ammolite.relays.MutableSubscriptionManager
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.ammolite.relays.TypedFilter
 import com.vitorpamplona.ammolite.relays.filters.SincePerRelayFilter
-import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
-import com.vitorpamplona.quartz.events.ContactListEvent
-import com.vitorpamplona.quartz.events.Event
-import com.vitorpamplona.quartz.signers.NostrSigner
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
+import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
+import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -47,7 +47,7 @@ object EventDownloader {
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
                 subs = MutableSubscriptionManager(),
-                socketBuilder = OkHttpWebSocket.Builder(),
+                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
             ),
             Relay(
                 url = "wss://relay.nostr.band",
@@ -56,7 +56,7 @@ object EventDownloader {
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
                 subs = MutableSubscriptionManager(),
-                socketBuilder = OkHttpWebSocket.Builder(),
+                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
             ),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
@@ -77,8 +77,8 @@ object EventDownloader {
 
         relays.forEach {
             it.register(listener)
-            it.connectAndRun { relay ->
-                relay.sendFilter(
+            it.connectAndRunAfterSync {
+                it.sendFilter(
                     UUID.randomUUID().toString().substring(0, 4),
                     filters = listOf(
                         TypedFilter(
@@ -115,7 +115,7 @@ object EventDownloader {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
-                socketBuilder = OkHttpWebSocket.Builder(),
+                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
                 subs = MutableSubscriptionManager(),
             ),
             Relay(
@@ -124,7 +124,7 @@ object EventDownloader {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
-                socketBuilder = OkHttpWebSocket.Builder(),
+                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
                 subs = MutableSubscriptionManager(),
             ),
         )
@@ -146,8 +146,8 @@ object EventDownloader {
 
         relays.forEach {
             it.register(listener)
-            it.connectAndRun { relay ->
-                relay.sendFilter(
+            it.connectAndRunAfterSync {
+                it.sendFilter(
                     UUID.randomUUID().toString().substring(0, 4),
                     filters = listOf(
                         TypedFilter(
@@ -359,8 +359,8 @@ object EventDownloader {
         relayParam.register(listener)
         listeners[relayParam.url] = listener
         if (!relayParam.isConnected()) {
-            relayParam.connectAndRun { relay ->
-                relay.sendFilter(
+            relayParam.connectAndRunAfterSync {
+                relayParam.sendFilter(
                     subId,
                     filters = filters,
                 )

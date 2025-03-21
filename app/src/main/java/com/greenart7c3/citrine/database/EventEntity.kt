@@ -10,8 +10,8 @@ import androidx.room.Relation
 import androidx.room.TypeConverter
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import com.vitorpamplona.quartz.events.Event
-import com.vitorpamplona.quartz.events.EventFactory
+import com.vitorpamplona.quartz.EventFactory
+import com.vitorpamplona.quartz.nip01Core.core.Event
 
 @Entity(
     indices = [

@@ -59,19 +59,20 @@ import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.EventDownloader
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
 import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
-import com.vitorpamplona.quartz.crypto.KeyPair
-import com.vitorpamplona.quartz.encoders.Hex
-import com.vitorpamplona.quartz.encoders.Nip19Bech32
-import com.vitorpamplona.quartz.encoders.RelayUrlFormatter
-import com.vitorpamplona.quartz.encoders.toNpub
-import com.vitorpamplona.quartz.events.AdvertisedRelayListEvent
-import com.vitorpamplona.quartz.events.ContactListEvent
-import com.vitorpamplona.quartz.events.RelayAuthEvent
-import com.vitorpamplona.quartz.signers.ExternalSignerLauncher
-import com.vitorpamplona.quartz.signers.NostrSigner
-import com.vitorpamplona.quartz.signers.NostrSignerExternal
-import com.vitorpamplona.quartz.signers.NostrSignerInternal
-import com.vitorpamplona.quartz.signers.Permission
+import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
+import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
+import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
+import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
+import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
+import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
+import com.vitorpamplona.quartz.nip19Bech32.toNpub
+import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
+import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
+import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
+import com.vitorpamplona.quartz.nip55AndroidSigner.Permission
+import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
+import com.vitorpamplona.quartz.nip65RelayList.RelayUrlFormatter
+import com.vitorpamplona.quartz.utils.Hex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -246,8 +247,8 @@ fun DownloadYourEventsUserScreen(
                         val packageName = it.getStringExtra("package") ?: ""
 
                         val returnedKey = if (key.startsWith("npub")) {
-                            when (val parsed = Nip19Bech32.uriToRoute(key)?.entity) {
-                                is Nip19Bech32.NPub -> parsed.hex
+                            when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+                                is NPub -> parsed.hex
                                 else -> ""
                             }
                         } else {
@@ -379,7 +380,7 @@ fun DownloadYourEventsUserScreen(
             },
             onClick = {
                 if (signer == null && npub.text.isNotBlank()) {
-                    val entity = Nip19Bech32.uriToRoute(npub.text)
+                    val entity = Nip19Parser.uriToRoute(npub.text)
 
                     if (entity == null) {
                         Toast.makeText(
@@ -390,7 +391,7 @@ fun DownloadYourEventsUserScreen(
                         return@ElevatedButton
                     }
 
-                    if (entity.entity !is Nip19Bech32.NPub) {
+                    if (entity.entity !is NPub) {
                         Toast.makeText(
                             context,
                             "Invalid account",
@@ -401,7 +402,7 @@ fun DownloadYourEventsUserScreen(
 
                     signer = NostrSignerInternal(
                         KeyPair(
-                            pubKey = Hex.decode((entity.entity as Nip19Bech32.NPub).hex),
+                            pubKey = Hex.decode((entity.entity as NPub).hex),
                         ),
                     )
                 }

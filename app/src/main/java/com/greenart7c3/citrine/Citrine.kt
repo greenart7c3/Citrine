@@ -14,8 +14,8 @@ import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
 import com.vitorpamplona.ammolite.relays.NostrClient
 import com.vitorpamplona.ammolite.relays.Relay
-import com.vitorpamplona.quartz.events.Event
-import com.vitorpamplona.quartz.events.EventInterface
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.relay.RelayState
 import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.measureTime
@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 
 class Citrine : Application() {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val client: NostrClient = NostrClient(OkHttpWebSocket.Builder())
+    val client: NostrClient = NostrClient(OkHttpWebSocket.BuilderFactory())
     var isImportingEvents = false
     var job: Job? = null
     private val pokeyReceiver = PokeyReceiver()
@@ -131,8 +131,8 @@ class RelayListener(
         Log.d("RelayListener", "Received auth challenge $challenge from relay ${relay.url}")
     }
 
-    override fun onBeforeSend(relay: Relay, event: EventInterface) {
-        Log.d("RelayListener", "Sending event ${event.id()} to relay ${relay.url}")
+    override fun onBeforeSend(relay: Relay, event: Event) {
+        Log.d("RelayListener", "Sending event ${event.id} to relay ${relay.url}")
     }
 
     override fun onError(relay: Relay, subscriptionId: String, error: Error) {
@@ -144,11 +144,15 @@ class RelayListener(
         onReceiveEvent(relay, subscriptionId, event)
     }
 
+    override fun onEOSE(relay: Relay, subscriptionId: String) {
+        Log.d("RelayListener", "Received EOSE from subscription $subscriptionId")
+    }
+
     override fun onNotify(relay: Relay, description: String) {
         Log.d("RelayListener", "Received notify $description from relay ${relay.url}")
     }
 
-    override fun onRelayStateChange(relay: Relay, type: Relay.StateType, channel: String?) {
+    override fun onRelayStateChange(relay: Relay, type: RelayState) {
         Log.d("RelayListener", "Relay ${relay.url} state changed to $type")
     }
 
@@ -172,8 +176,8 @@ class RelayListener2(
         onAuthFunc(relay, challenge)
     }
 
-    override fun onBeforeSend(relay: Relay, event: EventInterface) {
-        Log.d("RelayListener", "Sending event ${event.id()} to relay ${relay.url}")
+    override fun onBeforeSend(relay: Relay, event: Event) {
+        Log.d("RelayListener", "Sending event ${event.id} to relay ${relay.url}")
     }
 
     override fun onError(relay: Relay, subscriptionId: String, error: Error) {
@@ -186,13 +190,18 @@ class RelayListener2(
         onReceiveEvent(relay, subscriptionId, event)
     }
 
+    override fun onEOSE(relay: Relay, subscriptionId: String) {
+        Log.d("RelayListener", "Received EOSE from subscription $subscriptionId")
+        onEOSE(relay)
+    }
+
     override fun onNotify(relay: Relay, description: String) {
         Log.d("RelayListener", "Received notify $description from relay ${relay.url}")
     }
 
-    override fun onRelayStateChange(relay: Relay, type: Relay.StateType, channel: String?) {
+    override fun onRelayStateChange(relay: Relay, type: RelayState) {
         Log.d("RelayListener", "Relay ${relay.url} state changed to $type")
-        if (type == Relay.StateType.EOSE || type == Relay.StateType.DISCONNECTING) {
+        if (type == RelayState.DISCONNECTING) {
             onEOSE(relay)
         }
     }

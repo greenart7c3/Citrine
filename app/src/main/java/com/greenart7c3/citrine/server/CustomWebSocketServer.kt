@@ -15,9 +15,15 @@ import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
 import com.greenart7c3.citrine.utils.shouldOverwrite
-import com.vitorpamplona.quartz.encoders.ATag
-import com.vitorpamplona.quartz.events.AddressableEvent
-import com.vitorpamplona.quartz.events.Event
+import com.vitorpamplona.quartz.nip01Core.core.AddressableEvent
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.jackson.EventMapper
+import com.vitorpamplona.quartz.nip01Core.tags.addressables.taggedAddresses
+import com.vitorpamplona.quartz.nip01Core.tags.events.taggedEvents
+import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
+import com.vitorpamplona.quartz.nip01Core.verifyId
+import com.vitorpamplona.quartz.nip01Core.verifySignature
+import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -111,7 +117,7 @@ class CustomWebSocketServer(
 
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
         Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
-        val msgArray = Event.mapper.readTree(newMessage)
+        val msgArray = EventMapper.mapper.readTree(newMessage)
         when (val type = msgArray.get(0).asText()) {
             "COUNT" -> {
                 val subscriptionId = msgArray.get(1).asText()
@@ -122,7 +128,7 @@ class CustomWebSocketServer(
                 subscribe(subscriptionId, msgArray.drop(2), connection)
             }
             "EVENT" -> {
-                val event = Event.fromJson(msgArray.get(1))
+                val event = Event.fromJson(msgArray.get(1).toString())
                 processEvent(event, connection)
             }
             "CLOSE" -> {
@@ -140,7 +146,7 @@ class CustomWebSocketServer(
     }
 
     suspend fun innerProcessEvent(event: Event, connection: Connection?) {
-        if (!event.hasCorrectIDHash()) {
+        if (!event.verifyId()) {
             Log.d(Citrine.TAG, "event id hash verification failed ${event.toJson()}")
             connection?.session?.send(
                 CommandResult.invalid(
@@ -151,7 +157,7 @@ class CustomWebSocketServer(
             return
         }
 
-        if (!event.hasVerifiedSignature()) {
+        if (!event.verifySignature()) {
             Log.d(Citrine.TAG, "event signature verification failed ${event.toJson()}")
             connection?.session?.send(
                 CommandResult.invalid(
@@ -174,7 +180,7 @@ class CustomWebSocketServer(
             return
         }
 
-        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
+        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
             if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
                 Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.toJson()}")
                 connection?.session?.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
@@ -183,7 +189,7 @@ class CustomWebSocketServer(
         }
 
         if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
-            if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it in Settings.allowedTaggedPubKeys }) {
+            if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
                 Log.d(Citrine.TAG, "pubkey not allowed ${event.toJson()}")
                 connection?.session?.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
                 return
@@ -198,7 +204,7 @@ class CustomWebSocketServer(
         }
 
         if (event is AddressableEvent) {
-            val events = appDatabase.eventDao().getDeletedEventsByATag(ATag.assembleATag(event.kind, event.pubKey, event.dTag()))
+            val events = appDatabase.eventDao().getDeletedEventsByATag(event.address().toValue())
             events.forEach { deletedAt ->
                 if (deletedAt >= event.createdAt) {
                     Log.d(Citrine.TAG, "Event deleted ${event.toJson()}")
@@ -217,7 +223,7 @@ class CustomWebSocketServer(
                     return
                 }
                 event.taggedEvents().forEach { taggedEvent ->
-                    val taggedEventEntity = appDatabase.eventDao().getById(taggedEvent)
+                    val taggedEventEntity = appDatabase.eventDao().getById(taggedEvent.eventId)
                     if (taggedEventEntity != null && taggedEventEntity.event.pubkey != event.pubKey) {
                         Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.toJson()}")
                         connection?.session?.send(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
@@ -302,7 +308,7 @@ class CustomWebSocketServer(
 
     private suspend fun deleteEvent(event: Event, connection: Connection?) {
         save(event, connection)
-        appDatabase.eventDao().delete(event.taggedEvents(), event.pubKey)
+        appDatabase.eventDao().delete(event.taggedEvents().map { it.eventId }, event.pubKey)
         val taggedAddresses = event.taggedAddresses()
         if (taggedAddresses.isEmpty()) return
 

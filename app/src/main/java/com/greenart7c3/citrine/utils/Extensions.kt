@@ -1,6 +1,6 @@
 package com.greenart7c3.citrine.utils
 
-import com.vitorpamplona.quartz.events.Event
+import com.vitorpamplona.quartz.nip01Core.core.Event
 
 private const val KIND_EVENT_DELETION = 5
 private val KINDS_EVENT_EPHEMERAL = 20000 until 30000
