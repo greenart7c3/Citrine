@@ -2,6 +2,7 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
 import kotlin.time.measureTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -16,6 +17,39 @@ class SubscriptionManager(val subscription: Subscription) {
         }
 
         for (filter in subscription.filters) {
+            for (kind in filter.kinds) {
+                if (KINDS_PRIVATE_EVENTS.contains(kind)) {
+                    if (subscription.connection?.user == null) {
+                        Log.d(Citrine.TAG, "cancelling subscription auth-required: ${subscription.id}")
+                        subscription.connection?.session?.trySend(ClosedResult.required(subscription.id).toJson())
+                        return
+                    }
+                    val senders = filter.authors
+                    val receivers = filter.tags.filter { it.key == "p" }
+                    if (!senders.contains(subscription.connection.user) && !receivers.any { it.value.contains(subscription.connection.user) }) {
+                        Log.d(Citrine.TAG, "cancelling subscription restricted: ${subscription.id} senders: $senders receivers: $receivers authed user: ${subscription.connection.user} filter: $filter")
+                        subscription.connection.session.trySend(ClosedResult.restricted(subscription.id).toJson())
+                        return
+                    }
+                }
+            }
+
+            if (filter.kinds.isEmpty() && (filter.tags.contains("p") || filter.authors.isNotEmpty())) {
+                if (subscription.connection?.user == null) {
+                    Log.d(Citrine.TAG, "cancelling subscription auth-required: ${subscription.id}")
+                    subscription.connection?.session?.trySend(ClosedResult.required(subscription.id).toJson())
+                    return
+                }
+
+                val senders = filter.authors
+                val receivers = filter.tags.filter { it.key == "#p" }
+                if (!senders.contains(subscription.connection.user) && !receivers.any { it.value.contains(subscription.connection.user) }) {
+                    Log.d(Citrine.TAG, "cancelling subscription restricted: ${subscription.id} senders: $senders receivers: $receivers authed user: ${subscription.connection.user} filter: $filter")
+                    subscription.connection.session.trySend(ClosedResult.restricted(subscription.id).toJson())
+                    return
+                }
+            }
+
             try {
                 val time = measureTime {
                     EventRepository.subscribe(

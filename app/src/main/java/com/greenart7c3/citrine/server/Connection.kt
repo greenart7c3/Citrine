@@ -3,10 +3,12 @@ package com.greenart7c3.citrine.server
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import java.util.Timer
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.onClosed

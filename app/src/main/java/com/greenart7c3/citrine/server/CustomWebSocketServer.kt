@@ -180,20 +180,20 @@ class CustomWebSocketServer(
                     val subscriptionId = msgArray.get(1).asText()
                     subscribe(subscriptionId, msgArray.drop(2), connection)
                 }
-                
+
                 "AUTH" -> {
                     val event = Event.fromJson(msgArray.get(1).toString())
 
                     val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
                     if (exception != null) {
                         Log.d(Citrine.TAG, exception.message!!)
-                        connection?.session?.send(CommandResult.invalid(event, exception.message!!).toJson())
+                        connection?.session?.trySend(CommandResult.invalid(event, exception.message!!).toJson())
                         return
                     }
 
                     Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
                     connection?.user = event.pubKey
-                    connection?.session?.send(CommandResult.ok(event).toJson())
+                    connection?.session?.trySend(CommandResult.ok(event).toJson())
                 }
 
                 "EVENT" -> {
@@ -533,7 +533,7 @@ class CustomWebSocketServer(
                     connections.emit(connections.value + thisConnection)
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
 
-                    send(AuthResult(thisConnection.authChallenge).toJson())
+                    trySend(AuthResult(thisConnection.authChallenge).toJson())
 
                     try {
                         for (frame in incoming) {
