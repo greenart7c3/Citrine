@@ -24,6 +24,9 @@ import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
 import com.vitorpamplona.quartz.nip01Core.verify
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
+import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
+import com.vitorpamplona.quartz.nip65RelayList.RelayUrlFormatter
+import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -115,6 +118,53 @@ class CustomWebSocketServer(
         EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper, count)
     }
 
+    fun TimeUtils.tenMinutesAgo(): Long {
+        val tenMinutes = 10 * ONE_MINUTE
+        return now() - tenMinutes
+    }
+
+    fun TimeUtils.tenMinutesAhead(): Long {
+        val tenMinutes = 10 * ONE_MINUTE
+        return now() + tenMinutes
+    }
+
+    private fun validateAuthEvent(event: Event, challenge: String): Result<Boolean> {
+        if (event.kind != RelayAuthEvent.KIND) {
+            Log.d(Citrine.TAG, "incorrect event kind for auth")
+            return Result.failure(Exception("incorrect event kind for auth"))
+        }
+
+        val eventChallenge = (event as RelayAuthEvent).challenge()
+        val eventRelay = event.relay()
+        if (eventChallenge.isNullOrBlank()) {
+            Log.d(Citrine.TAG, "no challenge in auth event ${event.toJson()}")
+            return Result.failure(Exception("no challenge in auth event"))
+        }
+
+        if (eventRelay.isNullOrBlank()) {
+            Log.d(Citrine.TAG, "no relay in auth event ${event.toJson()}")
+            return Result.failure(Exception("no relay in auth event"))
+        }
+
+        if (eventChallenge != challenge) {
+            Log.d(Citrine.TAG, "challenge mismatch ${event.toJson()}")
+            return Result.failure(Exception("challenge mismatch"))
+        }
+
+        val formattedRelayUrl = RelayUrlFormatter.normalizeOrNull(eventRelay)
+        if (formattedRelayUrl == null) {
+            Log.d(Citrine.TAG, "invalid relay url ${event.toJson()}")
+            return Result.failure(Exception("invalid relay url"))
+        }
+
+        if (event.createdAt > TimeUtils.tenMinutesAhead() || event.createdAt < TimeUtils.tenMinutesAgo()) {
+            Log.d(Citrine.TAG, "auth event more than 10 minutes before or after current time ${event.toJson()}")
+            return Result.failure(Exception("auth event more than 10 minutes before or after current time"))
+        }
+
+        return Result.success(true)
+    }
+
     @OptIn(DelicateCoroutinesApi::class)
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
         try {
@@ -133,6 +183,15 @@ class CustomWebSocketServer(
                 
                 "AUTH" -> {
                     val event = Event.fromJson(msgArray.get(1).toString())
+
+                    val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
+                    if (exception != null) {
+                        Log.d(Citrine.TAG, exception.message!!)
+                        connection?.session?.send(CommandResult.invalid(event, exception.message!!).toJson())
+                        return
+                    }
+
+                    Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
                     connection?.user = event.pubKey
                     connection?.session?.send(CommandResult.ok(event).toJson())
                 }
