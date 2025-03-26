@@ -31,13 +31,12 @@ object ExportDatabaseUtils {
             )
             val op = file?.openOutputStream(context)
             op?.writer().use { writer ->
-                events.forEachIndexed { index, it ->
-                    database.eventDao().getById(it)?.let { event ->
+                val chunkSize = 1000
+                events.chunked(chunkSize).forEachIndexed { index, it ->
+                    database.eventDao().getByIds(it)?.let { event ->
                         val json = event.toEvent().toJson() + "\n"
                         writer?.write(json)
-                        if (index % 100 == 0) {
-                            onProgress("Exported ${index + 1}/${events.size}")
-                        }
+                        onProgress("Exported ${(index + 1) * chunkSize}/${events.size}")
                     }
                 }
                 if (deleteOldFiles) {

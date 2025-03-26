@@ -75,6 +75,7 @@ class WebSocketServerService : Service() {
                     }
 
                     if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank() && !Citrine.getInstance().isImportingEvents) {
+                        Citrine.getInstance().isImportingEvents = true
                         try {
                             val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
                             folder?.let {
@@ -85,8 +86,8 @@ class WebSocketServerService : Service() {
                                 if (lastModifiedTime < oneWeekAgo) {
                                     Log.d(Citrine.TAG, "Backing up database")
 
-                                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
-                                        Citrine.getInstance().job?.join()
+                                    Citrine.getInstance().job?.cancel()
+                                    Citrine.getInstance().job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
                                         ExportDatabaseUtils.exportDatabase(
                                             database = database,
                                             context = this@WebSocketServerService,
@@ -133,7 +134,9 @@ class WebSocketServerService : Service() {
                                     }
                                 }
                             }
+                            Citrine.getInstance().isImportingEvents = false
                         } catch (e: Exception) {
+                            Citrine.getInstance().isImportingEvents = false
                             if (e is CancellationException) throw e
                             Log.e(Citrine.TAG, "Error backing up database", e)
                         }

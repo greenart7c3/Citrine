@@ -25,6 +25,7 @@ import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -178,108 +179,114 @@ object EventDownloader {
         onAuth: (relay: Relay, challenge: String) -> Unit,
         scope: CoroutineScope,
     ) {
-        val finishedLoading = mutableMapOf<String, Boolean>()
+        try {
+            val finishedLoading = mutableMapOf<String, Boolean>()
 
-        Citrine.getInstance().client.getAll().filter { !it.url.contains("127.0.0.1") }.forEach {
-            finishedLoading[it.url] = false
-        }
+            Citrine.getInstance().client.getAll().filter { !it.url.contains("127.0.0.1") }.forEach {
+                finishedLoading[it.url] = false
+            }
 
-        Citrine.getInstance().client.getAll().forEach {
-            var count = 0
-            setProgress("loading events from ${it.url}")
-            val listeners = mutableMapOf<String, Relay.Listener>()
+            Citrine.getInstance().client.getAll().forEach {
+                var count = 0
+                setProgress("loading events from ${it.url}")
+                val listeners = mutableMapOf<String, Relay.Listener>()
 
-            val channel = Channel<Event>(
-                capacity = 300,
-                onUndeliveredElement = {
-                    Log.d(Citrine.TAG, "Undelivered element: $it")
-                },
-            )
+                val channel = Channel<Event>(
+                    capacity = 300,
+                    onUndeliveredElement = {
+                        Log.d(Citrine.TAG, "Undelivered element: $it")
+                    },
+                )
 
-            Citrine.getInstance().applicationScope.launch {
-                val eventList = mutableListOf<Event>()
+                scope.launch {
+                    val eventList = mutableListOf<Event>()
 
-                for (message in channel) {
-                    eventList.add(message)
-                    if (eventList.size >= LIMIT) {
-                        Log.d(Citrine.TAG, "Events to insert inner: ${eventList.size}")
-                        for (event in eventList) {
-                            CustomWebSocketService.server?.innerProcessEvent(event, null)
+                    for (message in channel) {
+                        eventList.add(message)
+                        if (eventList.size >= LIMIT) {
+                            Log.d(Citrine.TAG, "Events to insert inner: ${eventList.size}")
+                            for (event in eventList) {
+                                CustomWebSocketService.server?.innerProcessEvent(event, null)
+                            }
+                            eventList.clear()
                         }
-                        eventList.clear()
+                    }
+                    if (eventList.isNotEmpty()) Log.d(Citrine.TAG, "Events to insert: ${eventList.size}")
+                    for (event in eventList) {
+                        CustomWebSocketService.server?.innerProcessEvent(event, null)
                     }
                 }
-                if (eventList.isNotEmpty()) Log.d(Citrine.TAG, "Events to insert: ${eventList.size}")
-                for (event in eventList) {
-                    CustomWebSocketService.server?.innerProcessEvent(event, null)
+
+                fetchEventsFrom(
+                    signer = signer,
+                    channel = channel,
+                    listeners = listeners,
+                    relayParam = it,
+                    until = TimeUtils.now(),
+                    onAuth = { relay, challenge ->
+                        onAuth(relay, challenge)
+                        scope.launch(Dispatchers.IO) {
+                            delay(5000)
+
+                            fetchEventsFrom(
+                                signer = signer,
+                                channel = channel,
+                                listeners = listeners,
+                                relayParam = it,
+                                until = TimeUtils.now(),
+                                onAuth = { _, _ ->
+                                    finishedLoading[it.url] = true
+                                },
+                                onEvent = {
+                                    count++
+                                    if (count % LIMIT == 0) {
+                                        setProgress("loading events from ${it.url} ($count)")
+                                    }
+                                },
+                                onDone = {
+                                    finishedLoading[it.url] = true
+                                },
+                            )
+                        }
+                    },
+                    onEvent = {
+                        count++
+                        if (count % LIMIT == 0) {
+                            setProgress("loading events from ${it.url} ($count)")
+                        }
+                    },
+                    onDone = {
+                        finishedLoading[it.url] = true
+                    },
+                )
+                var timeElapsed = 0
+                while (finishedLoading[it.url] == false) {
+                    delay(1000)
+                    timeElapsed++
+                    if (timeElapsed > 60 && count == 0) {
+                        break
+                    }
+                }
+                channel.close()
+                if (it.isConnected()) {
+                    it.disconnect()
                 }
             }
 
-            fetchEventsFrom(
-                signer = signer,
-                channel = channel,
-                listeners = listeners,
-                relayParam = it,
-                until = TimeUtils.now(),
-                onAuth = { relay, challenge ->
-                    onAuth(relay, challenge)
-                    scope.launch(Dispatchers.IO) {
-                        delay(5000)
-
-                        fetchEventsFrom(
-                            signer = signer,
-                            channel = channel,
-                            listeners = listeners,
-                            relayParam = it,
-                            until = TimeUtils.now(),
-                            onAuth = { _, _ ->
-                                finishedLoading[it.url] = true
-                            },
-                            onEvent = {
-                                count++
-                                if (count % LIMIT == 0) {
-                                    setProgress("loading events from ${it.url} ($count)")
-                                }
-                            },
-                            onDone = {
-                                finishedLoading[it.url] = true
-                            },
-                        )
-                    }
-                },
-                onEvent = {
-                    count++
-                    if (count % LIMIT == 0) {
-                        setProgress("loading events from ${it.url} ($count)")
-                    }
-                },
-                onDone = {
-                    finishedLoading[it.url] = true
-                },
-            )
-            var timeElapsed = 0
-            while (finishedLoading[it.url] == false) {
-                delay(1000)
-                timeElapsed++
-                if (timeElapsed > 60 && count == 0) {
-                    break
-                }
-            }
-            channel.close()
-            if (it.isConnected()) {
+            Citrine.getInstance().client.getAll().forEach {
                 it.disconnect()
             }
+
+            delay(5000)
+
+            setProgress("Finished loading events from ${Citrine.getInstance().client.getAll().size} relays")
+            Citrine.getInstance().isImportingEvents = false
+        } catch (e: Exception) {
+            Citrine.getInstance().isImportingEvents = false
+            if (e is CancellationException) throw e
+            Log.e(Citrine.TAG, e.message ?: "", e)
+            setProgress("Failed to load events")
         }
-
-        Citrine.getInstance().client.getAll().forEach {
-            it.disconnect()
-        }
-
-        delay(5000)
-
-        setProgress("Finished loading events from ${Citrine.getInstance().client.getAll().size} relays")
-
-        Citrine.getInstance().isImportingEvents = false
     }
 
     fun fetchEventsFrom(

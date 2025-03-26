@@ -38,6 +38,10 @@ interface EventDao {
     @Transaction
     suspend fun getById(id: String): EventWithTags?
 
+    @Query("SELECT * FROM EventEntity WHERE id in (:ids)")
+    @Transaction
+    suspend fun getByIds(ids: List<String>): EventWithTags?
+
     @Transaction
     suspend fun deleteEventsWithExpirations(now: Long) {
         val ids = countEventsWithExpirations(now)

@@ -23,9 +23,6 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var database: AppDatabase? = null
 
-        @Volatile
-        private var historyDatabase: AppDatabase? = null
-
         fun getDatabase(context: Context): AppDatabase {
             return database ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -55,9 +52,6 @@ abstract class HistoryDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var database: AppDatabase? = null
-
-        @Volatile
-        private var historyDatabase: AppDatabase? = null
 
         fun getDatabase(context: Context): AppDatabase {
             return database ?: synchronized(this) {
