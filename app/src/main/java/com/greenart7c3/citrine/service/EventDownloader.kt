@@ -24,17 +24,44 @@ import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.TimeUtils
+import java.util.LinkedList
 import java.util.UUID
+import kotlin.time.measureTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
+class EventsDownloaderCache(val maxSize: Int = 200) {
+    private val cache: LinkedList<String> = LinkedList()
+
+    fun contains(element: String): Boolean {
+        return cache.contains(element)
+    }
+
+    fun addElement(element: String) {
+        // Add the new element
+        cache.addLast(element)
+
+        // If the cache exceeds the max size, remove the oldest element
+        if (cache.size > maxSize) {
+            cache.removeFirst()
+        }
+    }
+
+    fun clearCache() {
+        cache.clear()
+    }
+}
+
 object EventDownloader {
-    const val LIMIT = 300
+    const val LIMIT = 500
+    val eventCache = EventsDownloaderCache()
 
     suspend fun fetchAdvertisedRelayList(
         signer: NostrSigner,
@@ -191,35 +218,9 @@ object EventDownloader {
                 setProgress("loading events from ${it.url}")
                 val listeners = mutableMapOf<String, Relay.Listener>()
 
-                val channel = Channel<Event>(
-                    capacity = 300,
-                    onUndeliveredElement = {
-                        Log.d(Citrine.TAG, "Undelivered element: $it")
-                    },
-                )
-
-                scope.launch {
-                    val eventList = mutableListOf<Event>()
-
-                    for (message in channel) {
-                        eventList.add(message)
-                        if (eventList.size >= LIMIT) {
-                            Log.d(Citrine.TAG, "Events to insert inner: ${eventList.size}")
-                            for (event in eventList) {
-                                CustomWebSocketService.server?.innerProcessEvent(event, null)
-                            }
-                            eventList.clear()
-                        }
-                    }
-                    if (eventList.isNotEmpty()) Log.d(Citrine.TAG, "Events to insert: ${eventList.size}")
-                    for (event in eventList) {
-                        CustomWebSocketService.server?.innerProcessEvent(event, null)
-                    }
-                }
-
                 fetchEventsFrom(
+                    scope = scope,
                     signer = signer,
-                    channel = channel,
                     listeners = listeners,
                     relayParam = it,
                     until = TimeUtils.now(),
@@ -229,8 +230,8 @@ object EventDownloader {
                             delay(5000)
 
                             fetchEventsFrom(
+                                scope = this,
                                 signer = signer,
-                                channel = channel,
                                 listeners = listeners,
                                 relayParam = it,
                                 until = TimeUtils.now(),
@@ -267,7 +268,8 @@ object EventDownloader {
                         break
                     }
                 }
-                channel.close()
+                Log.d(Citrine.TAG, "Finished inserting events from ${it.url}")
+                eventCache.clearCache()
                 if (it.isConnected()) {
                     it.disconnect()
                 }
@@ -280,18 +282,30 @@ object EventDownloader {
             delay(5000)
 
             setProgress("Finished loading events from ${Citrine.getInstance().client.getAll().size} relays")
-            Citrine.getInstance().isImportingEvents = false
+            Citrine.isImportingEvents = false
         } catch (e: Exception) {
-            Citrine.getInstance().isImportingEvents = false
+            Citrine.isImportingEvents = false
             if (e is CancellationException) throw e
             Log.e(Citrine.TAG, e.message ?: "", e)
             setProgress("Failed to load events")
         }
     }
 
+    suspend fun saveEvents(events: List<Event>, scope: CoroutineScope) {
+        val jobs = mutableListOf<Deferred<Unit?>>()
+        events.forEach {
+            jobs.add(
+                scope.async {
+                    CustomWebSocketService.server?.innerProcessEvent(it, null)
+                },
+            )
+        }
+        jobs.awaitAll()
+    }
+
     fun fetchEventsFrom(
+        scope: CoroutineScope,
         signer: NostrSigner,
-        channel: Channel<Event>,
         listeners: MutableMap<String, Relay.Listener>,
         relayParam: Relay,
         until: Long,
@@ -306,57 +320,88 @@ object EventDownloader {
         listeners[relayParam.url]?.let {
             relayParam.unregister(it)
         }
+        val events = mutableListOf<Event>()
 
         val listener = RelayListener2(
             onReceiveEvent = { relay, _, event ->
                 onEvent()
-                eventCount[relay.url] = eventCount[relay.url]?.plus(1) ?: 1
-                lastEventCreatedAt = event.createdAt
+                if (!eventCache.contains(event.id)) {
+                    eventCache.addElement(event.id)
+                    eventCount[relay.url] = eventCount[relay.url]?.plus(1) ?: 1
+                    lastEventCreatedAt = if (event.createdAt < lastEventCreatedAt) {
+                        event.createdAt - 1
+                    } else {
+                        lastEventCreatedAt - 1
+                    }
+                    if (event.pubKey == signer.pubKey) {
+                        Log.d(Citrine.TAG, "Received event ${event.id} from relay ${relay.url}")
+                        events.add(event)
 
-                var result = channel.trySend(event)
-                while (result.isFailure) {
-                    result = channel.trySend(event)
-                }
-                if (result.isFailure) {
-                    Log.e(Citrine.TAG, "Failed to send event to channel")
+//                        scope.launch {
+//                            CustomWebSocketService.server?.innerProcessEvent(event, null)
+//                        }
+                    }
+                } else {
+                    lastEventCreatedAt = lastEventCreatedAt - 1
+                    Log.d(Citrine.TAG, "Received duplicate event ${event.id} from relay ${relay.url}")
                 }
             },
             onEOSE = { relay ->
                 Log.d(Citrine.TAG, "Received EOSE from relay ${relay.url}")
-                relay.close(subId)
-                listeners[relay.url]?.let {
-                    relayParam.unregister(it)
-                }
 
-                val localEventCount = eventCount[relay.url] ?: 0
-                if (localEventCount < LIMIT) {
-                    onDone()
-                } else {
-                    fetchEventsFrom(signer, channel, listeners, relay, lastEventCreatedAt, onEvent, onAuth, onDone)
+                scope.launch {
+                    val time = measureTime {
+                        saveEvents(events, scope)
+                    }
+                    Log.d(Citrine.TAG, "Saved ${events.size} events in $time")
+                    relay.close(subId)
+                    listeners[relay.url]?.let {
+                        relayParam.unregister(it)
+                    }
+
+                    val localEventCount = eventCount[relay.url] ?: 0
+                    if (localEventCount < LIMIT) {
+                        onDone()
+                    } else {
+                        // delay(5000)
+                        val localUntil = if (lastEventCreatedAt == until) {
+                            Log.d("filter", "until is the same as lastEventCreatedAt")
+                            until - 1
+                        } else {
+                            lastEventCreatedAt
+                        }
+                        fetchEventsFrom(scope, signer, listeners, relay, localUntil, onEvent, onAuth, onDone)
+                    }
                 }
             },
             onErrorFunc = { relay, sub, error ->
                 if (error.message?.contains("Socket closed") == false) {
-                    if (relay.isConnected()) {
-                        relay.close(sub)
+                    scope.launch {
+                        saveEvents(events, scope)
+                        if (relay.isConnected()) {
+                            relay.close(sub)
+                        }
+                        listeners[relay.url]?.let {
+                            relayParam.unregister(it)
+                        }
+                        onDone()
                     }
-                    listeners[relay.url]?.let {
-                        relayParam.unregister(it)
-                    }
-                    onDone()
                 }
             },
             onAuthFunc = { relay, challenge ->
+                Log.d(Citrine.TAG, "Received auth from relay ${relay.url}")
                 onAuth(relay, challenge)
             },
         )
+
+        Log.d("filter", lastEventCreatedAt.toString())
 
         val filters = listOf(
             TypedFilter(
                 types = COMMON_FEED_TYPES,
                 filter = SincePerRelayFilter(
                     authors = listOf(signer.pubKey),
-                    until = until,
+                    until = lastEventCreatedAt,
                     limit = LIMIT,
                 ),
             ),

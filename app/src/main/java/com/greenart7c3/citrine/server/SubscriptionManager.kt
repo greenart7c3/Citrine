@@ -2,7 +2,7 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
-import io.ktor.websocket.send
+import kotlin.time.measureTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 
@@ -17,15 +17,18 @@ class SubscriptionManager(val subscription: Subscription) {
 
         for (filter in subscription.filters) {
             try {
-                EventRepository.subscribe(
-                    subscription,
-                    filter,
-                )
+                val time = measureTime {
+                    EventRepository.subscribe(
+                        subscription,
+                        filter,
+                    )
+                }
+                Log.d(Citrine.TAG, "Subscription (${EventSubscription.count()}) ${subscription.id} took $time to execute $filter")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
 
                 Log.d(Citrine.TAG, "Error reading data from database $filter", e)
-                subscription.connection?.session?.send(
+                subscription.connection?.session?.trySend(
                     NoticeResult.invalid("Error reading data from database").toJson(),
                 )
             }

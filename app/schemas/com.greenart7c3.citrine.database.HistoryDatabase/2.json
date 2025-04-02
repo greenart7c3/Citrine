@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 2,
-    "identityHash": "bf90c485bbfb3751761eb581ab24cf07",
+    "identityHash": "c961195d5d6477a36ebf427daa91fa34",
     "entities": [
       {
         "tableName": "EventEntity",
@@ -90,7 +90,7 @@
       },
       {
         "tableName": "TagEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pk` INTEGER PRIMARY KEY AUTOINCREMENT, `pkEvent` TEXT, `position` INTEGER NOT NULL, `col0Name` TEXT, `col1Value` TEXT, `col2Differentiator` TEXT, `col3Amount` TEXT, `col4Plus` TEXT NOT NULL, FOREIGN KEY(`pkEvent`) REFERENCES `EventEntity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pk` INTEGER PRIMARY KEY AUTOINCREMENT, `pkEvent` TEXT, `position` INTEGER NOT NULL, `col0Name` TEXT, `col1Value` TEXT, `col2Differentiator` TEXT, `col3Amount` TEXT, `col4Plus` TEXT NOT NULL, `kind` INTEGER NOT NULL, FOREIGN KEY(`pkEvent`) REFERENCES `EventEntity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "pk",
@@ -139,6 +139,12 @@
             "columnName": "col4Plus",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "INTEGER",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -186,7 +192,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bf90c485bbfb3751761eb581ab24cf07')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c961195d5d6477a36ebf427daa91fa34')"
     ]
   }
 }

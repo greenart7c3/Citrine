@@ -204,7 +204,8 @@ fun SelectRelayModal(
                             Text(stringResource(R.string.fetch_events))
                         },
                         onClick = {
-                            onDone(relays)
+                            // TODO: find out why nostr.band keeps downloading events forever
+                            onDone(relays.filter { !it.contains("localhost") && !it.contains("127.0.0.1") })
                         },
                     )
                 }
@@ -276,9 +277,9 @@ fun DownloadYourEventsUserScreen(
             onDone = {
                 shouldShowDialog = false
 
-                Citrine.getInstance().isImportingEvents = true
+                Citrine.isImportingEvents = true
                 Citrine.getInstance().cancelJob()
-                Citrine.getInstance().job = Citrine.getInstance().applicationScope.launch {
+                Citrine.job = Citrine.getInstance().applicationScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
                     Citrine.getInstance().client.reconnect(
                         relays = it.map {

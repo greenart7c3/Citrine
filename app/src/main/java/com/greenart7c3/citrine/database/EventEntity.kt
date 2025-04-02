@@ -82,6 +82,7 @@ data class TagEntity(
     val col2Differentiator: String?,
     val col3Amount: String?,
     val col4Plus: List<String>,
+    val kind: Int,
 )
 
 class Converters {
@@ -147,6 +148,7 @@ fun Event.toEventWithTags(): EventWithTags {
             // value
             col3Amount = tag.getOrNull(3),
             col4Plus = if (tag.size > 4) tag.asList().subList(4, tag.size) else emptyList(),
+            kind = kind,
         )
     }
 

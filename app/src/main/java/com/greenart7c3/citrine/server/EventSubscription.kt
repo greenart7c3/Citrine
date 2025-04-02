@@ -7,7 +7,6 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
-import io.ktor.websocket.send
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -23,6 +22,10 @@ data class Subscription(
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
 
+    fun count(): Int {
+        return subscriptions.size()
+    }
+
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
         Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             subscriptions.snapshot().values.forEach {
@@ -34,7 +37,7 @@ object EventSubscription {
                             return@filter
                         }
 
-                        it.subscription.connection?.session?.send(
+                        it.subscription.connection?.session?.trySend(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(
                                     "EVENT",
@@ -93,6 +96,6 @@ object EventSubscription {
             manager,
         )
         manager.execute()
-        connection?.session?.send(EOSE(subscriptionId).toJson())
+        manager.subscription.connection?.session?.trySend(EOSE(subscriptionId).toJson())
     }
 }

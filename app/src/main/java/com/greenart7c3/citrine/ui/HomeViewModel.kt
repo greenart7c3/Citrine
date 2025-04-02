@@ -125,7 +125,7 @@ class HomeViewModel : ViewModel() {
         context: Context,
     ) {
         Citrine.getInstance().cancelJob()
-        Citrine.getInstance().job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+        Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             try {
                 ExportDatabaseUtils.exportDatabase(
                     database,
@@ -148,7 +148,7 @@ class HomeViewModel : ViewModel() {
         onFinished: () -> Unit,
     ) {
         Citrine.getInstance().cancelJob()
-        Citrine.getInstance().job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+        Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {
                 Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
@@ -162,7 +162,7 @@ class HomeViewModel : ViewModel() {
             }
 
             try {
-                Citrine.getInstance().isImportingEvents = true
+                Citrine.isImportingEvents = true
                 setProgress(context.getString(R.string.reading_file, file.name))
 
                 var linesRead = 0
@@ -194,7 +194,7 @@ class HomeViewModel : ViewModel() {
                 }
 
                 setProgress(context.getString(R.string.imported_events_successfully, linesRead))
-                Citrine.getInstance().isImportingEvents = false
+                Citrine.isImportingEvents = false
                 onFinished()
                 Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
@@ -204,7 +204,7 @@ class HomeViewModel : ViewModel() {
                     ).show()
                 }
             } catch (e: Exception) {
-                Citrine.getInstance().isImportingEvents = false
+                Citrine.isImportingEvents = false
                 if (e is CancellationException) throw e
                 Log.d(Citrine.TAG, e.message ?: "", e)
                 Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {

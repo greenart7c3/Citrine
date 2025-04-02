@@ -19,8 +19,7 @@ interface EventDao {
     }
 
     @RawQuery
-    @Transaction
-    suspend fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
+    fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
     @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
     @Transaction

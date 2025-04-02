@@ -10,10 +10,11 @@ import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.EventMapper.Companion.mapper
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
-import io.ktor.websocket.send
+import kotlin.collections.isNotEmpty
+import kotlin.collections.joinToString
 
 object EventRepository {
-    suspend fun query(
+    fun query(
         database: AppDatabase,
         filter: EventFilter,
     ): List<EventWithTags> {
@@ -31,21 +32,11 @@ object EventRepository {
         }
 
         if (filter.ids.isNotEmpty()) {
-            whereClause.add(
-                filter.ids.joinToString(" OR ", prefix = "(", postfix = ")") {
-                    "EventEntity.id = ?"
-                },
-            )
-            params.addAll(filter.ids)
+            whereClause.add("EventEntity.id IN ${filter.ids.map { "'$it'" }.toString().replace("[", "(").replace("]", ")")}")
         }
 
         if (filter.authors.isNotEmpty()) {
-            whereClause.add(
-                filter.authors.joinToString(" OR ", prefix = "(", postfix = ")") {
-                    "EventEntity.pubkey = ?"
-                },
-            )
-            params.addAll(filter.authors)
+            whereClause.add("EventEntity.pubkey IN ${filter.authors.map { "'$it'" }.toString().replace("[", "(").replace("]", ")")}")
         }
 
         if (filter.searchKeywords.isNotEmpty()) {
@@ -56,34 +47,19 @@ object EventRepository {
         }
 
         if (filter.kinds.isNotEmpty()) {
-            whereClause.add(
-                filter.kinds.joinToString(" OR ", prefix = "(", postfix = ")") {
-                    "EventEntity.kind = ?"
-                },
-            )
-            params.addAll(filter.kinds)
+            whereClause.add("EventEntity.kind IN ${filter.kinds.toString().replace("[", "(").replace("]", ")")}")
         }
 
         if (filter.tags.isNotEmpty()) {
             val tags = filter.tags.filterValues { it.isNotEmpty() }
             var tagQuery = ""
             tags.forEach { tag ->
-                tagQuery = "EXISTS (SELECT TagEntity.pkEvent FROM TagEntity WHERE EventEntity.id = TagEntity.pkEvent"
-                tagQuery += " AND TagEntity.col0Name = ? AND ("
-                params.add(tag.key)
-
-                var count2 = 0
-                tag.value.forEach {
-                    if (count2 == 0) {
-                        count2++
-                    } else {
-                        tagQuery += " OR "
-                    }
-                    tagQuery += " TagEntity.col1Value = ?"
-                    params.add(it)
+                tagQuery = "EventEntity.id IN (SELECT TagEntity.pkEvent FROM TagEntity WHERE 1=1"
+                if (filter.kinds.isNotEmpty()) {
+                    tagQuery += " AND TagEntity.kind IN ${filter.kinds.toString().replace("[", "(").replace("]", ")")}"
                 }
-                tagQuery += "))"
-
+                tagQuery += " AND TagEntity.col0Name = '${tag.key}'"
+                tagQuery += " AND TagEntity.col1Value IN (${tag.value.map { "'${it.replace("'", "''")}'" }.toString().replace("[", "").replace("]", "")}))"
                 whereClause.add(tagQuery)
             }
         }
@@ -113,7 +89,7 @@ object EventRepository {
         val events = query(subscription.appDatabase, filter)
 
         if (subscription.count) {
-            subscription.connection?.session?.send(
+            subscription.connection?.session?.trySend(
                 subscription.objectMapper.writeValueAsString(
                     listOf(
                         "COUNT",
@@ -129,7 +105,7 @@ object EventRepository {
             val event = it.toEvent()
             if (!event.isExpired()) {
                 Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
-                subscription.connection?.session?.send(
+                subscription.connection?.session?.trySend(
                     subscription.objectMapper.writeValueAsString(
                         listOf(
                             "EVENT",

@@ -61,7 +61,7 @@ class WebSocketServerService : Service() {
         timer?.schedule(
             object : TimerTask() {
                 override fun run() {
-                    if (Citrine.getInstance().job == null || Citrine.getInstance().job?.isCompleted == true) {
+                    if (Citrine.job == null || Citrine.job?.isCompleted == true) {
                         NotificationManagerCompat.from(Citrine.getInstance()).cancel(2)
                         Citrine.getInstance().applicationScope.launch {
                             Citrine.getInstance().client.getAll().forEach {
@@ -70,12 +70,14 @@ class WebSocketServerService : Service() {
                         }
                     }
 
-                    Citrine.getInstance().applicationScope.launch {
-                        Citrine.getInstance().eventsToDelete(database)
+                    if (!Citrine.isImportingEvents) {
+                        Citrine.getInstance().applicationScope.launch {
+                            Citrine.getInstance().eventsToDelete(database)
+                        }
                     }
 
-                    if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank() && !Citrine.getInstance().isImportingEvents) {
-                        Citrine.getInstance().isImportingEvents = true
+                    if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank() && !Citrine.isImportingEvents) {
+                        Citrine.isImportingEvents = true
                         try {
                             val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
                             folder?.let {
@@ -86,8 +88,8 @@ class WebSocketServerService : Service() {
                                 if (lastModifiedTime < oneWeekAgo) {
                                     Log.d(Citrine.TAG, "Backing up database")
 
-                                    Citrine.getInstance().job?.cancel()
-                                    Citrine.getInstance().job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                                    Citrine.job?.cancel()
+                                    Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
                                         ExportDatabaseUtils.exportDatabase(
                                             database = database,
                                             context = this@WebSocketServerService,
@@ -134,9 +136,9 @@ class WebSocketServerService : Service() {
                                     }
                                 }
                             }
-                            Citrine.getInstance().isImportingEvents = false
+                            Citrine.isImportingEvents = false
                         } catch (e: Exception) {
-                            Citrine.getInstance().isImportingEvents = false
+                            Citrine.isImportingEvents = false
                             if (e is CancellationException) throw e
                             Log.e(Citrine.TAG, "Error backing up database", e)
                         }

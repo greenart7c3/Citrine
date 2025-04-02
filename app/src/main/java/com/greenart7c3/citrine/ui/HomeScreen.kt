@@ -204,12 +204,12 @@ fun HomeScreen(
                     deleteAllDialog = false
                     Citrine.getInstance().cancelJob()
                     Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
-                        Citrine.getInstance().job?.join()
-                        Citrine.getInstance().isImportingEvents = true
+                        Citrine.job?.join()
+                        Citrine.isImportingEvents = true
                         homeViewModel.setProgress("Deleting all events")
                         database.clearAllTables()
                         homeViewModel.setProgress("")
-                        Citrine.getInstance().isImportingEvents = false
+                        Citrine.isImportingEvents = false
                     }
                 },
             )
