@@ -7,6 +7,7 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -70,6 +71,11 @@ object EventSubscription {
 
     fun close(subscriptionId: String) {
         subscriptions.remove(subscriptionId)
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    fun containsConnection(connection: Connection): Boolean {
+        return subscriptions.snapshot().values.any { it.subscription.connection?.name == connection.name && it.subscription.connection.session.outgoing.isClosedForSend == false }
     }
 
     suspend fun subscribe(

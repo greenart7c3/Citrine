@@ -126,16 +126,12 @@ class HomeViewModel : ViewModel() {
     ) {
         Citrine.getInstance().cancelJob()
         Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
-            try {
-                ExportDatabaseUtils.exportDatabase(
-                    database,
-                    context,
-                    folder,
-                ) {
-                    setProgress(it)
-                }
-            } finally {
-                setProgress("")
+            ExportDatabaseUtils.exportDatabase(
+                database,
+                context,
+                folder,
+            ) {
+                setProgress(it)
             }
         }
     }

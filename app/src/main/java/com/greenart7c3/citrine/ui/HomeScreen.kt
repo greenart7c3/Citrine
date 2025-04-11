@@ -2,16 +2,20 @@ package com.greenart7c3.citrine.ui
 
 import android.app.Activity.RESULT_OK
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +40,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -56,6 +63,10 @@ import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
 import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
 import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -329,7 +340,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
                         try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:"))
+                            val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
                             val signerType = "get_public_key"
                             intent.putExtra("type", signerType)
                             intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -343,7 +354,7 @@ fun HomeScreen(
                                     Toast.LENGTH_SHORT,
                                 ).show()
                             }
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/greenart7c3/Amber/releases"))
+                            val intent = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
                             launcherLoginContacts.launch(intent)
                         }
                     },
@@ -407,12 +418,59 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.padding(4.dp))
 
                 val connectionFlow = CustomWebSocketService.server?.connections?.collectAsStateWithLifecycle(initialValue = listOf())
+                var shouldShowConnections by remember { mutableStateOf(false) }
 
-                RelayInfo(
+                if (shouldShowConnections) {
+                    Dialog(
+                        onDismissRequest = {
+                            shouldShowConnections = false
+                        },
+                        properties = DialogProperties(
+                            usePlatformDefaultWidth = false,
+                        ),
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background),
+                        ) {
+                            LazyColumn(
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                            ) {
+                                item {
+                                    Box(Modifier.padding(bottom = 8.dp)) {
+                                        CloseButton(
+                                            onCancel = { shouldShowConnections = false },
+                                        )
+                                    }
+                                }
+                                items(connectionFlow!!.value) {
+                                    Text("${it.name} - ${it.remoteAddress()} - ${it.since.formatLongToCustomDateTimeWithSeconds()}")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth(),
-                    connections = connectionFlow?.value?.size ?: 0,
-                )
+                        .fillMaxWidth()
+                        .clickable(
+                            onClick = {
+                                if (connectionFlow?.value?.isNotEmpty() == true) {
+                                    shouldShowConnections = true
+                                }
+                            },
+                        ),
+                ) {
+                    RelayInfo(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        connections = connectionFlow?.value?.size ?: 0,
+                    )
+                }
                 Spacer(modifier = Modifier.padding(4.dp))
 
                 ElevatedButton(
@@ -426,4 +484,10 @@ fun HomeScreen(
             }
         }
     }
+}
+
+fun Long.formatLongToCustomDateTimeWithSeconds(): String {
+    val dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(this), ZoneId.systemDefault())
+    val formatter = DateTimeFormatter.ofPattern("HH:mm:ss - dd MMM")
+    return dateTime.format(formatter)
 }

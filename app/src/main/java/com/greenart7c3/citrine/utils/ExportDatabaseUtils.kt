@@ -36,7 +36,11 @@ object ExportDatabaseUtils {
                     database.eventDao().getByIds(it)?.let { event ->
                         val json = event.toEvent().toJson() + "\n"
                         writer?.write(json)
-                        onProgress("Exported ${(index + 1) * chunkSize}/${events.size}")
+                        if ((index + 1) * chunkSize > events.size) {
+                            onProgress("Exported ${events.size}/${events.size}")
+                        } else {
+                            onProgress("Exported ${(index + 1) * chunkSize}/${events.size}")
+                        }
                     }
                 }
                 if (deleteOldFiles) {
@@ -47,7 +51,7 @@ object ExportDatabaseUtils {
                         }
                     }
                 }
-                onProgress("")
+                onProgress("Backup complete")
             }
         }
     }

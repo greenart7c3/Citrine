@@ -498,13 +498,17 @@ class CustomWebSocketServer(
                             }
                         }
                     } finally {
-                        Log.d(Citrine.TAG, "Removing ${thisConnection.name}!")
-                        thisConnection.finalize()
-                        connections.value.remove(thisConnection)
-                        connections.emit(connections.value)
+                        removeConnection(thisConnection)
                     }
                 }
             }
         }.start(wait = false)
+    }
+
+    suspend fun removeConnection(connection: Connection) {
+        Log.d(Citrine.TAG, "Removing ${connection.name}!")
+        connection.finalize()
+        connections.value.remove(connection)
+        connections.emit(connections.value)
     }
 }
