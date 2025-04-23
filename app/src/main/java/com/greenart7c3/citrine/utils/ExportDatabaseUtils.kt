@@ -11,6 +11,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 object ExportDatabaseUtils {
@@ -30,12 +31,12 @@ object ExportDatabaseUtils {
                 mode = CreateMode.CREATE_NEW,
             )
             val op = file?.openOutputStream(context)
-            op?.writer().use { writer ->
+            op?.writer()?.use { writer ->
                 val chunkSize = 1000
                 events.chunked(chunkSize).forEachIndexed { index, it ->
-                    database.eventDao().getByIds(it)?.let { event ->
+                    database.eventDao().getByIds(it).forEach { event ->
                         val json = event.toEvent().toJson() + "\n"
-                        writer?.write(json)
+                        writer.write(json)
                         if ((index + 1) * chunkSize > events.size) {
                             onProgress("Exported ${events.size}/${events.size}")
                         } else {
@@ -51,6 +52,7 @@ object ExportDatabaseUtils {
                         }
                     }
                 }
+                delay(1000)
                 onProgress("Backup complete")
             }
         }
