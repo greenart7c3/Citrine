@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 class Connection(
     val session: DefaultWebSocketServerSession,
-    var user: HexKey? = null,
+    var users: MutableSet<HexKey> = mutableSetOf<HexKey>(),
     val authChallenge: String = UUID.randomUUID().toString().substring(0..10),
 ) {
     val since = System.currentTimeMillis()

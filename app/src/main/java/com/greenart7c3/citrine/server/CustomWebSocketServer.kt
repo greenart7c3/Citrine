@@ -93,7 +93,7 @@ class CustomWebSocketServer(
     private suspend fun subscribe(
         subscriptionId: String,
         filterNodes: List<JsonNode>,
-        connection: Connection?,
+        connection: Connection,
         count: Boolean = false,
     ) {
         val filters = filterNodes.map { jsonNode ->
@@ -172,13 +172,17 @@ class CustomWebSocketServer(
             val msgArray = EventMapper.mapper.readTree(newMessage)
             when (val type = msgArray.get(0).asText()) {
                 "COUNT" -> {
-                    val subscriptionId = msgArray.get(1).asText()
-                    subscribe(subscriptionId, msgArray.drop(2), connection, true)
+                    connection?.let {
+                        val subscriptionId = msgArray.get(1).asText()
+                        subscribe(subscriptionId, msgArray.drop(2), it, true)
+                    }
                 }
 
                 "REQ" -> {
-                    val subscriptionId = msgArray.get(1).asText()
-                    subscribe(subscriptionId, msgArray.drop(2), connection)
+                    connection?.let {
+                        val subscriptionId = msgArray.get(1).asText()
+                        subscribe(subscriptionId, msgArray.drop(2), it)
+                    }
                 }
 
                 "AUTH" -> {
@@ -192,7 +196,7 @@ class CustomWebSocketServer(
                     }
 
                     Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
-                    connection?.user = event.pubKey
+                    connection?.users?.add(event.pubKey)
                     connection?.session?.trySend(CommandResult.ok(event).toJson())
                 }
 
