@@ -186,6 +186,10 @@ class CustomWebSocketServer(
                 }
 
                 "AUTH" -> {
+                    if (!Settings.authEnabled) {
+                        return
+                    }
+
                     val event = Event.fromJson(msgArray.get(1).toString())
 
                     val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
@@ -513,13 +517,19 @@ class CustomWebSocketServer(
                         call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.getInstance())
+
+                        val supportedNips = mutableListOf<Int>(1, 2, 4, 9, 11, 40, 45, 50, 59, 65)
+                        if (Settings.authEnabled) {
+                            supportedNips.add(42)
+                        }
+
                         val json = """
                         {
                             "name": "${Settings.name}",
                             "description": "${Settings.description}",
                             "pubkey": "${Settings.ownerPubkey}",
                             "contact": "${Settings.contact}",
-                            "supported_nips": [1,2,4,9,11,40,45,50,59,65,42],
+                            "supported_nips": $supportedNips,
                             "software": "https://github.com/greenart7c3/Citrine",
                             "version": "${BuildConfig.VERSION_NAME}",
                             "icon": "${Settings.relayIcon}"
@@ -537,7 +547,9 @@ class CustomWebSocketServer(
                     connections.emit(connections.value + thisConnection)
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
 
-                    trySend(AuthResult(thisConnection.authChallenge).toJson())
+                    if (Settings.authEnabled) {
+                        trySend(AuthResult(thisConnection.authChallenge).toJson())
+                    }
 
                     try {
                         for (frame in incoming) {

@@ -17,8 +17,26 @@ class SubscriptionManager(val subscription: Subscription) {
         }
 
         for (filter in subscription.filters) {
-            for (kind in filter.kinds) {
-                if (KINDS_PRIVATE_EVENTS.contains(kind)) {
+            if (Settings.authEnabled) {
+                for (kind in filter.kinds) {
+                    if (KINDS_PRIVATE_EVENTS.contains(kind)) {
+                        if (subscription.connection.users.isEmpty()) {
+                            Log.d(Citrine.TAG, "cancelling subscription auth-required: ${subscription.id}")
+                            subscription.connection.session.trySend(ClosedResult.required(subscription.id).toJson())
+                            return
+                        }
+
+                        val senders = filter.authors
+                        val receivers = filter.tags.filter { it.key == "p" }
+                        if (!senders.any { subscription.connection.users.contains(it) } && !receivers.any { it.value.any { subscription.connection.users.contains(it) } }) {
+                            Log.d(Citrine.TAG, "cancelling subscription restricted: ${subscription.id} senders: $senders receivers: $receivers authed users: ${subscription.connection.users} filter: $filter")
+                            subscription.connection.session.trySend(ClosedResult.restricted(subscription.id).toJson())
+                            return
+                        }
+                    }
+                }
+
+                if (filter.kinds.isEmpty() && (filter.tags.contains("p") || filter.authors.isNotEmpty())) {
                     if (subscription.connection.users.isEmpty()) {
                         Log.d(Citrine.TAG, "cancelling subscription auth-required: ${subscription.id}")
                         subscription.connection.session.trySend(ClosedResult.required(subscription.id).toJson())
@@ -26,28 +44,12 @@ class SubscriptionManager(val subscription: Subscription) {
                     }
 
                     val senders = filter.authors
-                    val receivers = filter.tags.filter { it.key == "p" }
+                    val receivers = filter.tags.filter { it.key == "#p" }
                     if (!senders.any { subscription.connection.users.contains(it) } && !receivers.any { it.value.any { subscription.connection.users.contains(it) } }) {
-                        Log.d(Citrine.TAG, "cancelling subscription restricted: ${subscription.id} senders: $senders receivers: $receivers authed users: ${subscription.connection.users} filter: $filter")
+                        Log.d(Citrine.TAG, "cancelling subscription restricted: ${subscription.id} senders: $senders receivers: $receivers authed user: ${subscription.connection.users} filter: $filter")
                         subscription.connection.session.trySend(ClosedResult.restricted(subscription.id).toJson())
                         return
                     }
-                }
-            }
-
-            if (filter.kinds.isEmpty() && (filter.tags.contains("p") || filter.authors.isNotEmpty())) {
-                if (subscription.connection.users.isEmpty()) {
-                    Log.d(Citrine.TAG, "cancelling subscription auth-required: ${subscription.id}")
-                    subscription.connection.session.trySend(ClosedResult.required(subscription.id).toJson())
-                    return
-                }
-
-                val senders = filter.authors
-                val receivers = filter.tags.filter { it.key == "#p" }
-                if (!senders.any { subscription.connection.users.contains(it) } && !receivers.any { it.value.any { subscription.connection.users.contains(it) } }) {
-                    Log.d(Citrine.TAG, "cancelling subscription restricted: ${subscription.id} senders: $senders receivers: $receivers authed user: ${subscription.connection.users} filter: $filter")
-                    subscription.connection.session.trySend(ClosedResult.restricted(subscription.id).toJson())
-                    return
                 }
             }
 

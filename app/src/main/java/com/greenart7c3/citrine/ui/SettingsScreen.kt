@@ -89,6 +89,9 @@ fun SettingsScreen(
         var deleteExpiredEvents by remember {
             mutableStateOf(Settings.deleteExpiredEvents)
         }
+        var useAuth by remember {
+            mutableStateOf(Settings.authEnabled)
+        }
         var deleteEphemeralEvents by remember {
             mutableStateOf(Settings.deleteEphemeralEvents)
         }
@@ -740,6 +743,32 @@ fun SettingsScreen(
                     Text(
                         text = "Others",
                         style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            useAuth = !useAuth
+                            Settings.authEnabled = !Settings.authEnabled
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = "Enable/Disable Auth",
+                    )
+                    Switch(
+                        checked = useAuth,
+                        onCheckedChange = {
+                            useAuth = !useAuth
+                            Settings.authEnabled = !Settings.authEnabled
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
                     )
                 }
             }
