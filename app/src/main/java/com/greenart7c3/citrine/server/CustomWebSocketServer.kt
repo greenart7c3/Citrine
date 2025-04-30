@@ -26,6 +26,7 @@ import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
 import com.vitorpamplona.quartz.nip65RelayList.RelayUrlFormatter
+import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
 import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
@@ -256,9 +257,10 @@ class CustomWebSocketServer(
         AlreadyInDatabase,
         TaggedPubKeyMismatch,
         NewestEventAlreadyInDatabase,
+        AuthRequiredForProtectedEvent,
     }
 
-    suspend fun verifyEvent(event: Event, shouldVerify: Boolean): VerificationResult {
+    suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean): VerificationResult {
         if (!shouldVerify) {
             return VerificationResult.Valid
         }
@@ -300,6 +302,18 @@ class CustomWebSocketServer(
                     Log.d(Citrine.TAG, "Event deleted ${event.id}")
                     return VerificationResult.Deleted
                 }
+            }
+        }
+
+        if (event.isProtected()) {
+            if (!Settings.authEnabled) {
+                Log.d(Citrine.TAG, "auth disabled for protected event ${event.id}")
+                return VerificationResult.AuthRequiredForProtectedEvent
+            }
+
+            if (connection?.users?.contains(event.pubKey) != true) {
+                Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
+                return VerificationResult.AuthRequiredForProtectedEvent
             }
         }
 
@@ -365,7 +379,13 @@ class CustomWebSocketServer(
     }
 
     suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true) {
-        when (verifyEvent(event, shouldVerify)) {
+        when (verifyEvent(event, connection, shouldVerify)) {
+            VerificationResult.AuthRequiredForProtectedEvent -> {
+                if (Settings.authEnabled) {
+                    connection?.session?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
+                }
+                connection?.session?.trySend(CommandResult.invalid(event, "auth-required: this event may only be published by its author").toJson())
+            }
             VerificationResult.InvalidId -> {
                 connection?.session?.trySend(
                     CommandResult.invalid(
@@ -518,7 +538,7 @@ class CustomWebSocketServer(
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.getInstance())
 
-                        val supportedNips = mutableListOf<Int>(1, 2, 4, 9, 11, 40, 45, 50, 59, 65)
+                        val supportedNips = mutableListOf<Int>(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70)
                         if (Settings.authEnabled) {
                             supportedNips.add(42)
                         }
