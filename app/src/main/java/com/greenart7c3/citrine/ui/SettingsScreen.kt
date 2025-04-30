@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.text.isDigitsOnly
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.OlderThanType
@@ -88,6 +89,9 @@ fun SettingsScreen(
         }
         var deleteExpiredEvents by remember {
             mutableStateOf(Settings.deleteExpiredEvents)
+        }
+        var listenToPokeyBroadcasts by remember {
+            mutableStateOf(Settings.listenToPokeyBroadcasts)
         }
         var useAuth by remember {
             mutableStateOf(Settings.authEnabled)
@@ -760,7 +764,7 @@ fun SettingsScreen(
                 ) {
                     Text(
                         modifier = Modifier.weight(1f),
-                        text = "Enable/Disable Auth",
+                        text = stringResource(R.string.enable_disable_auth),
                     )
                     Switch(
                         checked = useAuth,
@@ -768,6 +772,37 @@ fun SettingsScreen(
                             useAuth = !useAuth
                             Settings.authEnabled = !Settings.authEnabled
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                    )
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            listenToPokeyBroadcasts = !listenToPokeyBroadcasts
+                            Settings.listenToPokeyBroadcasts = !Settings.listenToPokeyBroadcasts
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.listen_to_pokey_broadcasts),
+                    )
+                    Switch(
+                        checked = listenToPokeyBroadcasts,
+                        onCheckedChange = {
+                            listenToPokeyBroadcasts = !listenToPokeyBroadcasts
+                            Settings.listenToPokeyBroadcasts = !Settings.listenToPokeyBroadcasts
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            if (listenToPokeyBroadcasts) {
+                                Citrine.getInstance().registerPokeyReceiver()
+                            } else {
+                                Citrine.getInstance().unregisterPokeyReceiver()
+                            }
                         },
                     )
                 }
@@ -786,7 +821,7 @@ fun SettingsScreen(
                 ) {
                     Text(
                         modifier = Modifier.weight(1f),
-                        text = "Delete expired events",
+                        text = stringResource(R.string.delete_expired_events),
                     )
                     Switch(
                         checked = deleteExpiredEvents,
@@ -812,7 +847,7 @@ fun SettingsScreen(
                 ) {
                     Text(
                         modifier = Modifier.weight(1f),
-                        text = "Delete ephemeral events",
+                        text = stringResource(R.string.delete_ephemeral_events),
                     )
                     Switch(
                         checked = deleteEphemeralEvents,

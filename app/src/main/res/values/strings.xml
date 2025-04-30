@@ -58,5 +58,9 @@
     <string name="wss">wss://...</string>
     <string name="delete">Delete</string>
     <string name="are_you_sure_you_want_to_delete_all_events_of_kind">Are you sure you want to delete all events of kind %1$d?</string>
+    <string name="listen_to_pokey_broadcasts">Listen to pokey broadcasts</string>
+    <string name="delete_expired_events">Delete expired events</string>
+    <string name="delete_ephemeral_events">Delete ephemeral events</string>
+    <string name="enable_disable_auth">Enable/Disable Auth</string>
 
 </resources>
