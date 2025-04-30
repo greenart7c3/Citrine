@@ -52,11 +52,15 @@
     <string name="kind">类型</string>
     <string name="count">计数</string>
     <string name="database">数据库</string>
-    <string name="download_your_events">Download your events</string>
-    <string name="fetch_events">Fetch events</string>
-    <string name="login_with_external_signer">Login with external signer</string>
+    <string name="download_your_events">下载你的事件</string>
+    <string name="fetch_events">获取事件</string>
+    <string name="login_with_external_signer">使用外部签名器登录</string>
     <string name="npub1">npub1...</string>
     <string name="wss">wss://...</string>
-    <string name="delete">Delete</string>
-    <string name="are_you_sure_you_want_to_delete_all_events_of_kind">Are you sure you want to delete all events of kind %1$d?</string>
+    <string name="delete">删除</string>
+    <string name="are_you_sure_you_want_to_delete_all_events_of_kind">确定要从数据库中删除所有类型为 %1$d 的事件吗？</string>
+    <string name="listen_to_pokey_broadcasts">Listen to pokey broadcasts</string>
+    <string name="delete_expired_events">Delete expired events</string>
+    <string name="delete_ephemeral_events">Delete ephemeral events</string>
+    <string name="enable_disable_auth">Enable/Disable Auth</string>
 </resources>
