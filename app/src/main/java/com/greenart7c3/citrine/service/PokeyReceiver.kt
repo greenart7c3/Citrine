@@ -25,6 +25,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.server.Settings
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,18 +43,19 @@ class PokeyReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        if (intent.action == POKEY_ACTION) { // it's best practice to verify intent action before performing any operation
-            val eventStr = intent.getStringExtra("EVENT")
-            Log.d(Citrine.TAG, "New Pokey Notification Arrived $eventStr")
+        if (!Settings.listenToPokeyBroadcasts) return
+        if (intent.action != POKEY_ACTION) return
 
-            if (eventStr == null) return
+        val eventStr = intent.getStringExtra("EVENT")
+        Log.d(Citrine.TAG, "New Pokey Notification Arrived $eventStr")
 
-            scope.launch(Dispatchers.IO) {
-                try {
-                    CustomWebSocketService.server?.innerProcessEvent(Event.fromJson(eventStr), null)
-                } catch (e: Exception) {
-                    Log.e(Citrine.TAG, "Failed to parse Pokey Event", e)
-                }
+        if (eventStr == null) return
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                CustomWebSocketService.server?.innerProcessEvent(Event.fromJson(eventStr), null)
+            } catch (e: Exception) {
+                Log.e(Citrine.TAG, "Failed to parse Pokey Event", e)
             }
         }
     }

@@ -3,16 +3,22 @@ package com.greenart7c3.citrine.server
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import java.util.Timer
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.onClosed
 import kotlinx.coroutines.launch
 
-class Connection(val session: DefaultWebSocketServerSession) {
+class Connection(
+    val session: DefaultWebSocketServerSession,
+    var users: MutableSet<HexKey> = mutableSetOf<HexKey>(),
+    val authChallenge: String = UUID.randomUUID().toString().substring(0..10),
+) {
     val since = System.currentTimeMillis()
     val timer = Timer()
 

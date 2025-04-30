@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 data class Subscription(
     val id: String,
-    val connection: Connection?,
+    val connection: Connection,
     val filters: Set<EventFilter>,
     val appDatabase: AppDatabase,
     val objectMapper: ObjectMapper,
@@ -33,12 +33,12 @@ object EventSubscription {
                 it.subscription.filters.forEach filter@{ filter ->
                     val event = dbEvent.toEvent()
                     if (filter.test(event)) {
-                        if (connection != null && it.subscription.connection?.name == connection.name) {
+                        if (connection != null && it.subscription.connection.name == connection.name) {
                             Log.d(Citrine.TAG, "skipping event to same connection")
                             return@filter
                         }
 
-                        it.subscription.connection?.session?.trySend(
+                        it.subscription.connection.session.trySend(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(
                                     "EVENT",
@@ -56,7 +56,7 @@ object EventSubscription {
     fun closeAll(connectionName: String) {
         Log.d(Citrine.TAG, "finalizing subscriptions from $connectionName")
         subscriptions.snapshot().keys.forEach {
-            if (subscriptions[it].subscription.connection?.name == connectionName) {
+            if (subscriptions[it].subscription.connection.name == connectionName) {
                 Log.d(Citrine.TAG, "closing subscription $it")
                 close(it)
             }
@@ -75,13 +75,13 @@ object EventSubscription {
 
     @OptIn(DelicateCoroutinesApi::class)
     fun containsConnection(connection: Connection): Boolean {
-        return subscriptions.snapshot().values.any { it.subscription.connection?.name == connection.name && it.subscription.connection.session.outgoing.isClosedForSend == false }
+        return subscriptions.snapshot().values.any { it.subscription.connection.name == connection.name && it.subscription.connection.session.outgoing.isClosedForSend == false }
     }
 
     suspend fun subscribe(
         subscriptionId: String,
         filters: Set<EventFilter>,
-        connection: Connection?,
+        connection: Connection,
         appDatabase: AppDatabase,
         objectMapper: ObjectMapper,
         count: Boolean,
@@ -102,6 +102,6 @@ object EventSubscription {
             manager,
         )
         manager.execute()
-        manager.subscription.connection?.session?.trySend(EOSE(subscriptionId).toJson())
+        manager.subscription.connection.session.trySend(EOSE(subscriptionId).toJson())
     }
 }

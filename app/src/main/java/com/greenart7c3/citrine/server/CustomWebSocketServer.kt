@@ -24,6 +24,10 @@ import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
 import com.vitorpamplona.quartz.nip01Core.verify
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
+import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
+import com.vitorpamplona.quartz.nip65RelayList.RelayUrlFormatter
+import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
+import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -90,7 +94,7 @@ class CustomWebSocketServer(
     private suspend fun subscribe(
         subscriptionId: String,
         filterNodes: List<JsonNode>,
-        connection: Connection?,
+        connection: Connection,
         count: Boolean = false,
     ) {
         val filters = filterNodes.map { jsonNode ->
@@ -115,6 +119,53 @@ class CustomWebSocketServer(
         EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper, count)
     }
 
+    fun TimeUtils.tenMinutesAgo(): Long {
+        val tenMinutes = 10 * ONE_MINUTE
+        return now() - tenMinutes
+    }
+
+    fun TimeUtils.tenMinutesAhead(): Long {
+        val tenMinutes = 10 * ONE_MINUTE
+        return now() + tenMinutes
+    }
+
+    private fun validateAuthEvent(event: Event, challenge: String): Result<Boolean> {
+        if (event.kind != RelayAuthEvent.KIND) {
+            Log.d(Citrine.TAG, "incorrect event kind for auth")
+            return Result.failure(Exception("incorrect event kind for auth"))
+        }
+
+        val eventChallenge = (event as RelayAuthEvent).challenge()
+        val eventRelay = event.relay()
+        if (eventChallenge.isNullOrBlank()) {
+            Log.d(Citrine.TAG, "no challenge in auth event ${event.toJson()}")
+            return Result.failure(Exception("no challenge in auth event"))
+        }
+
+        if (eventRelay.isNullOrBlank()) {
+            Log.d(Citrine.TAG, "no relay in auth event ${event.toJson()}")
+            return Result.failure(Exception("no relay in auth event"))
+        }
+
+        if (eventChallenge != challenge) {
+            Log.d(Citrine.TAG, "challenge mismatch ${event.toJson()}")
+            return Result.failure(Exception("challenge mismatch"))
+        }
+
+        val formattedRelayUrl = RelayUrlFormatter.normalizeOrNull(eventRelay)
+        if (formattedRelayUrl == null) {
+            Log.d(Citrine.TAG, "invalid relay url ${event.toJson()}")
+            return Result.failure(Exception("invalid relay url"))
+        }
+
+        if (event.createdAt > TimeUtils.tenMinutesAhead() || event.createdAt < TimeUtils.tenMinutesAgo()) {
+            Log.d(Citrine.TAG, "auth event more than 10 minutes before or after current time ${event.toJson()}")
+            return Result.failure(Exception("auth event more than 10 minutes before or after current time"))
+        }
+
+        return Result.success(true)
+    }
+
     @OptIn(DelicateCoroutinesApi::class)
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
         try {
@@ -122,13 +173,36 @@ class CustomWebSocketServer(
             val msgArray = EventMapper.mapper.readTree(newMessage)
             when (val type = msgArray.get(0).asText()) {
                 "COUNT" -> {
-                    val subscriptionId = msgArray.get(1).asText()
-                    subscribe(subscriptionId, msgArray.drop(2), connection, true)
+                    connection?.let {
+                        val subscriptionId = msgArray.get(1).asText()
+                        subscribe(subscriptionId, msgArray.drop(2), it, true)
+                    }
                 }
 
                 "REQ" -> {
-                    val subscriptionId = msgArray.get(1).asText()
-                    subscribe(subscriptionId, msgArray.drop(2), connection)
+                    connection?.let {
+                        val subscriptionId = msgArray.get(1).asText()
+                        subscribe(subscriptionId, msgArray.drop(2), it)
+                    }
+                }
+
+                "AUTH" -> {
+                    if (!Settings.authEnabled) {
+                        return
+                    }
+
+                    val event = Event.fromJson(msgArray.get(1).toString())
+
+                    val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
+                    if (exception != null) {
+                        Log.d(Citrine.TAG, exception.message!!)
+                        connection?.session?.trySend(CommandResult.invalid(event, exception.message!!).toJson())
+                        return
+                    }
+
+                    Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
+                    connection?.users?.add(event.pubKey)
+                    connection?.session?.trySend(CommandResult.ok(event).toJson())
                 }
 
                 "EVENT" -> {
@@ -183,9 +257,10 @@ class CustomWebSocketServer(
         AlreadyInDatabase,
         TaggedPubKeyMismatch,
         NewestEventAlreadyInDatabase,
+        AuthRequiredForProtectedEvent,
     }
 
-    suspend fun verifyEvent(event: Event, shouldVerify: Boolean): VerificationResult {
+    suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean): VerificationResult {
         if (!shouldVerify) {
             return VerificationResult.Valid
         }
@@ -227,6 +302,18 @@ class CustomWebSocketServer(
                     Log.d(Citrine.TAG, "Event deleted ${event.id}")
                     return VerificationResult.Deleted
                 }
+            }
+        }
+
+        if (event.isProtected()) {
+            if (!Settings.authEnabled) {
+                Log.d(Citrine.TAG, "auth disabled for protected event ${event.id}")
+                return VerificationResult.AuthRequiredForProtectedEvent
+            }
+
+            if (connection?.users?.contains(event.pubKey) != true) {
+                Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
+                return VerificationResult.AuthRequiredForProtectedEvent
             }
         }
 
@@ -292,7 +379,13 @@ class CustomWebSocketServer(
     }
 
     suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true) {
-        when (verifyEvent(event, shouldVerify)) {
+        when (verifyEvent(event, connection, shouldVerify)) {
+            VerificationResult.AuthRequiredForProtectedEvent -> {
+                if (Settings.authEnabled) {
+                    connection?.session?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
+                }
+                connection?.session?.trySend(CommandResult.invalid(event, "auth-required: this event may only be published by its author").toJson())
+            }
             VerificationResult.InvalidId -> {
                 connection?.session?.trySend(
                     CommandResult.invalid(
@@ -444,13 +537,19 @@ class CustomWebSocketServer(
                         call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.getInstance())
+
+                        val supportedNips = mutableListOf<Int>(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70)
+                        if (Settings.authEnabled) {
+                            supportedNips.add(42)
+                        }
+
                         val json = """
                         {
                             "name": "${Settings.name}",
                             "description": "${Settings.description}",
                             "pubkey": "${Settings.ownerPubkey}",
                             "contact": "${Settings.contact}",
-                            "supported_nips": [1,2,4,9,11,40,45,50,59,65],
+                            "supported_nips": $supportedNips,
                             "software": "https://github.com/greenart7c3/Citrine",
                             "version": "${BuildConfig.VERSION_NAME}",
                             "icon": "${Settings.relayIcon}"
@@ -467,6 +566,11 @@ class CustomWebSocketServer(
                     val thisConnection = Connection(this)
                     connections.emit(connections.value + thisConnection)
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
+
+                    if (Settings.authEnabled) {
+                        trySend(AuthResult(thisConnection.authChallenge).toJson())
+                    }
+
                     try {
                         for (frame in incoming) {
                             try {

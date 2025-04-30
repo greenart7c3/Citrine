@@ -33,11 +33,7 @@ class Citrine : Application() {
     private val pokeyReceiver = PokeyReceiver()
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    override fun onCreate() {
-        super.onCreate()
-
-        instance = this
-        LocalPreferences.loadSettingsFromEncryptedStorage(this)
+    fun registerPokeyReceiver() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(
                 pokeyReceiver,
@@ -49,6 +45,20 @@ class Citrine : Application() {
                 pokeyReceiver,
                 IntentFilter(PokeyReceiver.POKEY_ACTION),
             )
+        }
+    }
+
+    fun unregisterPokeyReceiver() {
+        unregisterReceiver(pokeyReceiver)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+
+        instance = this
+        LocalPreferences.loadSettingsFromEncryptedStorage(this)
+        if (Settings.listenToPokeyBroadcasts) {
+            registerPokeyReceiver()
         }
     }
 
