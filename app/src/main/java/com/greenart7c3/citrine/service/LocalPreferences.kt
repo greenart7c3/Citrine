@@ -26,6 +26,7 @@ object PrefKeys {
     const val AUTO_BACKUP_FOLDER = "auto_backup_folder"
     const val AUTH_ENABLED = "auth_enabled"
     const val LISTEN_TO_POKEY_BROADCASTS = "listen_to_pokey_broadcasts"
+    const val START_ON_BOOT = "start_on_boot"
 }
 
 object LocalPreferences {
@@ -65,6 +66,7 @@ object LocalPreferences {
                 putString(PrefKeys.AUTO_BACKUP_FOLDER, settings.autoBackupFolder)
                 putBoolean(PrefKeys.AUTH_ENABLED, settings.authEnabled)
                 putBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, settings.listenToPokeyBroadcasts)
+                putBoolean(PrefKeys.START_ON_BOOT, settings.startOnBoot)
             }
         }
     }
@@ -90,5 +92,6 @@ object LocalPreferences {
         Settings.autoBackupFolder = prefs.getString(PrefKeys.AUTO_BACKUP_FOLDER, "") ?: ""
         Settings.authEnabled = prefs.getBoolean(PrefKeys.AUTH_ENABLED, true)
         Settings.listenToPokeyBroadcasts = prefs.getBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, true)
+        Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
     }
 }

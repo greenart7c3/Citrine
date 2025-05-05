@@ -1,8 +1,11 @@
 package com.greenart7c3.citrine
 
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
 import android.content.ContentResolver
+import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
@@ -12,6 +15,7 @@ import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
+import com.greenart7c3.citrine.service.WebSocketServerService
 import com.vitorpamplona.ammolite.relays.NostrClient
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -120,7 +124,23 @@ class Citrine : Application() {
         }
     }
 
+    fun startService() {
+        try {
+            val operation = PendingIntent.getForegroundService(
+                this,
+                10,
+                Intent(this, WebSocketServerService::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+            )
+            val alarmManager = this.getSystemService(ALARM_SERVICE) as AlarmManager
+            alarmManager.set(AlarmManager.RTC_WAKEUP, 1000, operation)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start WebSocketServerService", e)
+        }
+    }
+
     companion object {
+
         @Volatile
         var job: Job? = null
 

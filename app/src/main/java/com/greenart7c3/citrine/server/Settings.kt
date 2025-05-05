@@ -22,6 +22,7 @@ object Settings {
     var autoBackupFolder = ""
     var authEnabled = true
     var listenToPokeyBroadcasts = true
+    var startOnBoot = true
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -43,6 +44,7 @@ object Settings {
         autoBackupFolder = ""
         authEnabled = true
         listenToPokeyBroadcasts = true
+        startOnBoot = true
     }
 }
 

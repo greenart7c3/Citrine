@@ -62,5 +62,6 @@
     <string name="delete_expired_events">Delete expired events</string>
     <string name="delete_ephemeral_events">Delete ephemeral events</string>
     <string name="enable_disable_auth">Enable/Disable Auth</string>
+    <string name="start_on_boot">Start on boot</string>
 
 </resources>

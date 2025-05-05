@@ -141,6 +141,9 @@ fun SettingsScreen(
         var neverDeleteFrom by remember {
             mutableStateOf(Settings.neverDeleteFrom)
         }
+        var startOnBoot by remember {
+            mutableStateOf(Settings.startOnBoot)
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -261,30 +264,6 @@ fun SettingsScreen(
                     },
                 )
             }
-//            item {
-//                Row(
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .clickable {
-//                            useSSL = !useSSL
-//                            Settings.useSSL = !Settings.useSSL
-//                        },
-//                    horizontalArrangement = Arrangement.SpaceBetween,
-//                    verticalAlignment = Alignment.CenterVertically,
-//                ) {
-//                    Text(
-//                        modifier = Modifier.weight(1f),
-//                        text = "Use SSL",
-//                    )
-//                    Switch(
-//                        checked = useSSL,
-//                        onCheckedChange = {
-//                            useSSL = !useSSL
-//                            Settings.useSSL = !Settings.useSSL
-//                        },
-//                    )
-//                }
-//            }
             item {
                 Column(
                     Modifier.fillMaxWidth(),
@@ -747,6 +726,32 @@ fun SettingsScreen(
                     Text(
                         text = "Others",
                         style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            startOnBoot = !startOnBoot
+                            Settings.startOnBoot = !Settings.startOnBoot
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.start_on_boot),
+                    )
+                    Switch(
+                        checked = startOnBoot,
+                        onCheckedChange = {
+                            startOnBoot = !startOnBoot
+                            Settings.startOnBoot = !Settings.startOnBoot
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
                     )
                 }
             }
