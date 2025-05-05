@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
@@ -33,7 +34,10 @@ import kotlinx.coroutines.launch
 
 class Citrine : Application() {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val client: NostrClient = NostrClient(OkHttpWebSocket.BuilderFactory())
+    val factory = OkHttpWebSocket.BuilderFactory { _, useProxy ->
+        HttpClientManager.getHttpClient(useProxy)
+    }
+    val client: NostrClient = NostrClient(factory)
     private val pokeyReceiver = PokeyReceiver()
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")

@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.ui
 
 import android.app.Activity.RESULT_OK
+import android.content.ClipData
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
@@ -35,10 +36,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -302,13 +303,19 @@ fun HomeScreen(
                 CircularProgressIndicator()
             } else {
                 val isStarted = homeViewModel.state.value.service?.isStarted() ?: false
-                val clipboardManager = LocalClipboardManager.current
+                val clipboardManager = LocalClipboard.current
                 if (isStarted) {
                     Text(stringResource(R.string.relay_started_at))
                     Text(
                         "ws://${Settings.host}:${Settings.port}",
                         modifier = Modifier.clickable {
-                            clipboardManager.setText(AnnotatedString("ws://${Settings.host}:${Settings.port}"))
+                            coroutineScope.launch {
+                                clipboardManager.setClipEntry(
+                                    ClipEntry(
+                                        ClipData.newPlainText("", "ws://${Settings.host}:${Settings.port}"),
+                                    ),
+                                )
+                            }
                         },
                     )
                     ElevatedButton(

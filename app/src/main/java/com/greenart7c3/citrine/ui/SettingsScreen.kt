@@ -40,7 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,7 +79,7 @@ fun SettingsScreen(
     Surface(
         modifier,
     ) {
-        val clipboardManager = LocalClipboardManager.current
+        val clipboardManager = LocalClipboard.current
         val context = LocalContext.current
         var host by remember {
             mutableStateOf(TextFieldValue(Settings.host))
@@ -394,26 +394,28 @@ fun SettingsScreen(
                         trailingIcon = {
                             IconButton(
                                 onClick = {
-                                    clipboardManager.getText()?.let {
-                                        signedBy = TextFieldValue(it)
+                                    scope.launch {
+                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
+                                            signedBy = TextFieldValue(it.text.toString())
 
-                                        val key = signedBy.text.toNostrKey()
+                                            val key = signedBy.text.toNostrKey()
 
-                                        if (key == null) {
-                                            Toast.makeText(
-                                                context,
-                                                "Invalid key",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                            return@IconButton
+                                            if (key == null) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Invalid key",
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                                return@launch
+                                            }
+
+                                            val users = Settings.allowedPubKeys.toMutableSet()
+                                            users.add(key)
+                                            Settings.allowedPubKeys = users
+                                            allowedPubKeys = Settings.allowedPubKeys
+                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                            signedBy = TextFieldValue("")
                                         }
-
-                                        val users = Settings.allowedPubKeys.toMutableSet()
-                                        users.add(key)
-                                        Settings.allowedPubKeys = users
-                                        allowedPubKeys = Settings.allowedPubKeys
-                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                        signedBy = TextFieldValue("")
                                     }
                                     signedBy = TextFieldValue("")
                                 },
@@ -512,25 +514,27 @@ fun SettingsScreen(
                         trailingIcon = {
                             IconButton(
                                 onClick = {
-                                    clipboardManager.getText()?.let {
-                                        referredBy = TextFieldValue(it)
+                                    scope.launch {
+                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
+                                            referredBy = TextFieldValue(it.text.toString())
 
-                                        val key = referredBy.text.toNostrKey()
-                                        if (key == null) {
-                                            Toast.makeText(
-                                                context,
-                                                "Invalid key",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                            return@IconButton
+                                            val key = referredBy.text.toNostrKey()
+                                            if (key == null) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Invalid key",
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                                return@launch
+                                            }
+
+                                            val users = Settings.allowedTaggedPubKeys.toMutableSet()
+                                            users.add(key)
+                                            Settings.allowedTaggedPubKeys = users
+                                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                            referredBy = TextFieldValue("")
                                         }
-
-                                        val users = Settings.allowedTaggedPubKeys.toMutableSet()
-                                        users.add(key)
-                                        Settings.allowedTaggedPubKeys = users
-                                        allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
-                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                        referredBy = TextFieldValue("")
                                     }
                                     referredBy = TextFieldValue("")
                                 },
@@ -629,24 +633,26 @@ fun SettingsScreen(
                         trailingIcon = {
                             IconButton(
                                 onClick = {
-                                    clipboardManager.getText()?.let {
-                                        kind = TextFieldValue(it)
+                                    scope.launch {
+                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
+                                            kind = TextFieldValue(it.text.toString())
 
-                                        if (kind.text.toIntOrNull() == null) {
-                                            Toast.makeText(
-                                                context,
-                                                "Invalid kind",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                            return@IconButton
+                                            if (kind.text.toIntOrNull() == null) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Invalid kind",
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                                return@launch
+                                            }
+
+                                            val users = Settings.allowedKinds.toMutableSet()
+                                            users.add(kind.text.toInt())
+                                            Settings.allowedKinds = users
+                                            allowedKinds = Settings.allowedKinds
+                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                            kind = TextFieldValue("")
                                         }
-
-                                        val users = Settings.allowedKinds.toMutableSet()
-                                        users.add(kind.text.toInt())
-                                        Settings.allowedKinds = users
-                                        allowedKinds = Settings.allowedKinds
-                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                        kind = TextFieldValue("")
                                     }
                                     kind = TextFieldValue("")
                                 },
@@ -923,26 +929,28 @@ fun SettingsScreen(
                         trailingIcon = {
                             IconButton(
                                 onClick = {
-                                    clipboardManager.getText()?.let {
-                                        deleteFrom = TextFieldValue(it)
+                                    scope.launch {
+                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
+                                            deleteFrom = TextFieldValue(it.text.toString())
 
-                                        val key = deleteFrom.text.toNostrKey()
+                                            val key = deleteFrom.text.toNostrKey()
 
-                                        if (key == null) {
-                                            Toast.makeText(
-                                                context,
-                                                "Invalid key",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                            return@IconButton
+                                            if (key == null) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Invalid key",
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                                return@launch
+                                            }
+
+                                            val users = Settings.neverDeleteFrom.toMutableSet()
+                                            users.add(key)
+                                            Settings.neverDeleteFrom = users
+                                            neverDeleteFrom = Settings.neverDeleteFrom
+                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                            deleteFrom = TextFieldValue("")
                                         }
-
-                                        val users = Settings.neverDeleteFrom.toMutableSet()
-                                        users.add(key)
-                                        Settings.neverDeleteFrom = users
-                                        neverDeleteFrom = Settings.neverDeleteFrom
-                                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                        deleteFrom = TextFieldValue("")
                                     }
                                     deleteFrom = TextFieldValue("")
                                 },

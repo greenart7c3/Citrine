@@ -30,7 +30,7 @@ import com.vitorpamplona.quartz.nip17Dm.files.encryption.NostrCipher
  * This class serves as a key cache to decrypt the body of HTTP calls that need it.
  */
 class EncryptionKeyCache {
-    val cache = LruCache<String, NostrCipher>(100)
+    private val cache = LruCache<String, NostrCipher>(100)
 
     fun add(
         url: String?,

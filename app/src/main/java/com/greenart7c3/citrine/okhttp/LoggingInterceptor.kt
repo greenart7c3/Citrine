@@ -21,6 +21,7 @@
 package com.greenart7c3.citrine.okhttp
 
 import android.util.Log
+import com.greenart7c3.citrine.Citrine
 import java.net.InetSocketAddress
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -41,7 +42,7 @@ class LoggingInterceptor : Interceptor {
         val response: Response = chain.proceed(request)
         val t2 = System.nanoTime()
 
-        Log.d("OkHttpLog", "Req $port ${request.url} in ${(t2 - t1) / 1e6}ms")
+        Log.d(Citrine.TAG, "Req $port ${request.url} in ${(t2 - t1) / 1e6}ms")
 
         return response
     }

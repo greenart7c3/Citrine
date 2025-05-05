@@ -13,7 +13,6 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.RelayListener
 import com.greenart7c3.citrine.RelayListener2
-import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
 import com.vitorpamplona.ammolite.relays.MutableSubscriptionManager
 import com.vitorpamplona.ammolite.relays.Relay
@@ -75,7 +74,7 @@ object EventDownloader {
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
                 subs = MutableSubscriptionManager(),
-                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
+                socketBuilderFactory = Citrine.getInstance().factory,
             ),
             Relay(
                 url = "wss://relay.nostr.band",
@@ -84,7 +83,7 @@ object EventDownloader {
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
                 subs = MutableSubscriptionManager(),
-                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
+                socketBuilderFactory = Citrine.getInstance().factory,
             ),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
@@ -143,7 +142,7 @@ object EventDownloader {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
-                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
+                socketBuilderFactory = Citrine.getInstance().factory,
                 subs = MutableSubscriptionManager(),
             ),
             Relay(
@@ -152,7 +151,7 @@ object EventDownloader {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
-                socketBuilderFactory = OkHttpWebSocket.BuilderFactory(),
+                socketBuilderFactory = Citrine.getInstance().factory,
                 subs = MutableSubscriptionManager(),
             ),
         )

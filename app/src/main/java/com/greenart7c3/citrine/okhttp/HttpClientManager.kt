@@ -21,7 +21,7 @@
 package com.greenart7c3.citrine.okhttp
 
 import android.util.Log
-import com.vitorpamplona.quartz.nip17Dm.files.encryption.NostrCipher
+import com.greenart7c3.citrine.Citrine
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.time.Duration
@@ -49,7 +49,7 @@ object HttpClientManager {
 
     fun setDefaultProxy(proxy: Proxy?) {
         if (currentProxy != proxy) {
-            Log.d("HttpClient", "Changing proxy to: ${proxy != null}")
+            Log.d(Citrine.TAG, "Changing proxy to: ${proxy != null}")
             currentProxy = proxy
 
             // recreates singleton
@@ -57,10 +57,8 @@ object HttpClientManager {
         }
     }
 
-    fun getCurrentProxy(): Proxy? = currentProxy
-
     fun setDefaultTimeout(timeout: Duration) {
-        Log.d("HttpClient", "Changing timeout to: $timeout")
+        Log.d(Citrine.TAG, "Changing timeout to: $timeout")
         if (defaultTimeout.seconds != timeout.seconds) {
             defaultTimeout = timeout
 
@@ -71,7 +69,7 @@ object HttpClientManager {
     }
 
     fun setDefaultUserAgent(userAgentHeader: String) {
-        Log.d("HttpClient", "Changing userAgent")
+        Log.d(Citrine.TAG, "Changing userAgent")
         if (userAgent != userAgentHeader) {
             userAgent = userAgentHeader
             defaultHttpClient = buildHttpClient(currentProxy, defaultTimeout)
@@ -97,13 +95,6 @@ object HttpClientManager {
             .build()
     }
 
-    fun getCurrentProxyPort(useProxy: Boolean): Int? =
-        if (useProxy) {
-            (currentProxy?.address() as? InetSocketAddress)?.port
-        } else {
-            null
-        }
-
     fun getHttpClient(useProxy: Boolean): OkHttpClient =
         if (useProxy) {
             if (defaultHttpClient == null) {
@@ -120,9 +111,4 @@ object HttpClientManager {
     fun setDefaultProxyOnPort(port: Int) {
         setDefaultProxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port)))
     }
-
-    fun addCipherToCache(
-        url: String,
-        cipher: NostrCipher,
-    ) = cache.add(url, cipher)
 }
