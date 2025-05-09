@@ -20,7 +20,7 @@ object Settings {
     var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
     var autoBackup = false
     var autoBackupFolder = ""
-    var authEnabled = true
+    var authEnabled = false
     var listenToPokeyBroadcasts = true
     var startOnBoot = true
 
@@ -42,7 +42,7 @@ object Settings {
         relayIcon = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
         autoBackup = false
         autoBackupFolder = ""
-        authEnabled = true
+        authEnabled = false
         listenToPokeyBroadcasts = true
         startOnBoot = true
     }

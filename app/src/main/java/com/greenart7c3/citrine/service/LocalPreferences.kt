@@ -90,7 +90,7 @@ object LocalPreferences {
         Settings.relayIcon = prefs.getString(PrefKeys.RELAY_ICON, "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true") ?: "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
         Settings.autoBackup = prefs.getBoolean(PrefKeys.AUTO_BACKUP, false)
         Settings.autoBackupFolder = prefs.getString(PrefKeys.AUTO_BACKUP_FOLDER, "") ?: ""
-        Settings.authEnabled = prefs.getBoolean(PrefKeys.AUTH_ENABLED, true)
+        Settings.authEnabled = prefs.getBoolean(PrefKeys.AUTH_ENABLED, false)
         Settings.listenToPokeyBroadcasts = prefs.getBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, true)
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
     }
