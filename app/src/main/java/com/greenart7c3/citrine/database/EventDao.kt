@@ -47,6 +47,7 @@ interface EventDao {
     suspend fun deleteEventsWithExpirations(now: Long) {
         val ids = countEventsWithExpirations(now)
         if (ids.isNotEmpty()) {
+            Log.d(Citrine.TAG, "Deleting ${ids.size} expired events")
             delete(ids)
         }
     }
