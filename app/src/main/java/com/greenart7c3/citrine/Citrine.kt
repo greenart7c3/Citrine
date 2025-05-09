@@ -86,8 +86,8 @@ class Citrine : Application() {
                 try {
                     if (Settings.deleteEphemeralEvents && isActive) {
                         val duration = measureTime {
-                            Log.d(TAG, "Deleting ephemeral events")
-                            database.eventDao().deleteEphemeralEvents()
+                            Log.d(TAG, "Deleting ephemeral events older than one minute ago")
+                            database.eventDao().deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
                         }
                         Log.d(TAG, "Deleted ephemeral events in $duration")
                     }

@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.database
 
+import android.util.Log
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -7,6 +8,7 @@ import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.server.Connection
 import com.greenart7c3.citrine.server.EventSubscription
 import kotlinx.coroutines.flow.Flow
@@ -97,9 +99,9 @@ interface EventDao {
     @Transaction
     suspend fun deleteByKind(kind: Int)
 
-    @Query("SELECT id FROM EventEntity WHERE kind >= 20000 AND kind < 30000")
+    @Query("SELECT id FROM EventEntity WHERE kind >= 20000 AND kind < 30000 AND createdAt < :oneMinuteAgo")
     @Transaction
-    suspend fun getEphemeralEvents(): List<String>
+    suspend fun getEphemeralEvents(oneMinuteAgo: Long): List<String>
 
     @Query(
         """
@@ -186,9 +188,10 @@ interface EventDao {
     suspend fun deleteAll(until: Long, pubKeys: Array<String>)
 
     @Transaction
-    suspend fun deleteEphemeralEvents() {
-        val ids = getEphemeralEvents()
+    suspend fun deleteEphemeralEvents(oneMinuteAgo: Long) {
+        val ids = getEphemeralEvents(oneMinuteAgo)
         if (ids.isNotEmpty()) {
+            Log.d(Citrine.TAG, "Deleting ${ids.size} ephemeral events")
             delete(ids)
         }
     }

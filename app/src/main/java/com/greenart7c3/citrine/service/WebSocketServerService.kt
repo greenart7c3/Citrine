@@ -146,7 +146,7 @@ class WebSocketServerService : Service() {
                 }
             },
             0,
-            300000,
+            100000,
         )
 
         Log.d(Citrine.TAG, "Starting WebSocket server")
