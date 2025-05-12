@@ -187,11 +187,12 @@ class CustomWebSocketServer(
                 }
 
                 "AUTH" -> {
+                    val event = Event.fromJson(msgArray.get(1).toString())
                     if (!Settings.authEnabled) {
+                        Log.d(Citrine.TAG, "auth disabled")
+                        connection?.session?.trySend(CommandResult.invalid(event, "auth is disabled").toJson())
                         return
                     }
-
-                    val event = Event.fromJson(msgArray.get(1).toString())
 
                     val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
                     if (exception != null) {
