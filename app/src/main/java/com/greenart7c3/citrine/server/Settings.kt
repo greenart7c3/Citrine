@@ -23,6 +23,7 @@ object Settings {
     var authEnabled = false
     var listenToPokeyBroadcasts = true
     var startOnBoot = true
+    var lastBackup: Long = 0L
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -45,6 +46,7 @@ object Settings {
         authEnabled = false
         listenToPokeyBroadcasts = true
         startOnBoot = true
+        lastBackup = 0L
     }
 }
 

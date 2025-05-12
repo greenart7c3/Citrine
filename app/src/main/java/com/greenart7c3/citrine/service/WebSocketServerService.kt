@@ -27,6 +27,7 @@ import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
+import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.coroutines.cancellation.CancellationException
@@ -81,12 +82,12 @@ class WebSocketServerService : Service() {
                         try {
                             val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
                             folder?.let {
-                                val lastModifiedTime = folder.lastModified()
-                                val currentTime = System.currentTimeMillis()
-                                val oneWeekAgo = currentTime - (7 * 24 * 60 * 60 * 1000)
-
-                                if (lastModifiedTime < oneWeekAgo) {
+                                val oneWeekAgo = TimeUtils.oneWeekAgo()
+                                if (Settings.lastBackup < oneWeekAgo) {
                                     Log.d(Citrine.TAG, "Backing up database")
+
+                                    Settings.lastBackup = TimeUtils.now()
+                                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.getInstance())
 
                                     Citrine.job?.cancel()
                                     Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
