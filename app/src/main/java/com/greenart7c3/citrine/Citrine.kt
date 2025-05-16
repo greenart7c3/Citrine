@@ -178,12 +178,12 @@ class RelayListener(
         Log.d("RelayListener", "Received error $error from subscription $subscriptionId")
     }
 
-    override fun onEvent(relay: Relay, subscriptionId: String, event: Event, afterEOSE: Boolean) {
+    override fun onEvent(relay: Relay, subscriptionId: String, event: Event, time: Long, afterEOSE: Boolean) {
         Log.d("RelayListener", "Received event ${event.toJson()} from subscription $subscriptionId afterEOSE: $afterEOSE")
         onReceiveEvent(relay, subscriptionId, event)
     }
 
-    override fun onEOSE(relay: Relay, subscriptionId: String) {
+    override fun onEOSE(relay: Relay, subscriptionId: String, time: Long) {
         Log.d("RelayListener", "Received EOSE from subscription $subscriptionId")
     }
 
@@ -224,12 +224,12 @@ class RelayListener2(
         onErrorFunc(relay, subscriptionId, error)
     }
 
-    override fun onEvent(relay: Relay, subscriptionId: String, event: Event, afterEOSE: Boolean) {
+    override fun onEvent(relay: Relay, subscriptionId: String, event: Event, time: Long, afterEOSE: Boolean) {
         // Log.d("RelayListener", "Received event ${event.toJson()} from subscription $subscriptionId afterEOSE: $afterEOSE")
         onReceiveEvent(relay, subscriptionId, event)
     }
 
-    override fun onEOSE(relay: Relay, subscriptionId: String) {
+    override fun onEOSE(relay: Relay, subscriptionId: String, time: Long) {
         Log.d("RelayListener", "Received EOSE from subscription $subscriptionId")
         onEOSE(relay)
     }

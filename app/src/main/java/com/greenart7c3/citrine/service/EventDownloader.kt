@@ -14,7 +14,7 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.RelayListener
 import com.greenart7c3.citrine.RelayListener2
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.MutableSubscriptionManager
+import com.vitorpamplona.ammolite.relays.MutableSubscriptionCache
 import com.vitorpamplona.ammolite.relays.Relay
 import com.vitorpamplona.ammolite.relays.TypedFilter
 import com.vitorpamplona.ammolite.relays.filters.SincePerRelayFilter
@@ -73,7 +73,7 @@ object EventDownloader {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
-                subs = MutableSubscriptionManager(),
+                subs = MutableSubscriptionCache(),
                 socketBuilderFactory = Citrine.getInstance().factory,
             ),
             Relay(
@@ -82,7 +82,7 @@ object EventDownloader {
                 write = false,
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
-                subs = MutableSubscriptionManager(),
+                subs = MutableSubscriptionCache(),
                 socketBuilderFactory = Citrine.getInstance().factory,
             ),
         )
@@ -143,7 +143,7 @@ object EventDownloader {
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
                 socketBuilderFactory = Citrine.getInstance().factory,
-                subs = MutableSubscriptionManager(),
+                subs = MutableSubscriptionCache(),
             ),
             Relay(
                 url = "wss://relay.nostr.band",
@@ -152,7 +152,7 @@ object EventDownloader {
                 forceProxy = false,
                 activeTypes = COMMON_FEED_TYPES,
                 socketBuilderFactory = Citrine.getInstance().factory,
-                subs = MutableSubscriptionManager(),
+                subs = MutableSubscriptionCache(),
             ),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()

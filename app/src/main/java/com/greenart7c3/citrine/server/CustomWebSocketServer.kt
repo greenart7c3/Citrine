@@ -98,7 +98,7 @@ class CustomWebSocketServer(
         count: Boolean = false,
     ) {
         val filters = filterNodes.map { jsonNode ->
-            val tags = jsonNode.fields().asSequence()
+            val tags = jsonNode.properties().asSequence()
                 .filter { it.key.startsWith("#") }
                 .map { it.key.substringAfter("#") to it.value.map { item -> item.asText() }.toSet() }
                 .toMap()
