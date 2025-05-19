@@ -59,9 +59,9 @@
     <string name="wss">wss://...</string>
     <string name="delete">删除</string>
     <string name="are_you_sure_you_want_to_delete_all_events_of_kind">确定要从数据库中删除所有类型为 %1$d 的事件吗？</string>
-    <string name="listen_to_pokey_broadcasts">Listen to pokey broadcasts</string>
-    <string name="delete_expired_events">Delete expired events</string>
-    <string name="delete_ephemeral_events">Delete ephemeral events</string>
-    <string name="enable_disable_auth">Enable/Disable Auth</string>
-    <string name="start_on_boot">Start on boot</string>
+    <string name="listen_to_pokey_broadcasts">监听 Pokey 广播</string>
+    <string name="delete_expired_events">删除过期事件</string>
+    <string name="delete_ephemeral_events">删除短效事件</string>
+    <string name="enable_disable_auth">启用/禁止认证</string>
+    <string name="start_on_boot">开机自启动</string>
 </resources>
