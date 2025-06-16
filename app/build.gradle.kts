@@ -25,9 +25,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
+
         androidResources {
             localeFilters.addAll(
                 setOf(
@@ -161,6 +159,10 @@ android {
             isUniversalApk = true
         }
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 kotlin {
