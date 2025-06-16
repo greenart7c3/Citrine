@@ -79,7 +79,7 @@ class Citrine : Application() {
 
     suspend fun eventsToDelete(database: AppDatabase) {
         if (!isImportingEvents) {
-            Log.d("filters", "entered eventsToDelete")
+            Log.d(TAG, "entered eventsToDelete")
             job?.join()
             cancelJob()
             job = applicationScope.launch(Dispatchers.IO) {

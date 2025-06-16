@@ -62,11 +62,16 @@ class WebSocketServerService : Service() {
         timer?.schedule(
             object : TimerTask() {
                 override fun run() {
-                    if (Citrine.job == null || Citrine.job?.isCompleted == true) {
+                    if ((Citrine.job == null || Citrine.job?.isCompleted == true) && !Citrine.isImportingEvents) {
                         NotificationManagerCompat.from(Citrine.getInstance()).cancel(2)
                         Citrine.getInstance().applicationScope.launch {
                             Citrine.getInstance().client.getAll().forEach {
-                                it.disconnect()
+                                if (it.isConnected()) {
+                                    it.disconnect()
+                                }
+                            }
+                            if (Citrine.getInstance().client.getAll().isNotEmpty()) {
+                                Citrine.getInstance().client.reconnect(relays = null)
                             }
                         }
                     }

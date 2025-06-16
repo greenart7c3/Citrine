@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,8 +58,11 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.EventDownloader
+import com.greenart7c3.citrine.service.EventDownloader.LIMIT
 import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
 import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
+import com.vitorpamplona.ammolite.relays.TypedFilter
+import com.vitorpamplona.ammolite.relays.filters.SincePerRelayFilter
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
@@ -73,6 +77,7 @@ import com.vitorpamplona.quartz.nip55AndroidSigner.Permission
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.nip65RelayList.RelayUrlFormatter
 import com.vitorpamplona.quartz.utils.Hex
+import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -152,6 +157,7 @@ fun SelectRelayModal(
                         keyboardOptions = KeyboardOptions.Default.copy(
                             autoCorrectEnabled = false,
                             imeAction = ImeAction.Done,
+                            capitalization = KeyboardCapitalization.None,
                         ),
                         keyboardActions = KeyboardActions(
                             onDone = {
@@ -262,6 +268,11 @@ fun DownloadYourEventsUserScreen(
                             returnedKey,
                             ExternalSignerLauncher(returnedKey, packageName),
                         )
+                        (signer as NostrSignerExternal).launcher.registerLauncher(
+                            contentResolver = Citrine.getInstance()::contentResolverFn,
+                            launcher = { intent ->
+                            },
+                        )
                         npub = TextFieldValue(localNpub)
                     } catch (e: Exception) {
                         Log.d(Citrine.TAG, e.message ?: "", e)
@@ -296,14 +307,30 @@ fun DownloadYourEventsUserScreen(
 
                     EventDownloader.fetchEvents(
                         signer = signer!!,
-                        scope = this,
-                        onAuth = { relay, challenge ->
+                        scope = Citrine.getInstance().applicationScope,
+                        onAuth = { relay, challenge, subId ->
                             RelayAuthEvent.create(
                                 relay.url,
                                 challenge,
                                 if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair()),
                                 onReady = {
-                                    relay.send(it)
+                                    Citrine.getInstance().applicationScope.launch {
+                                        relay.send(it)
+                                        delay(2000)
+
+                                        val filters = relay.relaySubFilter.subs.allSubscriptions()[subId] ?: listOf(
+                                            TypedFilter(
+                                                types = COMMON_FEED_TYPES,
+                                                filter = SincePerRelayFilter(
+                                                    authors = listOf(signer!!.pubKey),
+                                                    until = TimeUtils.now(),
+                                                    limit = LIMIT,
+                                                ),
+                                            ),
+                                        )
+
+                                        relay.sendFilter(subId, filters)
+                                    }
                                 },
                             )
                         },

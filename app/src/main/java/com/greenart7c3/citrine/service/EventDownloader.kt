@@ -29,7 +29,6 @@ import kotlin.time.measureTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -202,7 +201,7 @@ object EventDownloader {
 
     suspend fun fetchEvents(
         signer: NostrSigner,
-        onAuth: (relay: Relay, challenge: String) -> Unit,
+        onAuth: (relay: Relay, challenge: String, subId: String) -> Unit,
         scope: CoroutineScope,
     ) {
         try {
@@ -223,31 +222,8 @@ object EventDownloader {
                     listeners = listeners,
                     relayParam = it,
                     until = TimeUtils.now(),
-                    onAuth = { relay, challenge ->
-                        onAuth(relay, challenge)
-                        scope.launch(Dispatchers.IO) {
-                            delay(5000)
-
-                            fetchEventsFrom(
-                                scope = this,
-                                signer = signer,
-                                listeners = listeners,
-                                relayParam = it,
-                                until = TimeUtils.now(),
-                                onAuth = { _, _ ->
-                                    finishedLoading[it.url] = true
-                                },
-                                onEvent = {
-                                    count++
-                                    if (count % LIMIT == 0) {
-                                        setProgress("loading events from ${it.url} ($count)")
-                                    }
-                                },
-                                onDone = {
-                                    finishedLoading[it.url] = true
-                                },
-                            )
-                        }
+                    onAuth = { relay, challenge, subId ->
+                        onAuth(relay, challenge, subId)
                     },
                     onEvent = {
                         count++
@@ -280,6 +256,8 @@ object EventDownloader {
 
             delay(5000)
 
+            Citrine.getInstance().client.reconnect(relays = null)
+
             setProgress("Finished loading events from ${Citrine.getInstance().client.getAll().size} relays")
             Citrine.isImportingEvents = false
         } catch (e: Exception) {
@@ -309,7 +287,7 @@ object EventDownloader {
         relayParam: Relay,
         until: Long,
         onEvent: () -> Unit,
-        onAuth: (relay: Relay, challenge: String) -> Unit,
+        onAuth: (relay: Relay, challenge: String, subId: String) -> Unit,
         onDone: () -> Unit,
     ) {
         val subId = UUID.randomUUID().toString().substring(0, 4)
@@ -362,7 +340,6 @@ object EventDownloader {
                     if (localEventCount < LIMIT) {
                         onDone()
                     } else {
-                        // delay(5000)
                         val localUntil = if (lastEventCreatedAt == until) {
                             Log.d("filter", "until is the same as lastEventCreatedAt")
                             until - 1
@@ -389,7 +366,7 @@ object EventDownloader {
             },
             onAuthFunc = { relay, challenge ->
                 Log.d(Citrine.TAG, "Received auth from relay ${relay.url}")
-                onAuth(relay, challenge)
+                onAuth(relay, challenge, subId)
             },
         )
 
