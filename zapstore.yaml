@@ -4,6 +4,3 @@ description: Citrine is a nostr relay for android. It allows any nostr client th
 repository: https://github.com/greenart7c3/Citrine
 assets:
   - citrine-arm64-v8a-v\d+\.\d+\.\d.apk
-blossom_servers:
-  - https://cdn.zapstore.dev
-  - https://blossom.band
