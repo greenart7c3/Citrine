@@ -45,14 +45,17 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import java.net.ServerSocket
 import java.util.Collections
 import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -539,7 +542,7 @@ class CustomWebSocketServer(
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.getInstance())
 
-                        val supportedNips = mutableListOf<Int>(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70)
+                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70)
                         if (Settings.authEnabled) {
                             supportedNips.add(42)
                         }
@@ -585,8 +588,9 @@ class CustomWebSocketServer(
 
                                     else -> {
                                         Citrine.getInstance().applicationScope.launch {
-                                            Log.d(Citrine.TAG, frame.toString())
-                                            trySend(NoticeResult.invalid("Error processing message").toJson())
+                                            close(CloseReason(CloseReason.Codes.NORMAL, "Force closing: invalid message type"))
+                                            this@webSocket.cancel()
+                                            removeConnection(thisConnection)
                                         }
                                     }
                                 }
