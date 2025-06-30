@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 class Connection(
     val session: DefaultWebSocketServerSession,
-    var users: MutableSet<HexKey> = mutableSetOf<HexKey>(),
+    var users: MutableSet<HexKey> = mutableSetOf(),
     val authChallenge: String = UUID.randomUUID().toString().substring(0..10),
 ) {
     val since = System.currentTimeMillis()
@@ -62,7 +62,13 @@ class Connection(
 fun DefaultWebSocketServerSession.trySend(data: String) {
     try {
         outgoing.trySend(Frame.Text(data)).onClosed {
-            Log.d(Citrine.TAG, "Session is closed")
+            val connection = EventSubscription.getConnection(this)
+            connection?.let {
+                Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress()}")
+                Citrine.getInstance().applicationScope.launch {
+                    CustomWebSocketService.server?.removeConnection(connection)
+                }
+            }
         }
     } catch (e: Exception) {
         if (e is CancellationException) throw e

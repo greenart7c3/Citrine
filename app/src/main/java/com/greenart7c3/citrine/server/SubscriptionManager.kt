@@ -10,7 +10,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 @OptIn(DelicateCoroutinesApi::class)
 class SubscriptionManager(val subscription: Subscription) {
     suspend fun execute() {
-        if (subscription.connection.session.outgoing.isClosedForSend == true) {
+        if (subscription.connection.session.outgoing.isClosedForSend) {
             EventSubscription.close(subscription.id)
             Log.d(Citrine.TAG, "cancelling subscription isClosedForSend: ${subscription.id}")
             return

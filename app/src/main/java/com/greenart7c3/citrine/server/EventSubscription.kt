@@ -7,6 +7,7 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
+import io.ktor.server.websocket.WebSocketServerSession
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -22,6 +23,10 @@ data class Subscription(
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
+
+    fun getConnection(session: WebSocketServerSession): Connection? {
+        return subscriptions.snapshot().values.firstOrNull { it.subscription.connection.session == session }?.subscription?.connection
+    }
 
     fun count(): Int {
         return subscriptions.size()
@@ -75,7 +80,7 @@ object EventSubscription {
 
     @OptIn(DelicateCoroutinesApi::class)
     fun containsConnection(connection: Connection): Boolean {
-        return subscriptions.snapshot().values.any { it.subscription.connection.name == connection.name && it.subscription.connection.session.outgoing.isClosedForSend == false }
+        return subscriptions.snapshot().values.any { it.subscription.connection.name == connection.name && !it.subscription.connection.session.outgoing.isClosedForSend }
     }
 
     suspend fun subscribe(

@@ -43,6 +43,7 @@ import io.ktor.server.response.appendIfAbsent
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
@@ -55,7 +56,9 @@ import java.util.Collections
 import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -580,7 +583,7 @@ class CustomWebSocketServer(
                             try {
                                 when (frame) {
                                     is Frame.Text -> {
-                                        Citrine.getInstance().applicationScope.launch {
+                                        this.launch(Dispatchers.IO) {
                                             val message = frame.readText()
                                             processNewRelayMessage(message, thisConnection)
                                         }
@@ -597,6 +600,11 @@ class CustomWebSocketServer(
                                 }
                             } catch (e: Throwable) {
                                 if (e is CancellationException) throw e
+                                if (e is ClosedReceiveChannelException) {
+                                    Log.d(Citrine.TAG, e.toString(), e)
+                                    removeConnection(thisConnection)
+                                    break
+                                }
                                 Log.d(Citrine.TAG, e.toString(), e)
                                 Citrine.getInstance().applicationScope.launch {
                                     try {
@@ -617,8 +625,16 @@ class CustomWebSocketServer(
 
     suspend fun removeConnection(connection: Connection) {
         Log.d(Citrine.TAG, "Removing ${connection.name}!")
+        connection.session.cancel()
         connection.finalize()
         connections.value.remove(connection)
         connections.emit(connections.value)
+    }
+
+    suspend fun removeConnection(session: WebSocketServerSession) {
+        val connection = connections.value.find { it.session == session }
+        connection?.let {
+            removeConnection(it)
+        }
     }
 }
