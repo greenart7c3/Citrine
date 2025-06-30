@@ -588,7 +588,8 @@ class CustomWebSocketServer(
 
                                     else -> {
                                         Citrine.getInstance().applicationScope.launch {
-                                            close(CloseReason(CloseReason.Codes.NORMAL, "Force closing: invalid message type"))
+                                            Log.d("websocket", "Invalid message type ${frame.frameType}")
+                                            this@webSocket.close(CloseReason(CloseReason.Codes.NORMAL, "Force closing: invalid message type"))
                                             this@webSocket.cancel()
                                             removeConnection(thisConnection)
                                         }
