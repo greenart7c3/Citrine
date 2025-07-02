@@ -53,7 +53,7 @@ object EventRepository {
 
         if (filter.tags.isNotEmpty()) {
             val tags = filter.tags.filterValues { it.isNotEmpty() }
-            var tagQuery = ""
+            var tagQuery: String
             tags.forEach { tag ->
                 tagQuery = "EventEntity.id IN (SELECT TagEntity.pkEvent FROM TagEntity WHERE 1=1"
                 if (filter.kinds.isNotEmpty()) {
@@ -90,7 +90,7 @@ object EventRepository {
         val events = query(subscription.appDatabase, filter)
 
         if (subscription.count) {
-            subscription.connection.session.trySend(
+            subscription.connection.trySend(
                 subscription.objectMapper.writeValueAsString(
                     listOf(
                         "COUNT",
@@ -109,13 +109,13 @@ object EventRepository {
                     return@forEach
                 }
                 if (event.isProtected() && !subscription.connection.users.contains(event.pubKey)) {
-                    subscription.connection.session.trySend(AuthResult.challenge(subscription.connection.authChallenge).toJson())
-                    subscription.connection.session.trySend(CommandResult.invalid(event, "auth-required: this event may only be queried by its author").toJson())
+                    subscription.connection.trySend(AuthResult.challenge(subscription.connection.authChallenge).toJson())
+                    subscription.connection.trySend(CommandResult.invalid(event, "auth-required: this event may only be queried by its author").toJson())
                     return@forEach
                 }
 
                 Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
-                subscription.connection.session.trySend(
+                subscription.connection.trySend(
                     subscription.objectMapper.writeValueAsString(
                         listOf(
                             "EVENT",

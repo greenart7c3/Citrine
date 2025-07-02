@@ -43,13 +43,10 @@ import io.ktor.server.response.appendIfAbsent
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
-import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
-import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import java.net.ServerSocket
 import java.util.Collections
@@ -58,7 +55,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -181,14 +178,24 @@ class CustomWebSocketServer(
                 "COUNT" -> {
                     connection?.let {
                         val subscriptionId = msgArray.get(1).asText()
-                        subscribe(subscriptionId, msgArray.drop(2), it, true)
+                        subscribe(
+                            subscriptionId = subscriptionId,
+                            filterNodes = msgArray.drop(2),
+                            connection = it,
+                            count = true,
+                        )
                     }
                 }
 
                 "REQ" -> {
                     connection?.let {
                         val subscriptionId = msgArray.get(1).asText()
-                        subscribe(subscriptionId, msgArray.drop(2), it)
+                        subscribe(
+                            subscriptionId = subscriptionId,
+                            filterNodes = msgArray.drop(2),
+                            connection = it,
+                            count = false,
+                        )
                     }
                 }
 
@@ -196,20 +203,20 @@ class CustomWebSocketServer(
                     val event = Event.fromJson(msgArray.get(1).toString())
                     if (!Settings.authEnabled) {
                         Log.d(Citrine.TAG, "auth disabled")
-                        connection?.session?.trySend(CommandResult.invalid(event, "auth is disabled").toJson())
+                        connection?.trySend(CommandResult.invalid(event, "auth is disabled").toJson())
                         return
                     }
 
                     val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
                     if (exception != null) {
                         Log.d(Citrine.TAG, exception.message!!)
-                        connection?.session?.trySend(CommandResult.invalid(event, exception.message!!).toJson())
+                        connection?.trySend(CommandResult.invalid(event, exception.message!!).toJson())
                         return
                     }
 
                     Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
                     connection?.users?.add(event.pubKey)
-                    connection?.session?.trySend(CommandResult.ok(event).toJson())
+                    connection?.trySend(CommandResult.ok(event).toJson())
                 }
 
                 "EVENT" -> {
@@ -223,7 +230,7 @@ class CustomWebSocketServer(
 
                 "PING" -> {
                     try {
-                        connection?.session?.trySend(NoticeResult("PONG").toJson())
+                        connection?.trySend(NoticeResult("PONG").toJson())
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         Log.d(Citrine.TAG, "Failed to send pong response", e)
@@ -234,7 +241,7 @@ class CustomWebSocketServer(
                     try {
                         val errorMessage = NoticeResult.invalid("unknown message type $type").toJson()
                         Log.d(Citrine.TAG, errorMessage)
-                        connection?.session?.trySend(errorMessage)
+                        connection?.trySend(errorMessage)
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         Log.d(Citrine.TAG, "Failed to send response", e)
@@ -245,7 +252,7 @@ class CustomWebSocketServer(
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, e.toString(), e)
             try {
-                connection?.session?.trySend(NoticeResult.invalid("Error processing message").toJson())
+                connection?.trySend(NoticeResult.invalid("Error processing message").toJson())
             } catch (e: Exception) {
                 Log.d(Citrine.TAG, e.toString(), e)
             }
@@ -389,12 +396,12 @@ class CustomWebSocketServer(
         when (verifyEvent(event, connection, shouldVerify)) {
             VerificationResult.AuthRequiredForProtectedEvent -> {
                 if (Settings.authEnabled) {
-                    connection?.session?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
+                    connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
                 }
-                connection?.session?.trySend(CommandResult.invalid(event, "auth-required: this event may only be published by its author").toJson())
+                connection?.trySend(CommandResult.invalid(event, "auth-required: this event may only be published by its author").toJson())
             }
             VerificationResult.InvalidId -> {
-                connection?.session?.trySend(
+                connection?.trySend(
                     CommandResult.invalid(
                         event,
                         "event id hash verification failed",
@@ -402,7 +409,7 @@ class CustomWebSocketServer(
                 )
             }
             VerificationResult.InvalidSignature -> {
-                connection?.session?.trySend(
+                connection?.trySend(
                     CommandResult.invalid(
                         event,
                         "event signature verification failed",
@@ -410,28 +417,28 @@ class CustomWebSocketServer(
                 )
             }
             VerificationResult.Expired -> {
-                connection?.session?.trySend(CommandResult.invalid(event, "event expired").toJson())
+                connection?.trySend(CommandResult.invalid(event, "event expired").toJson())
             }
             VerificationResult.KindNotAllowed -> {
-                connection?.session?.trySend(CommandResult.invalid(event, "kind not allowed").toJson())
+                connection?.trySend(CommandResult.invalid(event, "kind not allowed").toJson())
             }
             VerificationResult.PubkeyNotAllowed -> {
-                connection?.session?.trySend(CommandResult.invalid(event, "pubkey not allowed").toJson())
+                connection?.trySend(CommandResult.invalid(event, "pubkey not allowed").toJson())
             }
             VerificationResult.TaggedPubkeyNotAllowed -> {
-                connection?.session?.trySend(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
+                connection?.trySend(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
             }
             VerificationResult.Deleted -> {
-                connection?.session?.trySend(CommandResult.invalid(event, "Event deleted").toJson())
+                connection?.trySend(CommandResult.invalid(event, "Event deleted").toJson())
             }
             VerificationResult.AlreadyInDatabase -> {
-                connection?.session?.trySend(CommandResult.duplicated(event).toJson())
+                connection?.trySend(CommandResult.duplicated(event).toJson())
             }
             VerificationResult.TaggedPubKeyMismatch -> {
-                connection?.session?.trySend(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
+                connection?.trySend(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
             }
             VerificationResult.NewestEventAlreadyInDatabase -> {
-                connection?.session?.trySend(CommandResult.invalid(event, "newest event already in database").toJson())
+                connection?.trySend(CommandResult.invalid(event, "newest event already in database").toJson())
             }
             VerificationResult.Valid -> {
                 when {
@@ -449,7 +456,7 @@ class CustomWebSocketServer(
                     }
                 }
 
-                connection?.session?.trySend(CommandResult.ok(event).toJson())
+                connection?.trySend(CommandResult.ok(event).toJson())
             }
         }
     }
@@ -572,51 +579,58 @@ class CustomWebSocketServer(
                 webSocket("/") {
                     val thisConnection = Connection(this)
                     connections.emit(connections.value + thisConnection)
-                    Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
 
-                    if (Settings.authEnabled) {
-                        trySend(AuthResult(thisConnection.authChallenge).toJson())
-                    }
-
-                    try {
-                        for (frame in incoming) {
-                            try {
-                                when (frame) {
-                                    is Frame.Text -> {
-                                        this.launch(Dispatchers.IO) {
-                                            val message = frame.readText()
-                                            processNewRelayMessage(message, thisConnection)
-                                        }
+                    val job = launch {
+                        thisConnection.sharedFlow.collect { message ->
+                            launch(Dispatchers.IO) {
+                                try {
+                                    processNewRelayMessage(message, thisConnection)
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) {
+                                        Log.d(Citrine.TAG, "message $message cancelled")
                                     }
-
-                                    else -> {
-                                        Citrine.getInstance().applicationScope.launch {
-                                            Log.d("websocket", "Invalid message type ${frame.frameType}")
-                                            this@webSocket.close(CloseReason(CloseReason.Codes.NORMAL, "Force closing: invalid message type"))
-                                            this@webSocket.cancel()
-                                            removeConnection(thisConnection)
-                                        }
-                                    }
-                                }
-                            } catch (e: Throwable) {
-                                if (e is CancellationException) throw e
-                                if (e is ClosedReceiveChannelException) {
-                                    Log.d(Citrine.TAG, e.toString(), e)
-                                    removeConnection(thisConnection)
-                                    break
-                                }
-                                Log.d(Citrine.TAG, e.toString(), e)
-                                Citrine.getInstance().applicationScope.launch {
-                                    try {
-                                        trySend(NoticeResult.invalid("Error processing message").toJson())
-                                    } catch (e: Exception) {
-                                        Log.d(Citrine.TAG, e.toString(), e)
-                                    }
+                                    throw e
                                 }
                             }
                         }
-                    } finally {
+                    }
+
+                    Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
+
+                    if (Settings.authEnabled) {
+                        thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
+                    }
+
+                    runCatching {
+                        incoming.consumeEach { frame ->
+                            when (frame) {
+                                is Frame.Text -> {
+                                    val message = frame.readText()
+                                    thisConnection.messageResponseFlow.emit(message)
+                                }
+
+                                else -> {
+                                    throw Exception("Invalid message type ${frame.frameType}")
+                                }
+                            }
+                        }
+                    }.onFailure { e ->
+                        if (e is CancellationException) {
+                            removeConnection(thisConnection)
+                            job.cancel()
+                            Log.d(Citrine.TAG, "Connection closed from ${thisConnection.name}")
+                            return@onFailure
+                        }
+                        Log.d(Citrine.TAG, e.toString(), e)
+                        try {
+                            thisConnection.trySend(NoticeResult.invalid("Error processing message").toJson())
+                        } catch (e: Exception) {
+                            Log.d(Citrine.TAG, e.toString(), e)
+                        }
+                    }.also {
                         removeConnection(thisConnection)
+                        job.cancel()
+                        Log.d(Citrine.TAG, "Connection closed from ${thisConnection.name}")
                     }
                 }
             }
@@ -629,12 +643,5 @@ class CustomWebSocketServer(
         connection.finalize()
         connections.value.remove(connection)
         connections.emit(connections.value)
-    }
-
-    suspend fun removeConnection(session: WebSocketServerSession) {
-        val connection = connections.value.find { it.session == session }
-        connection?.let {
-            removeConnection(it)
-        }
     }
 }

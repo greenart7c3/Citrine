@@ -8,8 +8,11 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import io.ktor.server.websocket.WebSocketServerSession
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 
 data class Subscription(
@@ -19,7 +22,9 @@ data class Subscription(
     val appDatabase: AppDatabase,
     val objectMapper: ObjectMapper,
     val count: Boolean,
-)
+) {
+    val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+}
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
@@ -43,7 +48,7 @@ object EventSubscription {
                             return@filter
                         }
 
-                        it.subscription.connection.session.trySend(
+                        it.subscription.connection.trySend(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(
                                     "EVENT",
@@ -75,6 +80,11 @@ object EventSubscription {
     }
 
     fun close(subscriptionId: String) {
+        subscriptions.snapshot().values.filter {
+            it.subscription.id == subscriptionId
+        }.forEach {
+            it.subscription.scope.coroutineContext.cancelChildren()
+        }
         subscriptions.remove(subscriptionId)
     }
 
@@ -107,6 +117,6 @@ object EventSubscription {
             manager,
         )
         manager.execute()
-        manager.subscription.connection.session.trySend(EOSE(subscriptionId).toJson())
+        manager.subscription.connection.trySend(EOSE(subscriptionId).toJson())
     }
 }

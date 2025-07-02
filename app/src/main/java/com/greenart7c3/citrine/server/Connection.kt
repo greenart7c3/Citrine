@@ -6,12 +6,14 @@ import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
-import io.ktor.websocket.close
 import java.util.Timer
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.onClosed
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
 class Connection(
@@ -19,6 +21,9 @@ class Connection(
     var users: MutableSet<HexKey> = mutableSetOf(),
     val authChallenge: String = UUID.randomUUID().toString().substring(0..10),
 ) {
+    val messageResponseFlow = MutableSharedFlow<String>()
+    val sharedFlow = messageResponseFlow.asSharedFlow()
+
     val since = System.currentTimeMillis()
     val timer = Timer()
 
@@ -32,7 +37,7 @@ class Connection(
                             Log.d(Citrine.TAG, "Closing session due to inactivity")
                             finalize()
                             Citrine.getInstance().applicationScope.launch {
-                                session.close()
+                                session.cancel()
                                 CustomWebSocketService.server?.removeConnection(this@Connection)
                             }
                         }
@@ -57,21 +62,21 @@ class Connection(
         timer.cancel()
         EventSubscription.closeAll(name)
     }
-}
 
-fun DefaultWebSocketServerSession.trySend(data: String) {
-    try {
-        outgoing.trySend(Frame.Text(data)).onClosed {
-            val connection = EventSubscription.getConnection(this)
-            connection?.let {
-                Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress()}")
-                Citrine.getInstance().applicationScope.launch {
-                    CustomWebSocketService.server?.removeConnection(connection)
+    fun trySend(data: String) {
+        try {
+            session.outgoing.trySend(Frame.Text(data)).onClosed {
+                val connection = EventSubscription.getConnection(session)
+                connection?.let {
+                    Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress()}")
+                    Citrine.getInstance().applicationScope.launch {
+                        CustomWebSocketService.server?.removeConnection(connection)
+                    }
                 }
             }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.d(Citrine.TAG, "Error sending data to client $data", e)
         }
-    } catch (e: Exception) {
-        if (e is CancellationException) throw e
-        Log.d(Citrine.TAG, "Error sending data to client $data", e)
     }
 }
