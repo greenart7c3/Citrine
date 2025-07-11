@@ -24,28 +24,26 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var database: AppDatabase? = null
 
-        fun getDatabase(context: Context): AppDatabase {
-            return database ?: synchronized(this) {
-                val executor = Executors.newCachedThreadPool()
-                val transactionExecutor = Executors.newCachedThreadPool()
+        fun getDatabase(context: Context): AppDatabase = database ?: synchronized(this) {
+            val executor = Executors.newCachedThreadPool()
+            val transactionExecutor = Executors.newCachedThreadPool()
 
-                val instance = Room.databaseBuilder(
-                    context,
-                    AppDatabase::class.java,
-                    "citrine_database",
-                )
-                    // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
-                    .setQueryExecutor(executor)
-                    .setTransactionExecutor(transactionExecutor)
-                    .addMigrations(MIGRATION_1_2)
-                    .addMigrations(MIGRATION_2_3)
-                    .addMigrations(MIGRATION_3_4)
-                    .build()
+            val instance = Room.databaseBuilder(
+                context,
+                AppDatabase::class.java,
+                "citrine_database",
+            )
+                // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                .setQueryExecutor(executor)
+                .setTransactionExecutor(transactionExecutor)
+                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_3_4)
+                .build()
 
-                instance.openHelper.writableDatabase.execSQL("VACUUM")
-                database = instance
-                instance
-            }
+            instance.openHelper.writableDatabase.execSQL("VACUUM")
+            database = instance
+            instance
         }
     }
 }
@@ -62,22 +60,20 @@ abstract class HistoryDatabase : RoomDatabase() {
         @Volatile
         private var database: AppDatabase? = null
 
-        fun getDatabase(context: Context): AppDatabase {
-            return database ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context,
-                    AppDatabase::class.java,
-                    "citrine_history_database",
-                )
-                    // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
-                    .addMigrations(MIGRATION_1_2)
-                    .addMigrations(MIGRATION_2_3)
-                    .addMigrations(MIGRATION_3_4)
-                    .build()
+        fun getDatabase(context: Context): AppDatabase = database ?: synchronized(this) {
+            val instance = Room.databaseBuilder(
+                context,
+                AppDatabase::class.java,
+                "citrine_history_database",
+            )
+                // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_3_4)
+                .build()
 
-                database = instance
-                instance
-            }
+            database = instance
+            instance
         }
     }
 }

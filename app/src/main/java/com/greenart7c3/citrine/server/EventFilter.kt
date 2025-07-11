@@ -63,12 +63,10 @@ data class EventFilter(
         return tokens.all { it in eventTokens }
     }
 
-    private fun tokenizeString(string: String): Set<String> {
-        return string.split(TOKENIZE_REGEX)
-            .filter { it.isNotEmpty() }
-            .map { it.lowercase() }
-            .toSet()
-    }
+    private fun tokenizeString(string: String): Set<String> = string.split(TOKENIZE_REGEX)
+        .filter { it.isNotEmpty() }
+        .map { it.lowercase() }
+        .toSet()
 
     companion object {
         val TOKENIZE_REGEX = "[^a-zA-Z0-9]".toRegex()

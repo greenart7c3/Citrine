@@ -33,13 +33,9 @@ object PrefKeys {
 object LocalPreferences {
     private fun encryptedPreferences(
         context: Context,
-    ): SharedPreferences {
-        return EncryptedStorage.preferences(context)
-    }
+    ): SharedPreferences = EncryptedStorage.preferences(context)
 
-    fun shouldShowAutoBackupDialog(context: Context): Boolean {
-        return !encryptedPreferences(context).contains(PrefKeys.AUTO_BACKUP)
-    }
+    fun shouldShowAutoBackupDialog(context: Context): Boolean = !encryptedPreferences(context).contains(PrefKeys.AUTO_BACKUP)
 
     fun saveSettingsToEncryptedStorage(settings: Settings, context: Context) {
         encryptedPreferences(context).edit {

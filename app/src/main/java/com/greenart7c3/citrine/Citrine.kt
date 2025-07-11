@@ -156,10 +156,9 @@ class Citrine : Application() {
         @Volatile
         private var instance: Citrine? = null
 
-        fun getInstance(): Citrine =
-            instance ?: synchronized(this) {
-                instance ?: Citrine().also { instance = it }
-            }
+        fun getInstance(): Citrine = instance ?: synchronized(this) {
+            instance ?: Citrine().also { instance = it }
+        }
     }
 }
 

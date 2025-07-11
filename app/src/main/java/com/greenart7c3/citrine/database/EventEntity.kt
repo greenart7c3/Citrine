@@ -103,28 +103,24 @@ class Converters {
     }
 }
 
-fun EventWithTags.toEvent(): Event {
-    return EventFactory.create(
-        id = event.id,
-        pubKey = event.pubkey,
-        createdAt = event.createdAt,
-        kind = event.kind,
-        content = event.content,
-        sig = event.sig,
-        tags = tags.map {
-            it.toTags()
-        }.toTypedArray(),
-    )
-}
+fun EventWithTags.toEvent(): Event = EventFactory.create(
+    id = event.id,
+    pubKey = event.pubkey,
+    createdAt = event.createdAt,
+    kind = event.kind,
+    content = event.content,
+    sig = event.sig,
+    tags = tags.map {
+        it.toTags()
+    }.toTypedArray(),
+)
 
-fun TagEntity.toTags(): Array<String> {
-    return listOfNotNull(
-        col0Name,
-        col1Value,
-        col2Differentiator,
-        col3Amount,
-    ).plus(col4Plus).toTypedArray()
-}
+fun TagEntity.toTags(): Array<String> = listOfNotNull(
+    col0Name,
+    col1Value,
+    col2Differentiator,
+    col3Amount,
+).plus(col4Plus).toTypedArray()
 
 fun Event.toEventWithTags(): EventWithTags {
     val dbEvent = EventEntity(

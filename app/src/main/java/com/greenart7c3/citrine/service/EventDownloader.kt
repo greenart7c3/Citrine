@@ -38,9 +38,7 @@ import kotlinx.coroutines.runBlocking
 class EventsDownloaderCache(val maxSize: Int = 200) {
     private val cache: LinkedList<String> = LinkedList()
 
-    fun contains(element: String): Boolean {
-        return cache.contains(element)
-    }
+    fun contains(element: String): Boolean = cache.contains(element)
 
     fun addElement(element: String) {
         // Add the new element

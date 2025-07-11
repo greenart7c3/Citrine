@@ -54,9 +54,7 @@ class Connection(
     }
     val name = "user${lastId.getAndIncrement()}"
 
-    fun remoteAddress(): String {
-        return "${session.call.request.local.remoteHost} ${session.call.request.headers["User-Agent"]}"
-    }
+    fun remoteAddress(): String = "${session.call.request.local.remoteHost} ${session.call.request.headers["User-Agent"]}"
 
     fun finalize() {
         timer.cancel()

@@ -1028,13 +1028,11 @@ fun String.toShortenHex(): String {
     return replaceRange(8, length - 8, ":")
 }
 
-fun isIpValid(ip: String): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        isNumericAddress(ip)
-    } else {
-        @Suppress("DEPRECATION")
-        Patterns.IP_ADDRESS.matcher(ip).matches()
-    }
+fun isIpValid(ip: String): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    isNumericAddress(ip)
+} else {
+    @Suppress("DEPRECATION")
+    Patterns.IP_ADDRESS.matcher(ip).matches()
 }
 
 fun String.toNostrKey(): String? {

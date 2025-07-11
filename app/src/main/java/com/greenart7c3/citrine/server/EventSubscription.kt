@@ -29,13 +29,9 @@ data class Subscription(
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
 
-    fun getConnection(session: WebSocketServerSession): Connection? {
-        return subscriptions.snapshot().values.firstOrNull { it.subscription.connection.session == session }?.subscription?.connection
-    }
+    fun getConnection(session: WebSocketServerSession): Connection? = subscriptions.snapshot().values.firstOrNull { it.subscription.connection.session == session }?.subscription?.connection
 
-    fun count(): Int {
-        return subscriptions.size()
-    }
+    fun count(): Int = subscriptions.size()
 
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
         Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
@@ -89,9 +85,7 @@ object EventSubscription {
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    fun containsConnection(connection: Connection): Boolean {
-        return subscriptions.snapshot().values.any { it.subscription.connection.name == connection.name && !it.subscription.connection.session.outgoing.isClosedForSend }
-    }
+    fun containsConnection(connection: Connection): Boolean = subscriptions.snapshot().values.any { it.subscription.connection.name == connection.name && !it.subscription.connection.session.outgoing.isClosedForSend }
 
     suspend fun subscribe(
         subscriptionId: String,

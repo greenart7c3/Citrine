@@ -4,11 +4,9 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.vitorpamplona.quartz.nip01Core.core.Event
 
 data class CommandResult(val eventId: String, val result: Boolean, val description: String = "") {
-    fun toJson(): String {
-        return jacksonObjectMapper().writeValueAsString(
-            listOf("OK", eventId, result, description),
-        )
-    }
+    fun toJson(): String = jacksonObjectMapper().writeValueAsString(
+        listOf("OK", eventId, result, description),
+    )
 
     companion object {
         fun ok(event: Event) = CommandResult(event.id, true)
@@ -18,11 +16,9 @@ data class CommandResult(val eventId: String, val result: Boolean, val descripti
 }
 
 data class ClosedResult(val subId: String, val message: String) {
-    fun toJson(): String {
-        return jacksonObjectMapper().writeValueAsString(
-            listOf("CLOSED", subId, message),
-        )
-    }
+    fun toJson(): String = jacksonObjectMapper().writeValueAsString(
+        listOf("CLOSED", subId, message),
+    )
 
     companion object {
         fun required(subId: String) = ClosedResult(subId, "auth-required: we only accept events from registered users")

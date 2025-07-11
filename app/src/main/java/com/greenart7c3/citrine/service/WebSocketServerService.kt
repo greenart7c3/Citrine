@@ -187,9 +187,7 @@ class WebSocketServerService : Service() {
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder {
-        return binder
-    }
+    override fun onBind(intent: Intent?): IBinder = binder
 
     private fun createNotification(): Notification {
         Log.d(Citrine.TAG, "Creating notification")
@@ -238,7 +236,5 @@ class WebSocketServerService : Service() {
         return notificationBuilder.build()
     }
 
-    fun isStarted(): Boolean {
-        return CustomWebSocketService.server != null
-    }
+    fun isStarted(): Boolean = CustomWebSocketService.server != null
 }
