@@ -12,6 +12,7 @@ import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.utils.isEphemeral
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
 import com.greenart7c3.citrine.utils.shouldOverwrite
@@ -456,7 +457,10 @@ class CustomWebSocketServer(
                     }
                 }
 
-                connection?.trySend(CommandResult.ok(event).toJson())
+                // if the event is ephemeral the response will be sent after the event is sent to subscriptions
+                if (!event.isEphemeral()) {
+                    connection?.trySend(CommandResult.ok(event).toJson())
+                }
             }
         }
     }

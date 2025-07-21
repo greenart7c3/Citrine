@@ -7,6 +7,7 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.utils.isEphemeral
 import io.ktor.server.websocket.WebSocketServerSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -35,15 +36,16 @@ object EventSubscription {
 
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
         Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+            var sentEvent = false
             subscriptions.snapshot().values.forEach {
+                if (connection != null && it.subscription.connection.name == connection.name) {
+                    Log.d(Citrine.TAG, "skipping event to same connection")
+                    return@forEach
+                }
+
                 it.subscription.filters.forEach filter@{ filter ->
                     val event = dbEvent.toEvent()
                     if (filter.test(event)) {
-                        if (connection != null && it.subscription.connection.name == connection.name) {
-                            Log.d(Citrine.TAG, "skipping event to same connection")
-                            return@filter
-                        }
-
                         it.subscription.connection.trySend(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(
@@ -53,7 +55,19 @@ object EventSubscription {
                                 ),
                             ),
                         )
+
+                        sentEvent = true
                     }
+                }
+            }
+            val event = dbEvent.toEvent()
+            if (event.isEphemeral()) {
+                if (!sentEvent) {
+                    connection?.trySend(
+                        CommandResult.mute(event).toJson(),
+                    )
+                } else {
+                    connection?.trySend(CommandResult.ok(event).toJson())
                 }
             }
         }
