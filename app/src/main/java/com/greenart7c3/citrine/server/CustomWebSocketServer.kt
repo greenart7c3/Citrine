@@ -380,7 +380,7 @@ class CustomWebSocketServer(
             }
             else -> {
                 val eventEntity = appDatabase.eventDao().getById(event.id)
-                if (eventEntity != null) {
+                if (eventEntity != null && !event.isEphemeral()) {
                     Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
