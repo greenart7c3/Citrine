@@ -110,7 +110,7 @@ object EventRepository {
                 }
                 if (event.isProtected() && !subscription.connection.users.contains(event.pubKey)) {
                     subscription.connection.trySend(AuthResult.challenge(subscription.connection.authChallenge).toJson())
-                    subscription.connection.trySend(CommandResult.invalid(event, "auth-required: this event may only be queried by its author").toJson())
+                    subscription.connection.trySend(CommandResult.required(event, "this event may only be queried by its author").toJson())
                     return@forEach
                 }
 

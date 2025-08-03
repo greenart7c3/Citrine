@@ -399,7 +399,7 @@ class CustomWebSocketServer(
                 if (Settings.authEnabled) {
                     connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
                 }
-                connection?.trySend(CommandResult.invalid(event, "auth-required: this event may only be published by its author").toJson())
+                connection?.trySend(CommandResult.required(event, "this event may only be published by its author").toJson())
             }
             VerificationResult.InvalidId -> {
                 connection?.trySend(
