@@ -396,9 +396,7 @@ class CustomWebSocketServer(
     suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true) {
         when (verifyEvent(event, connection, shouldVerify)) {
             VerificationResult.AuthRequiredForProtectedEvent -> {
-                if (Settings.authEnabled) {
-                    connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
-                }
+                connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
                 connection?.trySend(CommandResult.required(event, "this event may only be published by its author").toJson())
             }
             VerificationResult.InvalidId -> {
