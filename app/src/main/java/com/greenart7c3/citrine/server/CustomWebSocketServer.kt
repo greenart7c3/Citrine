@@ -315,9 +315,10 @@ class CustomWebSocketServer(
         }
 
         if (event.isProtected()) {
-            return VerificationResult.AuthRequiredForProtectedEvent
+            val remoteHost = connection?.session?.call?.request?.local?.remoteHost
+            val isLocalHost = remoteHost in listOf("127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1")
 
-            if (connection?.users?.contains(event.pubKey) != true) {
+            if (!isLocalHost && connection?.users?.contains(event.pubKey) != true) {
                 Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
                 return VerificationResult.AuthRequiredForProtectedEvent
             }
