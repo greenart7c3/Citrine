@@ -125,6 +125,5 @@ object EventSubscription {
             manager,
         )
         manager.execute()
-        manager.subscription.connection.trySend(EOSE(subscriptionId).toJson())
     }
 }
