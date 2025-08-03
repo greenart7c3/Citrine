@@ -75,6 +75,8 @@ class SubscriptionManager(
                     )
                 }
             }
+
+            subscription.connection.trySend(EOSE(subscription.id).toJson())
         }
     }
 }
