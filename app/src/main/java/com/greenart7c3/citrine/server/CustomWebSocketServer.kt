@@ -202,12 +202,6 @@ class CustomWebSocketServer(
 
                 "AUTH" -> {
                     val event = Event.fromJson(msgArray.get(1).toString())
-                    if (!Settings.authEnabled) {
-                        Log.d(Citrine.TAG, "auth disabled")
-                        connection?.trySend(CommandResult.invalid(event, "auth is disabled").toJson())
-                        return
-                    }
-
                     val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
                     if (exception != null) {
                         Log.d(Citrine.TAG, exception.message!!)
@@ -321,10 +315,7 @@ class CustomWebSocketServer(
         }
 
         if (event.isProtected()) {
-            if (!Settings.authEnabled) {
-                Log.d(Citrine.TAG, "auth disabled for protected event ${event.id}")
-                return VerificationResult.AuthRequiredForProtectedEvent
-            }
+            return VerificationResult.AuthRequiredForProtectedEvent
 
             if (connection?.users?.contains(event.pubKey) != true) {
                 Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
