@@ -10,7 +10,6 @@ import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.EventMapper.Companion.mapper
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
-import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 
@@ -105,15 +104,6 @@ object EventRepository {
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {
-                if (event.isProtected() && !Settings.authEnabled) {
-                    return@forEach
-                }
-                if (event.isProtected() && !subscription.connection.users.contains(event.pubKey)) {
-                    subscription.connection.trySend(AuthResult.challenge(subscription.connection.authChallenge).toJson())
-                    subscription.connection.trySend(CommandResult.invalid(event, "auth-required: this event may only be queried by its author").toJson())
-                    return@forEach
-                }
-
                 Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
                 subscription.connection.trySend(
                     subscription.objectMapper.writeValueAsString(

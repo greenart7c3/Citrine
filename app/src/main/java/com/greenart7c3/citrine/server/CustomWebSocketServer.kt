@@ -202,12 +202,6 @@ class CustomWebSocketServer(
 
                 "AUTH" -> {
                     val event = Event.fromJson(msgArray.get(1).toString())
-                    if (!Settings.authEnabled) {
-                        Log.d(Citrine.TAG, "auth disabled")
-                        connection?.trySend(CommandResult.invalid(event, "auth is disabled").toJson())
-                        return
-                    }
-
                     val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
                     if (exception != null) {
                         Log.d(Citrine.TAG, exception.message!!)
@@ -321,10 +315,6 @@ class CustomWebSocketServer(
         }
 
         if (event.isProtected()) {
-            if (!Settings.authEnabled) {
-                Log.d(Citrine.TAG, "auth disabled for protected event ${event.id}")
-                return VerificationResult.AuthRequiredForProtectedEvent
-            }
 
             if (connection?.users?.contains(event.pubKey) != true) {
                 Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
@@ -396,10 +386,8 @@ class CustomWebSocketServer(
     suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true) {
         when (verifyEvent(event, connection, shouldVerify)) {
             VerificationResult.AuthRequiredForProtectedEvent -> {
-                if (Settings.authEnabled) {
-                    connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
-                }
-                connection?.trySend(CommandResult.invalid(event, "auth-required: this event may only be published by its author").toJson())
+                connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
+                connection?.trySend(CommandResult.required(event, "this event may only be published by its author").toJson())
             }
             VerificationResult.InvalidId -> {
                 connection?.trySend(

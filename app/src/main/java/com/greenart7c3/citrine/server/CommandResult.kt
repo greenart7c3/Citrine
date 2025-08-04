@@ -12,6 +12,7 @@ data class CommandResult(val eventId: String, val result: Boolean, val descripti
         fun ok(event: Event) = CommandResult(event.id, true)
         fun duplicated(event: Event) = CommandResult(event.id, true, "duplicate:")
         fun invalid(event: Event, message: String) = CommandResult(event.id, false, "invalid: $message")
+        fun required(event: Event, message: String) = CommandResult(event.id, false, "auth-required: $message")
 
         fun mute(event: Event) = CommandResult(event.id, false, "mute: no one was listening to your ephemeral event and it wasn't handled in any way, it was ignored")
     }
