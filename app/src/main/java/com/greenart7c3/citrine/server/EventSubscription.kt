@@ -38,11 +38,6 @@ object EventSubscription {
         Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
             var sentEvent = false
             subscriptions.snapshot().values.forEach {
-                if (connection != null && it.subscription.connection.name == connection.name) {
-                    Log.d(Citrine.TAG, "skipping event to same connection")
-                    return@forEach
-                }
-
                 it.subscription.filters.forEach filter@{ filter ->
                     val event = dbEvent.toEvent()
                     if (filter.test(event)) {
@@ -125,6 +120,5 @@ object EventSubscription {
             manager,
         )
         manager.execute()
-        manager.subscription.connection.trySend(EOSE(subscriptionId).toJson())
     }
 }
