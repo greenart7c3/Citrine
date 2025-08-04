@@ -315,7 +315,6 @@ class CustomWebSocketServer(
         }
 
         if (event.isProtected()) {
-
             if (connection?.users?.contains(event.pubKey) != true) {
                 Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
                 return VerificationResult.AuthRequiredForProtectedEvent
