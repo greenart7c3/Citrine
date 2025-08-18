@@ -12,12 +12,12 @@ plugins {
 
 android {
     namespace = "com.greenart7c3.citrine"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.greenart7c3.citrine"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 48
         versionName = "0.8.1"
 
