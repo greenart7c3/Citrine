@@ -388,6 +388,7 @@ fun HomeScreen(
                 ElevatedButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
+                        // TODO: Replace this with a setup screen to allow automatic download in background
                         navController.navigate(Route.DownloadYourEventsUserScreen.route)
                     },
                     content = {
