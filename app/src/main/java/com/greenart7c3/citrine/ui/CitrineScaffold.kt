@@ -195,15 +195,15 @@ fun CitrineScaffold(
                 )
             }
 
-            composable(Route.DownloadYourEventsUserScreen.route) {
-                DownloadYourEventsUserScreen(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(16.dp),
-                    navController = navController,
-                )
-            }
+//            composable(Route.DownloadYourEventsUserScreen.route) {
+//                DownloadYourEventsUserScreen(
+//                    modifier = Modifier
+//                        .fillMaxSize()
+//                        .padding(padding)
+//                        .padding(16.dp),
+//                    navController = navController,
+//                )
+//            }
         }
     }
 }

@@ -8,7 +8,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
-import com.vitorpamplona.quartz.nip01Core.jackson.EventMapper.Companion.mapper
+import com.vitorpamplona.quartz.nip01Core.jackson.JsonMapper
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
@@ -82,7 +82,7 @@ object EventRepository {
         return database.eventDao().getEvents(rawSql)
     }
 
-    suspend fun subscribe(
+    fun subscribe(
         subscription: Subscription,
         filter: EventFilter,
     ) {
@@ -120,7 +120,7 @@ object EventRepository {
 }
 
 fun Event.toJsonObject(): JsonNode {
-    val factory = mapper.nodeFactory
+    val factory = JsonMapper.mapper.nodeFactory
 
     return factory.objectNode().apply {
         put("id", id)

@@ -18,7 +18,8 @@ import com.greenart7c3.citrine.utils.shouldDelete
 import com.greenart7c3.citrine.utils.shouldOverwrite
 import com.vitorpamplona.quartz.nip01Core.core.AddressableEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
-import com.vitorpamplona.quartz.nip01Core.jackson.EventMapper
+import com.vitorpamplona.quartz.nip01Core.jackson.JsonMapper
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.tags.addressables.taggedAddresses
 import com.vitorpamplona.quartz.nip01Core.tags.events.taggedEvents
 import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
@@ -26,7 +27,6 @@ import com.vitorpamplona.quartz.nip01Core.verify
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
-import com.vitorpamplona.quartz.nip65RelayList.RelayUrlFormatter
 import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
 import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
@@ -89,7 +89,7 @@ class CustomWebSocketServer(
         }
     }
 
-    suspend fun stop() {
+    fun stop() {
         Log.d(Citrine.TAG, "Stopping server")
         server?.stop(1000)
         server = null
@@ -146,7 +146,7 @@ class CustomWebSocketServer(
             return Result.failure(Exception("no challenge in auth event"))
         }
 
-        if (eventRelay.isNullOrBlank()) {
+        if (eventRelay?.url.isNullOrBlank()) {
             Log.d(Citrine.TAG, "no relay in auth event ${event.toJson()}")
             return Result.failure(Exception("no relay in auth event"))
         }
@@ -156,7 +156,7 @@ class CustomWebSocketServer(
             return Result.failure(Exception("challenge mismatch"))
         }
 
-        val formattedRelayUrl = RelayUrlFormatter.normalizeOrNull(eventRelay)
+        val formattedRelayUrl = RelayUrlNormalizer.normalizeOrNull(eventRelay.url)
         if (formattedRelayUrl == null) {
             Log.d(Citrine.TAG, "invalid relay url ${event.toJson()}")
             return Result.failure(Exception("invalid relay url"))
@@ -174,7 +174,7 @@ class CustomWebSocketServer(
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
         try {
             Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
-            val msgArray = EventMapper.mapper.readTree(newMessage)
+            val msgArray = JsonMapper.mapper.readTree(newMessage)
             when (val type = msgArray.get(0).asText()) {
                 "COUNT" -> {
                     connection?.let {
