@@ -26,9 +26,7 @@ class ClipboardReceiver : BroadcastReceiver() {
             Citrine.getInstance().cancelJob()
             NotificationManagerCompat.from(context).cancel(2)
             Citrine.getInstance().applicationScope.launch {
-                Citrine.getInstance().client.getAll().forEach {
-                    it.disconnect()
-                }
+                Citrine.getInstance().client.disconnect()
             }
         }
     }

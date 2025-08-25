@@ -44,12 +44,10 @@ import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.utils.toDateString
-import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.RelaySetupInfo
-import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.sendAndWaitForResponse
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
-import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
-import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
+import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +68,8 @@ fun ContactsScreen(
 
     val signer = NostrSignerExternal(
         pubKey,
-        ExternalSignerLauncher(pubKey, ""),
+        "",
+        contentResolver = context.contentResolver,
     )
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -84,30 +83,27 @@ fun ContactsScreen(
             } else {
                 result.data?.let {
                     coroutineScope.launch(Dispatchers.IO) {
-                        signer.launcher.newResult(it)
+                        signer.newResponse(it)
                     }
                 }
             }
         },
     )
-    signer.launcher.registerLauncher(
-        launcher = {
-            try {
-                launcher.launch(it)
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                Log.e("Signer", "Error opening Signer app", e)
-                coroutineScope.launch {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.make_sure_the_signer_application_has_authorized_this_transaction),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
+    signer.registerForegroundLauncher {
+        try {
+            launcher.launch(it)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.e("Signer", "Error opening Signer app", e)
+            coroutineScope.launch {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.make_sure_the_signer_application_has_authorized_this_transaction),
+                    Toast.LENGTH_LONG,
+                ).show()
             }
-        },
-        contentResolver = { context.contentResolver },
-    )
+        }
+    }
 
     val events = remember { mutableListOf<ContactListEvent>() }
     var outboxRelays: AdvertisedRelayListEvent? = null
@@ -229,14 +225,6 @@ fun ContactsScreen(
                             modifier = Modifier.padding(horizontal = 6.dp),
                         )
                         Text(
-                            "Communities: ${event.verifiedFollowAddressSet().size}",
-                            modifier = Modifier.padding(horizontal = 6.dp),
-                        )
-                        Text(
-                            "Hashtags: ${event.countFollowTags()}",
-                            modifier = Modifier.padding(horizontal = 6.dp),
-                        )
-                        Text(
                             "Relays: ${event.relays()?.keys?.size ?: 0}",
                             modifier = Modifier.padding(horizontal = 6.dp),
                         )
@@ -258,63 +246,41 @@ fun ContactsScreen(
                                         return@ElevatedButton
                                     }
 
-                                    ContactListEvent.create(
-                                        event.content,
-                                        event.tags,
-                                        signer,
-                                    ) { signedEvent ->
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        val signedEvent = ContactListEvent.create(
+                                            event.content,
+                                            event.tags,
+                                            signer,
+                                        )
                                         val outbox = outboxRelays?.writeRelays()?.map { relay ->
-                                            RelaySetupInfo(
+                                            NormalizedRelayUrl(
                                                 url = relay,
-                                                read = true,
-                                                write = true,
-                                                feedTypes = COMMON_FEED_TYPES,
                                             )
                                         }
                                         val localRelays = outbox ?: relays?.mapNotNull { relay ->
                                             if (relay.value.write) {
-                                                RelaySetupInfo(
-                                                    relay.key,
-                                                    relay.value.read,
-                                                    relay.value.write,
-                                                    COMMON_FEED_TYPES,
-                                                )
+                                                relay.key
                                             } else {
                                                 null
                                             }
                                         }
 
-                                        if (localRelays == null) return@create
+                                        if (localRelays == null) return@launch
 
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            loading = true
-                                            if (useProxy) {
-                                                HttpClientManager.setDefaultProxyOnPort(proxyPort.text.toInt())
-                                            } else {
-                                                HttpClientManager.setDefaultProxy(null)
-                                            }
+                                        loading = true
+                                        if (useProxy) {
+                                            HttpClientManager.setDefaultProxyOnPort(proxyPort.text.toInt())
+                                        } else {
+                                            HttpClientManager.setDefaultProxy(null)
+                                        }
 
-                                            Citrine.getInstance().client.reconnect(
-                                                localRelays.map {
-                                                    RelaySetupInfoToConnect(
-                                                        it.url,
-                                                        it.read,
-                                                        it.write,
-                                                        useProxy,
-                                                        it.feedTypes,
-                                                    )
-                                                }.toTypedArray(),
-                                            )
-                                            delay(1000)
-                                            Citrine.getInstance().client.sendAndWaitForResponse(signedEvent, forceProxy = useProxy, relayList = localRelays)
-                                            CustomWebSocketService.server?.innerProcessEvent(signedEvent, null)
-                                            Citrine.getInstance().client.getAll().forEach {
-                                                it.disconnect()
-                                            }
-                                            loading = false
-                                            coroutineScope.launch(Dispatchers.Main) {
-                                                navController.navigateUp()
-                                            }
+                                        delay(1000)
+                                        Citrine.getInstance().client.sendAndWaitForResponse(signedEvent, relayList = localRelays.toSet())
+                                        CustomWebSocketService.server?.innerProcessEvent(signedEvent, null)
+                                        Citrine.getInstance().client.disconnect()
+                                        loading = false
+                                        coroutineScope.launch(Dispatchers.Main) {
+                                            navController.navigateUp()
                                         }
                                     }
                                 },
