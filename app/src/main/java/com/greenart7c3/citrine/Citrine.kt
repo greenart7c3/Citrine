@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
-import android.content.ContentResolver
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
@@ -17,11 +16,7 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
 import com.greenart7c3.citrine.service.WebSocketServerService
-import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
-import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.IRelayClientListener
-import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.RelayState
-import com.vitorpamplona.quartz.nip01Core.relay.client.single.IRelayClient
 import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.measureTime
@@ -71,14 +66,14 @@ class Citrine : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        client.connect()
+
         instance = this
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
         if (Settings.listenToPokeyBroadcasts) {
             registerPokeyReceiver()
         }
     }
-
-    fun contentResolverFn(): ContentResolver = contentResolver
 
     fun cancelJob() {
         job?.cancelChildren()
@@ -167,96 +162,5 @@ class Citrine : Application() {
         fun getInstance(): Citrine = instance ?: synchronized(this) {
             instance ?: Citrine().also { instance = it }
         }
-    }
-}
-
-class RelayListener(
-    val onReceiveEvent: (relay: IRelayClient, subscriptionId: String, event: Event) -> Unit,
-) : IRelayClientListener {
-    override fun onAuth(relay: IRelayClient, challenge: String) {
-        Log.d("RelayListener", "Received auth challenge $challenge from relay ${relay.url}")
-    }
-
-    override fun onBeforeSend(relay: IRelayClient, event: Event) {
-        Log.d("RelayListener", "Sending event ${event.id} to relay ${relay.url}")
-    }
-
-    override fun onError(relay: IRelayClient, subId: String, error: Error) {
-        Log.d("RelayListener", "Received error $error from subscription $subId")
-    }
-
-    override fun onEvent(relay: IRelayClient, subId: String, event: Event, arrivalTime: Long, afterEOSE: Boolean) {
-        Log.d("RelayListener", "Received event ${event.toJson()} from subscription $subId afterEOSE: $afterEOSE")
-        onReceiveEvent(relay, subId, event)
-    }
-
-    override fun onEOSE(relay: IRelayClient, subId: String, arrivalTime: Long) {
-        Log.d("RelayListener", "Received EOSE from subscription $subId")
-    }
-
-    override fun onNotify(relay: IRelayClient, description: String) {
-        Log.d("RelayListener", "Received notify $description from relay ${relay.url}")
-    }
-
-    override fun onRelayStateChange(relay: IRelayClient, type: RelayState) {
-        Log.d("RelayListener", "Relay ${relay.url} state changed to $type")
-    }
-
-    override fun onSend(relay: IRelayClient, msg: String, success: Boolean) {
-        Log.d("RelayListener", "Sent message $msg to relay ${relay.url} success: $success")
-    }
-
-    override fun onSendResponse(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
-        Log.d("RelayListener", "Sent response to event $eventId to relay ${relay.url} success: $success message: $message")
-    }
-}
-
-class RelayListener2(
-    val onReceiveEvent: (relay: IRelayClient, subscriptionId: String, event: Event) -> Unit,
-    val onEOSE: (relay: IRelayClient) -> Unit,
-    val onErrorFunc: (relay: IRelayClient, subscriptionId: String, error: Error) -> Unit,
-    val onAuthFunc: (relay: IRelayClient, challenge: String) -> Unit,
-) : IRelayClientListener {
-    override fun onAuth(relay: IRelayClient, challenge: String) {
-        Log.d("RelayListener", "Received auth challenge $challenge from relay ${relay.url}")
-        onAuthFunc(relay, challenge)
-    }
-
-    override fun onBeforeSend(relay: IRelayClient, event: Event) {
-        Log.d("RelayListener", "Sending event ${event.id} to relay ${relay.url}")
-    }
-
-    override fun onError(relay: IRelayClient, subId: String, error: Error) {
-        Log.d("RelayListener", "Received error $error from subscription $subId")
-        onErrorFunc(relay, subId, error)
-    }
-
-    override fun onEvent(relay: IRelayClient, subId: String, event: Event, arrivalTime: Long, afterEOSE: Boolean) {
-        // Log.d("RelayListener", "Received event ${event.toJson()} from subscription $subscriptionId afterEOSE: $afterEOSE")
-        onReceiveEvent(relay, subId, event)
-    }
-
-    override fun onEOSE(relay: IRelayClient, subId: String, arrivalTime: Long) {
-        Log.d("RelayListener", "Received EOSE from subscription $subId")
-        onEOSE(relay)
-    }
-
-    override fun onNotify(relay: IRelayClient, description: String) {
-        Log.d("RelayListener", "Received notify $description from relay ${relay.url}")
-    }
-
-    override fun onRelayStateChange(relay: IRelayClient, type: RelayState) {
-        Log.d("RelayListener", "Relay ${relay.url} state changed to $type")
-        if (type == RelayState.DISCONNECTING) {
-            onEOSE(relay)
-        }
-    }
-
-    override fun onSend(relay: IRelayClient, msg: String, success: Boolean) {
-        Log.d("RelayListener", "Sent message $msg to relay ${relay.url} success: $success")
-    }
-
-    override fun onSendResponse(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
-        Log.d("RelayListener", "Sent response to event $eventId to relay ${relay.url} success: $success message: $message")
     }
 }
