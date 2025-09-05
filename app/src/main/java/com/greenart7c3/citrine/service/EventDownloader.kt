@@ -23,6 +23,8 @@ import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
+import java.util.Timer
+import kotlin.concurrent.schedule
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -45,7 +47,6 @@ object EventDownloader {
         client: NostrClient,
         relayUrl: String,
         authorPubKey: String,
-        onAuth: (relay: IRelayClient, challenge: String, subId: String) -> Unit,
     ) {
         val normalizedUrl = NormalizedRelayUrl(relayUrl)
         val mutex = Mutex()
@@ -69,8 +70,11 @@ object EventDownloader {
                 completed = true
                 finishedSignal.complete(Unit)
             },
-            onAuthFunc = onAuth,
         )
+
+        client.disconnect()
+        delay(2000)
+        client.connect()
 
         // Wait until subscription finishes
         finishedSignal.await()
@@ -119,6 +123,9 @@ object EventDownloader {
                     finishedRelays[it.url] = true
                 },
             )
+            Citrine.getInstance().client.disconnect()
+            delay(2000)
+            Citrine.getInstance().client.connect()
         }
         var count = 0
         while (finishedRelays.values.contains(false) && count < 15) {
@@ -168,6 +175,9 @@ object EventDownloader {
                 },
             )
         }
+        Citrine.getInstance().client.disconnect()
+        delay(2000)
+        Citrine.getInstance().client.connect()
         var count = 0
         while (finishedRelays.values.contains(false) && count < 15) {
             count++
@@ -180,7 +190,6 @@ object EventDownloader {
     suspend fun fetchEvents(
         signer: NostrSigner,
         relays: List<NormalizedRelayUrl>,
-        onAuth: (relay: IRelayClient, challenge: String, subId: String) -> Unit,
         scope: CoroutineScope,
     ) {
         if (!Citrine.getInstance().client.isActive()) {
@@ -200,11 +209,7 @@ object EventDownloader {
                     Citrine.getInstance().client,
                     it.url,
                     signer.pubKey,
-                    onAuth = { relay, challenge, subId ->
-                        onAuth(relay, challenge, subId)
-                    },
                 )
-                Citrine.getInstance().client.buildRelay(it).disconnect()
             }
 
             Citrine.getInstance().client.disconnect()
@@ -268,20 +273,46 @@ class RelayClientSubscription(
     private val batchSize: Int = 500,
     private val eventConsumer: (Event) -> Unit,
     private val onComplete: (() -> Unit)? = null,
-    private val onAuthFunc: (relay: IRelayClient, challenge: String, subId: String) -> Unit,
 ) : IRelayClientListener {
     private var subId = newSubId()
     private var until: Long = (System.currentTimeMillis() / 1000)
     private var oldestTimestamp: Long = until
     private val receivedEvents = mutableListOf<Event>()
+    private var completed = false
+
+    private var timeoutTimer: Timer? = null
+    private val timeoutMs = 30_000L // 30 seconds
 
     init {
         client.subscribe(this)
         updateFilter()
     }
 
+    private fun startTimeout() {
+        timeoutTimer = Timer()
+        timeoutTimer?.schedule(timeoutMs) {
+            if (!completed) {
+                Log.d("RelayClientSubscription", "Timeout reached, no events received for 30 seconds. Completing.")
+                closeSubscription()
+                onComplete?.invoke()
+                completed = true
+            }
+        }
+    }
+
+    private fun cancelTimeout() {
+        timeoutTimer?.cancel()
+        timeoutTimer = null
+    }
+
     override fun onRelayStateChange(relay: IRelayClient, type: RelayState) {
         Log.d("RelayClientSubscription", "onRelayStateChange: ${relay.url}, $type")
+        if (type == RelayState.DISCONNECTED) {
+            if (!completed) {
+                closeSubscription()
+                updateFilter()
+            }
+        }
         super.onRelayStateChange(relay, type)
     }
 
@@ -295,10 +326,24 @@ class RelayClientSubscription(
         super.onError(relay, subId, error)
     }
 
+    override fun onNotify(relay: IRelayClient, description: String) {
+        Log.d("RelayClientSubscription", "onNotify: ${relay.url}, $description")
+        super.onNotify(relay, description)
+    }
+
+    override fun onSendResponse(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
+        Log.d("RelayClientSubscription", "onSendResponse: ${relay.url}, $eventId, $success, $message")
+        super.onSendResponse(relay, eventId, success, message)
+    }
+
     override fun onAuth(relay: IRelayClient, challenge: String) {
         Log.d("RelayClientSubscription", "onAuth: ${relay.url}, $challenge")
-        onAuthFunc(relay, challenge, subId)
         super.onAuth(relay, challenge)
+    }
+
+    override fun onAuthed(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
+        Log.d("RelayClientSubscription", "onAuthed: ${relay.url}, $eventId, $success, $message")
+        super.onAuthed(relay, eventId, success, message)
     }
 
     override fun onEvent(
@@ -309,6 +354,9 @@ class RelayClientSubscription(
         afterEOSE: Boolean,
     ) {
         if (this.subId == subId) {
+            cancelTimeout()
+            startTimeout() // Reset the timer
+
             receivedEvents.add(event)
             if (event.createdAt < oldestTimestamp) {
                 oldestTimestamp = event.createdAt
@@ -324,12 +372,15 @@ class RelayClientSubscription(
     override fun onEOSE(relay: IRelayClient, subId: String, arrivalTime: Long) {
         if (this.subId != subId) return
 
+        cancelTimeout()
+
         Log.d("RelayClientSubscription", "onEOSE: Received ${receivedEvents.size} events $arrivalTime")
 
         if (receivedEvents.isEmpty()) {
             Log.d("RelayClientSubscription", "Finished paginating, closing subscription.")
             closeSubscription()
             onComplete?.invoke()
+            completed = true
             return
         }
 
@@ -337,11 +388,13 @@ class RelayClientSubscription(
         oldestTimestamp -= 1
         until = oldestTimestamp
         closeSubscription()
-
         updateFilter()
     }
 
     fun updateFilter() {
+        cancelTimeout() // Cancel previous timeout if any
+        startTimeout() // Start timeout for this batch
+
         subId = newSubId()
         val filter = Filter(
             authors = listOf(authorPubKey),
@@ -351,13 +404,11 @@ class RelayClientSubscription(
 
         Log.d("RelayClientSubscription", "Requesting batch with until=$until from relay $relayUrl")
         client.openReqSubscription(subId, mapOf(relayUrl to listOf(filter)))
-        val relay = client.buildRelay(relayUrl)
-        if (!relay.isConnected()) {
-            client.buildRelay(relayUrl).connectAndSyncFiltersIfDisconnected()
-        }
+        client.reconnect(true)
     }
 
     fun closeSubscription() {
+        cancelTimeout()
         client.close(subId)
     }
 }

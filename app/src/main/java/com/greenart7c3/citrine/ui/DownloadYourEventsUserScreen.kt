@@ -59,6 +59,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.EventDownloader
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.RelayAuthenticator
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
@@ -287,21 +288,15 @@ fun DownloadYourEventsUserScreen(
                 Citrine.job = Citrine.getInstance().applicationScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
 
+                    RelayAuthenticator(Citrine.getInstance().client, Citrine.getInstance().applicationScope) { challenge, relay ->
+                        val authedEvent = RelayAuthEvent.create(relay.url, challenge, if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair()))
+                        Citrine.getInstance().client.sendIfExists(authedEvent, relay.url)
+                    }
+
                     EventDownloader.fetchEvents(
                         signer = signer!!,
                         scope = Citrine.getInstance().applicationScope,
                         relays = it,
-                        onAuth = { relay, challenge, subId ->
-                            scope.launch(Dispatchers.IO) {
-                                val authEvent = RelayAuthEvent.create(
-                                    relay.url,
-                                    challenge,
-                                    if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair()),
-                                )
-
-                                relay.sendAuth(authEvent)
-                            }
-                        },
                     )
                 }
                 navController.navigateUp()
