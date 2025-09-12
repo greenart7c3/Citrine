@@ -26,8 +26,7 @@ import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.nip01Core.core.Event
-import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
-import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
+import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -50,7 +49,8 @@ class HomeViewModel : ViewModel() {
     val state = _state
     var signer = NostrSignerExternal(
         "",
-        ExternalSignerLauncher("", ""),
+        "",
+        Citrine.getInstance().contentResolver,
     )
 
     private val connection = object : ServiceConnection {
@@ -184,7 +184,6 @@ class HomeViewModel : ViewModel() {
                                 }
                             }
                         }
-                        Citrine.getInstance().client.getAll().forEach { relay -> relay.disconnect() }
                         delay(3000)
                     }
                 }

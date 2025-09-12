@@ -11,76 +11,89 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.RelayListener
-import com.greenart7c3.citrine.RelayListener2
-import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.MutableSubscriptionCache
-import com.vitorpamplona.ammolite.relays.Relay
-import com.vitorpamplona.ammolite.relays.TypedFilter
-import com.vitorpamplona.ammolite.relays.filters.SincePerRelayFilter
 import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.downloadFirstEvent
+import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.IRelayClientListener
+import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.RelayState
+import com.vitorpamplona.quartz.nip01Core.relay.client.single.IRelayClient
+import com.vitorpamplona.quartz.nip01Core.relay.client.single.newSubId
+import com.vitorpamplona.quartz.nip01Core.relay.filters.Filter
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
-import com.vitorpamplona.quartz.utils.TimeUtils
-import java.util.LinkedList
-import java.util.UUID
-import kotlin.time.measureTime
+import java.util.Timer
+import kotlin.concurrent.schedule
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-
-class EventsDownloaderCache(val maxSize: Int = 200) {
-    private val cache: LinkedList<String> = LinkedList()
-
-    fun contains(element: String): Boolean = cache.contains(element)
-
-    fun addElement(element: String) {
-        // Add the new element
-        cache.addLast(element)
-
-        // If the cache exceeds the max size, remove the oldest element
-        if (cache.size > maxSize) {
-            cache.removeFirst()
-        }
-    }
-
-    fun clearCache() {
-        cache.clear()
-    }
-}
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 object EventDownloader {
-    const val LIMIT = 500
-    val eventCache = EventsDownloaderCache()
+    /**
+     * Fetches all events authored by [authorPubKey] from [relayUrl], in descending time order,
+     * pulling up to [batchSize] (e.g., 500) per request, starting from now and going backwards,
+     * until the returned batch has fewer than [batchSize] events.
+     *
+     * Returns a list of Events.
+     */
+    suspend fun fetchAllEventsByUserPaginated(
+        scope: CoroutineScope,
+        client: NostrClient,
+        relayUrl: String,
+        authorPubKey: String,
+    ) {
+        val normalizedUrl = NormalizedRelayUrl(relayUrl)
+        val mutex = Mutex()
+        val batchSize = 500
+        var completed = false
+        val finishedSignal = CompletableDeferred<Unit>()
+
+        val subscription = RelayClientSubscription(
+            client = client,
+            relayUrl = normalizedUrl,
+            authorPubKey = authorPubKey,
+            batchSize = batchSize,
+            eventConsumer = { event ->
+                scope.launch {
+                    mutex.withLock {
+                        CustomWebSocketService.server?.innerProcessEvent(event, null)
+                    }
+                }
+            },
+            onComplete = {
+                completed = true
+                finishedSignal.complete(Unit)
+            },
+        )
+
+        client.disconnect()
+        delay(2000)
+        client.connect()
+
+        // Wait until subscription finishes
+        finishedSignal.await()
+
+        if (completed) {
+            subscription.closeSubscription()
+        }
+    }
 
     suspend fun fetchAdvertisedRelayList(
         signer: NostrSigner,
     ): AdvertisedRelayListEvent? {
         var result: AdvertisedRelayListEvent? = null
         val relays = listOf(
-            Relay(
+            NormalizedRelayUrl(
                 url = "wss://purplepag.es",
-                read = true,
-                write = false,
-                forceProxy = false,
-                activeTypes = COMMON_FEED_TYPES,
-                subs = MutableSubscriptionCache(),
-                socketBuilderFactory = Citrine.getInstance().factory,
             ),
-            Relay(
+            NormalizedRelayUrl(
                 url = "wss://relay.nostr.band",
-                read = true,
-                write = false,
-                forceProxy = false,
-                activeTypes = COMMON_FEED_TYPES,
-                subs = MutableSubscriptionCache(),
-                socketBuilderFactory = Citrine.getInstance().factory,
             ),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
@@ -88,43 +101,38 @@ object EventDownloader {
             finishedRelays[it.url] = false
         }
 
-        val listener = RelayListener(
-            onReceiveEvent = { relay, _, event ->
-                Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
-                runBlocking {
-                    CustomWebSocketService.server?.innerProcessEvent(event, null)
-                }
-                result = event as AdvertisedRelayListEvent
-                finishedRelays[relay.url] = true
-            },
-        )
-
+        val subId = newSubId()
         relays.forEach {
-            it.register(listener)
-            it.connectAndRunAfterSync {
-                it.sendFilter(
-                    UUID.randomUUID().toString().substring(0, 4),
-                    filters = listOf(
-                        TypedFilter(
-                            types = COMMON_FEED_TYPES,
-                            filter = SincePerRelayFilter(
-                                kinds = listOf(AdvertisedRelayListEvent.KIND),
-                                authors = listOf(signer.pubKey),
-                                limit = 1,
-                            ),
-                        ),
-                    ),
-                )
-            }
+            val filters = listOf(
+                Filter(
+                    kinds = listOf(AdvertisedRelayListEvent.KIND),
+                    authors = listOf(signer.pubKey),
+                    limit = 1,
+                ),
+            )
+
+            Citrine.getInstance().client.downloadFirstEvent(
+                subId,
+                mapOf(it to filters),
+                onResponse = { event ->
+                    Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
+                    runBlocking {
+                        CustomWebSocketService.server?.innerProcessEvent(event, null)
+                    }
+                    result = event as AdvertisedRelayListEvent
+                    finishedRelays[it.url] = true
+                },
+            )
+            Citrine.getInstance().client.disconnect()
+            delay(2000)
+            Citrine.getInstance().client.connect()
         }
         var count = 0
         while (finishedRelays.values.contains(false) && count < 15) {
             count++
             delay(1000)
         }
-        relays.forEach {
-            it.unregister(listener)
-        }
+        Citrine.getInstance().client.close(subId)
         return result
     }
 
@@ -133,269 +141,86 @@ object EventDownloader {
     ): ContactListEvent? {
         var result: ContactListEvent? = null
         val relays = listOf(
-            Relay(
+            NormalizedRelayUrl(
                 url = "wss://purplepag.es",
-                read = true,
-                write = false,
-                forceProxy = false,
-                activeTypes = COMMON_FEED_TYPES,
-                socketBuilderFactory = Citrine.getInstance().factory,
-                subs = MutableSubscriptionCache(),
             ),
-            Relay(
+            NormalizedRelayUrl(
                 url = "wss://relay.nostr.band",
-                read = true,
-                write = false,
-                forceProxy = false,
-                activeTypes = COMMON_FEED_TYPES,
-                socketBuilderFactory = Citrine.getInstance().factory,
-                subs = MutableSubscriptionCache(),
             ),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
         relays.forEach {
             finishedRelays[it.url] = false
         }
-
-        val listener = RelayListener(
-            onReceiveEvent = { relay, _, event ->
-                Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
-                runBlocking {
-                    CustomWebSocketService.server?.innerProcessEvent(event, null)
-                }
-                result = event as ContactListEvent
-                finishedRelays[relay.url] = true
-            },
-        )
-
+        val subId = newSubId()
         relays.forEach {
-            it.register(listener)
-            it.connectAndRunAfterSync {
-                it.sendFilter(
-                    UUID.randomUUID().toString().substring(0, 4),
-                    filters = listOf(
-                        TypedFilter(
-                            types = COMMON_FEED_TYPES,
-                            filter = SincePerRelayFilter(
-                                kinds = listOf(ContactListEvent.KIND),
-                                authors = listOf(signer.pubKey),
-                                limit = 1,
-                            ),
-                        ),
-                    ),
-                )
-            }
+            val filters = listOf(
+                Filter(
+                    kinds = listOf(ContactListEvent.KIND),
+                    authors = listOf(signer.pubKey),
+                    limit = 1,
+                ),
+            )
+
+            Citrine.getInstance().client.downloadFirstEvent(
+                subId,
+                mapOf(it to filters),
+                onResponse = { event ->
+                    Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
+                    runBlocking {
+                        CustomWebSocketService.server?.innerProcessEvent(event, null)
+                    }
+                    result = event as ContactListEvent
+                    finishedRelays[it.url] = true
+                },
+            )
         }
+        Citrine.getInstance().client.disconnect()
+        delay(2000)
+        Citrine.getInstance().client.connect()
         var count = 0
         while (finishedRelays.values.contains(false) && count < 15) {
             count++
             delay(1000)
         }
-        relays.forEach {
-            it.unregister(listener)
-        }
+        Citrine.getInstance().client.close(subId)
         return result
     }
 
     suspend fun fetchEvents(
         signer: NostrSigner,
-        onAuth: (relay: Relay, challenge: String, subId: String) -> Unit,
+        relays: List<NormalizedRelayUrl>,
         scope: CoroutineScope,
     ) {
+        if (!Citrine.getInstance().client.isActive()) {
+            Citrine.getInstance().client.connect()
+        }
         try {
             val finishedLoading = mutableMapOf<String, Boolean>()
 
-            Citrine.getInstance().client.getAll().filter { !it.url.contains("127.0.0.1") }.forEach {
+            relays.filter { !it.url.contains("127.0.0.1") }.forEach {
                 finishedLoading[it.url] = false
             }
 
-            Citrine.getInstance().client.getAll().forEach {
-                var count = 0
+            relays.forEach {
                 setProgress("loading events from ${it.url}")
-                val listeners = mutableMapOf<String, Relay.Listener>()
-
-                fetchEventsFrom(
-                    scope = scope,
-                    signer = signer,
-                    listeners = listeners,
-                    relayParam = it,
-                    until = TimeUtils.now(),
-                    onAuth = { relay, challenge, subId ->
-                        onAuth(relay, challenge, subId)
-                    },
-                    onEvent = {
-                        count++
-                        if (count % LIMIT == 0) {
-                            setProgress("loading events from ${it.url} ($count)")
-                        }
-                    },
-                    onDone = {
-                        finishedLoading[it.url] = true
-                    },
+                fetchAllEventsByUserPaginated(
+                    scope,
+                    Citrine.getInstance().client,
+                    it.url,
+                    signer.pubKey,
                 )
-                var timeElapsed = 0
-                while (finishedLoading[it.url] == false) {
-                    delay(1000)
-                    timeElapsed++
-                    if (timeElapsed > 60 && count == 0) {
-                        break
-                    }
-                }
-                Log.d(Citrine.TAG, "Finished inserting events from ${it.url}")
-                eventCache.clearCache()
-                if (it.isConnected()) {
-                    it.disconnect()
-                }
             }
 
-            Citrine.getInstance().client.getAll().forEach {
-                it.disconnect()
-            }
+            Citrine.getInstance().client.disconnect()
 
-            delay(5000)
-
-            Citrine.getInstance().client.reconnect(relays = null)
-
-            setProgress("Finished loading events from ${Citrine.getInstance().client.getAll().size} relays")
+            setProgress("Finished loading events from ${relays.size} relays")
             Citrine.isImportingEvents = false
         } catch (e: Exception) {
             Citrine.isImportingEvents = false
             if (e is CancellationException) throw e
             Log.e(Citrine.TAG, e.message ?: "", e)
             setProgress("Failed to load events")
-        }
-    }
-
-    suspend fun saveEvents(events: List<Event>, scope: CoroutineScope) {
-        val jobs = mutableListOf<Deferred<Unit?>>()
-        events.forEach {
-            jobs.add(
-                scope.async {
-                    CustomWebSocketService.server?.innerProcessEvent(it, null)
-                },
-            )
-        }
-        jobs.awaitAll()
-    }
-
-    fun fetchEventsFrom(
-        scope: CoroutineScope,
-        signer: NostrSigner,
-        listeners: MutableMap<String, Relay.Listener>,
-        relayParam: Relay,
-        until: Long,
-        onEvent: () -> Unit,
-        onAuth: (relay: Relay, challenge: String, subId: String) -> Unit,
-        onDone: () -> Unit,
-    ) {
-        val subId = UUID.randomUUID().toString().substring(0, 4)
-        val eventCount = mutableMapOf<String, Int>()
-        var lastEventCreatedAt = until
-
-        listeners[relayParam.url]?.let {
-            relayParam.unregister(it)
-        }
-        val events = mutableListOf<Event>()
-
-        val listener = RelayListener2(
-            onReceiveEvent = { relay, _, event ->
-                onEvent()
-                if (!eventCache.contains(event.id)) {
-                    eventCache.addElement(event.id)
-                    eventCount[relay.url] = eventCount[relay.url]?.plus(1) ?: 1
-                    lastEventCreatedAt = if (event.createdAt < lastEventCreatedAt) {
-                        event.createdAt - 1
-                    } else {
-                        lastEventCreatedAt - 1
-                    }
-                    if (event.pubKey == signer.pubKey) {
-                        Log.d(Citrine.TAG, "Received event ${event.id} from relay ${relay.url}")
-                        events.add(event)
-
-//                        scope.launch {
-//                            CustomWebSocketService.server?.innerProcessEvent(event, null)
-//                        }
-                    }
-                } else {
-                    lastEventCreatedAt = lastEventCreatedAt - 1
-                    Log.d(Citrine.TAG, "Received duplicate event ${event.id} from relay ${relay.url}")
-                }
-            },
-            onEOSE = { relay ->
-                Log.d(Citrine.TAG, "Received EOSE from relay ${relay.url}")
-
-                scope.launch {
-                    val time = measureTime {
-                        saveEvents(events, scope)
-                    }
-                    Log.d(Citrine.TAG, "Saved ${events.size} events in $time")
-                    relay.close(subId)
-                    listeners[relay.url]?.let {
-                        relayParam.unregister(it)
-                    }
-
-                    val localEventCount = eventCount[relay.url] ?: 0
-                    if (localEventCount < LIMIT) {
-                        onDone()
-                    } else {
-                        val localUntil = if (lastEventCreatedAt == until) {
-                            Log.d("filter", "until is the same as lastEventCreatedAt")
-                            until - 1
-                        } else {
-                            lastEventCreatedAt
-                        }
-                        fetchEventsFrom(scope, signer, listeners, relay, localUntil, onEvent, onAuth, onDone)
-                    }
-                }
-            },
-            onErrorFunc = { relay, sub, error ->
-                if (error.message?.contains("Socket closed") == false) {
-                    scope.launch {
-                        saveEvents(events, scope)
-                        if (relay.isConnected()) {
-                            relay.close(sub)
-                        }
-                        listeners[relay.url]?.let {
-                            relayParam.unregister(it)
-                        }
-                        onDone()
-                    }
-                }
-            },
-            onAuthFunc = { relay, challenge ->
-                Log.d(Citrine.TAG, "Received auth from relay ${relay.url}")
-                onAuth(relay, challenge, subId)
-            },
-        )
-
-        Log.d("filter", lastEventCreatedAt.toString())
-
-        val filters = listOf(
-            TypedFilter(
-                types = COMMON_FEED_TYPES,
-                filter = SincePerRelayFilter(
-                    authors = listOf(signer.pubKey),
-                    until = lastEventCreatedAt,
-                    limit = LIMIT,
-                ),
-            ),
-        )
-
-        eventCount[relayParam.url] = 0
-        relayParam.register(listener)
-        listeners[relayParam.url] = listener
-        if (!relayParam.isConnected()) {
-            relayParam.connectAndRunAfterSync {
-                relayParam.sendFilter(
-                    subId,
-                    filters = filters,
-                )
-            }
-        } else {
-            relayParam.sendFilter(
-                subId,
-                filters = filters,
-            )
         }
     }
 
@@ -438,5 +263,152 @@ object EventDownloader {
             return
         }
         notificationManager.notify(2, notification)
+    }
+}
+
+class RelayClientSubscription(
+    private val client: NostrClient,
+    private val relayUrl: NormalizedRelayUrl,
+    private val authorPubKey: String,
+    private val batchSize: Int = 500,
+    private val eventConsumer: (Event) -> Unit,
+    private val onComplete: (() -> Unit)? = null,
+) : IRelayClientListener {
+    private var subId = newSubId()
+    private var until: Long = (System.currentTimeMillis() / 1000)
+    private var oldestTimestamp: Long = until
+    private val receivedEvents = mutableListOf<Event>()
+    private var completed = false
+
+    private var timeoutTimer: Timer? = null
+    private val timeoutMs = 30_000L // 30 seconds
+
+    init {
+        client.subscribe(this)
+        updateFilter()
+    }
+
+    private fun startTimeout() {
+        timeoutTimer = Timer()
+        timeoutTimer?.schedule(timeoutMs) {
+            if (!completed) {
+                Log.d("RelayClientSubscription", "Timeout reached, no events received for 30 seconds. Completing.")
+                closeSubscription()
+                onComplete?.invoke()
+                completed = true
+            }
+        }
+    }
+
+    private fun cancelTimeout() {
+        timeoutTimer?.cancel()
+        timeoutTimer = null
+    }
+
+    override fun onRelayStateChange(relay: IRelayClient, type: RelayState) {
+        Log.d("RelayClientSubscription", "onRelayStateChange: ${relay.url}, $type")
+        if (type == RelayState.DISCONNECTED) {
+            if (!completed) {
+                closeSubscription()
+                updateFilter()
+            }
+        }
+        super.onRelayStateChange(relay, type)
+    }
+
+    override fun onClosed(relay: IRelayClient, subId: String, message: String) {
+        Log.d("RelayClientSubscription", "onClosed: ${relay.url}, $subId, $message")
+        super.onClosed(relay, subId, message)
+    }
+
+    override fun onError(relay: IRelayClient, subId: String, error: Error) {
+        Log.d("RelayClientSubscription", "onError: ${relay.url}, $subId, $error")
+        super.onError(relay, subId, error)
+    }
+
+    override fun onNotify(relay: IRelayClient, description: String) {
+        Log.d("RelayClientSubscription", "onNotify: ${relay.url}, $description")
+        super.onNotify(relay, description)
+    }
+
+    override fun onSendResponse(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
+        Log.d("RelayClientSubscription", "onSendResponse: ${relay.url}, $eventId, $success, $message")
+        super.onSendResponse(relay, eventId, success, message)
+    }
+
+    override fun onAuth(relay: IRelayClient, challenge: String) {
+        Log.d("RelayClientSubscription", "onAuth: ${relay.url}, $challenge")
+        super.onAuth(relay, challenge)
+    }
+
+    override fun onAuthed(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
+        Log.d("RelayClientSubscription", "onAuthed: ${relay.url}, $eventId, $success, $message")
+        super.onAuthed(relay, eventId, success, message)
+    }
+
+    override fun onEvent(
+        relay: IRelayClient,
+        subId: String,
+        event: Event,
+        arrivalTime: Long,
+        afterEOSE: Boolean,
+    ) {
+        if (this.subId == subId) {
+            cancelTimeout()
+            startTimeout() // Reset the timer
+
+            receivedEvents.add(event)
+            if (event.createdAt < oldestTimestamp) {
+                oldestTimestamp = event.createdAt
+            }
+            eventConsumer(event)
+        }
+    }
+
+    override fun onSend(relay: IRelayClient, msg: String, success: Boolean) {
+        Log.d("RelayClientSubscription", "onSend: ${relay.url}, $msg, $success")
+    }
+
+    override fun onEOSE(relay: IRelayClient, subId: String, arrivalTime: Long) {
+        if (this.subId != subId) return
+
+        cancelTimeout()
+
+        Log.d("RelayClientSubscription", "onEOSE: Received ${receivedEvents.size} events $arrivalTime")
+
+        if (receivedEvents.isEmpty()) {
+            Log.d("RelayClientSubscription", "Finished paginating, closing subscription.")
+            closeSubscription()
+            onComplete?.invoke()
+            completed = true
+            return
+        }
+
+        receivedEvents.clear()
+        oldestTimestamp -= 1
+        until = oldestTimestamp
+        closeSubscription()
+        updateFilter()
+    }
+
+    fun updateFilter() {
+        cancelTimeout() // Cancel previous timeout if any
+        startTimeout() // Start timeout for this batch
+
+        subId = newSubId()
+        val filter = Filter(
+            authors = listOf(authorPubKey),
+            limit = batchSize,
+            until = until,
+        )
+
+        Log.d("RelayClientSubscription", "Requesting batch with until=$until from relay $relayUrl")
+        client.openReqSubscription(subId, mapOf(relayUrl to listOf(filter)))
+        client.reconnect(true)
+    }
+
+    fun closeSubscription() {
+        cancelTimeout()
+        client.close(subId)
     }
 }

@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
-import android.content.ContentResolver
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
@@ -17,13 +16,11 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
 import com.greenart7c3.citrine.service.WebSocketServerService
-import com.vitorpamplona.ammolite.relays.NostrClient
-import com.vitorpamplona.ammolite.relays.Relay
-import com.vitorpamplona.quartz.nip01Core.core.Event
-import com.vitorpamplona.quartz.nip01Core.relay.RelayState
+import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
 import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.measureTime
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,11 +30,17 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class Citrine : Application() {
-    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val factory = OkHttpWebSocket.BuilderFactory { _, useProxy ->
-        HttpClientManager.getHttpClient(useProxy)
+    val exceptionHandler =
+        CoroutineExceptionHandler { _, throwable ->
+            Log.e("AmberCoroutine", "Caught exception: ${throwable.message}", throwable)
+        }
+    val applicationScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
+    val factory = OkHttpWebSocket.Builder { url ->
+        // TODO: setup proxy as a settings preference
+        HttpClientManager.getHttpClient(false)
     }
-    val client: NostrClient = NostrClient(factory)
+    val client: NostrClient = NostrClient(factory, applicationScope)
+
     private val pokeyReceiver = PokeyReceiver()
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -63,14 +66,14 @@ class Citrine : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        client.connect()
+
         instance = this
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
         if (Settings.listenToPokeyBroadcasts) {
             registerPokeyReceiver()
         }
     }
-
-    fun contentResolverFn(): ContentResolver = contentResolver
 
     fun cancelJob() {
         job?.cancelChildren()
@@ -159,96 +162,5 @@ class Citrine : Application() {
         fun getInstance(): Citrine = instance ?: synchronized(this) {
             instance ?: Citrine().also { instance = it }
         }
-    }
-}
-
-class RelayListener(
-    val onReceiveEvent: (relay: Relay, subscriptionId: String, event: Event) -> Unit,
-) : Relay.Listener {
-    override fun onAuth(relay: Relay, challenge: String) {
-        Log.d("RelayListener", "Received auth challenge $challenge from relay ${relay.url}")
-    }
-
-    override fun onBeforeSend(relay: Relay, event: Event) {
-        Log.d("RelayListener", "Sending event ${event.id} to relay ${relay.url}")
-    }
-
-    override fun onError(relay: Relay, subscriptionId: String, error: Error) {
-        Log.d("RelayListener", "Received error $error from subscription $subscriptionId")
-    }
-
-    override fun onEvent(relay: Relay, subscriptionId: String, event: Event, time: Long, afterEOSE: Boolean) {
-        Log.d("RelayListener", "Received event ${event.toJson()} from subscription $subscriptionId afterEOSE: $afterEOSE")
-        onReceiveEvent(relay, subscriptionId, event)
-    }
-
-    override fun onEOSE(relay: Relay, subscriptionId: String, time: Long) {
-        Log.d("RelayListener", "Received EOSE from subscription $subscriptionId")
-    }
-
-    override fun onNotify(relay: Relay, description: String) {
-        Log.d("RelayListener", "Received notify $description from relay ${relay.url}")
-    }
-
-    override fun onRelayStateChange(relay: Relay, type: RelayState) {
-        Log.d("RelayListener", "Relay ${relay.url} state changed to $type")
-    }
-
-    override fun onSend(relay: Relay, msg: String, success: Boolean) {
-        Log.d("RelayListener", "Sent message $msg to relay ${relay.url} success: $success")
-    }
-
-    override fun onSendResponse(relay: Relay, eventId: String, success: Boolean, message: String) {
-        Log.d("RelayListener", "Sent response to event $eventId to relay ${relay.url} success: $success message: $message")
-    }
-}
-
-class RelayListener2(
-    val onReceiveEvent: (relay: Relay, subscriptionId: String, event: Event) -> Unit,
-    val onEOSE: (relay: Relay) -> Unit,
-    val onErrorFunc: (relay: Relay, subscriptionId: String, error: Error) -> Unit,
-    val onAuthFunc: (relay: Relay, challenge: String) -> Unit,
-) : Relay.Listener {
-    override fun onAuth(relay: Relay, challenge: String) {
-        Log.d("RelayListener", "Received auth challenge $challenge from relay ${relay.url}")
-        onAuthFunc(relay, challenge)
-    }
-
-    override fun onBeforeSend(relay: Relay, event: Event) {
-        Log.d("RelayListener", "Sending event ${event.id} to relay ${relay.url}")
-    }
-
-    override fun onError(relay: Relay, subscriptionId: String, error: Error) {
-        Log.d("RelayListener", "Received error $error from subscription $subscriptionId")
-        onErrorFunc(relay, subscriptionId, error)
-    }
-
-    override fun onEvent(relay: Relay, subscriptionId: String, event: Event, time: Long, afterEOSE: Boolean) {
-        // Log.d("RelayListener", "Received event ${event.toJson()} from subscription $subscriptionId afterEOSE: $afterEOSE")
-        onReceiveEvent(relay, subscriptionId, event)
-    }
-
-    override fun onEOSE(relay: Relay, subscriptionId: String, time: Long) {
-        Log.d("RelayListener", "Received EOSE from subscription $subscriptionId")
-        onEOSE(relay)
-    }
-
-    override fun onNotify(relay: Relay, description: String) {
-        Log.d("RelayListener", "Received notify $description from relay ${relay.url}")
-    }
-
-    override fun onRelayStateChange(relay: Relay, type: RelayState) {
-        Log.d("RelayListener", "Relay ${relay.url} state changed to $type")
-        if (type == RelayState.DISCONNECTING) {
-            onEOSE(relay)
-        }
-    }
-
-    override fun onSend(relay: Relay, msg: String, success: Boolean) {
-        Log.d("RelayListener", "Sent message $msg to relay ${relay.url} success: $success")
-    }
-
-    override fun onSendResponse(relay: Relay, eventId: String, success: Boolean, message: String) {
-        Log.d("RelayListener", "Sent response to event $eventId to relay ${relay.url} success: $success message: $message")
     }
 }

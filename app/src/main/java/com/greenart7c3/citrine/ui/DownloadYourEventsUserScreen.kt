@@ -58,12 +58,10 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.EventDownloader
-import com.greenart7c3.citrine.service.EventDownloader.LIMIT
-import com.vitorpamplona.ammolite.relays.COMMON_FEED_TYPES
-import com.vitorpamplona.ammolite.relays.RelaySetupInfoToConnect
-import com.vitorpamplona.ammolite.relays.TypedFilter
-import com.vitorpamplona.ammolite.relays.filters.SincePerRelayFilter
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.RelayAuthenticator
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
@@ -71,26 +69,23 @@ import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
 import com.vitorpamplona.quartz.nip19Bech32.toNpub
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
-import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
-import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
-import com.vitorpamplona.quartz.nip55AndroidSigner.Permission
+import com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType
+import com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission
+import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
-import com.vitorpamplona.quartz.nip65RelayList.RelayUrlFormatter
 import com.vitorpamplona.quartz.utils.Hex
-import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SelectRelayModal(
     signer: NostrSigner,
-    onDone: (List<String>) -> Unit,
+    onDone: (List<NormalizedRelayUrl>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var relayText by remember { mutableStateOf(TextFieldValue()) }
-    var relays = remember { mutableListOf<String>() }
+    var relays = remember { mutableListOf<NormalizedRelayUrl>() }
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
     )
@@ -100,6 +95,9 @@ fun SelectRelayModal(
         launch(Dispatchers.IO) {
             loading = true
             try {
+                if (!Citrine.getInstance().client.isActive()) {
+                    Citrine.getInstance().client.connect()
+                }
                 val database = AppDatabase.getDatabase(Citrine.getInstance())
                 var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
                 if (contactList == null) {
@@ -110,7 +108,7 @@ fun SelectRelayModal(
                 contactList?.let {
                     val contactListRelays = it.relays()
                     contactListRelays?.forEach {
-                        val formattedUrl = RelayUrlFormatter.normalizeOrNull(it.key)
+                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(it.key.url)
                         if (formattedUrl == null) return@forEach
                         if (!relays.contains(formattedUrl)) relays.add(formattedUrl)
                     }
@@ -123,7 +121,7 @@ fun SelectRelayModal(
                 }
                 advertisedRelayList?.let {
                     it.relays().forEach {
-                        val formattedUrl = RelayUrlFormatter.normalizeOrNull(it.relayUrl)
+                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(it.relayUrl.url)
                         if (formattedUrl == null) return@forEach
                         if (!relays.contains(formattedUrl)) relays.add(formattedUrl)
                     }
@@ -162,7 +160,7 @@ fun SelectRelayModal(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 if (relayText.text.isBlank()) return@KeyboardActions
-                                val url = RelayUrlFormatter.normalizeOrNull(relayText.text)
+                                val url = RelayUrlNormalizer.normalizeOrNull(relayText.text)
                                 if (url == null) return@KeyboardActions
                                 if (relays.contains(url)) {
                                     return@KeyboardActions
@@ -192,7 +190,7 @@ fun SelectRelayModal(
                     ) {
                         items(relays) {
                             RelayCard(
-                                relay = it,
+                                relay = it.url,
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {
                                     loading = true
@@ -211,7 +209,7 @@ fun SelectRelayModal(
                         },
                         onClick = {
                             // TODO: find out why nostr.band keeps downloading events forever
-                            onDone(relays.filter { !it.contains("localhost") && !it.contains("127.0.0.1") })
+                            onDone(relays)
                         },
                     )
                 }
@@ -266,13 +264,10 @@ fun DownloadYourEventsUserScreen(
 
                         signer = NostrSignerExternal(
                             returnedKey,
-                            ExternalSignerLauncher(returnedKey, packageName),
+                            packageName,
+                            Citrine.getInstance().contentResolver,
                         )
-                        (signer as NostrSignerExternal).launcher.registerLauncher(
-                            contentResolver = Citrine.getInstance()::contentResolverFn,
-                            launcher = { intent ->
-                            },
-                        )
+
                         npub = TextFieldValue(localNpub)
                     } catch (e: Exception) {
                         Log.d(Citrine.TAG, e.message ?: "", e)
@@ -292,48 +287,16 @@ fun DownloadYourEventsUserScreen(
                 Citrine.getInstance().cancelJob()
                 Citrine.job = Citrine.getInstance().applicationScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
-                    Citrine.getInstance().client.reconnect(
-                        relays = it.map {
-                            RelaySetupInfoToConnect(
-                                url = it,
-                                read = true,
-                                write = false,
-                                forceProxy = false,
-                                feedTypes = COMMON_FEED_TYPES,
-                            )
-                        }.toTypedArray(),
-                    )
-                    delay(5000)
+
+                    RelayAuthenticator(Citrine.getInstance().client, Citrine.getInstance().applicationScope) { challenge, relay ->
+                        val authedEvent = RelayAuthEvent.create(relay.url, challenge, if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair()))
+                        Citrine.getInstance().client.sendIfExists(authedEvent, relay.url)
+                    }
 
                     EventDownloader.fetchEvents(
                         signer = signer!!,
                         scope = Citrine.getInstance().applicationScope,
-                        onAuth = { relay, challenge, subId ->
-                            RelayAuthEvent.create(
-                                relay.url,
-                                challenge,
-                                if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair()),
-                                onReady = {
-                                    Citrine.getInstance().applicationScope.launch {
-                                        relay.send(it)
-                                        delay(2000)
-
-                                        val filters = relay.relaySubFilter.subs.allSubscriptions()[subId] ?: listOf(
-                                            TypedFilter(
-                                                types = COMMON_FEED_TYPES,
-                                                filter = SincePerRelayFilter(
-                                                    authors = listOf(signer!!.pubKey),
-                                                    until = TimeUtils.now(),
-                                                    limit = LIMIT,
-                                                ),
-                                            ),
-                                        )
-
-                                        relay.sendFilter(subId, filters)
-                                    }
-                                },
-                            )
-                        },
+                        relays = it,
                     )
                 }
                 navController.navigateUp()
@@ -372,7 +335,7 @@ fun DownloadYourEventsUserScreen(
                     val permissions =
                         listOf(
                             Permission(
-                                "sign_event",
+                                CommandType.SIGN_EVENT,
                                 22242,
                             ),
                         )

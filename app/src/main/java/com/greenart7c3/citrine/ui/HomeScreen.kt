@@ -62,8 +62,7 @@ import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
-import com.vitorpamplona.quartz.nip55AndroidSigner.ExternalSignerLauncher
-import com.vitorpamplona.quartz.nip55AndroidSigner.NostrSignerExternal
+import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -119,7 +118,7 @@ fun HomeScreen(
                 } else {
                     result.data?.let {
                         coroutineScope.launch(Dispatchers.IO) {
-                            homeViewModel.signer.launcher.newResult(it)
+                            homeViewModel.signer.newResponse(it)
                         }
                     }
                 }
@@ -129,12 +128,9 @@ fun HomeScreen(
         val lifeCycleOwner = LocalLifecycleOwner.current
         DisposableEffect(lifeCycleOwner) {
             val observer = LifecycleEventObserver { _, _ ->
-                homeViewModel.signer.launcher.registerLauncher(
-                    contentResolver = Citrine.getInstance()::contentResolverFn,
-                    launcher = { intent ->
-                        launcher.launch(intent)
-                    },
-                )
+                homeViewModel.signer.registerForegroundLauncher { intent ->
+                    launcher.launch(intent)
+                }
             }
             lifeCycleOwner.lifecycle.addObserver(observer)
             onDispose {
@@ -168,7 +164,8 @@ fun HomeScreen(
 
                             homeViewModel.signer = NostrSignerExternal(
                                 returnedKey,
-                                ExternalSignerLauncher(returnedKey, packageName),
+                                packageName,
+                                Citrine.getInstance().contentResolver,
                             )
 
                             homeViewModel.setPubKey(returnedKey)
@@ -391,6 +388,7 @@ fun HomeScreen(
                 ElevatedButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
+                        // TODO: Replace this with a setup screen to allow automatic download in background
                         navController.navigate(Route.DownloadYourEventsUserScreen.route)
                     },
                     content = {
