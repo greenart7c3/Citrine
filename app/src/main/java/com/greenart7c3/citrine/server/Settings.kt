@@ -24,6 +24,8 @@ object Settings {
     var listenToPokeyBroadcasts = true
     var startOnBoot = true
     var lastBackup: Long = 0L
+    var useProxy = false
+    var proxyPort = 9050
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -47,6 +49,8 @@ object Settings {
         listenToPokeyBroadcasts = true
         startOnBoot = true
         lastBackup = 0L
+        useProxy = false
+        proxyPort = 9050
     }
 }
 

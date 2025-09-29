@@ -36,12 +36,31 @@ class Citrine : Application() {
         }
     val applicationScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
     val factory = OkHttpWebSocket.Builder { url ->
-        // TODO: setup proxy as a settings preference
-        HttpClientManager.getHttpClient(false)
+        HttpClientManager.getHttpClient(if (isPrivateIp(url.url)) false else Settings.useProxy)
     }
     val client: NostrClient = NostrClient(factory, applicationScope)
 
     private val pokeyReceiver = PokeyReceiver()
+
+    fun isPrivateIp(url: String): Boolean = url.contains("127.0.0.1") ||
+        url.contains("localhost") ||
+        url.contains("192.168.") ||
+        url.contains("172.16.") ||
+        url.contains("172.17.") ||
+        url.contains("172.18.") ||
+        url.contains("172.19.") ||
+        url.contains("172.20.") ||
+        url.contains("172.21.") ||
+        url.contains("172.22.") ||
+        url.contains("172.23.") ||
+        url.contains("172.24.") ||
+        url.contains("172.25.") ||
+        url.contains("172.26.") ||
+        url.contains("172.27.") ||
+        url.contains("172.28.") ||
+        url.contains("172.29.") ||
+        url.contains("172.30.") ||
+        url.contains("172.31.")
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     fun registerPokeyReceiver() {

@@ -114,6 +114,12 @@ fun SettingsScreen(
         var relayIconUrl by remember {
             mutableStateOf(TextFieldValue(Settings.relayIcon))
         }
+        var useProxy by remember {
+            mutableStateOf(Settings.useProxy)
+        }
+        var proxyPort by remember {
+            mutableStateOf(TextFieldValue(Settings.proxyPort.toString()))
+        }
 //        var useSSL by remember {
 //            mutableStateOf(Settings.useSSL)
 //        }
@@ -869,6 +875,58 @@ fun SettingsScreen(
                         },
                     )
                 }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            useProxy = !useProxy
+                            Settings.useProxy = !Settings.useProxy
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.use_proxy),
+                    )
+                    Switch(
+                        checked = useProxy,
+                        onCheckedChange = {
+                            useProxy = it
+                            Settings.useProxy = it
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                    )
+                }
+            }
+            item {
+                OutlinedTextField(
+                    proxyPort,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    onValueChange = {
+                        proxyPort = it
+                        if (it.text.toIntOrNull() == null) {
+                            Toast.makeText(
+                                context,
+                                "Invalid port",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            return@OutlinedTextField
+                        }
+
+                        Settings.proxyPort = it.text.toInt()
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                    label = {
+                        Text(stringResource(R.string.proxy_port))
+                    },
+                )
             }
             item {
                 val deleteItems = persistentListOf(
