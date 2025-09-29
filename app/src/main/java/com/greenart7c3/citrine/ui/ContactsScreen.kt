@@ -6,7 +6,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,8 +17,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -41,7 +37,6 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEvent
-import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.sendAndWaitForResponse
@@ -132,13 +127,6 @@ fun ContactsScreen(
             CircularProgressIndicator()
         }
     } else {
-        var useProxy by remember {
-            mutableStateOf(false)
-        }
-        var proxyPort by remember {
-            mutableStateOf(TextFieldValue("9050"))
-        }
-
         Column(
             modifier = modifier
                 .background(MaterialTheme.colorScheme.background)
@@ -160,51 +148,6 @@ fun ContactsScreen(
             LazyColumn(
                 Modifier.fillMaxSize(),
             ) {
-                item {
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp)
-                                .clickable {
-                                    useProxy = !useProxy
-                                },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                modifier = Modifier.weight(1f),
-                                text = stringResource(R.string.use_proxy),
-                            )
-                            Switch(
-                                checked = useProxy,
-                                onCheckedChange = {
-                                    useProxy = !useProxy
-                                },
-                            )
-                        }
-                        OutlinedTextField(
-                            proxyPort,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
-                            onValueChange = {
-                                if (it.text.toIntOrNull() == null) {
-                                    Toast.makeText(
-                                        context,
-                                        "Invalid port",
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                    return@OutlinedTextField
-                                }
-                                proxyPort = it
-                            },
-                            label = {
-                                Text(stringResource(R.string.proxy_port))
-                            },
-                        )
-                    }
-                }
                 items(events.size) {
                     val event = events[it]
                     Card(
@@ -268,11 +211,6 @@ fun ContactsScreen(
                                         if (localRelays == null) return@launch
 
                                         loading = true
-                                        if (useProxy) {
-                                            HttpClientManager.setDefaultProxyOnPort(proxyPort.text.toInt())
-                                        } else {
-                                            HttpClientManager.setDefaultProxy(null)
-                                        }
 
                                         delay(1000)
                                         Citrine.getInstance().client.sendAndWaitForResponse(signedEvent, relayList = localRelays.toSet())
