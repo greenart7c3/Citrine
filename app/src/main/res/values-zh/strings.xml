@@ -64,4 +64,6 @@
     <string name="delete_ephemeral_events">删除短效事件</string>
     <string name="enable_disable_auth">启用/禁止认证</string>
     <string name="start_on_boot">开机自启动</string>
+    <string name="backup">Backup</string>
+    <string name="backup_folder">Backup folder</string>
 </resources>
