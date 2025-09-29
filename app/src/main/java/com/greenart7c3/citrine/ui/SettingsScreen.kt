@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.text.isDigitsOnly
+import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.OlderThan
@@ -71,6 +72,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
+    storageHelper: SimpleStorageHelper,
     onApplyChanges: () -> Unit,
 ) {
     var isLoading by remember { mutableStateOf(false) }
@@ -120,6 +122,17 @@ fun SettingsScreen(
         var proxyPort by remember {
             mutableStateOf(TextFieldValue(Settings.proxyPort.toString()))
         }
+        var autoBackup by remember {
+            mutableStateOf(Settings.autoBackup)
+        }
+
+        storageHelper.onFolderSelected = { _, folder ->
+            autoBackup = true
+            Settings.autoBackup = true
+            Settings.autoBackupFolder = folder.uri.toString()
+            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+        }
+
 //        var useSSL by remember {
 //            mutableStateOf(Settings.useSSL)
 //        }
@@ -1075,6 +1088,55 @@ fun SettingsScreen(
                             contentDescription = "Delete",
                         )
                     }
+                }
+            }
+            stickyHeader {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.backup),
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (!autoBackup) {
+                                storageHelper.openFolderPicker()
+                            } else {
+                                autoBackup = false
+                                Settings.autoBackup = false
+                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            }
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.auto_backup),
+                    )
+                    Switch(
+                        checked = autoBackup,
+                        onCheckedChange = {
+                            if (!autoBackup) {
+                                storageHelper.openFolderPicker()
+                            } else {
+                                autoBackup = false
+                                Settings.autoBackup = false
+                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            }
+                        },
+                    )
                 }
             }
         }

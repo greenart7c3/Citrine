@@ -173,6 +173,7 @@ fun CitrineScaffold(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(16.dp),
+                    storageHelper = storageHelper,
                     onApplyChanges = {
                         coroutineScope.launch(Dispatchers.IO) {
                             homeViewModel.stop(context)
