@@ -46,10 +46,13 @@ object ExportDatabaseUtils {
                 }
                 if (deleteOldFiles) {
                     Log.d(Citrine.TAG, "Deleting old backups")
-                    folder.listFiles().forEach { file ->
-                        if (file.name != fileName) {
-                            file.delete()
-                        }
+                    val files = folder.listFiles().sortedByDescending { it.lastModified() }
+                    val filesToDelete = files
+                        .filter { it.name != fileName }
+                        .drop(5)
+
+                    filesToDelete.forEach { file ->
+                        file.delete()
                     }
                 }
                 delay(1000)
