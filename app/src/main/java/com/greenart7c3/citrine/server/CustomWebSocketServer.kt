@@ -18,12 +18,12 @@ import com.greenart7c3.citrine.utils.shouldDelete
 import com.greenart7c3.citrine.utils.shouldOverwrite
 import com.vitorpamplona.quartz.nip01Core.core.AddressableEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
-import com.vitorpamplona.quartz.nip01Core.jackson.JsonMapper
+import com.vitorpamplona.quartz.nip01Core.crypto.verify
+import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
-import com.vitorpamplona.quartz.nip01Core.tags.addressables.taggedAddresses
+import com.vitorpamplona.quartz.nip01Core.tags.aTag.taggedAddresses
 import com.vitorpamplona.quartz.nip01Core.tags.events.taggedEvents
 import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
-import com.vitorpamplona.quartz.nip01Core.verify
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
@@ -174,7 +174,7 @@ class CustomWebSocketServer(
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
         try {
             Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
-            val msgArray = JsonMapper.mapper.readTree(newMessage)
+            val msgArray = JacksonMapper.mapper.readTree(newMessage)
             when (val type = msgArray.get(0).asText()) {
                 "COUNT" -> {
                     connection?.let {
@@ -385,8 +385,9 @@ class CustomWebSocketServer(
         return VerificationResult.Valid
     }
 
-    suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true) {
-        when (verifyEvent(event, connection, shouldVerify)) {
+    suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true): VerificationResult {
+        val result = verifyEvent(event, connection, shouldVerify)
+        when (result) {
             VerificationResult.AuthRequiredForProtectedEvent -> {
                 connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
                 connection?.trySend(CommandResult.required(event, "this event may only be published by its author").toJson())
@@ -453,6 +454,7 @@ class CustomWebSocketServer(
                 }
             }
         }
+        return result
     }
 
     private suspend fun processEvent(event: Event, connection: Connection?) {

@@ -17,12 +17,13 @@ room = "2.8.2"
 storage = "2.2.0"
 workRuntimeKtx = "2.10.5"
 material3 = "1.4.0"
-quartz = "c64e65ddb4"
+quartz = "1.03.0"
 kotlin = "2.2.20"
 agp = "8.11.1" # updating this breaks fdroid, wait for them to buy new servers before updating
 ksp = "2.2.20-2.0.3"
 ktlint = "13.1.0"
 securityCryptoKtx = "1.1.0"
+collections = "0.4.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -51,11 +52,11 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
-quartz = { module = "com.github.vitorpamplona.amethyst:quartz", version.ref = "quartz" }
-ammolite = { module = "com.github.vitorpamplona.amethyst:ammolite", version.ref = "quartz" }
+quartz = { module = "com.vitorpamplona.quartz:quartz-android", version.ref = "quartz" }
 storage = { module = "com.anggrayudi:storage", version.ref = "storage" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
 security-crypto-ktx = { module = "androidx.security:security-crypto-ktx", version.ref = "securityCryptoKtx" }
+kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "collections" }
 
 [plugins]
 jetbrainsComposeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

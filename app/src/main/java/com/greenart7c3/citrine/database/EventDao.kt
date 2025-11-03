@@ -78,7 +78,11 @@ interface EventDao {
 
     @Query("DELETE FROM EventEntity WHERE id in (:ids) and pubkey = :pubkey")
     @Transaction
-    suspend fun delete(ids: List<String>, pubkey: String)
+    suspend fun delete(ids: List<String>, pubkey: String) {
+        ids.forEach {
+            deletetags(it)
+        }
+    }
 
     @Query("DELETE FROM EventEntity WHERE id in (:ids)")
     @Transaction

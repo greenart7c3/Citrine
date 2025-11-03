@@ -202,9 +202,6 @@ dependencies {
     implementation(libs.quartz) {
         exclude("net.java.dev.jna")
     }
-    implementation(libs.ammolite) {
-        exclude("net.java.dev.jna")
-    }
     implementation(libs.jna) {
         artifact { type = "aar" }
     }
@@ -216,4 +213,5 @@ dependencies {
     implementation(libs.storage)
     implementation(libs.material.icons.extended)
     implementation(libs.security.crypto.ktx)
+    implementation(libs.kotlinx.collections.immutable)
 }

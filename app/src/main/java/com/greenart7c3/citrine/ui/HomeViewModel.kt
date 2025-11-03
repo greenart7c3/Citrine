@@ -21,6 +21,7 @@ import com.anggrayudi.storage.file.openInputStream
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.service.ClipboardReceiver
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.WebSocketServerService
@@ -176,7 +177,29 @@ class HomeViewModel : ViewModel() {
                                     return@forEach
                                 }
                                 val event = Event.fromJson(line)
-                                CustomWebSocketService.server?.innerProcessEvent(event, null)
+                                val result = CustomWebSocketService.server?.innerProcessEvent(event, null)
+                                if (result == CustomWebSocketServer.VerificationResult.InvalidId || result == CustomWebSocketServer.VerificationResult.InvalidSignature) {
+                                    Log.d(Citrine.TAG, "before: ${event.tags.size}")
+
+                                    val uniqueTags: Array<Array<String>> = event.tags
+                                        .distinctBy { tag -> tag.joinToString("|") }
+                                        .map { value -> value }
+                                        .toTypedArray()
+                                    Log.d(Citrine.TAG, "after: ${uniqueTags.size}")
+
+                                    val newEvent = Event(
+                                        id = event.id,
+                                        pubKey = event.pubKey,
+                                        createdAt = event.createdAt,
+                                        kind = event.kind,
+                                        tags = uniqueTags,
+                                        content = event.content,
+                                        sig = event.sig,
+                                    )
+
+                                    val result = CustomWebSocketService.server?.innerProcessEvent(newEvent, null)
+                                    Log.d(Citrine.TAG, "result: $result")
+                                }
 
                                 linesRead++
                                 if (linesRead % 100 == 0) {

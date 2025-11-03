@@ -30,7 +30,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -111,18 +110,16 @@ object EventDownloader {
                 ),
             )
 
-            Citrine.getInstance().client.downloadFirstEvent(
+            val event = Citrine.getInstance().client.downloadFirstEvent(
                 subId,
                 mapOf(it to filters),
-                onResponse = { event ->
-                    Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
-                    runBlocking {
-                        CustomWebSocketService.server?.innerProcessEvent(event, null)
-                    }
-                    result = event as AdvertisedRelayListEvent
-                    finishedRelays[it.url] = true
-                },
             )
+            event?.let {
+                Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
+                CustomWebSocketService.server?.innerProcessEvent(event, null)
+                result = event as AdvertisedRelayListEvent
+            }
+            finishedRelays[it.url] = true
             Citrine.getInstance().client.disconnect()
             delay(2000)
             Citrine.getInstance().client.connect()
@@ -162,18 +159,16 @@ object EventDownloader {
                 ),
             )
 
-            Citrine.getInstance().client.downloadFirstEvent(
+            val event = Citrine.getInstance().client.downloadFirstEvent(
                 subId,
                 mapOf(it to filters),
-                onResponse = { event ->
-                    Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
-                    runBlocking {
-                        CustomWebSocketService.server?.innerProcessEvent(event, null)
-                    }
-                    result = event as ContactListEvent
-                    finishedRelays[it.url] = true
-                },
             )
+            event?.let {
+                Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
+                CustomWebSocketService.server?.innerProcessEvent(event, null)
+                result = event as ContactListEvent
+            }
+            finishedRelays[it.url] = true
         }
         Citrine.getInstance().client.disconnect()
         delay(2000)
