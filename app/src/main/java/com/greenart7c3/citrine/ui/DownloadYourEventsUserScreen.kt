@@ -85,7 +85,7 @@ fun SelectRelayModal(
     onDismiss: () -> Unit,
 ) {
     var relayText by remember { mutableStateOf(TextFieldValue()) }
-    var relays = remember { mutableListOf<NormalizedRelayUrl>() }
+    val relays = remember { mutableListOf<NormalizedRelayUrl>() }
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
     )
@@ -107,9 +107,8 @@ fun SelectRelayModal(
                 }
                 contactList?.let {
                     val contactListRelays = it.relays()
-                    contactListRelays?.forEach {
-                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(it.key.url)
-                        if (formattedUrl == null) return@forEach
+                    contactListRelays?.forEach { relay ->
+                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.key.url) ?: return@forEach
                         if (!relays.contains(formattedUrl)) relays.add(formattedUrl)
                     }
                 }
@@ -120,9 +119,8 @@ fun SelectRelayModal(
                     )
                 }
                 advertisedRelayList?.let {
-                    it.relays().forEach {
-                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(it.relayUrl.url)
-                        if (formattedUrl == null) return@forEach
+                    it.relays().forEach { relay ->
+                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.relayUrl.url) ?: return@forEach
                         if (!relays.contains(formattedUrl)) relays.add(formattedUrl)
                     }
                 }
@@ -160,8 +158,7 @@ fun SelectRelayModal(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 if (relayText.text.isBlank()) return@KeyboardActions
-                                val url = RelayUrlNormalizer.normalizeOrNull(relayText.text)
-                                if (url == null) return@KeyboardActions
+                                val url = RelayUrlNormalizer.normalizeOrNull(relayText.text) ?: return@KeyboardActions
                                 if (relays.contains(url)) {
                                     return@KeyboardActions
                                 }
@@ -295,7 +292,6 @@ fun DownloadYourEventsUserScreen(
 
                     EventDownloader.fetchEvents(
                         signer = signer!!,
-                        scope = Citrine.getInstance().applicationScope,
                         relays = it,
                     )
                 }

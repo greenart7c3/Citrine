@@ -274,7 +274,7 @@ class CustomWebSocketServer(
             return VerificationResult.Valid
         }
 
-        if (event.isExpired()) {
+        if (event.isExpired() && connection != null) {
             Log.d(Citrine.TAG, "event expired ${event.id} ${event.expiration()}")
             return VerificationResult.Expired
         }
@@ -314,11 +314,11 @@ class CustomWebSocketServer(
             }
         }
 
-        if (event.isProtected()) {
-            val remoteHost = connection?.session?.call?.request?.local?.remoteHost
+        if (event.isProtected() && connection != null) {
+            val remoteHost = connection.session.call.request.local.remoteHost
             val isLocalHost = remoteHost in listOf("127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1")
 
-            if (!isLocalHost && connection?.users?.contains(event.pubKey) != true) {
+            if (!isLocalHost && !connection.users.contains(event.pubKey)) {
                 Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
                 return VerificationResult.AuthRequiredForProtectedEvent
             }

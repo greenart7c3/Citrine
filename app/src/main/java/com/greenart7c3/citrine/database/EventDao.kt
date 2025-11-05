@@ -76,13 +76,18 @@ interface EventDao {
     @Transaction
     suspend fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long): List<String>
 
-    @Query("DELETE FROM EventEntity WHERE id in (:ids) and pubkey = :pubkey")
     @Transaction
     suspend fun delete(ids: List<String>, pubkey: String) {
         ids.forEach {
-            deletetags(it)
+            val deleted = deleteById(it, pubkey)
+            if (deleted > 0) {
+                deletetags(it)
+            }
         }
     }
+
+    @Query("DELETE FROM EventEntity WHERE id = :id and pubkey = :pubkey")
+    suspend fun deleteById(id: String, pubkey: String): Int
 
     @Query("DELETE FROM EventEntity WHERE id in (:ids)")
     @Transaction
@@ -155,9 +160,19 @@ interface EventDao {
     @Transaction
     suspend fun getNewestReplaceable(kind: Int, pubkey: String, dTagValue: String, createdAt: Long): List<String>
 
+    @Transaction
+    suspend fun deleteAll() {
+        deleteAllTags()
+        innerDeleteAll()
+    }
+
     @Query("DELETE FROM EventEntity")
     @Transaction
-    suspend fun deleteAll()
+    suspend fun innerDeleteAll()
+
+    @Query("DELETE FROM TagEntity")
+    @Transaction
+    suspend fun deleteAllTags()
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction

@@ -64,16 +64,6 @@ class WebSocketServerService : Service() {
                 override fun run() {
                     if ((Citrine.job == null || Citrine.job?.isCompleted == true) && !Citrine.isImportingEvents) {
                         NotificationManagerCompat.from(Citrine.getInstance()).cancel(2)
-//                        Citrine.getInstance().applicationScope.launch {
-//                            Citrine.getInstance().client.getAll().forEach {
-//                                if (it.isConnected()) {
-//                                    it.disconnect()
-//                                }
-//                            }
-//                            if (Citrine.getInstance().client.getAll().isNotEmpty()) {
-//                                Citrine.getInstance().client.reconnect(relays = null)
-//                            }
-//                        }
                     }
 
                     if (!Citrine.isImportingEvents) {
