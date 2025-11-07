@@ -86,58 +86,60 @@ fun SelectRelayModal(
     onDone: (List<NormalizedRelayUrl>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var relayText by remember { mutableStateOf(TextFieldValue()) }
-    val relays = remember { mutableListOf<NormalizedRelayUrl>() }
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
     )
-    var loading by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        launch(Dispatchers.IO) {
-            loading = true
-            try {
-                if (!Citrine.getInstance().client.isActive()) {
-                    Citrine.getInstance().client.connect()
-                }
-                val database = AppDatabase.getDatabase(Citrine.getInstance())
-                var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
-                if (contactList == null) {
-                    contactList = EventDownloader.fetchContactList(
-                        signer = signer,
-                    )
-                }
-                contactList?.let {
-                    val contactListRelays = it.relays()
-                    contactListRelays?.forEach { relay ->
-                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.key.url) ?: return@forEach
-                        if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
-                    }
-                }
-                var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
-                if (advertisedRelayList == null) {
-                    advertisedRelayList = EventDownloader.fetchAdvertisedRelayList(
-                        signer = signer,
-                    )
-                }
-                advertisedRelayList?.let {
-                    it.relays().forEach { relay ->
-                        val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.relayUrl.url) ?: return@forEach
-                        if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
-                    }
-                }
-            } finally {
-                loading = false
-            }
-        }
-    }
-
     val scope = rememberCoroutineScope()
+
     ModalBottomSheet(
         modifier = Modifier
             .fillMaxSize(),
         content = {
             val keyboardController = LocalSoftwareKeyboardController.current
+            var relayText by remember { mutableStateOf(TextFieldValue()) }
+            val relays = remember { mutableListOf<NormalizedRelayUrl>() }
+
+            var loading by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                launch(Dispatchers.IO) {
+                    loading = true
+                    try {
+                        if (!Citrine.getInstance().client.isActive()) {
+                            Citrine.getInstance().client.connect()
+                        }
+                        val database = AppDatabase.getDatabase(Citrine.getInstance())
+                        var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
+                        if (contactList == null) {
+                            contactList = EventDownloader.fetchContactList(
+                                signer = signer,
+                            )
+                        }
+                        contactList?.let {
+                            val contactListRelays = it.relays()
+                            contactListRelays?.forEach { relay ->
+                                val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.key.url) ?: return@forEach
+                                if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
+                            }
+                        }
+                        var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
+                        if (advertisedRelayList == null) {
+                            advertisedRelayList = EventDownloader.fetchAdvertisedRelayList(
+                                signer = signer,
+                            )
+                        }
+                        advertisedRelayList?.let {
+                            it.relays().forEach { relay ->
+                                val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.relayUrl.url) ?: return@forEach
+                                if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
+                            }
+                        }
+                    } finally {
+                        loading = false
+                    }
+                }
+            }
+
             Column(
                 Modifier
                     .fillMaxSize()
@@ -161,15 +163,18 @@ fun SelectRelayModal(
                             onDone = {
                                 if (relayText.text.isBlank()) return@KeyboardActions
                                 val url = RelayUrlNormalizer.normalizeOrNull(relayText.text) ?: return@KeyboardActions
-                                if (relays.contains(url)) {
+                                if (relays.any { value -> value.displayUrl() == url.displayUrl() }) {
                                     return@KeyboardActions
                                 }
 
-                                loading = true
-                                relays.add(url)
-                                relayText = TextFieldValue()
-                                keyboardController?.hide()
-                                loading = false
+                                scope.launch {
+                                    loading = true
+                                    relays.add(url)
+                                    relayText = TextFieldValue()
+                                    keyboardController?.hide()
+                                    delay(200)
+                                    loading = false
+                                }
                             },
                         ),
                         modifier = Modifier.fillMaxWidth(),
