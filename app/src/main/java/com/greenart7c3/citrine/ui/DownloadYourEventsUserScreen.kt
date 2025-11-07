@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -62,6 +62,7 @@ import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.RelayAuthenticator
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.displayUrl
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
@@ -75,6 +76,7 @@ import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.Hex
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,7 +111,7 @@ fun SelectRelayModal(
                     val contactListRelays = it.relays()
                     contactListRelays?.forEach { relay ->
                         val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.key.url) ?: return@forEach
-                        if (!relays.contains(formattedUrl)) relays.add(formattedUrl)
+                        if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
                     }
                 }
                 var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
@@ -121,7 +123,7 @@ fun SelectRelayModal(
                 advertisedRelayList?.let {
                     it.relays().forEach { relay ->
                         val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.relayUrl.url) ?: return@forEach
-                        if (!relays.contains(formattedUrl)) relays.add(formattedUrl)
+                        if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
                     }
                 }
             } finally {
@@ -185,14 +187,17 @@ fun SelectRelayModal(
                             .fillMaxHeight(0.9f)
                             .padding(top = 4.dp),
                     ) {
-                        items(relays) {
+                        itemsIndexed(relays) { index, relay ->
                             RelayCard(
-                                relay = it.url,
+                                relay = relay.url,
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {
-                                    loading = true
-                                    relays.removeIf { url -> url == it }
-                                    loading = false
+                                    scope.launch {
+                                        loading = true
+                                        relays.removeAt(index)
+                                        delay(200)
+                                        loading = false
+                                    }
                                 },
                             )
                         }
