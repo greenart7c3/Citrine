@@ -12,12 +12,16 @@ import androidx.core.app.NotificationManagerCompat
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.vitorpamplona.quartz.nip01Core.core.Event
-import com.vitorpamplona.quartz.nip01Core.relay.client.INostrClient
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.downloadFirstEvent
 import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.IRelayClientListener
-import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.RelayState
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.IRelayClient
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.newSubId
+import com.vitorpamplona.quartz.nip01Core.relay.commands.toClient.ClosedMessage
+import com.vitorpamplona.quartz.nip01Core.relay.commands.toClient.EoseMessage
+import com.vitorpamplona.quartz.nip01Core.relay.commands.toClient.EventMessage
+import com.vitorpamplona.quartz.nip01Core.relay.commands.toClient.Message
+import com.vitorpamplona.quartz.nip01Core.relay.commands.toRelay.Command
 import com.vitorpamplona.quartz.nip01Core.relay.filters.Filter
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
@@ -26,7 +30,6 @@ import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import io.ktor.util.collections.ConcurrentSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -109,7 +112,7 @@ object EventDownloader {
             ),
         )
         Citrine.getInstance().client.connect()
-        val event = Citrine.getInstance().client.downloadFirstEvent2(
+        val event = Citrine.getInstance().client.downloadFirstEvent(
             subId,
             relays.associateWith {
                 filters
@@ -152,7 +155,7 @@ object EventDownloader {
         )
 
         Citrine.getInstance().client.connect()
-        val event = Citrine.getInstance().client.downloadFirstEvent2(
+        val event = Citrine.getInstance().client.downloadFirstEvent(
             subId,
             relays.associateWith {
                 filters
@@ -261,70 +264,54 @@ class RelayClientSubscription(
         client.subscribe(this)
     }
 
-    override fun onRelayStateChange(relay: IRelayClient, type: RelayState) {
-        Log.d("RelayClientSubscription", "onRelayStateChange: ${relay.url}, $type")
-        super.onRelayStateChange(relay, type)
-    }
-
-    override fun onClosed(relay: IRelayClient, subId: String, message: String) {
-        Log.d("RelayClientSubscription", "onClosed: ${relay.url}, $subId, $message")
-        super.onClosed(relay, subId, message)
-    }
-
-    override fun onError(relay: IRelayClient, subId: String, error: Error) {
-        Log.d("RelayClientSubscription", "onError: ${relay.url}, $subId, $error")
-        super.onError(relay, subId, error)
-    }
-
-    override fun onNotify(relay: IRelayClient, description: String) {
-        Log.d("RelayClientSubscription", "onNotify: ${relay.url}, $description")
-        super.onNotify(relay, description)
-    }
-
-    override fun onSendResponse(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
-        Log.d("RelayClientSubscription", "onSendResponse: ${relay.url}, $eventId, $success, $message")
-        super.onSendResponse(relay, eventId, success, message)
-    }
-
-    override fun onAuth(relay: IRelayClient, challenge: String) {
-        Log.d("RelayClientSubscription", "onAuth: ${relay.url}, $challenge")
-        super.onAuth(relay, challenge)
-    }
-
-    override fun onAuthed(relay: IRelayClient, eventId: String, success: Boolean, message: String) {
-        Log.d("RelayClientSubscription", "onAuthed: ${relay.url}, $eventId, $success, $message")
-        super.onAuthed(relay, eventId, success, message)
-    }
-
-    override fun onEvent(
-        relay: IRelayClient,
-        subId: String,
-        event: Event,
-        arrivalTime: Long,
-        afterEOSE: Boolean,
-    ) {
-        if (this.subId == subId) {
-            receivedEvents.add(event)
-            if (event.createdAt < oldestTimestamp) {
-                oldestTimestamp = event.createdAt
-            }
-            eventConsumer(event)
-        }
-    }
-
-    override fun onSend(relay: IRelayClient, msg: String, success: Boolean) {
-        Log.d("RelayClientSubscription", "onSend: ${relay.url}, $msg, $success")
-    }
-
-    override fun onEOSE(relay: IRelayClient, subId: String, arrivalTime: Long) {
-        if (this.subId != subId) return
-
-        Log.d("RelayClientSubscription", "onEOSE: Received ${receivedEvents.size} events $arrivalTime")
-
+    override fun onCannotConnect(relay: IRelayClient, errorMessage: String) {
+        Log.d("RelayClientSubscription", "onCannotConnect: ${relay.url}, $errorMessage")
         onComplete?.invoke(receivedEvents.size)
         receivedEvents.clear()
-        oldestTimestamp -= 1
-        until = oldestTimestamp
+        super.onCannotConnect(relay, errorMessage)
+    }
+
+    override fun onConnecting(relay: IRelayClient) {
+        Log.d("RelayClientSubscription", "Connecting: ${relay.url}")
+        super.onConnecting(relay)
+    }
+
+    override fun onDisconnected(relay: IRelayClient) {
+        Log.d("RelayClientSubscription", "Disconnected: ${relay.url}")
+        onComplete?.invoke(receivedEvents.size)
+        receivedEvents.clear()
+        super.onDisconnected(relay)
+    }
+
+    override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+        Log.d("RelayClientSubscription", "onIncomingMessage: ${relay.url}, $msgStr")
+
+        if (msg is EventMessage && this.subId == msg.subId) {
+            receivedEvents.add(msg.event)
+            if (msg.event.createdAt < oldestTimestamp) {
+                oldestTimestamp = msg.event.createdAt
+            }
+            eventConsumer(msg.event)
+        }
+
+        if (msg is EoseMessage && this.subId == msg.subId) {
+            onComplete?.invoke(receivedEvents.size)
+            receivedEvents.clear()
+            oldestTimestamp -= 1
+            until = oldestTimestamp
+        }
+
+        if (msg is ClosedMessage) {
+            onComplete?.invoke(receivedEvents.size)
+            receivedEvents.clear()
+        }
+
+        super.onIncomingMessage(relay, msgStr, msg)
+    }
+
+    override fun onSent(relay: IRelayClient, cmdStr: String, cmd: Command, success: Boolean) {
+        Log.d("RelayClientSubscription", "onSendResponse: ${relay.url}, $cmdStr, $success")
+        super.onSent(relay, cmdStr, cmd, success)
     }
 
     fun updateFilter() {
@@ -341,51 +328,4 @@ class RelayClientSubscription(
     fun closeSubscription() {
         client.close(subId)
     }
-}
-
-suspend fun INostrClient.downloadFirstEvent2(
-    subscriptionId: String = newSubId(),
-    filters: Map<NormalizedRelayUrl, List<Filter>>,
-): Event? {
-    val resultChannel = Channel<Event>()
-
-    val listener =
-        object : IRelayClientListener {
-            override fun onError(relay: IRelayClient, subId: String, error: Error) {
-                Log.d("RelayClientSubscription", "onError: ${relay.url.url}, $subId, $error")
-                super.onError(relay, subId, error)
-            }
-
-            override fun onRelayStateChange(relay: IRelayClient, type: RelayState) {
-                Log.d("RelayClientSubscription", "onRelayStateChange: ${relay.url.url}, $type")
-                super.onRelayStateChange(relay, type)
-            }
-            override fun onEvent(
-                relay: IRelayClient,
-                subId: String,
-                event: Event,
-                arrivalTime: Long,
-                afterEOSE: Boolean,
-            ) {
-                if (subId == subscriptionId) {
-                    resultChannel.trySend(event)
-                }
-            }
-        }
-
-    subscribe(listener)
-
-    val result =
-        withTimeoutOrNull(30000) {
-            openReqSubscription(subscriptionId, filters)
-            delay(2000)
-            reconnect()
-            resultChannel.receive()
-        }
-
-    close(subscriptionId)
-    unsubscribe(listener)
-    resultChannel.close()
-
-    return result
 }

@@ -59,7 +59,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.EventDownloader
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
-import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.RelayAuthenticator
+import com.vitorpamplona.quartz.nip01Core.relay.client.auth.RelayAuthenticator
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.displayUrl
@@ -69,7 +69,6 @@ import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
 import com.vitorpamplona.quartz.nip19Bech32.toNpub
-import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
 import com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType
 import com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
@@ -295,9 +294,10 @@ fun DownloadYourEventsUserScreen(
                 Citrine.job = Citrine.getInstance().applicationScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
 
-                    RelayAuthenticator(Citrine.getInstance().client, Citrine.getInstance().applicationScope) { challenge, relay ->
-                        val authedEvent = RelayAuthEvent.create(relay.url, challenge, if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair()))
-                        Citrine.getInstance().client.sendIfExists(authedEvent, relay.url)
+                    RelayAuthenticator(Citrine.getInstance().client, Citrine.getInstance().applicationScope) { template ->
+                        val signer = if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair())
+                        val event = signer.sign(template)
+                        listOf(event)
                     }
 
                     EventDownloader.fetchEvents(
