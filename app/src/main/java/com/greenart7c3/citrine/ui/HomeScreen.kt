@@ -1,8 +1,11 @@
 package com.greenart7c3.citrine.ui
 
+import android.Manifest
 import android.app.Activity.RESULT_OK
 import android.content.ClipData
 import android.content.Intent
+import android.os.Environment
+import android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +72,31 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+@Composable
+fun RequestStoragePermission(onGranted: () -> Unit) {
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            onGranted()
+        } else {
+            Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Settings.webClients.isNotEmpty()) {
+            if (!Environment.isExternalStorageManager() && Settings.webClients.isNotEmpty()) {
+                launcher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                val intent = Intent(ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                context.startActivity(intent)
+            }
+        }
+    }
+}
 
 @Composable
 fun HomeScreen(
@@ -176,6 +204,10 @@ fun HomeScreen(
                     }
                 }
             },
+        )
+
+        RequestStoragePermission(
+            onGranted = { },
         )
 
         LaunchedEffect(Unit) {

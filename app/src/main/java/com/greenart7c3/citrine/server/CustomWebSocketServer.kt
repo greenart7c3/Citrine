@@ -1,7 +1,10 @@
 package com.greenart7c3.citrine.server
 
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import android.widget.Toast
+import androidx.core.net.toUri
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -41,14 +44,17 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.httpMethod
 import io.ktor.server.response.appendIfAbsent
+import io.ktor.server.response.respondFile
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
+import java.io.File
 import java.net.ServerSocket
 import java.util.Collections
 import java.util.zip.Deflater
@@ -537,6 +543,45 @@ class CustomWebSocketServer(
             }
 
             routing {
+                val spawRoots = Settings.webClients.mapNotNull { webClient ->
+                    val path = getRealPathFromTreeUri(webClient.value.toUri()) ?: return@mapNotNull null
+                    webClient.key to File(path)
+                }.toMap()
+
+                get("/assets/{path...}") {
+                    val requestedPath = call.parameters.getAll("path")?.joinToString("/") ?: ""
+
+                    val file = spawRoots.values.map { File(it, "assets/$requestedPath") }
+                        .firstOrNull { it.exists() && it.isFile }
+
+                    if (file != null) {
+                        call.respondFile(file)
+                    } else {
+                        call.respondText("File not found", status = HttpStatusCode.NotFound)
+                    }
+                }
+
+                spawRoots.forEach { (clientName, root) ->
+                    route("/$clientName") {
+                        get("{...}") {
+                            val index = File(root, "index.html")
+                            if (index.exists()) {
+                                call.respondFile(index)
+                            } else {
+                                call.respondText("index.html not found", status = HttpStatusCode.NotFound)
+                            }
+                        }
+                        get {
+                            val index = File(root, "index.html")
+                            if (index.exists()) {
+                                call.respondFile(index)
+                            } else {
+                                call.respondText("index.html not found", status = HttpStatusCode.NotFound)
+                            }
+                        }
+                    }
+                }
+
                 // Handle HTTP GET requests
                 get("/") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
@@ -640,4 +685,20 @@ class CustomWebSocketServer(
         connections.value.remove(connection)
         connections.emit(connections.value)
     }
+}
+
+fun getRealPathFromTreeUri(treeUri: Uri): String? {
+    val docId = DocumentsContract.getTreeDocumentId(treeUri)
+    // docId example: "primary:webclients/dist"
+    val parts = docId.split(":")
+    if (parts.size >= 2) {
+        val type = parts[0]
+        val relativePath = parts[1]
+
+        return when (type) {
+            "primary" -> "/storage/emulated/0/$relativePath"
+            else -> "/storage/$type/$relativePath"
+        }
+    }
+    return null
 }
