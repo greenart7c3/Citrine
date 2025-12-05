@@ -31,6 +31,8 @@ object PrefKeys {
     const val LAST_BACKUP = "last_backup"
     const val PROXY_PORT = "proxy_port"
     const val USE_PROXY = "use_proxy"
+
+    const val WEB_CLIENTS = "web_clients"
 }
 
 object LocalPreferences {
@@ -70,6 +72,11 @@ object LocalPreferences {
                 putLong(PrefKeys.LAST_BACKUP, settings.lastBackup)
                 putInt(PrefKeys.PROXY_PORT, settings.proxyPort)
                 putBoolean(PrefKeys.USE_PROXY, settings.useProxy)
+                if (Settings.webClients.isNotEmpty()) {
+                    putString(PrefKeys.WEB_CLIENTS, Settings.webClientsToJson())
+                } else {
+                    remove(PrefKeys.WEB_CLIENTS)
+                }
 
                 HttpClientManager.setDefaultProxyOnPort(settings.proxyPort)
             }
@@ -101,6 +108,9 @@ object LocalPreferences {
         Settings.lastBackup = prefs.getLong(PrefKeys.LAST_BACKUP, 0)
         Settings.proxyPort = prefs.getInt(PrefKeys.PROXY_PORT, 9050)
         Settings.useProxy = prefs.getBoolean(PrefKeys.USE_PROXY, false)
+        prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
+            Settings.webClients = Settings.webClientFromJson(it)
+        }
 
         HttpClientManager.setDefaultProxyOnPort(Settings.proxyPort)
     }

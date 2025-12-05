@@ -1,6 +1,8 @@
 package com.greenart7c3.citrine.server
 
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.R
+import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 
 object Settings {
     var allowedKinds: Set<Int> = emptySet()
@@ -26,6 +28,7 @@ object Settings {
     var lastBackup: Long = 0L
     var useProxy = false
     var proxyPort = 9050
+    var webClients = mutableMapOf<String, String>()
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -51,7 +54,12 @@ object Settings {
         lastBackup = 0L
         useProxy = false
         proxyPort = 9050
+        webClients = mutableMapOf()
     }
+
+    fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)
+
+    fun webClientsToJson(): String = JacksonMapper.mapper.writeValueAsString(webClients)
 }
 
 enum class OlderThan {
