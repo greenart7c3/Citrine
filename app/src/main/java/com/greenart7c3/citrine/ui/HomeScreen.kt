@@ -87,7 +87,7 @@ fun HomeScreen(
         val requestPermissionLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission(),
         ) { _ ->
-            Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+            Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                 homeViewModel.start(context)
             }
         }
@@ -165,7 +165,7 @@ fun HomeScreen(
                             homeViewModel.signer = NostrSignerExternal(
                                 returnedKey,
                                 packageName,
-                                Citrine.getInstance().contentResolver,
+                                Citrine.instance.contentResolver,
                             )
 
                             homeViewModel.setPubKey(returnedKey)
@@ -211,8 +211,8 @@ fun HomeScreen(
                 },
                 onConfirm = {
                     deleteAllDialog = false
-                    Citrine.getInstance().cancelJob()
-                    Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                    Citrine.instance.cancelJob()
+                    Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                         Citrine.job?.join()
                         Citrine.isImportingEvents = true
                         homeViewModel.setProgress("Deleting all events")

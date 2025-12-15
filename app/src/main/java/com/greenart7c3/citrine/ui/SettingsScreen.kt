@@ -829,9 +829,9 @@ fun SettingsScreen(
                             Settings.listenToPokeyBroadcasts = !Settings.listenToPokeyBroadcasts
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             if (listenToPokeyBroadcasts) {
-                                Citrine.getInstance().registerPokeyReceiver()
+                                Citrine.instance.registerPokeyReceiver()
                             } else {
-                                Citrine.getInstance().unregisterPokeyReceiver()
+                                Citrine.instance.unregisterPokeyReceiver()
                             }
                         },
                     )

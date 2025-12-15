@@ -66,7 +66,7 @@ fun DatabaseInfo(
                         Text(stringResource(R.string.yes))
                     },
                     onClick = {
-                        Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                             database.eventDao().deleteByKind(wantsToDeleteKind!!)
                             wantsToDeleteKind = null
                         }

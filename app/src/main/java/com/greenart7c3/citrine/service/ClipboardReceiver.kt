@@ -23,10 +23,10 @@ class ClipboardReceiver : BroadcastReceiver() {
             // Show a toast message
             Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
         } else if (intent != null && intent.hasExtra("job")) {
-            Citrine.getInstance().cancelJob()
+            Citrine.instance.cancelJob()
             NotificationManagerCompat.from(context).cancel(2)
-            Citrine.getInstance().applicationScope.launch {
-                Citrine.getInstance().client.disconnect()
+            Citrine.instance.applicationScope.launch {
+                Citrine.instance.client.disconnect()
             }
         }
     }

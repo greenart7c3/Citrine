@@ -15,11 +15,11 @@ class BootBroadcastReceiver : BroadcastReceiver() {
             return
         }
         if (intent.action == Intent.ACTION_PACKAGE_REPLACED && Build.VERSION.SDK_INT < Build.VERSION_CODES.S && intent.dataString?.contains("com.greenart7c3.citrine") == true) {
-            Citrine.getInstance().startService()
+            Citrine.instance.startService()
         } else if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            Citrine.getInstance().startService()
+            Citrine.instance.startService()
         } else if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            Citrine.getInstance().startService()
+            Citrine.instance.startService()
         }
     }
 }

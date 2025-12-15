@@ -75,7 +75,7 @@ class CustomWebSocketServer(
             ServerSocket(Settings.port)
         } catch (e: Exception) {
             Log.d(Citrine.TAG, e.toString(), e)
-            Toast.makeText(Citrine.getInstance(), "Port ${Settings.port} is already in use", Toast.LENGTH_LONG).show()
+            Toast.makeText(Citrine.instance, "Port ${Settings.port} is already in use", Toast.LENGTH_LONG).show()
             null
         }
         if (serverSocket == null) return
@@ -465,7 +465,7 @@ class CustomWebSocketServer(
         save(event, connection)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
         appDatabase.eventDao().delete(ids, event.pubKey)
-        HistoryDatabase.getDatabase(Citrine.getInstance()).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
+        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
     }
 
     private suspend fun override(event: Event, connection: Connection?) {
@@ -473,7 +473,7 @@ class CustomWebSocketServer(
         val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
         appDatabase.eventDao().delete(ids, event.pubKey)
-        HistoryDatabase.getDatabase(Citrine.getInstance()).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
+        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
     }
 
     private suspend fun save(event: Event, connection: Connection?) {
@@ -546,7 +546,7 @@ class CustomWebSocketServer(
                     if (call.request.httpMethod == HttpMethod.Options) {
                         call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
-                        LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.getInstance())
+                        LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
                         val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70)
                         if (Settings.authEnabled) {

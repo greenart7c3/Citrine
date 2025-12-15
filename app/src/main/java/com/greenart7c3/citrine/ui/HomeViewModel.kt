@@ -51,7 +51,7 @@ class HomeViewModel : ViewModel() {
     var signer = NostrSignerExternal(
         "",
         "",
-        Citrine.getInstance().contentResolver,
+        Citrine.instance.contentResolver,
     )
 
     private val connection = object : ServiceConnection {
@@ -125,8 +125,8 @@ class HomeViewModel : ViewModel() {
         database: AppDatabase,
         context: Context,
     ) {
-        Citrine.getInstance().cancelJob()
-        Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+        Citrine.instance.cancelJob()
+        Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             ExportDatabaseUtils.exportDatabase(
                 database,
                 context,
@@ -144,11 +144,11 @@ class HomeViewModel : ViewModel() {
         context: Context,
         onFinished: () -> Unit,
     ) {
-        Citrine.getInstance().cancelJob()
-        Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+        Citrine.instance.cancelJob()
+        Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {
-                Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
+                Citrine.instance.applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.invalid_file_extension),
@@ -214,7 +214,7 @@ class HomeViewModel : ViewModel() {
                 setProgress(context.getString(R.string.imported_events_successfully, linesRead))
                 Citrine.isImportingEvents = false
                 onFinished()
-                Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
+                Citrine.instance.applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.imported_events_successfully, linesRead),
@@ -225,7 +225,7 @@ class HomeViewModel : ViewModel() {
                 Citrine.isImportingEvents = false
                 if (e is CancellationException) throw e
                 Log.d(Citrine.TAG, e.message ?: "", e)
-                Citrine.getInstance().applicationScope.launch(Dispatchers.Main) {
+                Citrine.instance.applicationScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.import_failed),
@@ -243,7 +243,7 @@ class HomeViewModel : ViewModel() {
         try {
             Log.d(Citrine.TAG, "HomeViewModel cleared")
             if (state.value.bound) {
-                Citrine.getInstance().unbindService(connection)
+                Citrine.instance.unbindService(connection)
                 _state.value = _state.value.copy(
                     bound = false,
                 )
@@ -255,7 +255,7 @@ class HomeViewModel : ViewModel() {
     }
 
     fun setProgress(message: String) {
-        val notificationManager = NotificationManagerCompat.from(Citrine.getInstance())
+        val notificationManager = NotificationManagerCompat.from(Citrine.instance)
 
         if (message.isBlank()) {
             notificationManager.cancel(2)
@@ -271,25 +271,25 @@ class HomeViewModel : ViewModel() {
 
         notificationManager.createNotificationChannel(channel)
 
-        val copyIntent = Intent(Citrine.getInstance(), ClipboardReceiver::class.java)
+        val copyIntent = Intent(Citrine.instance, ClipboardReceiver::class.java)
         copyIntent.putExtra("job", "cancel")
 
         val copyPendingIntent = PendingIntent.getBroadcast(
-            Citrine.getInstance(),
+            Citrine.instance,
             0,
             copyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(Citrine.getInstance(), "citrine")
+        val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
             .setContentTitle("Citrine")
             .setContentText(message)
             .setSmallIcon(R.drawable.ic_notification)
             .setOnlyAlertOnce(true)
-            .addAction(R.drawable.ic_launcher_background, Citrine.getInstance().getString(R.string.cancel), copyPendingIntent)
+            .addAction(R.drawable.ic_launcher_background, Citrine.instance.getString(R.string.cancel), copyPendingIntent)
             .build()
 
-        if (ActivityCompat.checkSelfPermission(Citrine.getInstance(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return
         }
         notificationManager.notify(2, notification)

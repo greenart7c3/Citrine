@@ -36,7 +36,7 @@ class Connection(
                         if (!EventSubscription.containsConnection(this@Connection)) {
                             Log.d(Citrine.TAG, "Closing session due to inactivity")
                             finalize()
-                            Citrine.getInstance().applicationScope.launch {
+                            Citrine.instance.applicationScope.launch {
                                 session.cancel()
                                 CustomWebSocketService.server?.removeConnection(this@Connection)
                             }
@@ -67,7 +67,7 @@ class Connection(
                 val connection = EventSubscription.getConnection(session)
                 connection?.let {
                     Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress()}")
-                    Citrine.getInstance().applicationScope.launch {
+                    Citrine.instance.applicationScope.launch {
                         CustomWebSocketService.server?.removeConnection(connection)
                     }
                 }

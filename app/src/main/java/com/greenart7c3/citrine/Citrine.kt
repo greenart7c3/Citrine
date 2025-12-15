@@ -85,9 +85,10 @@ class Citrine : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        instance = this
+
         client.connect()
 
-        instance = this
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
         if (Settings.listenToPokeyBroadcasts) {
             registerPokeyReceiver()
@@ -176,10 +177,7 @@ class Citrine : Application() {
         const val TAG = "Citrine"
 
         @Volatile
-        private var instance: Citrine? = null
-
-        fun getInstance(): Citrine = instance ?: synchronized(this) {
-            instance ?: Citrine().also { instance = it }
-        }
+        lateinit var instance: Citrine
+            private set
     }
 }

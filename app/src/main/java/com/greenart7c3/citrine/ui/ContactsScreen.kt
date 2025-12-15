@@ -213,9 +213,9 @@ fun ContactsScreen(
                                         loading = true
 
                                         delay(1000)
-                                        Citrine.getInstance().client.sendAndWaitForResponse(signedEvent, relayList = localRelays.toSet())
+                                        Citrine.instance.client.sendAndWaitForResponse(signedEvent, relayList = localRelays.toSet())
                                         CustomWebSocketService.server?.innerProcessEvent(signedEvent, null)
-                                        Citrine.getInstance().client.disconnect()
+                                        Citrine.instance.client.disconnect()
                                         loading = false
                                         coroutineScope.launch(Dispatchers.Main) {
                                             navController.navigateUp()

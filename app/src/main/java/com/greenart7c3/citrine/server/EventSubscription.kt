@@ -35,7 +35,7 @@ object EventSubscription {
     fun count(): Int = subscriptions.size()
 
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
-        Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             var sentEvent = false
             subscriptions.snapshot().values.forEach {
                 it.subscription.filters.forEach filter@{ filter ->

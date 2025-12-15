@@ -111,8 +111,8 @@ object EventDownloader {
                 limit = 1,
             ),
         )
-        Citrine.getInstance().client.connect()
-        val event = Citrine.getInstance().client.downloadFirstEvent(
+        Citrine.instance.client.connect()
+        val event = Citrine.instance.client.downloadFirstEvent(
             subId,
             relays.associateWith {
                 filters
@@ -124,7 +124,7 @@ object EventDownloader {
             result = event as AdvertisedRelayListEvent
         }
 
-        Citrine.getInstance().client.close(subId)
+        Citrine.instance.client.close(subId)
         return result
     }
 
@@ -154,8 +154,8 @@ object EventDownloader {
             ),
         )
 
-        Citrine.getInstance().client.connect()
-        val event = Citrine.getInstance().client.downloadFirstEvent(
+        Citrine.instance.client.connect()
+        val event = Citrine.instance.client.downloadFirstEvent(
             subId,
             relays.associateWith {
                 filters
@@ -166,7 +166,7 @@ object EventDownloader {
             CustomWebSocketService.server?.innerProcessEvent(event, null)
             result = event as ContactListEvent
         }
-        Citrine.getInstance().client.close(subId)
+        Citrine.instance.client.close(subId)
         return result
     }
 
@@ -174,8 +174,8 @@ object EventDownloader {
         signer: NostrSigner,
         relays: List<NormalizedRelayUrl>,
     ) {
-        if (!Citrine.getInstance().client.isActive()) {
-            Citrine.getInstance().client.connect()
+        if (!Citrine.instance.client.isActive()) {
+            Citrine.instance.client.connect()
         }
         try {
             val finishedLoading = mutableMapOf<String, Boolean>()
@@ -187,13 +187,13 @@ object EventDownloader {
             relays.forEach {
                 setProgress("loading events from ${it.url}")
                 fetchAllEventsByUserPaginated(
-                    Citrine.getInstance().client,
+                    Citrine.instance.client,
                     it.url,
                     signer.pubKey,
                 )
             }
 
-            Citrine.getInstance().client.disconnect()
+            Citrine.instance.client.disconnect()
 
             setProgress("Finished loading events from ${relays.size} relays")
             Citrine.isImportingEvents = false
@@ -206,7 +206,7 @@ object EventDownloader {
     }
 
     fun setProgress(message: String) {
-        val notificationManager = NotificationManagerCompat.from(Citrine.getInstance())
+        val notificationManager = NotificationManagerCompat.from(Citrine.instance)
 
         if (message.isBlank()) {
             notificationManager.cancel(2)
@@ -222,25 +222,25 @@ object EventDownloader {
 
         notificationManager.createNotificationChannel(channel)
 
-        val copyIntent = Intent(Citrine.getInstance(), ClipboardReceiver::class.java)
+        val copyIntent = Intent(Citrine.instance, ClipboardReceiver::class.java)
         copyIntent.putExtra("job", "cancel")
 
         val copyPendingIntent = PendingIntent.getBroadcast(
-            Citrine.getInstance(),
+            Citrine.instance,
             0,
             copyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(Citrine.getInstance(), "citrine")
+        val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
             .setContentTitle("Citrine")
             .setContentText(message)
             .setSmallIcon(R.drawable.ic_notification)
             .setOnlyAlertOnce(true)
-            .addAction(R.drawable.ic_launcher_background, Citrine.getInstance().getString(R.string.cancel), copyPendingIntent)
+            .addAction(R.drawable.ic_launcher_background, Citrine.instance.getString(R.string.cancel), copyPendingIntent)
             .build()
 
-        if (ActivityCompat.checkSelfPermission(Citrine.getInstance(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return
         }
         notificationManager.notify(2, notification)

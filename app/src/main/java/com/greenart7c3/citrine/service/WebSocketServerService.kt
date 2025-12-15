@@ -63,12 +63,12 @@ class WebSocketServerService : Service() {
             object : TimerTask() {
                 override fun run() {
                     if ((Citrine.job == null || Citrine.job?.isCompleted == true) && !Citrine.isImportingEvents) {
-                        NotificationManagerCompat.from(Citrine.getInstance()).cancel(2)
+                        NotificationManagerCompat.from(Citrine.instance).cancel(2)
                     }
 
                     if (!Citrine.isImportingEvents) {
-                        Citrine.getInstance().applicationScope.launch {
-                            Citrine.getInstance().eventsToDelete(database)
+                        Citrine.instance.applicationScope.launch {
+                            Citrine.instance.eventsToDelete(database)
                         }
                     }
 
@@ -82,17 +82,17 @@ class WebSocketServerService : Service() {
                                     Log.d(Citrine.TAG, "Backing up database")
 
                                     Settings.lastBackup = TimeUtils.now()
-                                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.getInstance())
+                                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
 
                                     Citrine.job?.cancel()
-                                    Citrine.job = Citrine.getInstance().applicationScope.launch(Dispatchers.IO) {
+                                    Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                                         ExportDatabaseUtils.exportDatabase(
                                             database = database,
                                             context = this@WebSocketServerService,
                                             folder = it,
                                             deleteOldFiles = true,
                                             onProgress = {
-                                                val notificationManager = NotificationManagerCompat.from(Citrine.getInstance())
+                                                val notificationManager = NotificationManagerCompat.from(Citrine.instance)
                                                 if (it.isBlank()) {
                                                     notificationManager.cancel(2)
                                                 } else {
@@ -105,25 +105,25 @@ class WebSocketServerService : Service() {
 
                                                     notificationManager.createNotificationChannel(channel)
 
-                                                    val copyIntent = Intent(Citrine.getInstance(), ClipboardReceiver::class.java)
+                                                    val copyIntent = Intent(Citrine.instance, ClipboardReceiver::class.java)
                                                     copyIntent.putExtra("job", "cancel")
 
                                                     val copyPendingIntent = PendingIntent.getBroadcast(
-                                                        Citrine.getInstance(),
+                                                        Citrine.instance,
                                                         0,
                                                         copyIntent,
                                                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
                                                     )
 
-                                                    val notification = NotificationCompat.Builder(Citrine.getInstance(), "citrine")
+                                                    val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
                                                         .setContentTitle("Citrine")
                                                         .setContentText(it)
                                                         .setSmallIcon(R.drawable.ic_notification)
                                                         .setOnlyAlertOnce(true)
-                                                        .addAction(R.drawable.ic_launcher_background, Citrine.getInstance().getString(R.string.cancel), copyPendingIntent)
+                                                        .addAction(R.drawable.ic_launcher_background, Citrine.instance.getString(R.string.cancel), copyPendingIntent)
                                                         .build()
 
-                                                    if (ActivityCompat.checkSelfPermission(Citrine.getInstance(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                                                    if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                                                         notificationManager.notify(2, notification)
                                                     }
                                                 }

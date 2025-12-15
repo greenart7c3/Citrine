@@ -104,10 +104,10 @@ fun SelectRelayModal(
                 launch(Dispatchers.IO) {
                     loading = true
                     try {
-                        if (!Citrine.getInstance().client.isActive()) {
-                            Citrine.getInstance().client.connect()
+                        if (!Citrine.instance.client.isActive()) {
+                            Citrine.instance.client.connect()
                         }
-                        val database = AppDatabase.getDatabase(Citrine.getInstance())
+                        val database = AppDatabase.getDatabase(Citrine.instance)
                         var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
                         if (contactList == null) {
                             contactList = EventDownloader.fetchContactList(
@@ -271,7 +271,7 @@ fun DownloadYourEventsUserScreen(
                         signer = NostrSignerExternal(
                             returnedKey,
                             packageName,
-                            Citrine.getInstance().contentResolver,
+                            Citrine.instance.contentResolver,
                         )
 
                         npub = TextFieldValue(localNpub)
@@ -290,11 +290,11 @@ fun DownloadYourEventsUserScreen(
                 shouldShowDialog = false
 
                 Citrine.isImportingEvents = true
-                Citrine.getInstance().cancelJob()
-                Citrine.job = Citrine.getInstance().applicationScope.launch {
+                Citrine.instance.cancelJob()
+                Citrine.job = Citrine.instance.applicationScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
 
-                    RelayAuthenticator(Citrine.getInstance().client, Citrine.getInstance().applicationScope) { template ->
+                    RelayAuthenticator(Citrine.instance.client, Citrine.instance.applicationScope) { template ->
                         val signer = if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair())
                         val event = signer.sign(template)
                         listOf(event)
