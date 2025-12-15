@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -19,11 +21,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -31,8 +33,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.paging.LoadState
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventPagingSource
 import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
@@ -105,42 +112,92 @@ fun CitrineScaffold(
                     it.arguments?.getInt("kind")?.let { kind ->
                         val context = LocalContext.current
                         val database = AppDatabase.getDatabase(context)
-                        val events = database.eventDao().getByKind(kind).collectAsStateWithLifecycle(emptyList())
+
+                        val pager = Pager(
+                            config = PagingConfig(
+                                pageSize = 20,
+                                initialLoadSize = 40,
+                                prefetchDistance = 5,
+                                enablePlaceholders = false,
+                            ),
+                            pagingSourceFactory = {
+                                EventPagingSource(
+                                    dao = database.eventDao(),
+                                    kind = kind,
+                                )
+                            },
+                        )
+
+                        val events = pager.flow.collectAsLazyPagingItems()
 
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(padding),
                         ) {
-                            items(events.value) { event ->
-                                var showTags by remember { mutableStateOf(false) }
+                            items(events.itemCount) { index ->
+                                val event = events[index]
+                                event?.let {
+                                    var showTags by remember { mutableStateOf(false) }
 
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                ) {
-                                    Text(event.event.kind.toString())
-                                    Text(event.event.createdAt.toDateString())
-                                    Text(event.event.pubkey.toShortenHex())
-                                    Text(event.event.content)
-                                    if (event.tags.isNotEmpty()) {
-                                        Row(
-                                            Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.Center,
-                                        ) {
-                                            ElevatedButton(
-                                                onClick = {
-                                                    showTags = !showTags
-                                                },
-                                                content = {
-                                                    Text("Show/Hide tags")
-                                                },
-                                            )
-                                        }
-                                        if (showTags) {
-                                            event.tags.forEach { tag ->
-                                                Text(tag.toTags().toList().toString())
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                    ) {
+                                        Text(event.event.kind.toString())
+                                        Text(event.event.createdAt.toDateString())
+                                        Text(event.event.pubkey.toShortenHex())
+                                        Text(event.event.content)
+                                        if (event.tags.isNotEmpty()) {
+                                            Row(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.Center,
+                                            ) {
+                                                ElevatedButton(
+                                                    onClick = {
+                                                        showTags = !showTags
+                                                    },
+                                                    content = {
+                                                        Text("Show/Hide tags")
+                                                    },
+                                                )
+                                            }
+                                            if (showTags) {
+                                                event.tags.forEach { tag ->
+                                                    Text(tag.toTags().toList().toString())
+                                                }
                                             }
                                         }
+                                    }
+                                }
+                            }
+
+                            events.apply {
+                                when (loadState.refresh) {
+                                    is LoadState.Loading -> item {
+                                        Box(
+                                            Modifier.fillMaxWidth(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier
+                                                    .padding(16.dp),
+                                            )
+                                        }
+                                    }
+                                    else -> { }
+                                }
+                            }
+
+                            item {
+                                if (events.loadState.append is LoadState.Loading) {
+                                    Box(
+                                        Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier
+                                                .padding(16.dp),
+                                        )
                                     }
                                 }
                             }

@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
-    version = 4,
+    version = 5,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -33,15 +33,14 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "citrine_database",
             )
-                // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+//                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
                 .setQueryExecutor(executor)
                 .setTransactionExecutor(transactionExecutor)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_4_5)
                 .build()
-
-            instance.openHelper.writableDatabase.execSQL("VACUUM")
             database = instance
             instance
         }
@@ -94,6 +93,12 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("UPDATE `TagEntity` SET `kind` = (SELECT e.kind from EventEntity e WHERE e.`id` = `pkEvent`)")
+    }
+}
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS `event_by_kind_created_at_id` ON `EventEntity` (`kind`, `createdAt`, `id`)")
     }
 }
 

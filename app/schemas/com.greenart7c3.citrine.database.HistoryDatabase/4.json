@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 4,
-    "identityHash": "c961195d5d6477a36ebf427daa91fa34",
+    "identityHash": "d7277491109573d434f1490b3c948e64",
     "entities": [
       {
         "tableName": "EventEntity",
@@ -84,9 +84,19 @@
               "ASC"
             ],
             "createSql": "CREATE INDEX IF NOT EXISTS `most_common_search_is_kind` ON `${TABLE_NAME}` (`kind` ASC)"
+          },
+          {
+            "name": "event_by_kind_created_at_id",
+            "unique": false,
+            "columnNames": [
+              "kind",
+              "createdAt",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `event_by_kind_created_at_id` ON `${TABLE_NAME}` (`kind`, `createdAt`, `id`)"
           }
-        ],
-        "foreignKeys": []
+        ]
       },
       {
         "tableName": "TagEntity",
@@ -95,14 +105,12 @@
           {
             "fieldPath": "pk",
             "columnName": "pk",
-            "affinity": "INTEGER",
-            "notNull": false
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "pkEvent",
             "columnName": "pkEvent",
-            "affinity": "TEXT",
-            "notNull": false
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "position",
@@ -113,26 +121,22 @@
           {
             "fieldPath": "col0Name",
             "columnName": "col0Name",
-            "affinity": "TEXT",
-            "notNull": false
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "col1Value",
             "columnName": "col1Value",
-            "affinity": "TEXT",
-            "notNull": false
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "col2Differentiator",
             "columnName": "col2Differentiator",
-            "affinity": "TEXT",
-            "notNull": false
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "col3Amount",
             "columnName": "col3Amount",
-            "affinity": "TEXT",
-            "notNull": false
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "col4Plus",
@@ -189,10 +193,9 @@
         ]
       }
     ],
-    "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c961195d5d6477a36ebf427daa91fa34')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd7277491109573d434f1490b3c948e64')"
     ]
   }
 }

@@ -215,4 +215,8 @@ dependencies {
     implementation(libs.material.icons.extended)
     implementation(libs.security.crypto.ktx)
     implementation(libs.kotlinx.collections.immutable)
+    implementation(libs.paging.common)
+    implementation(libs.paging.compose)
+    implementation(libs.paging.runtime)
+    implementation(libs.room.paging)
 }

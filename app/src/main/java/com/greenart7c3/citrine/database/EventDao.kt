@@ -1,6 +1,8 @@
 package com.greenart7c3.citrine.database
 
 import android.util.Log
+import androidx.paging.PagingSource
+import androidx.paging.PagingState
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -195,9 +197,26 @@ interface EventDao {
         }
     }
 
-    @Query("SELECT * FROM EventEntity WHERE kind = :kind ORDER BY createdAt DESC, id ASC")
     @Transaction
-    fun getByKind(kind: Int): Flow<List<EventWithTags>>
+    @Query(
+        """
+    SELECT * FROM EventEntity
+    WHERE kind = :kind
+      AND (
+        :createdAt IS NULL OR
+        createdAt < :createdAt OR
+        (createdAt = :createdAt AND id > :id)
+      )
+    ORDER BY createdAt DESC, id ASC
+    LIMIT :limit
+""",
+    )
+    suspend fun getByKindKeyset(
+        kind: Int,
+        createdAt: Long?,
+        id: String?,
+        limit: Int,
+    ): List<EventWithTags>
 
     @Query("DELETE FROM EventEntity WHERE createdAt <= :until")
     @Transaction
@@ -241,4 +260,46 @@ interface EventDao {
     )
     @Transaction
     suspend fun getDeletedEventsByATag(aTagValue: String): List<Long>
+}
+
+data class EventKey(
+    val createdAt: Long,
+    val id: String,
+)
+
+class EventPagingSource(
+    private val dao: EventDao,
+    private val kind: Int,
+) : PagingSource<EventKey, EventWithTags>() {
+
+    override suspend fun load(
+        params: LoadParams<EventKey>,
+    ): LoadResult<EventKey, EventWithTags> {
+        val key = params.key
+
+        val data = dao.getByKindKeyset(
+            kind = kind,
+            createdAt = key?.createdAt,
+            id = key?.id,
+            limit = params.loadSize,
+        )
+
+        val nextKey = data.lastOrNull()?.event?.let {
+            EventKey(it.createdAt, it.id)
+        }
+
+        return LoadResult.Page(
+            data = data,
+            prevKey = null,
+            nextKey = nextKey,
+        )
+    }
+
+    /**
+     * For keyset pagination, the safest behavior is to restart from the top.
+     * Paging will invalidate and reload cleanly.
+     */
+    override fun getRefreshKey(
+        state: PagingState<EventKey, EventWithTags>,
+    ): EventKey? = null
 }
