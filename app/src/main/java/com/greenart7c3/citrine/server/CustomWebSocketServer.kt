@@ -552,7 +552,7 @@ class CustomWebSocketServer(
             }
 
             routing {
-                val spawRoots = Settings.webClients.mapNotNull { webClient ->
+                val spawnRoots = Settings.webClients.mapNotNull { webClient ->
                     val uri = webClient.value.toUri()
                     webClient.key to uri
                 }.toMap()
@@ -563,7 +563,7 @@ class CustomWebSocketServer(
                     val resolver = Citrine.getInstance().contentResolver
                         ?: return@get call.respondText("ContentResolver not available", status = HttpStatusCode.InternalServerError)
 
-                    val fileUri = spawRoots.values.firstNotNullOfOrNull { rootUri ->
+                    val fileUri = spawnRoots.values.firstNotNullOfOrNull { rootUri ->
                         val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)
                             ?.findFileRecursive("assets/$requestedPath")
                         if (docFile?.exists() == true && docFile.isFile) docFile.uri else null
@@ -580,7 +580,7 @@ class CustomWebSocketServer(
                     }
                 }
 
-                spawRoots.forEach { (clientName, rootUri) ->
+                spawnRoots.forEach { (clientName, rootUri) ->
                     route("/$clientName") {
                         get("{...}") {
                             val resolver = Citrine.getInstance().contentResolver
