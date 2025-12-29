@@ -138,7 +138,11 @@ fun SettingsScreen(
         val clients = webClients.collectAsStateWithLifecycle()
         storageHelper.onFolderSelected = { _, folder ->
             if (shouldAddWebClient) {
-                val path = webPath.text
+                val path = if (webPath.text.startsWith("/")) {
+                    webPath.text
+                } else {
+                    "/${webPath.text}"
+                }
                 webClients.update { old ->
                     val clients = old.toMutableMap().apply {
                         this[path] = folder.uri.toString()
@@ -147,6 +151,7 @@ fun SettingsScreen(
                     LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     clients
                 }
+                onApplyChanges()
             } else {
                 autoBackup = true
                 Settings.autoBackup = true
@@ -1242,6 +1247,7 @@ fun SettingsScreen(
                                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                                 webClients
                             }
+                            onApplyChanges()
                         },
                     ) {
                         Icon(

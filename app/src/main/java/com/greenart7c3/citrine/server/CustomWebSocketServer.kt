@@ -1,10 +1,9 @@
 package com.greenart7c3.citrine.server
 
-import android.net.Uri
-import android.provider.DocumentsContract
 import android.util.Log
 import android.widget.Toast
 import androidx.core.net.toUri
+import androidx.documentfile.provider.DocumentFile
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -35,6 +34,7 @@ import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.defaultForFilePath
 import io.ktor.server.application.ApplicationStarted
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
@@ -44,7 +44,7 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.httpMethod
 import io.ktor.server.response.appendIfAbsent
-import io.ktor.server.response.respondFile
+import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
@@ -54,7 +54,6 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
-import java.io.File
 import java.net.ServerSocket
 import java.util.Collections
 import java.util.zip.Deflater
@@ -506,6 +505,16 @@ class CustomWebSocketServer(
             appDatabase.eventDao().delete(events.map { it.event.id }, event.pubKey)
         }
     }
+    fun DocumentFile?.findFileRecursive(path: String): DocumentFile? {
+        if (this == null) return null
+        val parts = path.split("/")
+        var current: DocumentFile = this
+        for (part in parts) {
+            val next = current.findFile(part) ?: return null
+            current = next
+        }
+        return current
+    }
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
@@ -544,37 +553,59 @@ class CustomWebSocketServer(
 
             routing {
                 val spawRoots = Settings.webClients.mapNotNull { webClient ->
-                    val path = getRealPathFromTreeUri(webClient.value.toUri()) ?: return@mapNotNull null
-                    webClient.key to File(path)
+                    val uri = webClient.value.toUri()
+                    webClient.key to uri
                 }.toMap()
 
                 get("/assets/{path...}") {
                     val requestedPath = call.parameters.getAll("path")?.joinToString("/") ?: ""
 
-                    val file = spawRoots.values.map { File(it, "assets/$requestedPath") }
-                        .firstOrNull { it.exists() && it.isFile }
+                    val resolver = Citrine.getInstance().contentResolver
+                        ?: return@get call.respondText("ContentResolver not available", status = HttpStatusCode.InternalServerError)
 
-                    if (file != null) {
-                        call.respondFile(file)
+                    val fileUri = spawRoots.values.firstNotNullOfOrNull { rootUri ->
+                        val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)
+                            ?.findFileRecursive("assets/$requestedPath")
+                        if (docFile?.exists() == true && docFile.isFile) docFile.uri else null
+                    }
+
+                    if (fileUri != null) {
+                        resolver.openInputStream(fileUri)?.use { input ->
+                            call.respondOutputStream(contentType = ContentType.defaultForFilePath(requestedPath)) {
+                                input.copyTo(this)
+                            }
+                        } ?: call.respondText("Unable to open file", status = HttpStatusCode.InternalServerError)
                     } else {
                         call.respondText("File not found", status = HttpStatusCode.NotFound)
                     }
                 }
 
-                spawRoots.forEach { (clientName, root) ->
+                spawRoots.forEach { (clientName, rootUri) ->
                     route("/$clientName") {
                         get("{...}") {
-                            val index = File(root, "index.html")
-                            if (index.exists()) {
-                                call.respondFile(index)
+                            val resolver = Citrine.getInstance().contentResolver
+                                ?: return@get call.respondText("ContentResolver not available", status = HttpStatusCode.InternalServerError)
+                            val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)?.findFile("index.html")
+                            if (docFile?.exists() == true && docFile.isFile) {
+                                resolver.openInputStream(docFile.uri)?.use { input ->
+                                    call.respondOutputStream(contentType = ContentType.Text.Html) {
+                                        input.copyTo(this)
+                                    }
+                                } ?: call.respondText("Unable to open index.html", status = HttpStatusCode.InternalServerError)
                             } else {
                                 call.respondText("index.html not found", status = HttpStatusCode.NotFound)
                             }
                         }
                         get {
-                            val index = File(root, "index.html")
-                            if (index.exists()) {
-                                call.respondFile(index)
+                            val resolver = Citrine.getInstance().contentResolver
+                                ?: return@get call.respondText("ContentResolver not available", status = HttpStatusCode.InternalServerError)
+                            val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)?.findFile("index.html")
+                            if (docFile?.exists() == true && docFile.isFile) {
+                                resolver.openInputStream(docFile.uri)?.use { input ->
+                                    call.respondOutputStream(contentType = ContentType.Text.Html) {
+                                        input.copyTo(this)
+                                    }
+                                } ?: call.respondText("Unable to open index.html", status = HttpStatusCode.InternalServerError)
                             } else {
                                 call.respondText("index.html not found", status = HttpStatusCode.NotFound)
                             }
@@ -582,7 +613,6 @@ class CustomWebSocketServer(
                     }
                 }
 
-                // Handle HTTP GET requests
                 get("/") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Credentials", "true")
@@ -685,20 +715,4 @@ class CustomWebSocketServer(
         connections.value.remove(connection)
         connections.emit(connections.value)
     }
-}
-
-fun getRealPathFromTreeUri(treeUri: Uri): String? {
-    val docId = DocumentsContract.getTreeDocumentId(treeUri)
-    // docId example: "primary:webclients/dist"
-    val parts = docId.split(":")
-    if (parts.size >= 2) {
-        val type = parts[0]
-        val relativePath = parts[1]
-
-        return when (type) {
-            "primary" -> "/storage/emulated/0/$relativePath"
-            else -> "/storage/$type/$relativePath"
-        }
-    }
-    return null
 }
