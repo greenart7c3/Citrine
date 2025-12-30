@@ -4,8 +4,13 @@ import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.util.Log
 import com.greenart7c3.citrine.database.AppDatabase
@@ -41,6 +46,7 @@ class Citrine : Application() {
     val client: NostrClient = NostrClient(factory, applicationScope)
 
     private val pokeyReceiver = PokeyReceiver()
+    private var connectivityCallback: ConnectivityManager.NetworkCallback? = null
 
     fun isPrivateIp(url: String): Boolean = url.contains("127.0.0.1") ||
         url.contains("localhost") ||
@@ -93,6 +99,87 @@ class Citrine : Application() {
         if (Settings.listenToPokeyBroadcasts) {
             registerPokeyReceiver()
         }
+
+        // Register connectivity callback for Android 7.0+ (API 24+)
+        // CONNECTIVITY_ACTION broadcasts don't work reliably on Android 7.0+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            registerConnectivityCallback()
+        }
+    }
+
+    private fun registerConnectivityCallback() {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return
+
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            .build()
+
+        connectivityCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                Log.d(TAG, "Network available, reconnecting Nostr client")
+                applicationScope.launch {
+                    try {
+                        if (!client.isActive()) {
+                            client.connect()
+                            Log.d(TAG, "Nostr client reconnected after network became available")
+                        } else {
+                            Log.d(TAG, "Nostr client already active, skipping reconnect")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to reconnect Nostr client after network became available", e)
+                    }
+                }
+            }
+
+            override fun onLost(network: Network) {
+                Log.d(TAG, "Network lost")
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities,
+            ) {
+                val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                Log.d(TAG, "Network capabilities changed: hasInternet=$hasInternet, isValidated=$isValidated")
+
+                if (hasInternet && isValidated) {
+                    Log.d(TAG, "Network validated, ensuring Nostr client is connected")
+                    applicationScope.launch {
+                        try {
+                            if (!client.isActive()) {
+                                client.connect()
+                                Log.d(TAG, "Nostr client reconnected after network validation")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to reconnect Nostr client after network validation", e)
+                        }
+                    }
+                }
+            }
+        }
+
+        try {
+            connectivityManager.registerNetworkCallback(networkRequest, connectivityCallback!!)
+            Log.d(TAG, "Registered connectivity callback for Android ${Build.VERSION.SDK_INT}+")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register connectivity callback", e)
+        }
+    }
+
+    private fun unregisterConnectivityCallback() {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        connectivityCallback?.let { callback ->
+            try {
+                connectivityManager?.unregisterNetworkCallback(callback)
+                Log.d(TAG, "Unregistered connectivity callback")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to unregister connectivity callback", e)
+            }
+        }
+        connectivityCallback = null
     }
 
     fun cancelJob() {
