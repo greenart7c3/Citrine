@@ -51,10 +51,14 @@ class EventBroadcastWorker(
             }
 
             // Send event to relays
-            Citrine.instance.client.sendAndWaitForResponse(event, relayList = relays)
-            Log.d(Citrine.TAG, "EventBroadcastWorker: Successfully broadcast event $eventId to relays")
-
-            Result.success()
+            val result = Citrine.instance.client.sendAndWaitForResponse(event, relayList = relays)
+            Citrine.instance.client.disconnect()
+            Log.d(Citrine.TAG, "EventBroadcastWorker: Success: $result broadcast event $eventId to relays")
+            if (result) {
+                Result.success()
+            } else {
+                Result.failure()
+            }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Log.e(Citrine.TAG, "EventBroadcastWorker: Failed to broadcast event", e)
@@ -63,52 +67,16 @@ class EventBroadcastWorker(
     }
 
     private suspend fun getRelaysForEvent(event: Event, database: AppDatabase): Set<NormalizedRelayUrl>? {
-        // Try to get relays from the event itself (e.g., ContactListEvent)
-        val eventRelays = try {
-            val relaysMethod = event.javaClass.getMethod("relays")
-            relaysMethod.invoke(event) as? Map<*, *>
-        } catch (e: Exception) {
+        val eventRelays = if (event.kind == AdvertisedRelayListEvent.KIND) {
+            val advertisedRelayEvent = event as AdvertisedRelayListEvent
+            advertisedRelayEvent.writeRelays()
+        } else {
             null
         }
 
-        val relaysFromEvent = eventRelays?.mapNotNull { entry ->
-            val relayEntry = entry as? Map.Entry<*, *>
-            val relayUrl = relayEntry?.key
-            val relayInfo = relayEntry?.value
-
-            // Check if relayInfo has a write property (could be an object or a Map)
-            val canWrite = try {
-                when (relayInfo) {
-                    is Map<*, *> -> relayInfo["write"] as? Boolean ?: true
-                    else -> {
-                        // Try to access write property via reflection
-                        val writeMethod = relayInfo?.javaClass?.getMethod("getWrite")
-                        writeMethod?.invoke(relayInfo) as? Boolean ?: true
-                    }
-                }
-            } catch (e: Exception) {
-                true // Default to allowing write if we can't determine
-            }
-
-            if (canWrite && relayUrl != null) {
-                // relayUrl might be a NormalizedRelayUrl or a String
-                val urlString = when (relayUrl) {
-                    is String -> relayUrl
-                    else -> {
-                        // Try to get url property
-                        try {
-                            val urlMethod = relayUrl.javaClass.getMethod("getUrl")
-                            urlMethod.invoke(relayUrl) as? String ?: relayUrl.toString()
-                        } catch (e: Exception) {
-                            relayUrl.toString()
-                        }
-                    }
-                }
-                RelayUrlNormalizer.normalizeOrNull(urlString)?.let {
-                    NormalizedRelayUrl(url = it.url)
-                }
-            } else {
-                null
+        val relaysFromEvent = eventRelays?.mapNotNull { urlString ->
+            RelayUrlNormalizer.normalizeOrNull(urlString)?.let {
+                NormalizedRelayUrl(url = it.url)
             }
         }
 

@@ -75,15 +75,6 @@
             </intent-filter>
         </receiver>
 
-        <receiver
-            android:name=".service.ConnectivityBroadcastReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.net.conn.CONNECTIVITY_ACTION" />
-            </intent-filter>
-        </receiver>
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

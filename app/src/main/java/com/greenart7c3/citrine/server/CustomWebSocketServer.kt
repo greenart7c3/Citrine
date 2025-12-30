@@ -5,7 +5,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
-import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.core.net.toUri
@@ -20,10 +19,11 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.HistoryDatabase
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.greenart7c3.citrine.service.EventBroadcastWorker
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.utils.isEphemeral
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
@@ -33,8 +33,6 @@ import com.vitorpamplona.quartz.nip01Core.core.AddressableEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.crypto.verify
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
-import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.sendAndWaitForResponse
-import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.tags.aTag.taggedAddresses
 import com.vitorpamplona.quartz.nip01Core.tags.events.taggedEvents
@@ -42,7 +40,6 @@ import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
-import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
 import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
@@ -289,72 +286,6 @@ class CustomWebSocketServer(
         AuthRequiredForProtectedEvent,
     }
 
-    private suspend fun getRelaysForEvent(event: Event): Set<NormalizedRelayUrl>? {
-        // Try to get relays from the event itself (e.g., ContactListEvent)
-        val eventRelays = try {
-            val relaysMethod = event.javaClass.getMethod("relays")
-            relaysMethod.invoke(event) as? Map<*, *>
-        } catch (e: Exception) {
-            null
-        }
-
-        val relaysFromEvent = eventRelays?.mapNotNull { entry ->
-            val relayEntry = entry as? Map.Entry<*, *>
-            val relayUrl = relayEntry?.key
-            val relayInfo = relayEntry?.value
-
-            // Check if relayInfo has a write property (could be an object or a Map)
-            val canWrite = try {
-                when (relayInfo) {
-                    is Map<*, *> -> relayInfo["write"] as? Boolean ?: true
-                    else -> {
-                        // Try to access write property via reflection
-                        val writeMethod = relayInfo?.javaClass?.getMethod("getWrite")
-                        writeMethod?.invoke(relayInfo) as? Boolean ?: true
-                    }
-                }
-            } catch (e: Exception) {
-                true // Default to allowing write if we can't determine
-            }
-
-            if (canWrite && relayUrl != null) {
-                // relayUrl might be a NormalizedRelayUrl or a String
-                val urlString = when (relayUrl) {
-                    is String -> relayUrl
-                    else -> {
-                        // Try to get url property
-                        try {
-                            val urlMethod = relayUrl.javaClass.getMethod("getUrl")
-                            urlMethod.invoke(relayUrl) as? String ?: relayUrl.toString()
-                        } catch (e: Exception) {
-                            relayUrl.toString()
-                        }
-                    }
-                }
-                RelayUrlNormalizer.normalizeOrNull(urlString)?.let {
-                    NormalizedRelayUrl(url = it.url)
-                }
-            } else {
-                null
-            }
-        }
-
-        if (!relaysFromEvent.isNullOrEmpty()) {
-            return relaysFromEvent.toSet()
-        }
-
-        // Try to get relays from the user's advertised relay list (kind 10002)
-        val advertisedRelayList = appDatabase.eventDao().getAdvertisedRelayList(event.pubKey)
-        val outboxRelays = advertisedRelayList?.toEvent() as? AdvertisedRelayListEvent
-        val writeRelays = outboxRelays?.writeRelays()?.mapNotNull { relay ->
-            RelayUrlNormalizer.normalizeOrNull(relay)?.let {
-                NormalizedRelayUrl(url = it.url)
-            }
-        }
-
-        return writeRelays?.toSet()
-    }
-
     suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean): VerificationResult {
         if (!shouldVerify) {
             return VerificationResult.Valid
@@ -534,27 +465,6 @@ class CustomWebSocketServer(
                     }
                 }
 
-                // Send event to relays
-                try {
-                    val relays = getRelaysForEvent(event)
-                    if (!relays.isNullOrEmpty()) {
-                        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
-                            try {
-                                if (!Citrine.instance.client.isActive()) {
-                                    Citrine.instance.client.connect()
-                                }
-                                Citrine.instance.client.sendAndWaitForResponse(event, relayList = relays)
-                            } catch (e: Exception) {
-                                if (e is CancellationException) throw e
-                                Log.d(Citrine.TAG, "Failed to send event to relays: ${e.message}", e)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    Log.d(Citrine.TAG, "Error getting relays for event: ${e.message}", e)
-                }
-
                 // if the event is ephemeral the response will be sent after the event is sent to subscriptions
                 if (!event.isEphemeral()) {
                     connection?.trySend(CommandResult.ok(event).toJson())
@@ -587,18 +497,12 @@ class CustomWebSocketServer(
         val connectivityManager = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return true
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork
-            val capabilities = connectivityManager.getNetworkCapabilities(network)
-            capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        } else {
-            @Suppress("DEPRECATION")
-            val networkInfo = connectivityManager.activeNetworkInfo
-            networkInfo?.isConnected != true
-        }
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    private fun broadcastWithWorkManager(dbEvent: com.greenart7c3.citrine.database.EventWithTags) {
+    private fun broadcastWithWorkManager(dbEvent: EventWithTags) {
         try {
             val inputData = androidx.work.Data.Builder()
                 .putString("event_id", dbEvent.event.id)
@@ -608,7 +512,7 @@ class CustomWebSocketServer(
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val workRequest = OneTimeWorkRequestBuilder<com.greenart7c3.citrine.service.EventBroadcastWorker>()
+            val workRequest = OneTimeWorkRequestBuilder<EventBroadcastWorker>()
                 .setConstraints(constraints)
                 .setInputData(inputData)
                 .build()
