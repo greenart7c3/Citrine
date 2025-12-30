@@ -11,6 +11,16 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.TagEntity
+import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.database.toEventWithTags
+import com.greenart7c3.citrine.server.CustomWebSocketServer
+import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.crypto.verify
+import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
+import com.vitorpamplona.quartz.utils.EventFactory
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -49,6 +59,63 @@ class CitrineContentProvider : ContentProvider() {
         return true
     }
 
+    /**
+     * Filters events based on authentication when auth is enabled.
+     * Returns true if the event should be included in results, false otherwise.
+     * Matches the logic from SubscriptionManager.execute() lines 25-58.
+     */
+    private fun shouldIncludeEvent(eventWithTags: EventWithTags, authPubkey: String?): Boolean {
+        if (!Settings.authEnabled) {
+            return true
+        }
+
+        // If no auth pubkey provided, exclude private events and events with p tags/authors
+        val authenticatedPubkey = authPubkey ?: return false
+
+        val event = eventWithTags.toEvent()
+        val eventKind = event.kind
+
+        // Check if event is a private event kind
+        if (KINDS_PRIVATE_EVENTS.contains(eventKind)) {
+            // For private events, require auth and check if user is sender or receiver
+            val senders = setOf(eventWithTags.event.pubkey)
+            val receivers = event.taggedUsers().map { it.pubKey }.toSet()
+
+            val hasAccess = senders.contains(authenticatedPubkey) || receivers.contains(authenticatedPubkey)
+
+            if (!hasAccess) {
+                Log.d(TAG, "Excluding private event ${event.id} - auth pubkey $authenticatedPubkey not authorized")
+            }
+
+            return hasAccess
+        }
+
+        // For non-private events, check if they have p tags or authors
+        // This matches SubscriptionManager logic for empty kind filters with p tags or authors
+        val hasPTags = eventWithTags.tags.any { it.col0Name == "p" }
+        val hasAuthors = eventWithTags.event.pubkey.isNotEmpty()
+
+        if (!hasPTags && !hasAuthors) {
+            // No p tags and no specific authors, include it
+            return true
+        }
+
+        // Has p tags or authors, check if authenticated user is sender or receiver
+        val senders = setOf(eventWithTags.event.pubkey)
+        val receivers = eventWithTags.tags
+            .filter { it.col0Name == "p" }
+            .mapNotNull { it.col1Value }
+            .toSet()
+
+        val hasAccess = senders.contains(authenticatedPubkey) || receivers.contains(authenticatedPubkey)
+
+        if (!hasAccess) {
+            Log.d(TAG, "Excluding event ${event.id} with p tags/authors - auth pubkey $authenticatedPubkey not authorized")
+        }
+
+        return hasAccess
+    }
+
     override fun query(
         uri: Uri,
         projection: Array<out String>?,
@@ -63,7 +130,7 @@ class CitrineContentProvider : ContentProvider() {
             EVENTS -> queryAllEvents(uri, projection, selection, selectionArgs, sortOrder)
             EVENT_ID -> {
                 val eventId = uri.lastPathSegment
-                queryEventById(eventId, projection)
+                queryEventById(eventId, projection, uri)
             }
             EVENTS_BY_PUBKEY -> queryEventsByPubkey(uri, projection, sortOrder)
             EVENTS_BY_KIND -> queryEventsByKind(uri, projection, sortOrder)
@@ -80,6 +147,7 @@ class CitrineContentProvider : ContentProvider() {
         selectionArgs: Array<out String>?,
         sortOrder: String?,
     ): Cursor {
+        val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
         val events = runBlocking {
             val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull()
             val offset = uri.getQueryParameter(CitrineContract.Events.PARAM_OFFSET)?.toIntOrNull() ?: 0
@@ -92,10 +160,11 @@ class CitrineContentProvider : ContentProvider() {
             val allIds = eventDao.getAllIds()
             val events = eventDao.getByIds(allIds)
 
-            // Apply date filtering if provided
+            // Apply date filtering and auth filtering if provided
             events.filter { event ->
                 (createdAtFrom == null || event.event.createdAt >= createdAtFrom) &&
-                    (createdAtTo == null || event.event.createdAt <= createdAtTo)
+                    (createdAtTo == null || event.event.createdAt <= createdAtTo) &&
+                    shouldIncludeEvent(event, authPubkey)
             }.let { filtered ->
                 if (limit != null) {
                     filtered.drop(offset).take(limit)
@@ -108,14 +177,16 @@ class CitrineContentProvider : ContentProvider() {
         return buildEventCursor(events, projection)
     }
 
-    private fun queryEventById(eventId: String?, projection: Array<out String>?): Cursor? {
+    private fun queryEventById(eventId: String?, projection: Array<out String>?, uri: Uri? = null): Cursor? {
         if (eventId == null) return null
+
+        val authPubkey = uri?.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
 
         val event = runBlocking {
             eventDao.getById(eventId)
         }
 
-        return if (event != null) {
+        return if (event != null && shouldIncludeEvent(event, authPubkey)) {
             buildEventCursor(listOf(event), projection)
         } else {
             buildEventCursor(emptyList(), projection)
@@ -130,11 +201,12 @@ class CitrineContentProvider : ContentProvider() {
         val pubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_PUBKEY)
             ?: return buildEventCursor(emptyList(), projection)
 
+        val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
         val kind = uri.getQueryParameter(CitrineContract.Events.PARAM_KIND)?.toIntOrNull()
         val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull()
 
         val events = runBlocking {
-            if (kind != null) {
+            val rawEvents = if (kind != null) {
                 val ids = eventDao.getByKind(kind, pubkey)
                 eventDao.getByIds(ids)
             } else {
@@ -143,6 +215,8 @@ class CitrineContentProvider : ContentProvider() {
                 val allEvents = eventDao.getByIds(allIds)
                 allEvents.filter { it.event.pubkey == pubkey }
             }
+            // Apply auth filtering
+            rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
         }
 
         val sortedEvents = if (sortOrder != null) {
@@ -172,11 +246,12 @@ class CitrineContentProvider : ContentProvider() {
         val kind = uri.getQueryParameter(CitrineContract.Events.PARAM_KIND)?.toIntOrNull()
             ?: return buildEventCursor(emptyList(), projection)
 
+        val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
         val pubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_PUBKEY)
         val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull()
 
         val events = runBlocking {
-            if (pubkey != null) {
+            val rawEvents = if (pubkey != null) {
                 val ids = eventDao.getByKind(kind, pubkey)
                 eventDao.getByIds(ids)
             } else {
@@ -185,6 +260,8 @@ class CitrineContentProvider : ContentProvider() {
                 val allEvents = eventDao.getByIds(allIds)
                 allEvents.filter { it.event.kind == kind }
             }
+            // Apply auth filtering
+            rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
         }
 
         val sortedEvents = if (sortOrder != null) {
@@ -334,34 +411,108 @@ class CitrineContentProvider : ContentProvider() {
         val eventId = values.getAsString(CitrineContract.Events.COLUMN_ID)
             ?: throw IllegalArgumentException("Event ID is required")
 
-        val event = runBlocking {
-            // Check if event already exists
-            val existing = eventDao.getById(eventId)
-            if (existing != null) {
-                // Event already exists, return existing URI
-                return@runBlocking existing.event.id
-            }
+        val authPubkey = values.getAsString(CitrineContract.Events.COLUMN_AUTH_PUBKEY)
 
-            // Create new event entity
-            val eventEntity = com.greenart7c3.citrine.database.EventEntity(
+        return runBlocking {
+            // Extract event data from ContentValues
+            val pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
+                ?: throw IllegalArgumentException("Pubkey is required")
+            val createdAt = values.getAsLong(CitrineContract.Events.COLUMN_CREATED_AT)
+                ?: throw IllegalArgumentException("CreatedAt is required")
+            val kind = values.getAsInteger(CitrineContract.Events.COLUMN_KIND)
+                ?: throw IllegalArgumentException("Kind is required")
+            val content = values.getAsString(CitrineContract.Events.COLUMN_CONTENT) ?: ""
+            val sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
+                ?: throw IllegalArgumentException("Signature is required")
+
+            // Extract tags from ContentValues if provided
+            // Tags would be provided as a separate ContentValues or JSON string
+            // For now, we'll create event without tags and let validation handle it
+            val tags = emptyArray<Array<String>>()
+
+            // Create Event object
+            val event: Event = EventFactory.create(
                 id = eventId,
-                pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
-                    ?: throw IllegalArgumentException("Pubkey is required"),
-                createdAt = values.getAsLong(CitrineContract.Events.COLUMN_CREATED_AT)
-                    ?: throw IllegalArgumentException("CreatedAt is required"),
-                kind = values.getAsInteger(CitrineContract.Events.COLUMN_KIND)
-                    ?: throw IllegalArgumentException("Kind is required"),
-                content = values.getAsString(CitrineContract.Events.COLUMN_CONTENT) ?: "",
-                sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
-                    ?: throw IllegalArgumentException("Signature is required"),
+                pubKey = pubkey,
+                createdAt = createdAt,
+                kind = kind,
+                content = content,
+                sig = sig,
+                tags = tags,
             )
 
-            // Insert event (tags would need to be handled separately if provided)
-            eventDao.insertEvent(eventEntity)
-            eventId
-        }
+            // Validate and process event using the same logic as WebSocket server
+            val server = CustomWebSocketService.server
+            if (server != null) {
+                val result = server.innerProcessEvent(event, null, shouldVerify = true)
 
-        return Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, event)
+                when (result) {
+                    CustomWebSocketServer.VerificationResult.Valid -> {
+                        // Event was successfully validated and inserted by innerProcessEvent
+                        Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
+                    }
+                    CustomWebSocketServer.VerificationResult.InvalidId -> {
+                        throw SecurityException("Event ID hash verification failed")
+                    }
+                    CustomWebSocketServer.VerificationResult.InvalidSignature -> {
+                        throw SecurityException("Event signature verification failed")
+                    }
+                    CustomWebSocketServer.VerificationResult.Expired -> {
+                        throw IllegalArgumentException("Event expired")
+                    }
+                    CustomWebSocketServer.VerificationResult.KindNotAllowed -> {
+                        throw SecurityException("Kind not allowed")
+                    }
+                    CustomWebSocketServer.VerificationResult.PubkeyNotAllowed -> {
+                        throw SecurityException("Pubkey not allowed")
+                    }
+                    CustomWebSocketServer.VerificationResult.TaggedPubkeyNotAllowed -> {
+                        throw SecurityException("Tagged pubkey not allowed")
+                    }
+                    CustomWebSocketServer.VerificationResult.Deleted -> {
+                        throw IllegalArgumentException("Event deleted")
+                    }
+                    CustomWebSocketServer.VerificationResult.AlreadyInDatabase -> {
+                        // Event already exists, return existing URI
+                        Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
+                    }
+                    CustomWebSocketServer.VerificationResult.TaggedPubKeyMismatch -> {
+                        throw SecurityException("Tagged event pubkey mismatch")
+                    }
+                    CustomWebSocketServer.VerificationResult.NewestEventAlreadyInDatabase -> {
+                        throw IllegalArgumentException("Newest event already in database")
+                    }
+                    CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent -> {
+                        throw SecurityException("Authentication required for protected event")
+                    }
+                }
+            } else {
+                // Server not available, do basic validation and insert
+                if (!event.verify()) {
+                    throw SecurityException("Event ID hash or signature verification failed")
+                }
+
+                // Check if event already exists
+                val existing = eventDao.getById(eventId)
+                if (existing != null) {
+                    return@runBlocking Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
+                }
+
+                // Create event entity and insert
+                val eventEntity = com.greenart7c3.citrine.database.EventEntity(
+                    id = eventId,
+                    pubkey = pubkey,
+                    createdAt = createdAt,
+                    kind = kind,
+                    content = content,
+                    sig = sig,
+                )
+
+                val eventWithTags = event.toEventWithTags()
+                eventDao.insertEventWithTags(eventWithTags, null, sendEventToSubscriptions = false)
+                Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
+            }
+        }
     }
 
     override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
@@ -371,20 +522,69 @@ class CitrineContentProvider : ContentProvider() {
         return when (matchCode) {
             EVENT_ID -> {
                 val eventId = uri.lastPathSegment
-                deleteEventById(eventId)
+                val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
+                deleteEventById(eventId, authPubkey)
             }
             else -> throw IllegalArgumentException("Delete not supported for URI: $uri")
         }
     }
 
-    private fun deleteEventById(eventId: String?): Int {
+    private fun deleteEventById(eventId: String?, authPubkey: String?): Int {
         if (eventId == null) return 0
 
         return runBlocking {
-            // Use the delete method that takes a list of IDs
-            // This will delete the event and cascade delete tags
-            eventDao.delete(listOf(eventId))
-            1 // Return 1 if deletion was attempted (actual count would require checking)
+            // Load event from database
+            val eventWithTags = eventDao.getById(eventId)
+            if (eventWithTags == null) {
+                Log.d(TAG, "Event not found: $eventId")
+                return@runBlocking 0
+            }
+
+            // Validate that auth pubkey matches event author when auth is enabled
+            if (Settings.authEnabled) {
+                if (authPubkey == null) {
+                    Log.d(TAG, "Delete denied: no auth pubkey provided")
+                    throw SecurityException("Authentication required to delete events")
+                }
+
+                if (authPubkey != eventWithTags.event.pubkey) {
+                    Log.d(TAG, "Delete denied: auth pubkey $authPubkey does not match event author ${eventWithTags.event.pubkey}")
+                    throw SecurityException("Only the event author can delete this event")
+                }
+            }
+
+            // If server is available, validate using server logic
+            val server = CustomWebSocketService.server
+            if (server != null) {
+                val event = eventWithTags.toEvent()
+                // For delete events (kind 5), we need to validate the delete event itself
+                // For regular events, we just check authorization
+                val result = server.verifyEvent(event, null, shouldVerify = true)
+
+                when (result) {
+                    CustomWebSocketServer.VerificationResult.Valid,
+                    CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
+                    -> {
+                        // Event is valid, proceed with deletion
+                        eventDao.delete(listOf(eventId))
+                        1
+                    }
+                    CustomWebSocketServer.VerificationResult.InvalidId -> {
+                        throw SecurityException("Event ID hash verification failed")
+                    }
+                    CustomWebSocketServer.VerificationResult.Deleted -> {
+                        // Already deleted
+                        return@runBlocking 0
+                    }
+                    else -> {
+                        throw SecurityException("Event validation failed: $result")
+                    }
+                }
+            } else {
+                // Server not available, just delete if authorized
+                eventDao.delete(listOf(eventId))
+                1
+            }
         }
     }
 

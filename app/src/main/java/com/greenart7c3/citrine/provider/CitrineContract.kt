@@ -27,6 +27,7 @@ object CitrineContract {
         const val COLUMN_KIND = "kind"
         const val COLUMN_CONTENT = "content"
         const val COLUMN_SIG = "sig"
+        const val COLUMN_AUTH_PUBKEY = "auth_pubkey"
 
         // Query parameters
         const val PARAM_PUBKEY = "pubkey"
@@ -35,6 +36,7 @@ object CitrineContract {
         const val PARAM_CREATED_AT_TO = "createdAt_to"
         const val PARAM_LIMIT = "limit"
         const val PARAM_OFFSET = "offset"
+        const val PARAM_AUTH_PUBKEY = "auth_pubkey"
 
         // URI paths
         const val PATH_BY_PUBKEY = "by_pubkey"
