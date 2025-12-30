@@ -351,7 +351,7 @@ fun SettingsScreen(
                             }
                         },
                         content = {
-                            Text(stringResource(R.string.default))
+                            Text(stringResource(R.string.default_value))
                         },
                     )
 

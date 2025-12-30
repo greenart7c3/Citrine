@@ -76,7 +76,7 @@
     <string name="relay_icon_url">Relay Icon URL</string>
     <string name="invalid_owner_pubkey">Invalid owner pubkey</string>
     <string name="invalid_icon_url">Invalid icon URL</string>
-    <string name="default">Default</string>
+    <string name="default_value">Default</string>
     <string name="invalid_host_or_port">Invalid host or port</string>
     <string name="apply_changes">Apply changes</string>
     <string name="accept_events_signed_by">Accept events signed by</string>
@@ -91,6 +91,5 @@
     <string name="never_delete_from">Never delete from</string>
     <string name="name_access_client_with_name_localhost_port">Name (access client with name.localhost:port)</string>
     <string name="name_cannot_be_blank">Name cannot be blank</string>
-    <string name="default">Default</string>
 
 </resources>
