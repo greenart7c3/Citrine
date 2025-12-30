@@ -66,4 +66,5 @@
     <string name="start_on_boot">Запуск при загрузке</string>
     <string name="backup">Резервное копирование</string>
     <string name="backup_folder">Папка резервного копирования</string>
+    <string name="web_clients">Web Clients</string>
 </resources>
