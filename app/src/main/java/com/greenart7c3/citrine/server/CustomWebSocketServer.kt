@@ -1,7 +1,11 @@
 package com.greenart7c3.citrine.server
 
+import android.content.ContentResolver
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import androidx.core.net.toUri
+import androidx.documentfile.provider.DocumentFile
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -32,6 +36,8 @@ import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.defaultForFilePath
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationStarted
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
@@ -39,8 +45,10 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.host
 import io.ktor.server.request.httpMethod
 import io.ktor.server.response.appendIfAbsent
+import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -500,6 +508,43 @@ class CustomWebSocketServer(
             appDatabase.eventDao().delete(events.map { it.event.id }, event.pubKey)
         }
     }
+    fun DocumentFile?.findFileRecursive(path: String): DocumentFile? {
+        if (this == null) return null
+        val parts = path.split("/")
+        var current: DocumentFile = this
+        for (part in parts) {
+            val next = current.findFile(part) ?: return null
+            current = next
+        }
+        return current
+    }
+
+    val resolver: ContentResolver = Citrine.instance.contentResolver
+
+    private suspend fun serveIndex(
+        call: ApplicationCall,
+        rootUri: Uri,
+    ) {
+        val docFile = DocumentFile
+            .fromTreeUri(Citrine.instance, rootUri)
+            ?.findFile("index.html")
+
+        if (docFile?.exists() == true && docFile.isFile) {
+            resolver.openInputStream(docFile.uri)?.use { input ->
+                call.respondOutputStream(ContentType.Text.Html) {
+                    input.copyTo(this)
+                }
+            } ?: call.respondText(
+                "Unable to open index.html",
+                status = HttpStatusCode.InternalServerError,
+            )
+        } else {
+            call.respondText(
+                "index.html not found",
+                status = HttpStatusCode.NotFound,
+            )
+        }
+    }
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
@@ -524,7 +569,7 @@ class CustomWebSocketServer(
                 extensions {
                     install(WebSocketDeflateExtension) {
                         /**
-                         * Compression level to use for [java.util.zip.Deflater].
+                         * Compression level to use for [Deflater].
                          */
                         compressionLevel = Deflater.DEFAULT_COMPRESSION
 
@@ -537,37 +582,87 @@ class CustomWebSocketServer(
             }
 
             routing {
-                // Handle HTTP GET requests
+                val spawnRoots = Settings.webClients.mapNotNull { webClient ->
+                    val uri = webClient.value.toUri()
+                    webClient.key to uri
+                }.toMap()
+
+                get("{...}") {
+                    val host = call.request.host()
+                    val clientName = host.removeSuffix(".localhost")
+                    val rootUri = spawnRoots[clientName]
+
+                    if (rootUri != null) {
+                        serveIndex(call, rootUri)
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, null)
+                    }
+                }
+
+                get("/assets/{path...}") {
+                    val requestedPath = call.parameters.getAll("path")?.joinToString("/") ?: ""
+
+                    val fileUri = spawnRoots.values.firstNotNullOfOrNull { rootUri ->
+                        val docFile = DocumentFile.fromTreeUri(Citrine.instance, rootUri)
+                            ?.findFileRecursive("assets/$requestedPath")
+                        if (docFile?.exists() == true && docFile.isFile) docFile.uri else null
+                    }
+
+                    if (fileUri != null) {
+                        resolver.openInputStream(fileUri)?.use { input ->
+                            call.respondOutputStream(contentType = ContentType.defaultForFilePath(requestedPath)) {
+                                input.copyTo(this)
+                            }
+                        } ?: call.respondText("Unable to open file", status = HttpStatusCode.InternalServerError)
+                    } else {
+                        call.respondText("File not found", status = HttpStatusCode.NotFound)
+                    }
+                }
+
                 get("/") {
+                    val host = call.request.host() // e.g. client1.localhost
+                    val clientName = host.removeSuffix(".localhost")
+
+                    val rootUri = spawnRoots["/$clientName"]
+
+                    if (rootUri != null) {
+                        serveIndex(call, rootUri)
+                        return@get
+                    }
+
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Credentials", "true")
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Methods", "*")
                     call.response.headers.appendIfAbsent("Access-Control-Expose-Headers", "*")
+
                     if (call.request.httpMethod == HttpMethod.Options) {
                         call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
                         val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70)
-                        if (Settings.authEnabled) {
-                            supportedNips.add(42)
-                        }
+                        if (Settings.authEnabled) supportedNips.add(42)
 
-                        val json = """
-                        {
-                            "name": "${Settings.name}",
-                            "description": "${Settings.description}",
-                            "pubkey": "${Settings.ownerPubkey}",
-                            "contact": "${Settings.contact}",
-                            "supported_nips": $supportedNips,
-                            "software": "https://github.com/greenart7c3/Citrine",
-                            "version": "${BuildConfig.VERSION_NAME}",
-                            "icon": "${Settings.relayIcon}"
-                        }
-                        """
-                        call.respondText(json, ContentType.Application.Json)
+                        call.respondText(
+                            """
+                            {
+                              "name": "${Settings.name}",
+                              "description": "${Settings.description}",
+                              "pubkey": "${Settings.ownerPubkey}",
+                              "contact": "${Settings.contact}",
+                              "supported_nips": $supportedNips,
+                              "software": "https://github.com/greenart7c3/Citrine",
+                              "version": "${BuildConfig.VERSION_NAME}",
+                              "icon": "${Settings.relayIcon}"
+                            }
+                            """.trimIndent(),
+                            ContentType.Application.Json,
+                        )
                     } else {
-                        call.respondText("Use a Nostr client or Websocket client to connect", ContentType.Text.Html)
+                        call.respondText(
+                            "Use a Nostr client or Websocket client to connect",
+                            ContentType.Text.Html,
+                        )
                     }
                 }
 

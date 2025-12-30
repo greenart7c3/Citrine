@@ -2,6 +2,7 @@
 
 package com.greenart7c3.citrine.ui
 
+import android.content.Intent
 import android.net.InetAddresses.isNumericAddress
 import android.os.Build
 import android.util.Patterns
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.text.isDigitsOnly
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
@@ -67,6 +70,8 @@ import com.vitorpamplona.quartz.utils.Hex
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @Composable
@@ -126,11 +131,35 @@ fun SettingsScreen(
             mutableStateOf(Settings.autoBackup)
         }
 
+        var shouldAddWebClient = false
+        var webPath by remember {
+            mutableStateOf(TextFieldValue(""))
+        }
+        val webClients = MutableStateFlow(Settings.webClients.toMutableMap())
+        val clients = webClients.collectAsStateWithLifecycle()
         storageHelper.onFolderSelected = { _, folder ->
-            autoBackup = true
-            Settings.autoBackup = true
-            Settings.autoBackupFolder = folder.uri.toString()
-            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+            if (shouldAddWebClient) {
+                val path = if (webPath.text.startsWith("/")) {
+                    webPath.text
+                } else {
+                    "/${webPath.text}"
+                }
+                webClients.update { old ->
+                    val clients = old.toMutableMap().apply {
+                        this[path] = folder.uri.toString()
+                    }.toMutableMap()
+                    Settings.webClients = clients
+                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    clients
+                }
+                onApplyChanges()
+                webPath = TextFieldValue("")
+            } else {
+                autoBackup = true
+                Settings.autoBackup = true
+                Settings.autoBackupFolder = folder.uri.toString()
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+            }
         }
 
 //        var useSSL by remember {
@@ -148,6 +177,7 @@ fun SettingsScreen(
         var deleteFrom by remember {
             mutableStateOf(TextFieldValue(""))
         }
+
         var allowedPubKeys by remember {
             mutableStateOf(Settings.allowedPubKeys)
         }
@@ -1111,6 +1141,7 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .clickable {
                             if (!autoBackup) {
+                                shouldAddWebClient = false
                                 storageHelper.openFolderPicker()
                             } else {
                                 autoBackup = false
@@ -1129,6 +1160,7 @@ fun SettingsScreen(
                         checked = autoBackup,
                         onCheckedChange = {
                             if (!autoBackup) {
+                                shouldAddWebClient = false
                                 storageHelper.openFolderPicker()
                             } else {
                                 autoBackup = false
@@ -1137,6 +1169,99 @@ fun SettingsScreen(
                             }
                         },
                     )
+                }
+            }
+            stickyHeader {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.web_clients),
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(0.9f),
+                        value = webPath,
+                        label = {
+                            Text("Name (access client with name.localhost:port)")
+                        },
+                        onValueChange = {
+                            webPath = it
+                        },
+                    )
+                    IconButton(
+                        onClick = {
+                            if (webPath.text.isBlank()) {
+                                Toast.makeText(
+                                    context,
+                                    "Path cannot be blank",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                return@IconButton
+                            }
+                            shouldAddWebClient = true
+                            storageHelper.openFolderPicker()
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add",
+                        )
+                    }
+                }
+            }
+
+            items(clients.value.keys.toList()) { item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val browserIntent = Intent(Intent.ACTION_VIEW, "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri())
+                            browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            Citrine.instance.startActivity(browserIntent)
+                        }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${item.removePrefix("/")}.localhost:${Settings.port}",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(0.9f),
+                    )
+                    IconButton(
+                        onClick = {
+                            webClients.update { old ->
+                                val webClients = old.toMutableMap().apply {
+                                    remove(item)
+                                }.toMutableMap()
+
+                                Settings.webClients = webClients
+                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                webClients
+                            }
+                            onApplyChanges()
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                        )
+                    }
                 }
             }
         }

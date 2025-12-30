@@ -65,5 +65,6 @@
     <string name="start_on_boot">Start on boot</string>
     <string name="backup">Backup</string>
     <string name="backup_folder">Backup folder</string>
+    <string name="web_clients">Web Clients</string>
 
 </resources>
