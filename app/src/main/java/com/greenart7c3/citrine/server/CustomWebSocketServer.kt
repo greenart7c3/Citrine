@@ -517,7 +517,7 @@ class CustomWebSocketServer(
         return current
     }
 
-    val resolver: ContentResolver = Citrine.getInstance().contentResolver
+    val resolver: ContentResolver = Citrine.instance.contentResolver
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
@@ -564,7 +564,7 @@ class CustomWebSocketServer(
                     val requestedPath = call.parameters.getAll("path")?.joinToString("/") ?: ""
 
                     val fileUri = spawnRoots.values.firstNotNullOfOrNull { rootUri ->
-                        val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)
+                        val docFile = DocumentFile.fromTreeUri(Citrine.instance, rootUri)
                             ?.findFileRecursive("assets/$requestedPath")
                         if (docFile?.exists() == true && docFile.isFile) docFile.uri else null
                     }
@@ -583,7 +583,7 @@ class CustomWebSocketServer(
                 spawnRoots.forEach { (clientName, rootUri) ->
                     route("/$clientName") {
                         get("{...}") {
-                            val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)?.findFile("index.html")
+                            val docFile = DocumentFile.fromTreeUri(Citrine.instance, rootUri)?.findFile("index.html")
                             if (docFile?.exists() == true && docFile.isFile) {
                                 resolver.openInputStream(docFile.uri)?.use { input ->
                                     call.respondOutputStream(contentType = ContentType.Text.Html) {
@@ -595,9 +595,7 @@ class CustomWebSocketServer(
                             }
                         }
                         get {
-                            val resolver = Citrine.getInstance().contentResolver
-                                ?: return@get call.respondText("ContentResolver not available", status = HttpStatusCode.InternalServerError)
-                            val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)?.findFile("index.html")
+                            val docFile = DocumentFile.fromTreeUri(Citrine.instance, rootUri)?.findFile("index.html")
                             if (docFile?.exists() == true && docFile.isFile) {
                                 resolver.openInputStream(docFile.uri)?.use { input ->
                                     call.respondOutputStream(contentType = ContentType.Text.Html) {
