@@ -85,15 +85,6 @@
             </intent-filter>
         </receiver>
 
-        <receiver
-            android:name=".service.ConnectivityBroadcastReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.net.conn.CONNECTIVITY_ACTION" />
-            </intent-filter>
-        </receiver>
-
         <provider
             android:name=".provider.CitrineContentProvider"
             android:authorities="com.greenart7c3.citrine.provider"
