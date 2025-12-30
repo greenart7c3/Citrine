@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.server
 
+import android.content.ContentResolver
 import android.util.Log
 import android.widget.Toast
 import androidx.core.net.toUri
@@ -516,6 +517,8 @@ class CustomWebSocketServer(
         return current
     }
 
+    val resolver: ContentResolver = Citrine.getInstance().contentResolver
+
     @OptIn(DelicateCoroutinesApi::class)
     private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
         return embeddedServer(
@@ -539,7 +542,7 @@ class CustomWebSocketServer(
                 extensions {
                     install(WebSocketDeflateExtension) {
                         /**
-                         * Compression level to use for [java.util.zip.Deflater].
+                         * Compression level to use for [Deflater].
                          */
                         compressionLevel = Deflater.DEFAULT_COMPRESSION
 
@@ -559,9 +562,6 @@ class CustomWebSocketServer(
 
                 get("/assets/{path...}") {
                     val requestedPath = call.parameters.getAll("path")?.joinToString("/") ?: ""
-
-                    val resolver = Citrine.getInstance().contentResolver
-                        ?: return@get call.respondText("ContentResolver not available", status = HttpStatusCode.InternalServerError)
 
                     val fileUri = spawnRoots.values.firstNotNullOfOrNull { rootUri ->
                         val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)
@@ -583,8 +583,6 @@ class CustomWebSocketServer(
                 spawnRoots.forEach { (clientName, rootUri) ->
                     route("/$clientName") {
                         get("{...}") {
-                            val resolver = Citrine.getInstance().contentResolver
-                                ?: return@get call.respondText("ContentResolver not available", status = HttpStatusCode.InternalServerError)
                             val docFile = DocumentFile.fromTreeUri(Citrine.getInstance(), rootUri)?.findFile("index.html")
                             if (docFile?.exists() == true && docFile.isFile) {
                                 resolver.openInputStream(docFile.uri)?.use { input ->
