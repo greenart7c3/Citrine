@@ -1,11 +1,19 @@
 package com.greenart7c3.citrine.server
 
 import android.content.ContentResolver
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -13,6 +21,7 @@ import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.HistoryDatabase
+import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -24,6 +33,8 @@ import com.vitorpamplona.quartz.nip01Core.core.AddressableEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.crypto.verify
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.sendAndWaitForResponse
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.tags.aTag.taggedAddresses
 import com.vitorpamplona.quartz.nip01Core.tags.events.taggedEvents
@@ -31,6 +42,7 @@ import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
+import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
 import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.http.ContentType
@@ -277,6 +289,72 @@ class CustomWebSocketServer(
         AuthRequiredForProtectedEvent,
     }
 
+    private suspend fun getRelaysForEvent(event: Event): Set<NormalizedRelayUrl>? {
+        // Try to get relays from the event itself (e.g., ContactListEvent)
+        val eventRelays = try {
+            val relaysMethod = event.javaClass.getMethod("relays")
+            relaysMethod.invoke(event) as? Map<*, *>
+        } catch (e: Exception) {
+            null
+        }
+
+        val relaysFromEvent = eventRelays?.mapNotNull { entry ->
+            val relayEntry = entry as? Map.Entry<*, *>
+            val relayUrl = relayEntry?.key
+            val relayInfo = relayEntry?.value
+
+            // Check if relayInfo has a write property (could be an object or a Map)
+            val canWrite = try {
+                when (relayInfo) {
+                    is Map<*, *> -> relayInfo["write"] as? Boolean ?: true
+                    else -> {
+                        // Try to access write property via reflection
+                        val writeMethod = relayInfo?.javaClass?.getMethod("getWrite")
+                        writeMethod?.invoke(relayInfo) as? Boolean ?: true
+                    }
+                }
+            } catch (e: Exception) {
+                true // Default to allowing write if we can't determine
+            }
+
+            if (canWrite && relayUrl != null) {
+                // relayUrl might be a NormalizedRelayUrl or a String
+                val urlString = when (relayUrl) {
+                    is String -> relayUrl
+                    else -> {
+                        // Try to get url property
+                        try {
+                            val urlMethod = relayUrl.javaClass.getMethod("getUrl")
+                            urlMethod.invoke(relayUrl) as? String ?: relayUrl.toString()
+                        } catch (e: Exception) {
+                            relayUrl.toString()
+                        }
+                    }
+                }
+                RelayUrlNormalizer.normalizeOrNull(urlString)?.let {
+                    NormalizedRelayUrl(url = it.url)
+                }
+            } else {
+                null
+            }
+        }
+
+        if (!relaysFromEvent.isNullOrEmpty()) {
+            return relaysFromEvent.toSet()
+        }
+
+        // Try to get relays from the user's advertised relay list (kind 10002)
+        val advertisedRelayList = appDatabase.eventDao().getAdvertisedRelayList(event.pubKey)
+        val outboxRelays = advertisedRelayList?.toEvent() as? AdvertisedRelayListEvent
+        val writeRelays = outboxRelays?.writeRelays()?.mapNotNull { relay ->
+            RelayUrlNormalizer.normalizeOrNull(relay)?.let {
+                NormalizedRelayUrl(url = it.url)
+            }
+        }
+
+        return writeRelays?.toSet()
+    }
+
     suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean): VerificationResult {
         if (!shouldVerify) {
             return VerificationResult.Valid
@@ -456,6 +534,27 @@ class CustomWebSocketServer(
                     }
                 }
 
+                // Send event to relays
+                try {
+                    val relays = getRelaysForEvent(event)
+                    if (!relays.isNullOrEmpty()) {
+                        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                            try {
+                                if (!Citrine.instance.client.isActive()) {
+                                    Citrine.instance.client.connect()
+                                }
+                                Citrine.instance.client.sendAndWaitForResponse(event, relayList = relays)
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                Log.d(Citrine.TAG, "Failed to send event to relays: ${e.message}", e)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Log.d(Citrine.TAG, "Error getting relays for event: ${e.message}", e)
+                }
+
                 // if the event is ephemeral the response will be sent after the event is sent to subscriptions
                 if (!event.isEphemeral()) {
                     connection?.trySend(CommandResult.ok(event).toJson())
@@ -484,8 +583,53 @@ class CustomWebSocketServer(
         HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
     }
 
+    private fun isOffline(): Boolean {
+        val connectivityManager = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return true
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork
+            val capabilities = connectivityManager.getNetworkCapabilities(network)
+            capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } else {
+            @Suppress("DEPRECATION")
+            val networkInfo = connectivityManager.activeNetworkInfo
+            networkInfo?.isConnected != true
+        }
+    }
+
+    private fun broadcastWithWorkManager(dbEvent: com.greenart7c3.citrine.database.EventWithTags) {
+        try {
+            val inputData = androidx.work.Data.Builder()
+                .putString("event_id", dbEvent.event.id)
+                .build()
+
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val workRequest = OneTimeWorkRequestBuilder<com.greenart7c3.citrine.service.EventBroadcastWorker>()
+                .setConstraints(constraints)
+                .setInputData(inputData)
+                .build()
+
+            WorkManager.getInstance(Citrine.instance).enqueue(workRequest)
+            Log.d(Citrine.TAG, "Queued event ${dbEvent.event.id} for broadcast when connectivity is restored")
+        } catch (e: Exception) {
+            Log.e(Citrine.TAG, "Failed to queue event for broadcast: ${e.message}", e)
+        }
+    }
+
     private suspend fun save(event: Event, connection: Connection?) {
         appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
+
+        // Check if offline and broadcast with WorkManager
+        if (isOffline()) {
+            val dbEvent = appDatabase.eventDao().getById(event.id)
+            if (dbEvent != null) {
+                broadcastWithWorkManager(dbEvent)
+            }
+        }
     }
 
     private suspend fun deleteEvent(event: Event, connection: Connection?) {
