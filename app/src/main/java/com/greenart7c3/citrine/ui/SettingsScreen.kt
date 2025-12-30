@@ -153,6 +153,7 @@ fun SettingsScreen(
                     clients
                 }
                 onApplyChanges()
+                webPath = TextFieldValue("")
             } else {
                 autoBackup = true
                 Settings.autoBackup = true
