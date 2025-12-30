@@ -66,4 +66,5 @@
     <string name="start_on_boot">开机自启动</string>
     <string name="backup">Backup</string>
     <string name="backup_folder">Backup folder</string>
+    <string name="web_clients">Web Clients</string>
 </resources>
