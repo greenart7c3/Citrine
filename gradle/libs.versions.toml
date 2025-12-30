@@ -8,7 +8,12 @@ espressoCore = "3.7.0"
 jna = "5.18.1"
 junitVersion = "1.3.0"
 junit = "4.13.2"
+robolectric = "4.15"
+mockito = "5.14.2"
+mockitoKotlin = "5.4.0"
+mockk = "1.13.11"
 kotlinxCoroutinesCore = "1.10.2"
+kotlinxCoroutinesTest = "1.10.2"
 ktorServer = "3.3.3"
 lifecycleRuntimeKtx = "2.10.0"
 navigationCompose = "2.9.6"
@@ -45,7 +50,12 @@ androidx-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version.ref = "mockitoKotlin" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktorServer" }
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktorServer" }
 ktor-websockets = { module = "io.ktor:ktor-websockets", version.ref = "ktorServer" }
