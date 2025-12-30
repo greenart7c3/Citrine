@@ -2,6 +2,7 @@
 
 package com.greenart7c3.citrine.ui
 
+import android.content.Intent
 import android.net.InetAddresses.isNumericAddress
 import android.os.Build
 import android.util.Patterns
@@ -1194,7 +1195,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(0.9f),
                         value = webPath,
                         label = {
-                            Text("Path to access eg. /jumble")
+                            Text("Name (access client with name.localhost:port)")
                         },
                         onValueChange = {
                             webPath = it
@@ -1226,12 +1227,17 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clickable {
+                            val browserIntent = Intent(Intent.ACTION_VIEW, "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri())
+                            browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            Citrine.instance.startActivity(browserIntent)
+                        }
                         .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        item,
+                        "${item.removePrefix("/")}.localhost:${Settings.port}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(0.9f),
