@@ -207,7 +207,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Server",
+                        text = stringResource(R.string.server),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                 }
@@ -219,7 +219,7 @@ fun SettingsScreen(
                         .padding(vertical = 4.dp),
                     value = host,
                     label = {
-                        Text(text = "Host")
+                        Text(text = stringResource(R.string.host))
                     },
                     onValueChange = {
                         host = it
@@ -236,7 +236,7 @@ fun SettingsScreen(
                         keyboardType = KeyboardType.Number,
                     ),
                     label = {
-                        Text(text = "Port")
+                        Text(text = stringResource(R.string.port))
                     },
                     onValueChange = {
                         port = it
@@ -250,7 +250,7 @@ fun SettingsScreen(
                         .padding(vertical = 4.dp),
                     value = relayName,
                     label = {
-                        Text(text = "Relay Name")
+                        Text(text = stringResource(R.string.relay_name))
                     },
                     onValueChange = {
                         relayName = it
@@ -264,7 +264,7 @@ fun SettingsScreen(
                         .padding(vertical = 4.dp),
                     value = relayOwnerPubkey,
                     label = {
-                        Text(text = "Relay Owner Pubkey")
+                        Text(text = stringResource(R.string.relay_owner_pubkey))
                     },
                     onValueChange = {
                         relayOwnerPubkey = it
@@ -278,7 +278,7 @@ fun SettingsScreen(
                         .padding(vertical = 4.dp),
                     value = relayContact,
                     label = {
-                        Text(text = "Relay Contact")
+                        Text(text = stringResource(R.string.relay_contact))
                     },
                     onValueChange = {
                         relayContact = it
@@ -292,7 +292,7 @@ fun SettingsScreen(
                         .padding(vertical = 4.dp),
                     value = relayDescription,
                     label = {
-                        Text(text = "Relay Description")
+                        Text(text = stringResource(R.string.relay_description))
                     },
                     onValueChange = {
                         relayDescription = it
@@ -306,7 +306,7 @@ fun SettingsScreen(
                         .padding(vertical = 4.dp),
                     value = relayIconUrl,
                     label = {
-                        Text(text = "Relay Icon URL")
+                        Text(text = stringResource(R.string.relay_icon_url))
                     },
                     onValueChange = {
                         relayIconUrl = it
@@ -351,7 +351,7 @@ fun SettingsScreen(
                             }
                         },
                         content = {
-                            Text("Default")
+                            Text(stringResource(R.string.default))
                         },
                     )
 
@@ -364,7 +364,7 @@ fun SettingsScreen(
                                 if (relayOwnerPubkey.text.isNotBlank() && relayOwnerPubkey.text.toNostrKey() == null) {
                                     Toast.makeText(
                                         context,
-                                        "Invalid owner pubkey",
+                                        context.getString(R.string.invalid_owner_pubkey),
                                         Toast.LENGTH_SHORT,
                                     ).show()
                                     return@ElevatedButton
@@ -376,7 +376,7 @@ fun SettingsScreen(
                                     } catch (_: Exception) {
                                         Toast.makeText(
                                             context,
-                                            "Invalid icon URL",
+                                            context.getString(R.string.invalid_icon_url),
                                             Toast.LENGTH_SHORT,
                                         ).show()
                                         return@ElevatedButton
@@ -402,13 +402,13 @@ fun SettingsScreen(
                             } else {
                                 Toast.makeText(
                                     context,
-                                    "Invalid host or port",
+                                    context.getString(R.string.invalid_host_or_port),
                                     Toast.LENGTH_SHORT,
                                 ).show()
                             }
                         },
                         content = {
-                            Text("Apply changes")
+                            Text(stringResource(R.string.apply_changes))
                         },
                     )
                 }
@@ -423,7 +423,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Accept events signed by",
+                        text = stringResource(R.string.accept_events_signed_by),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                 }
@@ -452,7 +452,7 @@ fun SettingsScreen(
                                             if (key == null) {
                                                 Toast.makeText(
                                                     context,
-                                                    "Invalid key",
+                                                    context.getString(R.string.invalid_key),
                                                     Toast.LENGTH_SHORT,
                                                 ).show()
                                                 return@launch
@@ -471,7 +471,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(
                                     Icons.Default.ContentPaste,
-                                    contentDescription = "Paste from clipboard",
+                                    contentDescription = stringResource(R.string.paste_from_clipboard),
                                 )
                             }
                         },
@@ -482,7 +482,7 @@ fun SettingsScreen(
                             if (key == null) {
                                 Toast.makeText(
                                     context,
-                                    "Invalid key",
+                                    context.getString(R.string.invalid_key),
                                     Toast.LENGTH_SHORT,
                                 ).show()
                                 return@IconButton
@@ -528,7 +528,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.delete),
                         )
                     }
                 }
@@ -543,7 +543,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Accept events that refer to",
+                        text = stringResource(R.string.accept_events_that_refer_to),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                 }
@@ -571,7 +571,7 @@ fun SettingsScreen(
                                             if (key == null) {
                                                 Toast.makeText(
                                                     context,
-                                                    "Invalid key",
+                                                    context.getString(R.string.invalid_key),
                                                     Toast.LENGTH_SHORT,
                                                 ).show()
                                                 return@launch
@@ -590,7 +590,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(
                                     Icons.Default.ContentPaste,
-                                    contentDescription = "Paste from clipboard",
+                                    contentDescription = stringResource(R.string.paste_from_clipboard),
                                 )
                             }
                         },
@@ -601,7 +601,7 @@ fun SettingsScreen(
                             if (key == null) {
                                 Toast.makeText(
                                     context,
-                                    "Invalid key",
+                                    context.getString(R.string.invalid_key),
                                     Toast.LENGTH_SHORT,
                                 ).show()
                                 return@IconButton
@@ -617,7 +617,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "Add",
+                            contentDescription = stringResource(R.string.add),
                         )
                     }
                 }
@@ -647,7 +647,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.delete),
                         )
                     }
                 }
@@ -662,7 +662,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Allowed kinds",
+                        text = stringResource(R.string.allowed_kinds),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                 }
@@ -689,7 +689,7 @@ fun SettingsScreen(
                                             if (kind.text.toIntOrNull() == null) {
                                                 Toast.makeText(
                                                     context,
-                                                    "Invalid kind",
+                                                    context.getString(R.string.invalid_kind),
                                                     Toast.LENGTH_SHORT,
                                                 ).show()
                                                 return@launch
@@ -708,7 +708,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(
                                     Icons.Default.ContentPaste,
-                                    contentDescription = "Paste from clipboard",
+                                    contentDescription = stringResource(R.string.paste_from_clipboard),
                                 )
                             }
                         },
@@ -718,7 +718,7 @@ fun SettingsScreen(
                             if (kind.text.toIntOrNull() == null) {
                                 Toast.makeText(
                                     context,
-                                    "Invalid kind",
+                                    context.getString(R.string.invalid_kind),
                                     Toast.LENGTH_SHORT,
                                 ).show()
                                 return@IconButton
@@ -734,7 +734,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "Add",
+                            contentDescription = stringResource(R.string.add),
                         )
                     }
                 }
@@ -764,7 +764,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.delete),
                         )
                     }
                 }
@@ -779,7 +779,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Others",
+                        text = stringResource(R.string.others),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                 }
@@ -957,7 +957,7 @@ fun SettingsScreen(
                         if (it.text.toIntOrNull() == null) {
                             Toast.makeText(
                                 context,
-                                "Invalid port",
+                                context.getString(R.string.invalid_port),
                                 Toast.LENGTH_SHORT,
                             ).show()
                             return@OutlinedTextField
@@ -1010,7 +1010,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Never delete from",
+                        text = stringResource(R.string.never_delete_from),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                 }
@@ -1039,7 +1039,7 @@ fun SettingsScreen(
                                             if (key == null) {
                                                 Toast.makeText(
                                                     context,
-                                                    "Invalid key",
+                                                    context.getString(R.string.invalid_key),
                                                     Toast.LENGTH_SHORT,
                                                 ).show()
                                                 return@launch
@@ -1058,7 +1058,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(
                                     Icons.Default.ContentPaste,
-                                    contentDescription = "Paste from clipboard",
+                                    contentDescription = stringResource(R.string.paste_from_clipboard),
                                 )
                             }
                         },
@@ -1069,7 +1069,7 @@ fun SettingsScreen(
                             if (key == null) {
                                 Toast.makeText(
                                     context,
-                                    "Invalid key",
+                                    context.getString(R.string.invalid_key),
                                     Toast.LENGTH_SHORT,
                                 ).show()
                                 return@IconButton
@@ -1085,7 +1085,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "Add",
+                            contentDescription = stringResource(R.string.add),
                         )
                     }
                 }
@@ -1115,7 +1115,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.delete),
                         )
                     }
                 }
@@ -1196,7 +1196,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(0.9f),
                         value = webPath,
                         label = {
-                            Text("Name (access client with name.localhost:port)")
+                            Text(stringResource(R.string.name_access_client_with_name_localhost_port))
                         },
                         onValueChange = {
                             webPath = it
@@ -1207,7 +1207,7 @@ fun SettingsScreen(
                             if (webPath.text.isBlank()) {
                                 Toast.makeText(
                                     context,
-                                    "Path cannot be blank",
+                                    context.getString(R.string.name_cannot_be_blank),
                                     Toast.LENGTH_SHORT,
                                 ).show()
                                 return@IconButton
@@ -1218,7 +1218,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "Add",
+                            contentDescription = stringResource(R.string.add),
                         )
                     }
                 }
@@ -1259,7 +1259,7 @@ fun SettingsScreen(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.delete),
                         )
                     }
                 }
