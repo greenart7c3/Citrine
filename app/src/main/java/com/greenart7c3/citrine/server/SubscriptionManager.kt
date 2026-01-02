@@ -22,6 +22,7 @@ class SubscriptionManager(
             }
 
             for (filter in subscription.filters) {
+                // Check pubkey auth - require authentication for private events and filters with p tags/authors
                 if (Settings.authEnabled) {
                     for (kind in filter.kinds) {
                         if (KINDS_PRIVATE_EVENTS.contains(kind)) {
