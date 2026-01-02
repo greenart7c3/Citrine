@@ -61,6 +61,8 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.SettingsRow
 import com.greenart7c3.citrine.ui.components.TitleExplainer
+import com.greenart7c3.citrine.ui.components.WebAppInput
+import com.greenart7c3.citrine.ui.components.WebAppRow
 import com.vitorpamplona.quartz.nip01Core.core.hexToByteArray
 import com.vitorpamplona.quartz.nip01Core.core.toHexKey
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
@@ -1187,82 +1189,48 @@ fun SettingsScreen(
                 }
             }
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier.fillMaxWidth(0.9f),
-                        value = webPath,
-                        label = {
-                            Text(stringResource(R.string.name_access_client_with_name_localhost_port))
-                        },
-                        onValueChange = {
-                            webPath = it
-                        },
-                    )
-                    IconButton(
-                        onClick = {
-                            if (webPath.text.isBlank()) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.name_cannot_be_blank),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                                return@IconButton
-                            }
-                            shouldAddWebClient = true
-                            storageHelper.openFolderPicker()
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = stringResource(R.string.add),
-                        )
-                    }
-                }
+                val nameNotBlankResource = stringResource(R.string.name_cannot_be_blank)
+                WebAppInput(
+                    value = webPath,
+                    onValueChange = {
+                        webPath = it
+                    },
+                    onAdd = {
+                        if (webPath.text.isBlank()) {
+                            Toast.makeText(
+                                context,
+                                nameNotBlankResource,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            return@WebAppInput
+                        }
+                        shouldAddWebClient = true
+                        storageHelper.openFolderPicker()
+                    },
+                )
             }
 
             items(clients.value.keys.toList()) { item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val browserIntent = Intent(Intent.ACTION_VIEW, "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri())
-                            browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            Citrine.instance.startActivity(browserIntent)
-                        }
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "${item.removePrefix("/")}.localhost:${Settings.port}",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(0.9f),
-                    )
-                    IconButton(
-                        onClick = {
-                            webClients.update { old ->
-                                val webClients = old.toMutableMap().apply {
-                                    remove(item)
-                                }.toMutableMap()
+                WebAppRow(
+                    onOpenWebApp = {
+                        val browserIntent = Intent(Intent.ACTION_VIEW, "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri())
+                        browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        Citrine.instance.startActivity(browserIntent)
+                    },
+                    onDelete = {
+                        webClients.update { old ->
+                            val webClients = old.toMutableMap().apply {
+                                remove(item)
+                            }.toMutableMap()
 
-                                Settings.webClients = webClients
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                webClients
-                            }
-                            onApplyChanges()
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                        )
-                    }
-                }
+                            Settings.webClients = webClients
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            webClients
+                        }
+                        onApplyChanges()
+                    },
+                    item = item,
+                )
             }
         }
     }
