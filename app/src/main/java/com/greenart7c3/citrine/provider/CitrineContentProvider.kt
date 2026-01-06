@@ -127,15 +127,15 @@ class CitrineContentProvider : ContentProvider() {
         Log.d(TAG, "Query URI: $uri, match code: $matchCode")
 
         return when (matchCode) {
-            EVENTS -> queryAllEvents(uri, projection, selection, selectionArgs, sortOrder)
+            EVENTS -> queryAllEvents(uri, projection)
             EVENT_ID -> {
                 val eventId = uri.lastPathSegment
                 queryEventById(eventId, projection, uri)
             }
             EVENTS_BY_PUBKEY -> queryEventsByPubkey(uri, projection, sortOrder)
             EVENTS_BY_KIND -> queryEventsByKind(uri, projection, sortOrder)
-            TAGS -> queryAllTags(uri, projection, selection, selectionArgs, sortOrder)
-            TAGS_BY_EVENT -> queryTagsByEvent(uri, projection, sortOrder)
+            TAGS -> queryAllTags(projection)
+            TAGS_BY_EVENT -> queryTagsByEvent(uri, projection)
             else -> throw IllegalArgumentException("Unknown URI: $uri")
         }
     }
@@ -143,9 +143,6 @@ class CitrineContentProvider : ContentProvider() {
     private fun queryAllEvents(
         uri: Uri,
         projection: Array<out String>?,
-        selection: String?,
-        selectionArgs: Array<out String>?,
-        sortOrder: String?,
     ): Cursor {
         val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
         val events = runBlocking {
@@ -284,11 +281,7 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     private fun queryAllTags(
-        uri: Uri,
         projection: Array<out String>?,
-        selection: String?,
-        selectionArgs: Array<out String>?,
-        sortOrder: String?,
     ): Cursor {
         // Tags are typically queried with events, so this returns empty for now
         // Can be implemented if needed
@@ -298,7 +291,6 @@ class CitrineContentProvider : ContentProvider() {
     private fun queryTagsByEvent(
         uri: Uri,
         projection: Array<out String>?,
-        sortOrder: String?,
     ): Cursor {
         val eventId = uri.getQueryParameter(CitrineContract.Tags.PARAM_EVENT_ID)
             ?: return buildTagCursor(emptyList(), projection)
@@ -411,8 +403,6 @@ class CitrineContentProvider : ContentProvider() {
         val eventId = values.getAsString(CitrineContract.Events.COLUMN_ID)
             ?: throw IllegalArgumentException("Event ID is required")
 
-        val authPubkey = values.getAsString(CitrineContract.Events.COLUMN_AUTH_PUBKEY)
-
         return runBlocking {
             // Extract event data from ContentValues
             val pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
@@ -498,16 +488,6 @@ class CitrineContentProvider : ContentProvider() {
                     return@runBlocking Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
                 }
 
-                // Create event entity and insert
-                val eventEntity = com.greenart7c3.citrine.database.EventEntity(
-                    id = eventId,
-                    pubkey = pubkey,
-                    createdAt = createdAt,
-                    kind = kind,
-                    content = content,
-                    sig = sig,
-                )
-
                 val eventWithTags = event.toEventWithTags()
                 eventDao.insertEventWithTags(eventWithTags, null, sendEventToSubscriptions = false)
                 Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
@@ -559,9 +539,7 @@ class CitrineContentProvider : ContentProvider() {
                 val event = eventWithTags.toEvent()
                 // For delete events (kind 5), we need to validate the delete event itself
                 // For regular events, we just check authorization
-                val result = server.verifyEvent(event, null, shouldVerify = true)
-
-                when (result) {
+                when (val result = server.verifyEvent(event, null, shouldVerify = true)) {
                     CustomWebSocketServer.VerificationResult.Valid,
                     CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
                     -> {
