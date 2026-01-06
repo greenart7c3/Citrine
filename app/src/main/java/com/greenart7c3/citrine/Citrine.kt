@@ -16,6 +16,8 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
 import com.greenart7c3.citrine.service.WebSocketServerService
+import com.greenart7c3.citrine.service.crashreports.CrashReportCache
+import com.greenart7c3.citrine.service.crashreports.UnexpectedCrashSaver
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
 import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlin.coroutines.cancellation.CancellationException
@@ -30,6 +32,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class Citrine : Application() {
+    val crashReportCache: CrashReportCache by lazy { CrashReportCache(this.applicationContext) }
     val exceptionHandler =
         CoroutineExceptionHandler { _, throwable ->
             Log.e("AmberCoroutine", "Caught exception: ${throwable.message}", throwable)
@@ -86,6 +89,8 @@ class Citrine : Application() {
         super.onCreate()
 
         instance = this
+
+        Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache, applicationScope))
 
         client.connect()
 

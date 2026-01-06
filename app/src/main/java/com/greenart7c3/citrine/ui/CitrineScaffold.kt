@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.ui
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,7 +41,7 @@ import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventPagingSource
 import com.greenart7c3.citrine.database.toTags
-import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.crashreports.DisplayCrashMessages
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
 import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
@@ -51,6 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun CitrineScaffold(
     storageHelper: SimpleStorageHelper,
@@ -263,5 +264,6 @@ fun CitrineScaffold(
                 )
             }
         }
+        DisplayCrashMessages()
     }
 }
