@@ -751,7 +751,7 @@ class CustomWebSocketServer(
                         val createdAtFrom = call.request.queryParameters["createdAt_from"]?.toLongOrNull()
                         val createdAtTo = call.request.queryParameters["createdAt_to"]?.toLongOrNull()
 
-                        val uriBuilder = Uri.parse("content://com.greenart7c3.citrine.provider/events")
+                        val uriBuilder = "content://com.greenart7c3.citrine.provider/events".toUri()
                             .buildUpon()
                             .appendQueryParameter("limit", limit.toString())
                             .appendQueryParameter("offset", offset.toString())
@@ -792,7 +792,7 @@ class CustomWebSocketServer(
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
                         val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
-                        val uriBuilder = Uri.parse("content://com.greenart7c3.citrine.provider/events/by_pubkey")
+                        val uriBuilder = "content://com.greenart7c3.citrine.provider/events/by_pubkey".toUri()
                             .buildUpon()
                             .appendQueryParameter("pubkey", pubkey)
                             .appendQueryParameter("limit", limit.toString())
@@ -833,7 +833,7 @@ class CustomWebSocketServer(
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
                         val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
-                        val uriBuilder = Uri.parse("content://com.greenart7c3.citrine.provider/events/by_kind")
+                        val uriBuilder = "content://com.greenart7c3.citrine.provider/events/by_kind".toUri()
                             .buildUpon()
                             .appendQueryParameter("kind", kind.toString())
                             .appendQueryParameter("limit", limit.toString())
@@ -858,42 +858,42 @@ class CustomWebSocketServer(
                 // HTTP endpoints for testing ContentProvider errors
                 get("/api/test/errors/invalid_offset") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
-                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events?offset=-1")
+                    val uri = "content://${CitrineContract.AUTHORITY}/events?offset=-1".toUri()
                     val cursor = resolver.query(uri, null, null, null, null)
                     call.respondText(cursorToJson(cursor), ContentType.Application.Json)
                 }
 
                 get("/api/test/errors/invalid_limit") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
-                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events?limit=-1")
+                    val uri = "content://${CitrineContract.AUTHORITY}/events?limit=-1".toUri()
                     val cursor = resolver.query(uri, null, null, null, null)
                     call.respondText(cursorToJson(cursor), ContentType.Application.Json)
                 }
 
                 get("/api/test/errors/invalid_date_range") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
-                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events?createdAtFrom=1000&createdAtTo=500")
+                    val uri = "content://${CitrineContract.AUTHORITY}/events?createdAtFrom=1000&createdAtTo=500".toUri()
                     val cursor = resolver.query(uri, null, null, null, null)
                     call.respondText(cursorToJson(cursor), ContentType.Application.Json)
                 }
 
                 get("/api/test/errors/missing_pubkey") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
-                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events/by_pubkey")
+                    val uri = "content://${CitrineContract.AUTHORITY}/events/by_pubkey".toUri()
                     val cursor = resolver.query(uri, null, null, null, null)
                     call.respondText(cursorToJson(cursor), ContentType.Application.Json)
                 }
 
                 get("/api/test/errors/missing_kind") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
-                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events/by_kind")
+                    val uri = "content://${CitrineContract.AUTHORITY}/events/by_kind".toUri()
                     val cursor = resolver.query(uri, null, null, null, null)
                     call.respondText(cursorToJson(cursor), ContentType.Application.Json)
                 }
 
                 get("/api/test/errors/invalid_event_id") {
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
-                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events/invalid_event_id")
+                    val uri = "content://${CitrineContract.AUTHORITY}/events/invalid_event_id".toUri()
                     val cursor = resolver.query(uri, null, null, null, null)
                     call.respondText(cursorToJson(cursor), ContentType.Application.Json)
                 }
