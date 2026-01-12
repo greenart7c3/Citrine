@@ -63,26 +63,26 @@ object EventRepository {
                 // Only allow alphanumeric characters to prevent SQL injection
                 val safeTagKey = tag.key.takeIf { it.matches(Regex("^[a-zA-Z0-9]+$")) }
                     ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
-                
+
                 val tagSubqueryParams = mutableListOf<Any>()
                 val tagSubquery = buildString {
                     append("EventEntity.id IN (SELECT TagEntity.pkEvent FROM TagEntity WHERE 1=1")
-                    
+
                     if (filter.kinds.isNotEmpty()) {
                         val kindPlaceholders = filter.kinds.map { "?" }.joinToString(",")
                         append(" AND TagEntity.kind IN ($kindPlaceholders)")
                         tagSubqueryParams.addAll(filter.kinds)
                     }
-                    
+
                     append(" AND TagEntity.col0Name = ?")
                     tagSubqueryParams.add(safeTagKey)
-                    
+
                     if (tag.value.isNotEmpty()) {
                         val valuePlaceholders = tag.value.map { "?" }.joinToString(",")
                         append(" AND TagEntity.col1Value IN ($valuePlaceholders)")
                         tagSubqueryParams.addAll(tag.value)
                     }
-                    
+
                     append(")")
                 }
                 whereClause.add(tagSubquery)
