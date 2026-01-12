@@ -24,6 +24,18 @@ import com.vitorpamplona.quartz.utils.EventFactory
 import kotlinx.coroutines.runBlocking
 
 /**
+ * Result type for ContentProvider operations
+ */
+sealed class QueryResult<out T> {
+    data class Success<T>(val data: T) : QueryResult<T>()
+    data class Error(val message: String, val exception: Throwable? = null) : QueryResult<Nothing>()
+
+    companion object {
+        fun <T> error(message: String, exception: Throwable? = null): QueryResult<T> = Error(message, exception)
+    }
+}
+
+/**
  * Content Provider for exposing Citrine's Nostr event data to other Android apps.
  * Allows external apps to query events and tags using ContentResolver.
  */
@@ -126,17 +138,25 @@ class CitrineContentProvider : ContentProvider() {
         val matchCode = uriMatcher.match(uri)
         Log.d(TAG, "Query URI: $uri, match code: $matchCode")
 
-        return when (matchCode) {
-            EVENTS -> queryAllEvents(uri, projection)
-            EVENT_ID -> {
-                val eventId = uri.lastPathSegment
-                queryEventById(eventId, projection, uri)
+        return try {
+            when (matchCode) {
+                EVENTS -> queryAllEvents(uri, projection)
+                EVENT_ID -> {
+                    val eventId = uri.lastPathSegment
+                    queryEventById(eventId, projection, uri)
+                }
+                EVENTS_BY_PUBKEY -> queryEventsByPubkey(uri, projection, sortOrder)
+                EVENTS_BY_KIND -> queryEventsByKind(uri, projection, sortOrder)
+                TAGS -> queryAllTags(projection)
+                TAGS_BY_EVENT -> queryTagsByEvent(uri, projection)
+                else -> {
+                    Log.e(TAG, "Unknown URI: $uri")
+                    buildEventCursor(emptyList(), projection)
+                }
             }
-            EVENTS_BY_PUBKEY -> queryEventsByPubkey(uri, projection, sortOrder)
-            EVENTS_BY_KIND -> queryEventsByKind(uri, projection, sortOrder)
-            TAGS -> queryAllTags(projection)
-            TAGS_BY_EVENT -> queryTagsByEvent(uri, projection)
-            else -> throw IllegalArgumentException("Unknown URI: $uri")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error querying ContentProvider", e)
+            buildEventCursor(emptyList(), projection)
         }
     }
 
@@ -145,42 +165,82 @@ class CitrineContentProvider : ContentProvider() {
         projection: Array<out String>?,
     ): Cursor {
         val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
-        val events = runBlocking {
-            val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull() ?: Int.MAX_VALUE
-            val offset = uri.getQueryParameter(CitrineContract.Events.PARAM_OFFSET)?.toIntOrNull() ?: 0
-            val createdAtFrom = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_FROM)?.toLongOrNull()
-                ?: Long.MIN_VALUE
-            val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
-                ?: Long.MAX_VALUE
 
-            // Use optimized database query instead of loading all events into memory
-            val rawEvents = eventDao.getEventsByDateRange(
-                createdAtFrom = createdAtFrom,
-                createdAtTo = createdAtTo,
-                limit = limit,
-                offset = offset,
-            )
+        val result = runBlocking {
+            try {
+                val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull() ?: Int.MAX_VALUE
+                val offset = uri.getQueryParameter(CitrineContract.Events.PARAM_OFFSET)?.toIntOrNull() ?: 0
+                val createdAtFrom = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_FROM)?.toLongOrNull()
+                    ?: Long.MIN_VALUE
+                val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
+                    ?: Long.MAX_VALUE
 
-            // Apply auth filtering (cannot be done at DB level due to complex logic)
-            rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+                // Validate parameters
+                if (offset < 0) {
+                    return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
+                }
+                if (limit < 0) {
+                    return@runBlocking QueryResult.error("Invalid limit: $limit (must be >= 0)")
+                }
+                if (createdAtFrom != Long.MIN_VALUE && createdAtTo != Long.MAX_VALUE && createdAtFrom > createdAtTo) {
+                    return@runBlocking QueryResult.error("Invalid date range: createdAtFrom ($createdAtFrom) > createdAtTo ($createdAtTo)")
+                }
+
+                // Use optimized database query instead of loading all events into memory
+                val rawEvents = eventDao.getEventsByDateRange(
+                    createdAtFrom = createdAtFrom,
+                    createdAtTo = createdAtTo,
+                    limit = limit,
+                    offset = offset,
+                )
+
+                // Apply auth filtering (cannot be done at DB level due to complex logic)
+                val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+
+                QueryResult.Success(filtered)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error querying all events", e)
+                QueryResult.error("Failed to query events: ${e.message}", e)
+            }
         }
 
-        return buildEventCursor(events, projection)
+        return when (result) {
+            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Error -> {
+                Log.e(TAG, result.message, result.exception)
+                buildEventCursor(emptyList(), projection)
+            }
+        }
     }
 
     private fun queryEventById(eventId: String?, projection: Array<out String>?, uri: Uri? = null): Cursor? {
-        if (eventId == null) return null
+        if (eventId == null) {
+            Log.w(TAG, "queryEventById called with null eventId")
+            return buildEventCursor(emptyList(), projection)
+        }
 
         val authPubkey = uri?.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
 
-        val event = runBlocking {
-            eventDao.getById(eventId)
+        val result = runBlocking {
+            try {
+                val event = eventDao.getById(eventId)
+                if (event != null && shouldIncludeEvent(event, authPubkey)) {
+                    QueryResult.Success(listOf(event))
+                } else {
+                    QueryResult.Success(emptyList<EventWithTags>())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error querying event by ID: $eventId", e)
+                QueryResult.error("Failed to query event: ${e.message}", e)
+            }
         }
 
-        return if (event != null && shouldIncludeEvent(event, authPubkey)) {
-            buildEventCursor(listOf(event), projection)
-        } else {
-            buildEventCursor(emptyList(), projection)
+        return when (result) {
+            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Error -> {
+                Log.e(TAG, result.message, result.exception)
+                buildEventCursor(emptyList(), projection)
+            }
         }
     }
 
@@ -190,7 +250,10 @@ class CitrineContentProvider : ContentProvider() {
         sortOrder: String?,
     ): Cursor {
         val pubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_PUBKEY)
-            ?: return buildEventCursor(emptyList(), projection)
+        if (pubkey == null || pubkey.isBlank()) {
+            Log.w(TAG, "queryEventsByPubkey called without pubkey parameter")
+            return buildEventCursor(emptyList(), projection)
+        }
 
         val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
         val kind = uri.getQueryParameter(CitrineContract.Events.PARAM_KIND)?.toIntOrNull() ?: -1
@@ -201,29 +264,50 @@ class CitrineContentProvider : ContentProvider() {
         val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
             ?: Long.MAX_VALUE
 
-        val events = runBlocking {
-            // Use optimized database query with pubkey filter
-            val rawEvents = eventDao.getEventsByPubkey(
-                pubkey = pubkey,
-                kind = kind,
-                createdAtFrom = createdAtFrom,
-                createdAtTo = createdAtTo,
-                limit = limit,
-                offset = offset,
-            )
-            // Apply auth filtering (cannot be done at DB level due to complex logic)
-            rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+        val result = runBlocking {
+            try {
+                // Validate parameters
+                if (limit < 0) {
+                    return@runBlocking QueryResult.error("Invalid limit: $limit (must be >= 0)")
+                }
+                if (offset < 0) {
+                    return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
+                }
+
+                // Use optimized database query with pubkey filter
+                val rawEvents = eventDao.getEventsByPubkey(
+                    pubkey = pubkey,
+                    kind = kind,
+                    createdAtFrom = createdAtFrom,
+                    createdAtTo = createdAtTo,
+                    limit = limit,
+                    offset = offset,
+                )
+                // Apply auth filtering (cannot be done at DB level due to complex logic)
+                val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+
+                // Note: Sorting is now done at DB level (DESC by default)
+                // If custom sort order is needed, we'd need to add it to the DAO query
+                val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
+                    filtered.sortedBy { it.event.createdAt }
+                } else {
+                    filtered // Already sorted DESC by DB query
+                }
+
+                QueryResult.Success(sortedEvents)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error querying events by pubkey: $pubkey", e)
+                QueryResult.error("Failed to query events by pubkey: ${e.message}", e)
+            }
         }
 
-        // Note: Sorting is now done at DB level (DESC by default)
-        // If custom sort order is needed, we'd need to add it to the DAO query
-        val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
-            events.sortedBy { it.event.createdAt }
-        } else {
-            events // Already sorted DESC by DB query
+        return when (result) {
+            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Error -> {
+                Log.e(TAG, result.message, result.exception)
+                buildEventCursor(emptyList(), projection)
+            }
         }
-
-        return buildEventCursor(sortedEvents, projection)
     }
 
     private fun queryEventsByKind(
@@ -232,7 +316,10 @@ class CitrineContentProvider : ContentProvider() {
         sortOrder: String?,
     ): Cursor {
         val kind = uri.getQueryParameter(CitrineContract.Events.PARAM_KIND)?.toIntOrNull()
-            ?: return buildEventCursor(emptyList(), projection)
+        if (kind == null) {
+            Log.w(TAG, "queryEventsByKind called without kind parameter")
+            return buildEventCursor(emptyList(), projection)
+        }
 
         val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
         val pubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_PUBKEY) ?: ""
@@ -243,29 +330,50 @@ class CitrineContentProvider : ContentProvider() {
         val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
             ?: Long.MAX_VALUE
 
-        val events = runBlocking {
-            // Use optimized database query with kind filter
-            val rawEvents = eventDao.getEventsByKind(
-                kind = kind,
-                pubkey = pubkey,
-                createdAtFrom = createdAtFrom,
-                createdAtTo = createdAtTo,
-                limit = limit,
-                offset = offset,
-            )
-            // Apply auth filtering (cannot be done at DB level due to complex logic)
-            rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+        val result = runBlocking {
+            try {
+                // Validate parameters
+                if (limit < 0) {
+                    return@runBlocking QueryResult.error("Invalid limit: $limit (must be >= 0)")
+                }
+                if (offset < 0) {
+                    return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
+                }
+
+                // Use optimized database query with kind filter
+                val rawEvents = eventDao.getEventsByKind(
+                    kind = kind,
+                    pubkey = pubkey,
+                    createdAtFrom = createdAtFrom,
+                    createdAtTo = createdAtTo,
+                    limit = limit,
+                    offset = offset,
+                )
+                // Apply auth filtering (cannot be done at DB level due to complex logic)
+                val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+
+                // Note: Sorting is now done at DB level (DESC by default)
+                // If custom sort order is needed, we'd need to add it to the DAO query
+                val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
+                    filtered.sortedBy { it.event.createdAt }
+                } else {
+                    filtered // Already sorted DESC by DB query
+                }
+
+                QueryResult.Success(sortedEvents)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error querying events by kind: $kind", e)
+                QueryResult.error("Failed to query events by kind: ${e.message}", e)
+            }
         }
 
-        // Note: Sorting is now done at DB level (DESC by default)
-        // If custom sort order is needed, we'd need to add it to the DAO query
-        val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
-            events.sortedBy { it.event.createdAt }
-        } else {
-            events // Already sorted DESC by DB query
+        return when (result) {
+            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Error -> {
+                Log.e(TAG, result.message, result.exception)
+                buildEventCursor(emptyList(), projection)
+            }
         }
-
-        return buildEventCursor(sortedEvents, projection)
     }
 
     private fun queryAllTags(
@@ -281,16 +389,31 @@ class CitrineContentProvider : ContentProvider() {
         projection: Array<out String>?,
     ): Cursor {
         val eventId = uri.getQueryParameter(CitrineContract.Tags.PARAM_EVENT_ID)
-            ?: return buildTagCursor(emptyList(), projection)
-
-        val event = runBlocking {
-            eventDao.getById(eventId)
+        if (eventId == null || eventId.isBlank()) {
+            Log.w(TAG, "queryTagsByEvent called without eventId parameter")
+            return buildTagCursor(emptyList(), projection)
         }
 
-        return if (event != null) {
-            buildTagCursor(event.tags, projection)
-        } else {
-            buildTagCursor(emptyList(), projection)
+        val result = runBlocking {
+            try {
+                val event = eventDao.getById(eventId)
+                if (event != null) {
+                    QueryResult.Success(event.tags)
+                } else {
+                    QueryResult.Success(emptyList<TagEntity>())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error querying tags for event: $eventId", e)
+                QueryResult.error("Failed to query tags: ${e.message}", e)
+            }
+        }
+
+        return when (result) {
+            is QueryResult.Success -> buildTagCursor(result.data, projection)
+            is QueryResult.Error -> {
+                Log.e(TAG, result.message, result.exception)
+                buildTagCursor(emptyList(), projection)
+            }
         }
     }
 
@@ -379,106 +502,129 @@ class CitrineContentProvider : ContentProvider() {
         val matchCode = uriMatcher.match(uri)
         Log.d(TAG, "Insert URI: $uri, match code: $matchCode")
 
-        return when (matchCode) {
-            EVENTS -> insertEvent(values)
-            else -> throw IllegalArgumentException("Insert not supported for URI: $uri")
+        return try {
+            when (matchCode) {
+                EVENTS -> insertEvent(values)
+                else -> {
+                    Log.e(TAG, "Insert not supported for URI: $uri")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error inserting into ContentProvider", e)
+            null
         }
     }
 
     private fun insertEvent(values: ContentValues?): Uri? {
-        if (values == null) return null
+        if (values == null) {
+            Log.w(TAG, "insertEvent called with null ContentValues")
+            return null
+        }
 
-        val eventId = values.getAsString(CitrineContract.Events.COLUMN_ID)
-            ?: throw IllegalArgumentException("Event ID is required")
+        val result = runBlocking {
+            try {
+                // Extract and validate event data from ContentValues
+                val eventId = values.getAsString(CitrineContract.Events.COLUMN_ID)
+                    ?: return@runBlocking QueryResult.error<Uri>("Event ID is required")
+                val pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
+                    ?: return@runBlocking QueryResult.error<Uri>("Pubkey is required")
+                val createdAt = values.getAsLong(CitrineContract.Events.COLUMN_CREATED_AT)
+                    ?: return@runBlocking QueryResult.error<Uri>("CreatedAt is required")
+                val kind = values.getAsInteger(CitrineContract.Events.COLUMN_KIND)
+                    ?: return@runBlocking QueryResult.error<Uri>("Kind is required")
+                val content = values.getAsString(CitrineContract.Events.COLUMN_CONTENT) ?: ""
+                val sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
+                    ?: return@runBlocking QueryResult.error<Uri>("Signature is required")
 
-        return runBlocking {
-            // Extract event data from ContentValues
-            val pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
-                ?: throw IllegalArgumentException("Pubkey is required")
-            val createdAt = values.getAsLong(CitrineContract.Events.COLUMN_CREATED_AT)
-                ?: throw IllegalArgumentException("CreatedAt is required")
-            val kind = values.getAsInteger(CitrineContract.Events.COLUMN_KIND)
-                ?: throw IllegalArgumentException("Kind is required")
-            val content = values.getAsString(CitrineContract.Events.COLUMN_CONTENT) ?: ""
-            val sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
-                ?: throw IllegalArgumentException("Signature is required")
+                // Extract tags from ContentValues if provided
+                // Tags would be provided as a separate ContentValues or JSON string
+                // For now, we'll create event without tags and let validation handle it
+                val tags = emptyArray<Array<String>>()
 
-            // Extract tags from ContentValues if provided
-            // Tags would be provided as a separate ContentValues or JSON string
-            // For now, we'll create event without tags and let validation handle it
-            val tags = emptyArray<Array<String>>()
+                // Create Event object
+                val event: Event = EventFactory.create(
+                    id = eventId,
+                    pubKey = pubkey,
+                    createdAt = createdAt,
+                    kind = kind,
+                    content = content,
+                    sig = sig,
+                    tags = tags,
+                )
 
-            // Create Event object
-            val event: Event = EventFactory.create(
-                id = eventId,
-                pubKey = pubkey,
-                createdAt = createdAt,
-                kind = kind,
-                content = content,
-                sig = sig,
-                tags = tags,
-            )
+                // Validate and process event using the same logic as WebSocket server
+                val server = CustomWebSocketService.server
+                if (server != null) {
+                    val verificationResult = server.innerProcessEvent(event, null, shouldVerify = true)
 
-            // Validate and process event using the same logic as WebSocket server
-            val server = CustomWebSocketService.server
-            if (server != null) {
-                val result = server.innerProcessEvent(event, null, shouldVerify = true)
+                    when (verificationResult) {
+                        CustomWebSocketServer.VerificationResult.Valid -> {
+                            // Event was successfully validated and inserted by innerProcessEvent
+                            QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
+                        }
+                        CustomWebSocketServer.VerificationResult.InvalidId -> {
+                            QueryResult.error<Uri>("Event ID hash verification failed")
+                        }
+                        CustomWebSocketServer.VerificationResult.InvalidSignature -> {
+                            QueryResult.error<Uri>("Event signature verification failed")
+                        }
+                        CustomWebSocketServer.VerificationResult.Expired -> {
+                            QueryResult.error<Uri>("Event expired")
+                        }
+                        CustomWebSocketServer.VerificationResult.KindNotAllowed -> {
+                            QueryResult.error<Uri>("Kind not allowed")
+                        }
+                        CustomWebSocketServer.VerificationResult.PubkeyNotAllowed -> {
+                            QueryResult.error<Uri>("Pubkey not allowed")
+                        }
+                        CustomWebSocketServer.VerificationResult.TaggedPubkeyNotAllowed -> {
+                            QueryResult.error<Uri>("Tagged pubkey not allowed")
+                        }
+                        CustomWebSocketServer.VerificationResult.Deleted -> {
+                            QueryResult.error<Uri>("Event deleted")
+                        }
+                        CustomWebSocketServer.VerificationResult.AlreadyInDatabase -> {
+                            // Event already exists, return existing URI
+                            QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
+                        }
+                        CustomWebSocketServer.VerificationResult.TaggedPubKeyMismatch -> {
+                            QueryResult.error<Uri>("Tagged event pubkey mismatch")
+                        }
+                        CustomWebSocketServer.VerificationResult.NewestEventAlreadyInDatabase -> {
+                            QueryResult.error<Uri>("Newest event already in database")
+                        }
+                        CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent -> {
+                            QueryResult.error<Uri>("Authentication required for protected event")
+                        }
+                    }
+                } else {
+                    // Server not available, do basic validation and insert
+                    if (!event.verify()) {
+                        return@runBlocking QueryResult.error<Uri>("Event ID hash or signature verification failed")
+                    }
 
-                when (result) {
-                    CustomWebSocketServer.VerificationResult.Valid -> {
-                        // Event was successfully validated and inserted by innerProcessEvent
-                        Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
+                    // Check if event already exists
+                    val existing = eventDao.getById(eventId)
+                    if (existing != null) {
+                        return@runBlocking QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                     }
-                    CustomWebSocketServer.VerificationResult.InvalidId -> {
-                        throw SecurityException("Event ID hash verification failed")
-                    }
-                    CustomWebSocketServer.VerificationResult.InvalidSignature -> {
-                        throw SecurityException("Event signature verification failed")
-                    }
-                    CustomWebSocketServer.VerificationResult.Expired -> {
-                        throw IllegalArgumentException("Event expired")
-                    }
-                    CustomWebSocketServer.VerificationResult.KindNotAllowed -> {
-                        throw SecurityException("Kind not allowed")
-                    }
-                    CustomWebSocketServer.VerificationResult.PubkeyNotAllowed -> {
-                        throw SecurityException("Pubkey not allowed")
-                    }
-                    CustomWebSocketServer.VerificationResult.TaggedPubkeyNotAllowed -> {
-                        throw SecurityException("Tagged pubkey not allowed")
-                    }
-                    CustomWebSocketServer.VerificationResult.Deleted -> {
-                        throw IllegalArgumentException("Event deleted")
-                    }
-                    CustomWebSocketServer.VerificationResult.AlreadyInDatabase -> {
-                        // Event already exists, return existing URI
-                        Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
-                    }
-                    CustomWebSocketServer.VerificationResult.TaggedPubKeyMismatch -> {
-                        throw SecurityException("Tagged event pubkey mismatch")
-                    }
-                    CustomWebSocketServer.VerificationResult.NewestEventAlreadyInDatabase -> {
-                        throw IllegalArgumentException("Newest event already in database")
-                    }
-                    CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent -> {
-                        throw SecurityException("Authentication required for protected event")
-                    }
+
+                    val eventWithTags = event.toEventWithTags()
+                    eventDao.insertEventWithTags(eventWithTags, null, sendEventToSubscriptions = false)
+                    QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                 }
-            } else {
-                // Server not available, do basic validation and insert
-                if (!event.verify()) {
-                    throw SecurityException("Event ID hash or signature verification failed")
-                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error inserting event", e)
+                QueryResult.error<Uri>("Failed to insert event: ${e.message}", e)
+            }
+        }
 
-                // Check if event already exists
-                val existing = eventDao.getById(eventId)
-                if (existing != null) {
-                    return@runBlocking Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
-                }
-
-                val eventWithTags = event.toEventWithTags()
-                eventDao.insertEventWithTags(eventWithTags, null, sendEventToSubscriptions = false)
-                Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId)
+        return when (result) {
+            is QueryResult.Success -> result.data
+            is QueryResult.Error -> {
+                Log.e(TAG, result.message, result.exception)
+                null
             }
         }
     }

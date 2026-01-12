@@ -23,6 +23,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
+import com.greenart7c3.citrine.provider.CitrineContract
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.EventBroadcastWorker
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -570,29 +571,28 @@ class CustomWebSocketServer(
 
     val resolver: ContentResolver = Citrine.instance.contentResolver
 
-    private fun cursorToJson(cursor: Cursor): String {
-        val jsonArray = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode()
+    private fun cursorToJson(cursor: Cursor?): String {
+        if (cursor == null) {
+            return "[]"
+        }
+        val result = mutableListOf<Map<String, Any?>>()
         val columnNames = cursor.columnNames
-
-        cursor.moveToFirst()
-        while (!cursor.isAfterLast) {
-            val row = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
-            columnNames.forEach { column ->
-                val index = cursor.getColumnIndex(column)
+        while (cursor.moveToNext()) {
+            val row = mutableMapOf<String, Any?>()
+            for (columnName in columnNames) {
+                val index = cursor.getColumnIndex(columnName)
                 when (cursor.getType(index)) {
-                    Cursor.FIELD_TYPE_NULL -> row.putNull(column)
-                    Cursor.FIELD_TYPE_INTEGER -> row.put(column, cursor.getLong(index))
-                    Cursor.FIELD_TYPE_FLOAT -> row.put(column, cursor.getDouble(index))
-                    Cursor.FIELD_TYPE_STRING -> row.put(column, cursor.getString(index))
-                    Cursor.FIELD_TYPE_BLOB -> row.put(column, cursor.getBlob(index).toString())
-                    else -> row.put(column, cursor.getString(index) ?: "")
+                    Cursor.FIELD_TYPE_NULL -> row[columnName] = null
+                    Cursor.FIELD_TYPE_INTEGER -> row[columnName] = cursor.getLong(index)
+                    Cursor.FIELD_TYPE_FLOAT -> row[columnName] = cursor.getDouble(index)
+                    Cursor.FIELD_TYPE_STRING -> row[columnName] = cursor.getString(index)
+                    Cursor.FIELD_TYPE_BLOB -> row[columnName] = cursor.getBlob(index)?.let { String(it) }
                 }
             }
-            jsonArray.add(row)
-            cursor.moveToNext()
+            result.add(row)
         }
-
-        return JacksonMapper.mapper.writeValueAsString(jsonArray)
+        cursor.close()
+        return objectMapper.writeValueAsString(result)
     }
 
     private suspend fun serveIndex(
@@ -760,8 +760,7 @@ class CustomWebSocketServer(
                         createdAtTo?.let { uriBuilder.appendQueryParameter("createdAt_to", it.toString()) }
 
                         val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
-                        val result = cursor?.let { cursorToJson(it) } ?: "[]"
-                        cursor?.close()
+                        val result = cursorToJson(cursor)
 
                         call.respondText(result, ContentType.Application.Json)
                     } catch (e: Exception) {
@@ -802,8 +801,7 @@ class CustomWebSocketServer(
                         kind?.let { uriBuilder.appendQueryParameter("kind", it.toString()) }
 
                         val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
-                        val result = cursor?.let { cursorToJson(it) } ?: "[]"
-                        cursor?.close()
+                        val result = cursorToJson(cursor)
 
                         call.respondText(result, ContentType.Application.Json)
                     } catch (e: Exception) {
@@ -844,8 +842,7 @@ class CustomWebSocketServer(
                         pubkey?.let { uriBuilder.appendQueryParameter("pubkey", it) }
 
                         val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
-                        val result = cursor?.let { cursorToJson(it) } ?: "[]"
-                        cursor?.close()
+                        val result = cursorToJson(cursor)
 
                         call.respondText(result, ContentType.Application.Json)
                     } catch (e: Exception) {
@@ -856,6 +853,49 @@ class CustomWebSocketServer(
                             HttpStatusCode.InternalServerError,
                         )
                     }
+                }
+
+                // HTTP endpoints for testing ContentProvider errors
+                get("/api/test/errors/invalid_offset") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events?offset=-1")
+                    val cursor = resolver.query(uri, null, null, null, null)
+                    call.respondText(cursorToJson(cursor), ContentType.Application.Json)
+                }
+
+                get("/api/test/errors/invalid_limit") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events?limit=-1")
+                    val cursor = resolver.query(uri, null, null, null, null)
+                    call.respondText(cursorToJson(cursor), ContentType.Application.Json)
+                }
+
+                get("/api/test/errors/invalid_date_range") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events?createdAtFrom=1000&createdAtTo=500")
+                    val cursor = resolver.query(uri, null, null, null, null)
+                    call.respondText(cursorToJson(cursor), ContentType.Application.Json)
+                }
+
+                get("/api/test/errors/missing_pubkey") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events/by_pubkey")
+                    val cursor = resolver.query(uri, null, null, null, null)
+                    call.respondText(cursorToJson(cursor), ContentType.Application.Json)
+                }
+
+                get("/api/test/errors/missing_kind") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events/by_kind")
+                    val cursor = resolver.query(uri, null, null, null, null)
+                    call.respondText(cursorToJson(cursor), ContentType.Application.Json)
+                }
+
+                get("/api/test/errors/invalid_event_id") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    val uri = Uri.parse("content://${CitrineContract.AUTHORITY}/events/invalid_event_id")
+                    val cursor = resolver.query(uri, null, null, null, null)
+                    call.respondText(cursorToJson(cursor), ContentType.Application.Json)
                 }
 
                 // WebSocket endpoint

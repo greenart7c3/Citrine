@@ -30,7 +30,9 @@ class LogcatViewModel : ViewModel() {
                 // Get the process ID for the current app
                 val processId = android.os.Process.myPid()
                 // Start listening to logcat for the current app's logs continuously
-                val process = Runtime.getRuntime().exec("logcat --pid=$processId -s ${Citrine.TAG}")
+                // Include both Citrine and CitrineContentProvider tags to show ContentProvider errors
+                // Using multiple -s flags to filter by both tags
+                val process = Runtime.getRuntime().exec("logcat --pid=$processId -s ${Citrine.TAG}:* -s CitrineContentProvider:*")
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
 
                 var log = mutableListOf<String>()
