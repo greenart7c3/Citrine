@@ -32,11 +32,15 @@ object EventRepository {
         }
 
         if (filter.ids.isNotEmpty()) {
-            whereClause.add("EventEntity.id IN ${filter.ids.map { "'$it'" }.toString().replace("[", "(").replace("]", ")")}")
+            val placeholders = filter.ids.map { "?" }.joinToString(",")
+            whereClause.add("EventEntity.id IN ($placeholders)")
+            params.addAll(filter.ids)
         }
 
         if (filter.authors.isNotEmpty()) {
-            whereClause.add("EventEntity.pubkey IN ${filter.authors.map { "'$it'" }.toString().replace("[", "(").replace("]", ")")}")
+            val placeholders = filter.authors.map { "?" }.joinToString(",")
+            whereClause.add("EventEntity.pubkey IN ($placeholders)")
+            params.addAll(filter.authors)
         }
 
         if (filter.searchKeywords.isNotEmpty()) {
@@ -47,20 +51,42 @@ object EventRepository {
         }
 
         if (filter.kinds.isNotEmpty()) {
-            whereClause.add("EventEntity.kind IN ${filter.kinds.toString().replace("[", "(").replace("]", ")")}")
+            val placeholders = filter.kinds.map { "?" }.joinToString(",")
+            whereClause.add("EventEntity.kind IN ($placeholders)")
+            params.addAll(filter.kinds)
         }
 
         if (filter.tags.isNotEmpty()) {
             val tags = filter.tags.filterValues { it.isNotEmpty() }
-            var tagQuery: String
             tags.forEach { tag ->
-                tagQuery = "EventEntity.id IN (SELECT TagEntity.pkEvent FROM TagEntity WHERE 1=1"
-                if (filter.kinds.isNotEmpty()) {
-                    tagQuery += " AND TagEntity.kind IN ${filter.kinds.toString().replace("[", "(").replace("]", ")")}"
+                // Validate tag key is safe (should be a single character like 'p', 'e', 'a', etc.)
+                // Only allow alphanumeric characters to prevent SQL injection
+                val safeTagKey = tag.key.takeIf { it.matches(Regex("^[a-zA-Z0-9]+$")) }
+                    ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
+
+                val tagSubqueryParams = mutableListOf<Any>()
+                val tagSubquery = buildString {
+                    append("EventEntity.id IN (SELECT TagEntity.pkEvent FROM TagEntity WHERE 1=1")
+
+                    if (filter.kinds.isNotEmpty()) {
+                        val kindPlaceholders = filter.kinds.map { "?" }.joinToString(",")
+                        append(" AND TagEntity.kind IN ($kindPlaceholders)")
+                        tagSubqueryParams.addAll(filter.kinds)
+                    }
+
+                    append(" AND TagEntity.col0Name = ?")
+                    tagSubqueryParams.add(safeTagKey)
+
+                    if (tag.value.isNotEmpty()) {
+                        val valuePlaceholders = tag.value.map { "?" }.joinToString(",")
+                        append(" AND TagEntity.col1Value IN ($valuePlaceholders)")
+                        tagSubqueryParams.addAll(tag.value)
+                    }
+
+                    append(")")
                 }
-                tagQuery += " AND TagEntity.col0Name = '${tag.key}'"
-                tagQuery += " AND TagEntity.col1Value IN (${tag.value.map { "'${it.replace("'", "''")}'" }.toString().replace("[", "").replace("]", "")}))"
-                whereClause.add(tagQuery)
+                whereClause.add(tagSubquery)
+                params.addAll(tagSubqueryParams)
             }
         }
 
