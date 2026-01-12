@@ -2,6 +2,7 @@ package com.greenart7c3.citrine.server
 
 import android.content.ContentResolver
 import android.content.Context
+import android.database.Cursor
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -569,6 +570,31 @@ class CustomWebSocketServer(
 
     val resolver: ContentResolver = Citrine.instance.contentResolver
 
+    private fun cursorToJson(cursor: Cursor): String {
+        val jsonArray = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode()
+        val columnNames = cursor.columnNames
+
+        cursor.moveToFirst()
+        while (!cursor.isAfterLast) {
+            val row = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
+            columnNames.forEach { column ->
+                val index = cursor.getColumnIndex(column)
+                when (cursor.getType(index)) {
+                    Cursor.FIELD_TYPE_NULL -> row.putNull(column)
+                    Cursor.FIELD_TYPE_INTEGER -> row.put(column, cursor.getLong(index))
+                    Cursor.FIELD_TYPE_FLOAT -> row.put(column, cursor.getDouble(index))
+                    Cursor.FIELD_TYPE_STRING -> row.put(column, cursor.getString(index))
+                    Cursor.FIELD_TYPE_BLOB -> row.put(column, cursor.getBlob(index).toString())
+                    else -> row.put(column, cursor.getString(index) ?: "")
+                }
+            }
+            jsonArray.add(row)
+            cursor.moveToNext()
+        }
+
+        return JacksonMapper.mapper.writeValueAsString(jsonArray)
+    }
+
     private suspend fun serveIndex(
         call: ApplicationCall,
         rootUri: Uri,
@@ -710,6 +736,124 @@ class CustomWebSocketServer(
                         call.respondText(
                             "Use a Nostr client or Websocket client to connect",
                             ContentType.Text.Html,
+                        )
+                    }
+                }
+
+                // ContentProvider test endpoints (for Postman testing)
+                get("/api/events") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    call.response.headers.appendIfAbsent("Content-Type", "application/json")
+
+                    try {
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+                        val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
+                        val createdAtFrom = call.request.queryParameters["createdAt_from"]?.toLongOrNull()
+                        val createdAtTo = call.request.queryParameters["createdAt_to"]?.toLongOrNull()
+
+                        val uriBuilder = Uri.parse("content://com.greenart7c3.citrine.provider/events")
+                            .buildUpon()
+                            .appendQueryParameter("limit", limit.toString())
+                            .appendQueryParameter("offset", offset.toString())
+
+                        createdAtFrom?.let { uriBuilder.appendQueryParameter("createdAt_from", it.toString()) }
+                        createdAtTo?.let { uriBuilder.appendQueryParameter("createdAt_to", it.toString()) }
+
+                        val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
+                        val result = cursor?.let { cursorToJson(it) } ?: "[]"
+                        cursor?.close()
+
+                        call.respondText(result, ContentType.Application.Json)
+                    } catch (e: Exception) {
+                        Log.e(Citrine.TAG, "Error querying events", e)
+                        call.respondText(
+                            """{"error": "${e.message}"}""",
+                            ContentType.Application.Json,
+                            HttpStatusCode.InternalServerError,
+                        )
+                    }
+                }
+
+                get("/api/events/by_pubkey") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    call.response.headers.appendIfAbsent("Content-Type", "application/json")
+
+                    try {
+                        val pubkey = call.request.queryParameters["pubkey"]
+                        if (pubkey == null) {
+                            call.respondText(
+                                """{"error": "pubkey parameter required"}""",
+                                ContentType.Application.Json,
+                                HttpStatusCode.BadRequest,
+                            )
+                            return@get
+                        }
+
+                        val kind = call.request.queryParameters["kind"]?.toIntOrNull()
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+                        val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
+
+                        val uriBuilder = Uri.parse("content://com.greenart7c3.citrine.provider/events/by_pubkey")
+                            .buildUpon()
+                            .appendQueryParameter("pubkey", pubkey)
+                            .appendQueryParameter("limit", limit.toString())
+                            .appendQueryParameter("offset", offset.toString())
+
+                        kind?.let { uriBuilder.appendQueryParameter("kind", it.toString()) }
+
+                        val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
+                        val result = cursor?.let { cursorToJson(it) } ?: "[]"
+                        cursor?.close()
+
+                        call.respondText(result, ContentType.Application.Json)
+                    } catch (e: Exception) {
+                        Log.e(Citrine.TAG, "Error querying events by pubkey", e)
+                        call.respondText(
+                            """{"error": "${e.message}"}""",
+                            ContentType.Application.Json,
+                            HttpStatusCode.InternalServerError,
+                        )
+                    }
+                }
+
+                get("/api/events/by_kind") {
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
+                    call.response.headers.appendIfAbsent("Content-Type", "application/json")
+
+                    try {
+                        val kind = call.request.queryParameters["kind"]?.toIntOrNull()
+                        if (kind == null) {
+                            call.respondText(
+                                """{"error": "kind parameter required"}""",
+                                ContentType.Application.Json,
+                                HttpStatusCode.BadRequest,
+                            )
+                            return@get
+                        }
+
+                        val pubkey = call.request.queryParameters["pubkey"]
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+                        val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
+
+                        val uriBuilder = Uri.parse("content://com.greenart7c3.citrine.provider/events/by_kind")
+                            .buildUpon()
+                            .appendQueryParameter("kind", kind.toString())
+                            .appendQueryParameter("limit", limit.toString())
+                            .appendQueryParameter("offset", offset.toString())
+
+                        pubkey?.let { uriBuilder.appendQueryParameter("pubkey", it) }
+
+                        val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
+                        val result = cursor?.let { cursorToJson(it) } ?: "[]"
+                        cursor?.close()
+
+                        call.respondText(result, ContentType.Application.Json)
+                    } catch (e: Exception) {
+                        Log.e(Citrine.TAG, "Error querying events by kind", e)
+                        call.respondText(
+                            """{"error": "${e.message}"}""",
+                            ContentType.Application.Json,
+                            HttpStatusCode.InternalServerError,
                         )
                     }
                 }
