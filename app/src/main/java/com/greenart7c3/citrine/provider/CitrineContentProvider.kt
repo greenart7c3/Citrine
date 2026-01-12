@@ -146,29 +146,23 @@ class CitrineContentProvider : ContentProvider() {
     ): Cursor {
         val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
         val events = runBlocking {
-            val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull()
+            val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull() ?: Int.MAX_VALUE
             val offset = uri.getQueryParameter(CitrineContract.Events.PARAM_OFFSET)?.toIntOrNull() ?: 0
             val createdAtFrom = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_FROM)?.toLongOrNull()
+                ?: Long.MIN_VALUE
             val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
+                ?: Long.MAX_VALUE
 
-            // For now, get all events (can be optimized later with proper filtering)
-            // This is a simplified implementation - in production, you'd want to add
-            // proper filtering support in the DAO
-            val allIds = eventDao.getAllIds()
-            val events = eventDao.getByIds(allIds)
+            // Use optimized database query instead of loading all events into memory
+            val rawEvents = eventDao.getEventsByDateRange(
+                createdAtFrom = createdAtFrom,
+                createdAtTo = createdAtTo,
+                limit = limit,
+                offset = offset,
+            )
 
-            // Apply date filtering and auth filtering if provided
-            events.filter { event ->
-                (createdAtFrom == null || event.event.createdAt >= createdAtFrom) &&
-                    (createdAtTo == null || event.event.createdAt <= createdAtTo) &&
-                    shouldIncludeEvent(event, authPubkey)
-            }.let { filtered ->
-                if (limit != null) {
-                    filtered.drop(offset).take(limit)
-                } else {
-                    filtered.drop(offset)
-                }
-            }
+            // Apply auth filtering (cannot be done at DB level due to complex logic)
+            rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
         }
 
         return buildEventCursor(events, projection)
@@ -199,40 +193,37 @@ class CitrineContentProvider : ContentProvider() {
             ?: return buildEventCursor(emptyList(), projection)
 
         val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
-        val kind = uri.getQueryParameter(CitrineContract.Events.PARAM_KIND)?.toIntOrNull()
-        val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull()
+        val kind = uri.getQueryParameter(CitrineContract.Events.PARAM_KIND)?.toIntOrNull() ?: -1
+        val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull() ?: Int.MAX_VALUE
+        val offset = uri.getQueryParameter(CitrineContract.Events.PARAM_OFFSET)?.toIntOrNull() ?: 0
+        val createdAtFrom = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_FROM)?.toLongOrNull()
+            ?: Long.MIN_VALUE
+        val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
+            ?: Long.MAX_VALUE
 
         val events = runBlocking {
-            val rawEvents = if (kind != null) {
-                val ids = eventDao.getByKind(kind, pubkey)
-                eventDao.getByIds(ids)
-            } else {
-                // Get all events for this pubkey
-                val allIds = eventDao.getAllIds()
-                val allEvents = eventDao.getByIds(allIds)
-                allEvents.filter { it.event.pubkey == pubkey }
-            }
-            // Apply auth filtering
+            // Use optimized database query with pubkey filter
+            val rawEvents = eventDao.getEventsByPubkey(
+                pubkey = pubkey,
+                kind = kind,
+                createdAtFrom = createdAtFrom,
+                createdAtTo = createdAtTo,
+                limit = limit,
+                offset = offset,
+            )
+            // Apply auth filtering (cannot be done at DB level due to complex logic)
             rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
         }
 
-        val sortedEvents = if (sortOrder != null) {
-            when {
-                sortOrder.contains("createdAt DESC") -> events.sortedByDescending { it.event.createdAt }
-                sortOrder.contains("createdAt ASC") -> events.sortedBy { it.event.createdAt }
-                else -> events
-            }
+        // Note: Sorting is now done at DB level (DESC by default)
+        // If custom sort order is needed, we'd need to add it to the DAO query
+        val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
+            events.sortedBy { it.event.createdAt }
         } else {
-            events.sortedByDescending { it.event.createdAt }
+            events // Already sorted DESC by DB query
         }
 
-        val limitedEvents = if (limit != null) {
-            sortedEvents.take(limit)
-        } else {
-            sortedEvents
-        }
-
-        return buildEventCursor(limitedEvents, projection)
+        return buildEventCursor(sortedEvents, projection)
     }
 
     private fun queryEventsByKind(
@@ -244,40 +235,37 @@ class CitrineContentProvider : ContentProvider() {
             ?: return buildEventCursor(emptyList(), projection)
 
         val authPubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_AUTH_PUBKEY)
-        val pubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_PUBKEY)
-        val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull()
+        val pubkey = uri.getQueryParameter(CitrineContract.Events.PARAM_PUBKEY) ?: ""
+        val limit = uri.getQueryParameter(CitrineContract.Events.PARAM_LIMIT)?.toIntOrNull() ?: Int.MAX_VALUE
+        val offset = uri.getQueryParameter(CitrineContract.Events.PARAM_OFFSET)?.toIntOrNull() ?: 0
+        val createdAtFrom = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_FROM)?.toLongOrNull()
+            ?: Long.MIN_VALUE
+        val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
+            ?: Long.MAX_VALUE
 
         val events = runBlocking {
-            val rawEvents = if (pubkey != null) {
-                val ids = eventDao.getByKind(kind, pubkey)
-                eventDao.getByIds(ids)
-            } else {
-                // Get all events of this kind
-                val allIds = eventDao.getAllIds()
-                val allEvents = eventDao.getByIds(allIds)
-                allEvents.filter { it.event.kind == kind }
-            }
-            // Apply auth filtering
+            // Use optimized database query with kind filter
+            val rawEvents = eventDao.getEventsByKind(
+                kind = kind,
+                pubkey = pubkey,
+                createdAtFrom = createdAtFrom,
+                createdAtTo = createdAtTo,
+                limit = limit,
+                offset = offset,
+            )
+            // Apply auth filtering (cannot be done at DB level due to complex logic)
             rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
         }
 
-        val sortedEvents = if (sortOrder != null) {
-            when {
-                sortOrder.contains("createdAt DESC") -> events.sortedByDescending { it.event.createdAt }
-                sortOrder.contains("createdAt ASC") -> events.sortedBy { it.event.createdAt }
-                else -> events
-            }
+        // Note: Sorting is now done at DB level (DESC by default)
+        // If custom sort order is needed, we'd need to add it to the DAO query
+        val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
+            events.sortedBy { it.event.createdAt }
         } else {
-            events.sortedByDescending { it.event.createdAt }
+            events // Already sorted DESC by DB query
         }
 
-        val limitedEvents = if (limit != null) {
-            sortedEvents.take(limit)
-        } else {
-            sortedEvents
-        }
-
-        return buildEventCursor(limitedEvents, projection)
+        return buildEventCursor(sortedEvents, projection)
     }
 
     private fun queryAllTags(

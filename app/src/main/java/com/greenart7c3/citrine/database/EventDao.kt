@@ -260,6 +260,67 @@ interface EventDao {
     )
     @Transaction
     suspend fun getDeletedEventsByATag(aTagValue: String): List<Long>
+
+    // Optimized queries for ContentProvider
+    // Using sentinel values: Long.MIN_VALUE/MAX_VALUE means "no filter"
+    @Query(
+        """
+        SELECT * FROM EventEntity
+        WHERE (:createdAtFrom = -9223372036854775808 OR createdAt >= :createdAtFrom)
+          AND (:createdAtTo = 9223372036854775807 OR createdAt <= :createdAtTo)
+        ORDER BY createdAt DESC, id ASC
+        LIMIT :limit OFFSET :offset
+        """,
+    )
+    @Transaction
+    suspend fun getEventsByDateRange(
+        createdAtFrom: Long,
+        createdAtTo: Long,
+        limit: Int,
+        offset: Int,
+    ): List<EventWithTags>
+
+    @Query(
+        """
+        SELECT * FROM EventEntity
+        WHERE pubkey = :pubkey
+          AND (:kind = -1 OR kind = :kind)
+          AND (:createdAtFrom = -9223372036854775808 OR createdAt >= :createdAtFrom)
+          AND (:createdAtTo = 9223372036854775807 OR createdAt <= :createdAtTo)
+        ORDER BY createdAt DESC, id ASC
+        LIMIT :limit OFFSET :offset
+        """,
+    )
+    @Transaction
+    suspend fun getEventsByPubkey(
+        pubkey: String,
+        kind: Int,
+        createdAtFrom: Long,
+        createdAtTo: Long,
+        limit: Int,
+        offset: Int,
+    ): List<EventWithTags>
+
+    @Query(
+        """
+        SELECT * FROM EventEntity
+        WHERE kind = :kind
+          AND (:pubkey = '' OR pubkey = :pubkey)
+          AND (:createdAtFrom = -9223372036854775808 OR createdAt >= :createdAtFrom)
+          AND (:createdAtTo = 9223372036854775807 OR createdAt <= :createdAtTo)
+        ORDER BY createdAt DESC, id ASC
+        LIMIT :limit OFFSET :offset
+        """,
+    )
+    @Transaction
+    suspend fun getEventsByKind(
+        kind: Int,
+        pubkey: String,
+        createdAtFrom: Long,
+        createdAtTo: Long,
+        limit: Int,
+        offset: Int,
+    ): List<EventWithTags>
 }
 
 data class EventKey(
