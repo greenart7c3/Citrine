@@ -32,13 +32,13 @@ object EventRepository {
         }
 
         if (filter.ids.isNotEmpty()) {
-            val placeholders = filter.ids.map { "?" }.joinToString(",")
+            val placeholders = filter.ids.joinToString(",") { "?" }
             whereClause.add("EventEntity.id IN ($placeholders)")
             params.addAll(filter.ids)
         }
 
         if (filter.authors.isNotEmpty()) {
-            val placeholders = filter.authors.map { "?" }.joinToString(",")
+            val placeholders = filter.authors.joinToString(",") { "?" }
             whereClause.add("EventEntity.pubkey IN ($placeholders)")
             params.addAll(filter.authors)
         }
@@ -51,7 +51,7 @@ object EventRepository {
         }
 
         if (filter.kinds.isNotEmpty()) {
-            val placeholders = filter.kinds.map { "?" }.joinToString(",")
+            val placeholders = filter.kinds.joinToString(",") { "?" }
             whereClause.add("EventEntity.kind IN ($placeholders)")
             params.addAll(filter.kinds)
         }
@@ -69,7 +69,7 @@ object EventRepository {
                     append("EventEntity.id IN (SELECT TagEntity.pkEvent FROM TagEntity WHERE 1=1")
 
                     if (filter.kinds.isNotEmpty()) {
-                        val kindPlaceholders = filter.kinds.map { "?" }.joinToString(",")
+                        val kindPlaceholders = filter.kinds.joinToString(",") { "?" }
                         append(" AND TagEntity.kind IN ($kindPlaceholders)")
                         tagSubqueryParams.addAll(filter.kinds)
                     }
@@ -78,7 +78,7 @@ object EventRepository {
                     tagSubqueryParams.add(safeTagKey)
 
                     if (tag.value.isNotEmpty()) {
-                        val valuePlaceholders = tag.value.map { "?" }.joinToString(",")
+                        val valuePlaceholders = tag.value.joinToString(",") { "?" }
                         append(" AND TagEntity.col1Value IN ($valuePlaceholders)")
                         tagSubqueryParams.addAll(tag.value)
                     }
