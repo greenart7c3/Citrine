@@ -49,7 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
-    version = 4,
+    version = 5,
 )
 @TypeConverters(Converters::class)
 abstract class HistoryDatabase : RoomDatabase() {
@@ -69,6 +69,7 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_4_5)
                 .build()
 
             database = instance
