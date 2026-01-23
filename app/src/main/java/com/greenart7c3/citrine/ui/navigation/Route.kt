@@ -45,7 +45,7 @@ sealed class Route(
     )
 
     data object ContactsScreen : Route(
-        route = "Contacts/{pubkey}",
+        route = "Contacts/{pubkey}/{packageName}",
         icon = Icons.Outlined.Settings,
         selectedIcon = Icons.Default.Settings,
     )

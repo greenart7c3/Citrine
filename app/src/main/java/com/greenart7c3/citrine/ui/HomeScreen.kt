@@ -169,7 +169,7 @@ fun HomeScreen(
                             )
 
                             homeViewModel.setPubKey(returnedKey)
-                            navController.navigate(Route.ContactsScreen.route.replace("{pubkey}", returnedKey))
+                            navController.navigate(Route.ContactsScreen.route.replace("{pubkey}", returnedKey).replace("{packageName}", packageName))
                         } catch (e: Exception) {
                             Log.d(Citrine.TAG, e.message ?: "", e)
                         }

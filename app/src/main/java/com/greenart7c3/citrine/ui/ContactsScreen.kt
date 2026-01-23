@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 fun ContactsScreen(
     modifier: Modifier,
     pubKey: String,
+    packageName: String,
     navController: NavController,
 ) {
     var loading by remember {
@@ -63,7 +64,7 @@ fun ContactsScreen(
 
     val signer = NostrSignerExternal(
         pubKey,
-        "",
+        packageName,
         contentResolver = context.contentResolver,
     )
     val launcher = rememberLauncherForActivityResult(
@@ -101,7 +102,7 @@ fun ContactsScreen(
     }
 
     val events = remember { mutableListOf<ContactListEvent>() }
-    var outboxRelays: AdvertisedRelayListEvent? = null
+    var outboxRelays by remember { mutableStateOf<AdvertisedRelayListEvent?>(null) }
     LaunchedEffect(Unit) {
         coroutineScope.launch(Dispatchers.IO) {
             loading = true

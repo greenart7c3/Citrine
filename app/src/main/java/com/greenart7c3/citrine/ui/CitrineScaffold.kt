@@ -209,7 +209,7 @@ fun CitrineScaffold(
 
             composable(
                 Route.ContactsScreen.route,
-                arguments = listOf(navArgument("pubkey") { type = NavType.StringType }),
+                arguments = listOf(navArgument("pubkey") { type = NavType.StringType }, navArgument("packageName") { type = NavType.StringType }),
                 content = {
                     it.arguments?.getString("pubkey")?.let { pubkey ->
                         ContactsScreen(
@@ -218,6 +218,7 @@ fun CitrineScaffold(
                                 .padding(padding)
                                 .padding(16.dp),
                             pubKey = pubkey,
+                            packageName = it.arguments?.getString("packageName") ?: "",
                             navController = navController,
                         )
                     }
