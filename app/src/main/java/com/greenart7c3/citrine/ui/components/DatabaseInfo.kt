@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.ui.components
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,25 +29,58 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventDao
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+class DatabaseInfoViewModelFactory(
+    private val database: AppDatabase,
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(DatabaseInfoViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return DatabaseInfoViewModel(database) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+class DatabaseInfoViewModel(
+    database: AppDatabase,
+) : ViewModel() {
+
+    val countByKind =
+        database.eventDao().countByKind()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList(),
+            )
+
+    override fun onCleared() {
+        Log.d(Citrine.TAG, "DatabaseInfoViewModel cleared")
+        super.onCleared()
+    }
+}
 
 @Composable
 fun DatabaseInfo(
     modifier: Modifier = Modifier,
     database: AppDatabase,
     navController: NavController,
+    viewModel: DatabaseInfoViewModel,
 ) {
-    val countByKind: Flow<List<EventDao.CountResult>> = database.eventDao().countByKind()
+    val events by viewModel.countByKind.collectAsStateWithLifecycle()
 
-    val flow = countByKind.collectAsStateWithLifecycle(initialValue = listOf())
     var wantsToDeleteKind by remember { mutableStateOf<Int?>(null) }
 
     if (wantsToDeleteKind != null) {
@@ -91,13 +125,13 @@ fun DatabaseInfo(
             .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(stringResource(R.string.total, flow.value.sumOf { it.count }))
+        Text(stringResource(R.string.total, events.sumOf { it.count }))
         Spacer(modifier = Modifier.padding(4.dp))
         LazyColumn(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            items(flow.value) { item ->
+            items(events) { item ->
                 Row(
                     Modifier.fillMaxWidth(),
                 ) {

@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 5,
-    "identityHash": "45ae803bd4c8ac64193019a519377197",
+    "version": 8,
+    "identityHash": "bdf4b22007b894520d6605fe9dc6c98a",
     "entities": [
       {
         "tableName": "EventEntity",
@@ -81,6 +81,19 @@
               "ASC"
             ],
             "createSql": "CREATE INDEX IF NOT EXISTS `idx_event_kind_created_id` ON `${TABLE_NAME}` (`kind` ASC, `createdAt` DESC, `id` ASC)"
+          },
+          {
+            "name": "idx_event_created_id",
+            "unique": false,
+            "columnNames": [
+              "createdAt",
+              "id"
+            ],
+            "orders": [
+              "DESC",
+              "ASC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_event_created_id` ON `${TABLE_NAME}` (`createdAt` DESC, `id` ASC)"
           }
         ]
       },
@@ -162,6 +175,18 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `tags_by_tags_on_person_or_events` ON `${TABLE_NAME}` (`col0Name`, `col1Value`)"
+          },
+          {
+            "name": "tags_by_kind_tags_on_person_or_events",
+            "unique": false,
+            "columnNames": [
+              "kind",
+              "col0Name",
+              "col1Value",
+              "pkEvent"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `tags_by_kind_tags_on_person_or_events` ON `${TABLE_NAME}` (`kind`, `col0Name`, `col1Value`, `pkEvent`)"
           }
         ],
         "foreignKeys": [
@@ -181,7 +206,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '45ae803bd4c8ac64193019a519377197')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bdf4b22007b894520d6605fe9dc6c98a')"
     ]
   }
 }

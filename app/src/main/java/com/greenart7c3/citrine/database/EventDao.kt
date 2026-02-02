@@ -25,8 +25,10 @@ interface EventDao {
     @RawQuery
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
+    @RawQuery
+    fun count(query: SupportSQLiteQuery): Int
+
     @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
-    @Transaction
     fun countByKind(): Flow<List<CountResult>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)

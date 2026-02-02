@@ -16,23 +16,24 @@ import com.vitorpamplona.quartz.utils.EventFactory
 @Entity(
     indices = [
         Index(
-            value = ["id"],
-            name = "id_is_hash",
-            unique = true,
+            value = ["pubkey", "createdAt", "id"],
+            name = "idx_event_pubkey_created_id",
+            orders = [Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
         ),
         Index(
-            value = ["pubkey", "kind"],
-            name = "most_common_search_is_pubkey_kind",
-            orders = [Index.Order.ASC, Index.Order.ASC],
-        ),
-        Index(
-            value = ["kind"],
-            name = "most_common_search_is_kind",
-            orders = [Index.Order.ASC],
-        ),
-        Index(
-            name = "event_by_kind_created_at_id",
             value = ["kind", "createdAt", "id"],
+            name = "idx_event_kind_created_id",
+            orders = [Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
+        ),
+        Index(
+            value = ["createdAt", "id"],
+            name = "idx_event_created_id",
+            orders = [Index.Order.DESC, Index.Order.ASC],
+        ),
+        Index(
+            value = ["pubkey", "kind", "createdAt", "id"],
+            name = "idx_event_pubkey_kind_created_id",
+            orders = [Index.Order.ASC, Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
         ),
     ],
 )
@@ -72,6 +73,10 @@ data class EventWithTags(
         Index(
             value = ["col0Name", "col1Value"],
             name = "tags_by_tags_on_person_or_events",
+        ),
+        Index(
+            value = ["kind", "col0Name", "col1Value", "pkEvent"],
+            name = "tags_by_kind_tags_on_person_or_events",
         ),
     ],
 )

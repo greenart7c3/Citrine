@@ -45,6 +45,8 @@ import com.greenart7c3.citrine.service.crashreports.DisplayCrashMessages
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
 import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
+import com.greenart7c3.citrine.ui.components.DatabaseInfoViewModel
+import com.greenart7c3.citrine.ui.components.DatabaseInfoViewModelFactory
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.utils.toDateString
 import kotlinx.coroutines.Dispatchers
@@ -245,6 +247,9 @@ fun CitrineScaffold(
 
             composable(Route.DatabaseInfo.route) {
                 val context = LocalContext.current
+                val viewModel = viewModel<DatabaseInfoViewModel>(
+                    factory = DatabaseInfoViewModelFactory(AppDatabase.getDatabase(context)),
+                )
                 DatabaseInfo(
                     modifier = Modifier
                         .fillMaxSize()
@@ -252,6 +257,7 @@ fun CitrineScaffold(
                         .padding(16.dp),
                     database = AppDatabase.getDatabase(context),
                     navController = navController,
+                    viewModel = viewModel,
                 )
             }
 

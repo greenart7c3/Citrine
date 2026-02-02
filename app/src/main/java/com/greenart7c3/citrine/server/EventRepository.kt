@@ -1,9 +1,7 @@
 package com.greenart7c3.citrine.server
 
-import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
@@ -14,21 +12,23 @@ import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 
 object EventRepository {
-    fun query(
-        database: AppDatabase,
+    fun createQuery(
         filter: EventFilter,
-    ): List<EventWithTags> {
+        count: Boolean,
+    ): Pair<String, List<Any>> {
         val whereClause = mutableListOf<String>()
         val params = mutableListOf<Any>()
+        val joinClause = StringBuilder()
 
-        if (filter.since != null) {
+        // --- EventEntity filters ---
+        filter.since?.let {
             whereClause.add("EventEntity.createdAt >= ?")
-            params.add(filter.since!!)
+            params.add(it)
         }
 
-        if (filter.until != null) {
+        filter.until?.let {
             whereClause.add("EventEntity.createdAt <= ?")
-            params.add(filter.until)
+            params.add(it)
         }
 
         if (filter.ids.isNotEmpty()) {
@@ -56,81 +56,111 @@ object EventRepository {
             params.addAll(filter.kinds)
         }
 
+        // --- Single JOIN (just for connecting EventEntity with TagEntity if needed) ---
         if (filter.tags.isNotEmpty()) {
-            val tags = filter.tags.filterValues { it.isNotEmpty() }
-            tags.forEach { tag ->
-                // Validate tag key is safe (should be a single character like 'p', 'e', 'a', etc.)
-                // Only allow alphanumeric characters to prevent SQL injection
-                val safeTagKey = tag.key.takeIf { it.matches(Regex("^[a-zA-Z0-9]+$")) }
-                    ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
+            joinClause.append("INNER JOIN TagEntity t ON t.pkEvent = EventEntity.id")
+        }
 
-                val tagSubqueryParams = mutableListOf<Any>()
-                val tagSubquery = buildString {
-                    append("EventEntity.id IN (SELECT TagEntity.pkEvent FROM TagEntity WHERE 1=1")
+        // --- Add each tag as an AND EXISTS in WHERE ---
+        filter.tags.forEach { tag ->
+            val safeTagKey = tag.key.takeIf { it.matches(Regex("^[a-zA-Z0-9]+$")) }
+                ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
 
-                    if (filter.kinds.isNotEmpty()) {
-                        val kindPlaceholders = filter.kinds.joinToString(",") { "?" }
-                        append(" AND TagEntity.kind IN ($kindPlaceholders)")
-                        tagSubqueryParams.addAll(filter.kinds)
-                    }
+            val existsClause = buildString {
+                append("EXISTS (SELECT 1 FROM TagEntity WHERE pkEvent = EventEntity.id AND col0Name = ?")
+                params.add(safeTagKey)
 
-                    append(" AND TagEntity.col0Name = ?")
-                    tagSubqueryParams.add(safeTagKey)
-
-                    if (tag.value.isNotEmpty()) {
-                        val valuePlaceholders = tag.value.joinToString(",") { "?" }
-                        append(" AND TagEntity.col1Value IN ($valuePlaceholders)")
-                        tagSubqueryParams.addAll(tag.value)
-                    }
-
-                    append(")")
+                if (tag.value.isNotEmpty()) {
+                    val valuePlaceholders = tag.value.joinToString(",") { "?" }
+                    append(" AND col1Value IN ($valuePlaceholders)")
+                    params.addAll(tag.value)
                 }
-                whereClause.add(tagSubquery)
-                params.addAll(tagSubqueryParams)
+
+                if (filter.kinds.isNotEmpty()) {
+                    val kindPlaceholders = filter.kinds.joinToString(",") { "?" }
+                    append(" AND kind IN ($kindPlaceholders)")
+                    params.addAll(filter.kinds)
+                }
+
+                append(")")
             }
+
+            whereClause.add(existsClause)
         }
 
+        // --- Build SQL ---
+        val joinSql = if (joinClause.isNotEmpty()) joinClause.toString() else ""
         val predicatesSql = if (whereClause.isNotEmpty()) whereClause.joinToString(" AND ", prefix = "WHERE ") else ""
+        val distinctSql = if (filter.tags.isNotEmpty()) "DISTINCT " else ""
 
-        var query = """
-            SELECT EventEntity.*
-              FROM EventEntity EventEntity
-              $predicatesSql
-              ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC
-        """
-
-        if (filter.limit != null) {
-            query += " LIMIT ?"
-            params.add(filter.limit)
+        var query = if (count) {
+            """
+        SELECT COUNT(DISTINCT EventEntity.id)
+          FROM EventEntity EventEntity
+          $joinSql
+          $predicatesSql
+          ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC
+            """.trimIndent()
+        } else {
+            """
+        SELECT $distinctSql EventEntity.*
+          FROM EventEntity EventEntity
+          $joinSql
+          $predicatesSql
+          ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC
+            """.trimIndent()
         }
 
-        val rawSql = SimpleSQLiteQuery(query, params.toTypedArray())
+        filter.limit?.let {
+            query += " LIMIT ?"
+            params.add(it)
+        }
+        return Pair(query, params)
+    }
+
+    fun query(
+        database: AppDatabase,
+        filter: EventFilter,
+    ): List<EventWithTags> {
+        val query = createQuery(filter, false)
+
+        val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
         return database.eventDao().getEvents(rawSql)
+    }
+
+    fun countQuery(
+        database: AppDatabase,
+        filter: EventFilter,
+    ): Int {
+        val query = createQuery(filter, true)
+
+        val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
+        return database.eventDao().count(rawSql)
     }
 
     fun subscribe(
         subscription: Subscription,
         filter: EventFilter,
     ) {
-        val events = query(subscription.appDatabase, filter)
-
         if (subscription.count) {
+            val count = countQuery(subscription.appDatabase, filter)
             subscription.connection.trySend(
                 subscription.objectMapper.writeValueAsString(
                     listOf(
                         "COUNT",
                         subscription.id,
-                        CountResult(events.size).toJson(),
+                        CountResult(count).toJson(),
                     ),
                 ),
             )
             return
         }
 
+        val events = query(subscription.appDatabase, filter)
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {
-                Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
+//                Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
                 subscription.connection.trySend(
                     subscription.objectMapper.writeValueAsString(
                         listOf(
