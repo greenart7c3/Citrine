@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.ui
 
 import android.annotation.SuppressLint
+import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Scaffold
@@ -23,8 +25,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -38,8 +44,11 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.anggrayudi.storage.SimpleStorageHelper
+import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventPagingSource
+import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.service.crashreports.DisplayCrashMessages
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
@@ -47,11 +56,23 @@ import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
 import com.greenart7c3.citrine.ui.components.DatabaseInfoViewModel
 import com.greenart7c3.citrine.ui.components.DatabaseInfoViewModelFactory
+import com.greenart7c3.citrine.ui.components.EventSection
+import com.greenart7c3.citrine.ui.components.TagsSection
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.utils.toDateString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+fun copyToClipboard(clipboard: Clipboard, text: String) {
+    Citrine.instance.applicationScope.launch(Dispatchers.Main) {
+        clipboard.setClipEntry(
+            ClipEntry(
+                ClipData.newPlainText("Tags", text),
+            ),
+        )
+    }
+}
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
@@ -115,6 +136,7 @@ fun CitrineScaffold(
                     it.arguments?.getInt("kind")?.let { kind ->
                         val context = LocalContext.current
                         val database = AppDatabase.getDatabase(context)
+                        val clipboard = LocalClipboard.current
 
                         val pager = Pager(
                             config = PagingConfig(
@@ -141,34 +163,53 @@ fun CitrineScaffold(
                             items(events.itemCount) { index ->
                                 val event = events[index]
                                 event?.let {
-                                    var showTags by remember { mutableStateOf(false) }
+                                    val event = it.toEvent()
 
-                                    Column(
-                                        modifier = Modifier.padding(16.dp),
+                                    Card(
+                                        modifier = Modifier
+                                            .padding(16.dp),
                                     ) {
-                                        Text(event.event.kind.toString())
-                                        Text(event.event.createdAt.toDateString())
-                                        Text(event.event.pubkey.toShortenHex())
-                                        Text(event.event.content)
+                                        EventSection(
+                                            stringResource(R.string.kind),
+                                            "${event.kind}",
+                                            {
+                                                copyToClipboard(clipboard, "${event.kind}")
+                                            },
+                                        )
+                                        EventSection(
+                                            stringResource(R.string.pubkey),
+                                            event.pubKey.toShortenHex(),
+                                            {
+                                                copyToClipboard(clipboard, event.pubKey)
+                                            },
+                                        )
+                                        EventSection(
+                                            stringResource(R.string.date),
+                                            event.createdAt.formatLongToCustomDateTimeWithSeconds(),
+                                            {
+                                                copyToClipboard(clipboard, "${event.createdAt}")
+                                            },
+                                        )
+                                        if (event.content.isNotEmpty()) {
+                                            EventSection(
+                                                stringResource(R.string.content),
+                                                event.content,
+                                                {
+                                                    copyToClipboard(clipboard, event.content)
+                                                },
+                                            )
+                                        }
                                         if (event.tags.isNotEmpty()) {
-                                            Row(
-                                                Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.Center,
-                                            ) {
-                                                ElevatedButton(
-                                                    onClick = {
-                                                        showTags = !showTags
-                                                    },
-                                                    content = {
-                                                        Text("Show/Hide tags")
-                                                    },
-                                                )
-                                            }
-                                            if (showTags) {
-                                                event.tags.forEach { tag ->
-                                                    Text(tag.toTags().toList().toString())
-                                                }
-                                            }
+                                            TagsSection(
+                                                label = stringResource(R.string.tags),
+                                                tags = event.tags,
+                                                onCopy = {
+                                                    copyToClipboard(
+                                                        clipboard,
+                                                        event.tags.joinToString(separator = ", ") { "[${it.joinToString(separator = ", ") { tag -> "\"${tag}\"" }}]" },
+                                                    )
+                                                },
+                                            )
                                         }
                                     }
                                 }
