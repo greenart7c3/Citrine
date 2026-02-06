@@ -109,7 +109,7 @@ class CustomWebSocketServer(
     private val appDatabase: AppDatabase,
 ) {
     val connections = MutableStateFlow(Collections.synchronizedList<Connection>(mutableListOf()))
-    var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
+    lateinit var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
@@ -124,18 +124,28 @@ class CustomWebSocketServer(
         if (serverSocket == null) return
         serverSocket.close()
 
-        Log.d(Citrine.TAG, "Starting server on $host:$port isNull: ${server == null}")
-        if (server == null) {
+        Log.d(Citrine.TAG, "Starting server on $host:$port isInitialized: ${::server.isInitialized}")
+        if (!::server.isInitialized) {
             server = startKtorHttpServer(host, port)
+            server.monitor.subscribe(ApplicationStarted) {
+                Log.d(Citrine.TAG, "Server started on $host:$port")
+                CustomWebSocketService.hasStarted = true
+            }
+
+            server.monitor.subscribe(ApplicationStopped) {
+                Log.d(Citrine.TAG, "Server stopped")
+                CustomWebSocketService.hasStarted = false
+            }
         } else {
-            server!!.start(false)
+            server.start(false)
         }
     }
 
     fun stop() {
         Log.d(Citrine.TAG, "Stopping server")
-        server?.stop(1000)
-        server = null
+        if (::server.isInitialized) {
+            server.stop(1000)
+        }
     }
 
     private suspend fun subscribe(
@@ -782,16 +792,6 @@ class CustomWebSocketServer(
             port = port,
             host = host,
         ) {
-            monitor.subscribe(ApplicationStarted) {
-                Log.d(Citrine.TAG, "Server started on $host:$port")
-                CustomWebSocketService.hasStarted = true
-            }
-
-            monitor.subscribe(ApplicationStopped) {
-                Log.d(Citrine.TAG, "Server stopped")
-                CustomWebSocketService.hasStarted = false
-            }
-
             install(WebSockets) {
                 pingPeriodMillis = 5000L
                 timeoutMillis = 300000L
@@ -1095,7 +1095,7 @@ class CustomWebSocketServer(
                     }
                 }
             }
-        }.start(wait = false)
+        }
     }
 
     suspend fun removeConnection(connection: Connection) {
