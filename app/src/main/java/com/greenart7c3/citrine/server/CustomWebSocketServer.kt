@@ -44,9 +44,16 @@ import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
 import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
 import com.vitorpamplona.quartz.utils.TimeUtils
+import io.ktor.client.HttpClient
+import io.ktor.client.request.headers
+import io.ktor.client.request.request
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.http.defaultForFilePath
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationStarted
@@ -58,19 +65,20 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.host
 import io.ktor.server.request.httpMethod
+import io.ktor.server.request.receiveStream
+import io.ktor.server.request.uri
 import io.ktor.server.response.appendIfAbsent
+import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.utils.io.copyTo
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
-import java.net.ServerSocket
-import java.util.Collections
-import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -90,6 +98,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.ServerSocket
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.Deflater
 
 class CustomWebSocketServer(
     private val host: String,
@@ -611,29 +623,160 @@ class CustomWebSocketServer(
         call: ApplicationCall,
         rootUri: Uri,
     ) {
-        val docFile = DocumentFile
-            .fromTreeUri(Citrine.instance, rootUri)
-            ?.findFile("index.html")
+        // Trim leading slash
+        val requestedPath = call.request.uri.trimStart('/')
+        Log.d(Citrine.TAG, requestedPath)
 
-        if (docFile?.exists() == true && docFile.isFile) {
-            resolver.openInputStream(docFile.uri)?.use { input ->
-                call.respondOutputStream(ContentType.Text.Html) {
-                    input.copyTo(this)
-                }
-            } ?: call.respondText(
-                "Unable to open index.html",
-                status = HttpStatusCode.InternalServerError,
-            )
-        } else {
-            call.respondText(
-                "index.html not found",
-                status = HttpStatusCode.NotFound,
-            )
+        val root = DocumentFile.fromTreeUri(Citrine.instance, rootUri)
+        if (root == null) {
+            Log.d(Citrine.TAG, "$requestedPath not found")
+            return call.respond(HttpStatusCode.InternalServerError, null)
+        }
+
+        // First try requested file
+        val targetFile = root.findFileRecursive(requestedPath)?.takeIf { it.exists() && it.isFile }
+        // SPA fallback for root or route paths without file extension
+            ?: if (requestedPath.isEmpty() || !requestedPath.contains('.')) {
+                root.findFile("index.html")?.takeIf { it.exists() && it.isFile }
+            } else null
+
+        if (targetFile == null) {
+            Log.d(Citrine.TAG, "$requestedPath not found")
+            return call.respond(HttpStatusCode.NotFound, null)
+        }
+
+        resolver.openInputStream(targetFile.uri)?.use { input ->
+            Log.d(Citrine.TAG, "${targetFile.name} sent")
+            call.respondOutputStream(
+                contentType = ContentType.defaultForFilePath(targetFile.name ?: "index.html")
+            ) {
+                input.copyTo(this)
+            }
+        } ?: run {
+            Log.d(Citrine.TAG, "${targetFile.name} not sent")
+            call.respond(HttpStatusCode.InternalServerError, null)
         }
     }
 
+
+    fun randomFreePort(): Int =
+        ServerSocket(0).use { it.localPort }
+
+    private val webClientServers = ConcurrentHashMap<String, WebClientServer>()
+
+    fun startWebClientServer(
+        clientName: String,
+        rootUri: Uri
+    ): WebClientServer {
+
+        val port = randomFreePort()
+
+        val server = embeddedServer(
+            CIO,
+            host = "127.0.0.1",
+            port = port
+        ) {
+            routing {
+                // Catch-all: /, /index.html, /assets/foo.js, etc
+                get("{...}") {
+                    serveIndex(call, rootUri)
+                }
+            }
+        }.start(wait = false)
+
+        return WebClientServer(
+            name = clientName,
+            rootUri = rootUri,
+            port = port,
+            server = server
+        )
+    }
+
+    val proxyClient = HttpClient(io.ktor.client.engine.cio.CIO) {
+        expectSuccess = false
+    }
+
+    private fun extractClientName(host: String): String? {
+        val cleanHost = host.substringBefore(":")
+        if (!cleanHost.endsWith(".localhost")) return null
+        return cleanHost.removeSuffix(".localhost")
+            .takeIf { it.isNotBlank() }
+    }
+
+    private fun HttpMethod.allowsRequestBody(): Boolean =
+        this == HttpMethod.Post ||
+            this == HttpMethod.Put ||
+            this == HttpMethod.Patch ||
+            this == HttpMethod.Delete
+
+    private val hopByHopHeaders = setOf(
+        HttpHeaders.Connection,
+        HttpHeaders.ProxyAuthenticate,
+        HttpHeaders.ProxyAuthorization,
+        HttpHeaders.Trailer,
+        HttpHeaders.TransferEncoding,
+        HttpHeaders.Upgrade
+    )
+
+    private suspend fun proxyHttp(
+        call: ApplicationCall,
+        clientName: String,
+    ) {
+        val clientServer = webClientServers["/$clientName"]
+            ?: return call.respond(HttpStatusCode.NotFound, null)
+
+        // 🚀 Forward full path + query string
+        val targetUrl = "http://127.0.0.1:${clientServer.port}${call.request.uri}"
+
+        val response = proxyClient.request(targetUrl) {
+            method = call.request.httpMethod
+
+            headers {
+                call.request.headers.forEach { key, values ->
+                    if (!hopByHopHeaders.contains(key)) {
+                        values.forEach { append(key, it) }
+                    }
+                }
+
+                set(HttpHeaders.Host, "127.0.0.1:${clientServer.port}")
+            }
+
+            if (call.request.httpMethod.allowsRequestBody()) {
+                val len = call.request.headers[HttpHeaders.ContentLength]
+                    ?.toLongOrNull() ?: 0L
+                if (len > 0) setBody(call.receiveStream())
+            }
+        }
+
+        // Forward response headers
+        response.headers.forEach { key, values ->
+            if (!hopByHopHeaders.contains(key)) {
+                values.forEach { call.response.headers.append(key, it) }
+            }
+        }
+
+        call.respondBytesWriter(
+            contentType = response.contentType(),
+            status = response.status
+        ) {
+            response.bodyAsChannel().copyTo(this)
+        }
+    }
+
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
+        Settings.webClients.forEach { (name, uriString) ->
+            val uri = uriString.toUri()
+            val clientServer = startWebClientServer(name, uri)
+            webClientServers[name] = clientServer
+
+            Log.d(
+                Citrine.TAG,
+                "Started web client '$name' on port ${clientServer.port}"
+            )
+        }
+
         return embeddedServer(
             CIO,
             port = port,
@@ -668,51 +811,24 @@ class CustomWebSocketServer(
             }
 
             routing {
-                val spawnRoots = Settings.webClients.mapNotNull { webClient ->
-                    val uri = webClient.value.toUri()
-                    webClient.key to uri
-                }.toMap()
-
                 get("{...}") {
-                    val host = call.request.host()
-                    val clientName = host.removeSuffix(".localhost")
-                    val rootUri = spawnRoots[clientName]
+                    val clientName = extractClientName(call.request.host())
+                        ?: return@get call.respond(HttpStatusCode.NotFound, null)
 
-                    if (rootUri != null) {
-                        serveIndex(call, rootUri)
-                    } else {
+                    if (!webClientServers.containsKey("/$clientName")) {
                         call.respond(HttpStatusCode.NotFound, null)
-                    }
-                }
-
-                get("/assets/{path...}") {
-                    val requestedPath = call.parameters.getAll("path")?.joinToString("/") ?: ""
-
-                    val fileUri = spawnRoots.values.firstNotNullOfOrNull { rootUri ->
-                        val docFile = DocumentFile.fromTreeUri(Citrine.instance, rootUri)
-                            ?.findFileRecursive("assets/$requestedPath")
-                        if (docFile?.exists() == true && docFile.isFile) docFile.uri else null
+                        return@get
                     }
 
-                    if (fileUri != null) {
-                        resolver.openInputStream(fileUri)?.use { input ->
-                            call.respondOutputStream(contentType = ContentType.defaultForFilePath(requestedPath)) {
-                                input.copyTo(this)
-                            }
-                        } ?: call.respondText("Unable to open file", status = HttpStatusCode.InternalServerError)
-                    } else {
-                        call.respondText("File not found", status = HttpStatusCode.NotFound)
-                    }
+                    proxyHttp(call, clientName)
                 }
 
                 get("/") {
-                    val host = call.request.host() // e.g. client1.localhost
-                    val clientName = host.removeSuffix(".localhost")
+                    val clientName = extractClientName(call.request.host())
 
-                    val rootUri = spawnRoots["/$clientName"]
-
-                    if (rootUri != null) {
-                        serveIndex(call, rootUri)
+                    // If this is a client subdomain, proxy instead
+                    if (clientName != null && webClientServers.containsKey("/$clientName")) {
+                        proxyHttp(call, clientName)
                         return@get
                     }
 
@@ -990,6 +1106,14 @@ class CustomWebSocketServer(
         connections.emit(connections.value)
     }
 }
+
+data class WebClientServer(
+    val name: String,
+    val rootUri: Uri,
+    val port: Int,
+    val server: EmbeddedServer<*, *>
+)
+
 
 fun ReceiveChannel<Frame>.asTextMessages(): Flow<String> = receiveAsFlow() // Convert channel to Flow
     .filterIsInstance<Frame.Text>() // Only text frames
