@@ -2,10 +2,7 @@ package com.greenart7c3.citrine.ui
 
 import android.annotation.SuppressLint
 import android.content.ClipData
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,10 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
@@ -49,7 +43,6 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventPagingSource
 import com.greenart7c3.citrine.database.toEvent
-import com.greenart7c3.citrine.database.toTags
 import com.greenart7c3.citrine.service.crashreports.DisplayCrashMessages
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
 import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
@@ -59,7 +52,6 @@ import com.greenart7c3.citrine.ui.components.DatabaseInfoViewModelFactory
 import com.greenart7c3.citrine.ui.components.EventSection
 import com.greenart7c3.citrine.ui.components.TagsSection
 import com.greenart7c3.citrine.ui.navigation.Route
-import com.greenart7c3.citrine.utils.toDateString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -162,39 +154,39 @@ fun CitrineScaffold(
                         ) {
                             items(events.itemCount) { index ->
                                 val event = events[index]
-                                event?.let {
-                                    val event = it.toEvent()
+                                event?.let { eventWithTags ->
+                                    val event = eventWithTags.toEvent()
 
                                     Card(
                                         modifier = Modifier
                                             .padding(16.dp),
                                     ) {
                                         EventSection(
-                                            stringResource(R.string.kind),
-                                            "${event.kind}",
-                                            {
+                                            label = stringResource(R.string.kind),
+                                            displayValue = "${event.kind}",
+                                            onCopy = {
                                                 copyToClipboard(clipboard, "${event.kind}")
                                             },
                                         )
                                         EventSection(
-                                            stringResource(R.string.pubkey),
-                                            event.pubKey.toShortenHex(),
-                                            {
+                                            label = stringResource(R.string.pubkey),
+                                            displayValue = event.pubKey.toShortenHex(),
+                                            onCopy = {
                                                 copyToClipboard(clipboard, event.pubKey)
                                             },
                                         )
                                         EventSection(
-                                            stringResource(R.string.date),
-                                            event.createdAt.formatLongToCustomDateTimeWithSeconds(),
-                                            {
+                                            label = stringResource(R.string.date),
+                                            displayValue = event.createdAt.formatLongToCustomDateTimeWithSeconds(),
+                                            onCopy = {
                                                 copyToClipboard(clipboard, "${event.createdAt}")
                                             },
                                         )
                                         if (event.content.isNotEmpty()) {
                                             EventSection(
-                                                stringResource(R.string.content),
-                                                event.content,
-                                                {
+                                                label = stringResource(R.string.content),
+                                                displayValue = event.content,
+                                                onCopy = {
                                                     copyToClipboard(clipboard, event.content)
                                                 },
                                             )
@@ -206,11 +198,22 @@ fun CitrineScaffold(
                                                 onCopy = {
                                                     copyToClipboard(
                                                         clipboard,
-                                                        event.tags.joinToString(separator = ", ") { "[${it.joinToString(separator = ", ") { tag -> "\"${tag}\"" }}]" },
+                                                        event.tags.joinToString(separator = ", ") { mainTag -> "[${mainTag.joinToString(separator = ", ") { tag -> "\"${tag}\"" }}]" },
                                                     )
                                                 },
                                             )
                                         }
+                                        ElevatedButton(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(8.dp),
+                                            onClick = {
+                                                copyToClipboard(clipboard, event.toJson())
+                                            },
+                                            content = {
+                                                Text(stringResource(R.string.copy_raw_json))
+                                            },
+                                        )
                                     }
                                 }
                             }
