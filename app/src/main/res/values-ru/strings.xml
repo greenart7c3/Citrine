@@ -95,4 +95,11 @@
     <string name="copy_crash_report_to_clipboard">Хотите скопировать отчет о сбое в буфер обмена и открыть клиент, чтобы отправить его Amber?</string>
     <string name="crashreport_found_send">Отправить</string>
     <string name="crashreport_found">Обнаружен отчет о сбое</string>
+    <string name="copy">Copy</string>
+    <string name="more">%1$s more…</string>
+    <string name="copy_to_clipboard">Copy to clipboard</string>
+    <string name="pubkey">pubkey</string>
+    <string name="date">Date</string>
+    <string name="content">Content</string>
+    <string name="tags">Tags</string>
 </resources>

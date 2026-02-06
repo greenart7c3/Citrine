@@ -95,4 +95,11 @@
     <string name="copy_crash_report_to_clipboard">想要复制崩溃报告到剪贴板并打开客户端发送给 Amber 吗？</string>
     <string name="crashreport_found_send">发送</string>
     <string name="crashreport_found">找到崩溃报告</string>
+    <string name="copy">Copy</string>
+    <string name="more">%1$s more…</string>
+    <string name="copy_to_clipboard">Copy to clipboard</string>
+    <string name="pubkey">pubkey</string>
+    <string name="date">Date</string>
+    <string name="content">Content</string>
+    <string name="tags">Tags</string>
 </resources>
