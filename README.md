@@ -15,7 +15,7 @@ Citrine is a nostr relay for android. It allows any nostr client that supports A
 
 [<img src="https://github.com/greenart7c3/Amber/blob/master/assets/zapstore.svg"
 alt="Get it on Zap Store"
-height="70">](https://github.com/zapstore/zapstore/releases)
+height="70">](https://zapstore.dev/apps/naddr1qvzqqqr7pvpzqateqake4lc2fn77lflzq30jfpk8uhvtccalc66989er8cdmljceqqtkxmmd9enhyet9deshyaphvvejucmfw3exjmn9hzj8uf)
 [<img src="https://github.com/greenart7c3/Amber/blob/master/assets/obtainium.png"
 alt="Get it on Obtaininum"
 height="70">](https://github.com/ImranR98/Obtainium)
