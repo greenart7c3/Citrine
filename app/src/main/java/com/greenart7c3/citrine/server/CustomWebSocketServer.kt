@@ -110,6 +110,7 @@ class CustomWebSocketServer(
 ) {
     val connections = MutableStateFlow(Collections.synchronizedList<Connection>(mutableListOf()))
     lateinit var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>
+    private val webClientServers = ConcurrentHashMap<String, WebClientServer>()
     private val objectMapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
@@ -136,15 +137,20 @@ class CustomWebSocketServer(
                 Log.d(Citrine.TAG, "Server stopped")
                 CustomWebSocketService.hasStarted = false
             }
+            server.start(false)
         } else {
             server.start(false)
+            startWebClients()
         }
     }
 
     fun stop() {
         Log.d(Citrine.TAG, "Stopping server")
         if (::server.isInitialized) {
-            server.stop(1000)
+            server.stop()
+            webClientServers.forEach {
+                it.value.server.stop()
+            }
         }
     }
 
@@ -672,8 +678,6 @@ class CustomWebSocketServer(
     fun randomFreePort(): Int =
         ServerSocket(0).use { it.localPort }
 
-    private val webClientServers = ConcurrentHashMap<String, WebClientServer>()
-
     fun startWebClientServer(
         clientName: String,
         rootUri: Uri
@@ -774,8 +778,7 @@ class CustomWebSocketServer(
     }
 
 
-    @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
-    private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
+    fun startWebClients() {
         Settings.webClients.forEach { (name, uriString) ->
             val uri = uriString.toUri()
             val clientServer = startWebClientServer(name, uri)
@@ -786,6 +789,11 @@ class CustomWebSocketServer(
                 "Started web client '$name' on port ${clientServer.port}"
             )
         }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
+    private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
+        startWebClients()
 
         return embeddedServer(
             CIO,

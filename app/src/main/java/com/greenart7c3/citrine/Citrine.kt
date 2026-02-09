@@ -20,8 +20,6 @@ import com.greenart7c3.citrine.service.crashreports.CrashReportCache
 import com.greenart7c3.citrine.service.crashreports.UnexpectedCrashSaver
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
 import com.vitorpamplona.quartz.utils.TimeUtils
-import kotlin.coroutines.cancellation.CancellationException
-import kotlin.time.measureTime
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +28,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.measureTime
 
 class Citrine : Application() {
     val crashReportCache: CrashReportCache by lazy { CrashReportCache(this.applicationContext) }
