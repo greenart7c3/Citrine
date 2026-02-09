@@ -46,7 +46,7 @@ import com.vitorpamplona.quartz.nip70ProtectedEvts.isProtected
 import com.vitorpamplona.quartz.utils.TimeUtils
 import io.ktor.client.HttpClient
 import io.ktor.client.request.headers
-import io.ktor.client.request.request
+import io.ktor.client.request.prepareRequest
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
@@ -65,7 +65,7 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.host
 import io.ktor.server.request.httpMethod
-import io.ktor.server.request.receiveStream
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.uri
 import io.ktor.server.response.appendIfAbsent
 import io.ktor.server.response.respondBytesWriter
@@ -724,12 +724,12 @@ class CustomWebSocketServer(
             this == HttpMethod.Delete
 
     private val hopByHopHeaders = setOf(
-        HttpHeaders.Connection,
-        HttpHeaders.ProxyAuthenticate,
-        HttpHeaders.ProxyAuthorization,
-        HttpHeaders.Trailer,
-        HttpHeaders.TransferEncoding,
-        HttpHeaders.Upgrade
+        HttpHeaders.Connection.lowercase(),
+        HttpHeaders.ProxyAuthenticate.lowercase(),
+        HttpHeaders.ProxyAuthorization.lowercase(),
+        HttpHeaders.Trailer.lowercase(),
+        HttpHeaders.TransferEncoding.lowercase(),
+        HttpHeaders.Upgrade.lowercase()
     )
 
     private suspend fun proxyHttp(
@@ -739,41 +739,42 @@ class CustomWebSocketServer(
         val clientServer = webClientServers["/$clientName"]
             ?: return call.respond(HttpStatusCode.NotFound, null)
 
-        // 🚀 Forward full path + query string
         val targetUrl = "http://127.0.0.1:${clientServer.port}${call.request.uri}"
 
-        val response = proxyClient.request(targetUrl) {
+        proxyClient.prepareRequest(targetUrl) {
             method = call.request.httpMethod
 
+            // Forward headers to target, excluding engine-managed ones
             headers {
                 call.request.headers.forEach { key, values ->
-                    if (!hopByHopHeaders.contains(key)) {
+                    val lowerKey = key.lowercase()
+                    if (!hopByHopHeaders.contains(lowerKey)) {
                         values.forEach { append(key, it) }
                     }
                 }
-
                 set(HttpHeaders.Host, "127.0.0.1:${clientServer.port}")
             }
 
             if (call.request.httpMethod.allowsRequestBody()) {
-                val len = call.request.headers[HttpHeaders.ContentLength]
-                    ?.toLongOrNull() ?: 0L
-                if (len > 0) setBody(call.receiveStream())
+                setBody(call.receiveChannel())
             }
-        }
-
-        // Forward response headers
-        response.headers.forEach { key, values ->
-            if (!hopByHopHeaders.contains(key)) {
-                values.forEach { call.response.headers.append(key, it) }
+        }.execute { response ->
+            // Filter headers before sending back to the original client
+            response.headers.forEach { key, values ->
+                val lowerKey = key.lowercase()
+                // IMPORTANT: Let Ktor manage Transfer-Encoding and Content-Length
+                if (!hopByHopHeaders.contains(lowerKey)) {
+                    values.forEach { call.response.headers.append(key, it) }
+                }
             }
-        }
 
-        call.respondBytesWriter(
-            contentType = response.contentType(),
-            status = response.status
-        ) {
-            response.bodyAsChannel().copyTo(this)
+            call.respondBytesWriter(
+                contentType = response.contentType(),
+                status = response.status
+            ) {
+                // Streaming happens here
+                response.bodyAsChannel().copyTo(this)
+            }
         }
     }
 
