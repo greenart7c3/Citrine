@@ -13,8 +13,8 @@ import com.greenart7c3.citrine.Citrine
 import java.util.concurrent.Executors
 
 @Database(
-    entities = [EventEntity::class, TagEntity::class],
-    version = 9,
+    entities = [EventEntity::class, TagEntity::class, EventFTS::class],
+    version = 11,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -44,6 +44,8 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_6_7)
                 .addMigrations(MIGRATION_7_8)
                 .addMigrations(MIGRATION_8_9)
+                .addMigrations(MIGRATION_9_10)
+                .addMigrations(MIGRATION_10_11)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -60,7 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
-    version = 9,
+    version = 11,
 )
 @TypeConverters(Converters::class)
 abstract class HistoryDatabase : RoomDatabase() {
@@ -76,7 +78,7 @@ abstract class HistoryDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "citrine_history_database",
             )
-                // .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+//                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
@@ -85,6 +87,8 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_6_7)
                 .addMigrations(MIGRATION_7_8)
                 .addMigrations(MIGRATION_8_9)
+                .addMigrations(MIGRATION_9_10)
+                .addMigrations(MIGRATION_10_11)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -159,6 +163,21 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
 val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `idx_event_pubkey_kind_created_id` ON `EventEntity` (`pubkey` ASC, `kind` ASC, `createdAt` DESC, `id` ASC)")
+    }
+}
+
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS `event_fts` USING FTS4(content, content=`EventEntity`)")
+        db.execSQL("INSERT INTO `event_fts` (`event_fts`) VALUES ('rebuild')")
+    }
+}
+
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS `event_fts` ")
+        db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS `event_fts` USING FTS4(content, content=`EventEntity`)")
+        db.execSQL("INSERT INTO `event_fts` (`event_fts`) VALUES ('rebuild')")
     }
 }
 

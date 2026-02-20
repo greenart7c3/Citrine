@@ -1,7 +1,9 @@
 package com.greenart7c3.citrine.server
 
+import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
@@ -44,10 +46,10 @@ object EventRepository {
         }
 
         if (filter.searchKeywords.isNotEmpty()) {
-            whereClause.add(
-                filter.searchKeywords.joinToString(" AND ", prefix = "(", postfix = ")") { "LOWER(EventEntity.content) LIKE ?" },
-            )
-            params.addAll(filter.searchKeywords.map { "%$it%" })
+            joinClause.append("INNER JOIN event_fts ON event_fts.rowid = EventEntity.rowid")
+            val searchParam = filter.searchKeywords.joinToString(" ") { "\"$it\"" }
+            whereClause.add("event_fts MATCH ?")
+            params.add(searchParam)
         }
 
         if (filter.kinds.isNotEmpty()) {
@@ -58,7 +60,7 @@ object EventRepository {
 
         // --- Single JOIN (just for connecting EventEntity with TagEntity if needed) ---
         if (filter.tags.isNotEmpty()) {
-            joinClause.append("INNER JOIN TagEntity t ON t.pkEvent = EventEntity.id")
+            joinClause.append(" INNER JOIN TagEntity t ON t.pkEvent = EventEntity.id")
         }
 
         // --- Add each tag as an AND EXISTS in WHERE ---
@@ -93,13 +95,18 @@ object EventRepository {
         val predicatesSql = if (whereClause.isNotEmpty()) whereClause.joinToString(" AND ", prefix = "WHERE ") else ""
         val distinctSql = if (filter.tags.isNotEmpty()) "DISTINCT " else ""
 
+        val orderBy = if (filter.searchKeywords.isNotEmpty()) {
+            "EventEntity.rowid DESC"
+        } else {
+            "EventEntity.createdAt DESC, EventEntity.id ASC"
+        }
+
         var query = if (count) {
             """
         SELECT COUNT(DISTINCT EventEntity.id)
           FROM EventEntity EventEntity
           $joinSql
           $predicatesSql
-          ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC
             """.trimIndent()
         } else {
             """
@@ -107,7 +114,7 @@ object EventRepository {
           FROM EventEntity EventEntity
           $joinSql
           $predicatesSql
-          ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC
+          ORDER BY $orderBy
             """.trimIndent()
         }
 
@@ -160,7 +167,7 @@ object EventRepository {
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {
-//                Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
+                Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
                 subscription.connection.trySend(
                     subscription.objectMapper.writeValueAsString(
                         listOf(

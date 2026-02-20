@@ -13,7 +13,7 @@ data class EventFilter(
     val limit: Int? = null,
     val search: String? = null,
 ) : Predicate<Event> {
-    val searchKeywords: Set<String> = search?.let { tokenizeString(search) } ?: emptySet()
+    val searchKeywords: Set<String> = search?.let { tokenizeSearchString(it) } ?: emptySet()
 
     override fun test(event: Event): Boolean {
         if (since != null && event.createdAt < since!!) {
@@ -40,7 +40,7 @@ data class EventFilter(
             return false
         }
 
-        if (!search.isNullOrBlank() && !testSearch(search, event)) {
+        if (searchKeywords.isNotEmpty() && !testSearch(event)) {
             return false
         }
 
@@ -56,11 +56,17 @@ data class EventFilter(
         return tag.value.any { it in eventTags }
     }
 
-    private fun testSearch(search: String, event: Event): Boolean {
-        val tokens = tokenizeString(search)
+    private fun testSearch(event: Event): Boolean {
         val eventTokens = tokenizeString(event.content)
+        return searchKeywords.all { it in eventTokens }
+    }
 
-        return tokens.all { it in eventTokens }
+    private fun tokenizeSearchString(string: String): Set<String> {
+        return string.split(Regex("\\s+"))
+            .filter { it.isNotEmpty() && !it.contains(":") }
+            .map { it.lowercase().replace(TOKENIZE_REGEX, "") }
+            .filter { it.isNotEmpty() }
+            .toSet()
     }
 
     private fun tokenizeString(string: String): Set<String> = string.split(TOKENIZE_REGEX)
