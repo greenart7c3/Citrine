@@ -103,4 +103,5 @@
     <string name="content">Содержание</string>
     <string name="tags">Теги</string>
     <string name="copy_raw_json">Скопировать необработанный json</string>
+    <string name="download_tagged_events">Download tagged events</string>
 </resources>
