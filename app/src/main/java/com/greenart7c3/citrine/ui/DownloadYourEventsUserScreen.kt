@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -241,6 +243,7 @@ fun DownloadYourEventsUserScreen(
     var shouldShowDialog by remember { mutableStateOf(false) }
     var npub by remember { mutableStateOf(TextFieldValue()) }
     var signer by remember { mutableStateOf<NostrSigner?>(null) }
+    var downloadTaggedEvents by remember { mutableStateOf(true) }
 
     val launcherLogin = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -303,6 +306,7 @@ fun DownloadYourEventsUserScreen(
                     EventDownloader.fetchEvents(
                         signer = signer!!,
                         relays = it,
+                        downloadTaggedEvents = downloadTaggedEvents,
                     )
                 }
                 navController.navigateUp()
@@ -328,6 +332,22 @@ fun DownloadYourEventsUserScreen(
                 Text(stringResource(R.string.npub1))
             },
         )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable {
+                    downloadTaggedEvents = !downloadTaggedEvents
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = downloadTaggedEvents,
+                onCheckedChange = {
+                    downloadTaggedEvents = it
+                },
+            )
+            Text(stringResource(R.string.download_tagged_events))
+        }
         ElevatedButton(
             content = {
                 Text(stringResource(R.string.login_with_external_signer))

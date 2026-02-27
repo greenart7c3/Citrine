@@ -45,6 +45,7 @@ object EventDownloader {
         client: NostrClient,
         relayUrl: String,
         authorPubKey: String,
+        downloadTaggedEvents: Boolean,
     ) {
         val normalizedUrl = NormalizedRelayUrl(relayUrl)
         val batchSize = 500
@@ -53,6 +54,7 @@ object EventDownloader {
         val events = ConcurrentSet<Event>()
 
         val subscription = RelayClientSubscription(
+            downloadTaggedEvents = downloadTaggedEvents,
             client = client,
             relayUrl = normalizedUrl,
             authorPubKey = authorPubKey,
@@ -173,6 +175,7 @@ object EventDownloader {
     suspend fun fetchEvents(
         signer: NostrSigner,
         relays: List<NormalizedRelayUrl>,
+        downloadTaggedEvents: Boolean,
     ) {
         if (!Citrine.instance.client.isActive()) {
             Citrine.instance.client.connect()
@@ -190,6 +193,7 @@ object EventDownloader {
                     Citrine.instance.client,
                     it.url,
                     signer.pubKey,
+                    downloadTaggedEvents = downloadTaggedEvents,
                 )
             }
 
@@ -248,6 +252,7 @@ object EventDownloader {
 }
 
 class RelayClientSubscription(
+    private val downloadTaggedEvents: Boolean,
     private val client: NostrClient,
     private val relayUrl: NormalizedRelayUrl,
     private val authorPubKey: String,
@@ -315,14 +320,25 @@ class RelayClientSubscription(
     }
 
     fun updateFilter() {
-        val filter = Filter(
-            authors = listOf(authorPubKey),
-            limit = batchSize,
-            until = until,
+        val filters = mutableListOf(
+            Filter(
+                authors = listOf(authorPubKey),
+                limit = batchSize,
+                until = until,
+            ),
         )
+        if (downloadTaggedEvents) {
+            filters.add(
+                Filter(
+                    limit = batchSize,
+                    until = until,
+                    tags = mapOf("p" to listOf(authorPubKey)),
+                ),
+            )
+        }
 
         Log.d("RelayClientSubscription", "Requesting batch with until=$until from relay $relayUrl")
-        client.openReqSubscription(subId, mapOf(relayUrl to listOf(filter)))
+        client.openReqSubscription(subId, mapOf(relayUrl to filters))
     }
 
     fun closeSubscription() {

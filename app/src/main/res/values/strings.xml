@@ -102,4 +102,5 @@
     <string name="content">Content</string>
     <string name="tags">Tags</string>
     <string name="copy_raw_json">Copy raw json</string>
+    <string name="download_tagged_events">Download tagged events</string>
 </resources>
