@@ -1069,13 +1069,6 @@ class CustomWebSocketServer(
                         thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
                     }
 
-                    val messageChannel = Channel<String>(capacity = Channel.UNLIMITED)
-                    launch {
-                        for (message in messageChannel) {
-                            thisConnection.messageResponseFlow.emit(message)
-                        }
-                    }
-
                     try {
                         incoming.asTextMessages()
                             .onEach { message ->

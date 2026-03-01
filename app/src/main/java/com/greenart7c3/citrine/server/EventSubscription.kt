@@ -36,17 +36,18 @@ object EventSubscription {
 
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            val event = dbEvent.toEvent()
+            val eventJson = event.toJsonObject()
             var sentEvent = false
             subscriptions.snapshot().values.forEach {
                 it.subscription.filters.forEach filter@{ filter ->
-                    val event = dbEvent.toEvent()
                     if (filter.test(event)) {
                         it.subscription.connection.trySend(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(
                                     "EVENT",
                                     it.subscription.id,
-                                    event.toJsonObject(),
+                                    eventJson,
                                 ),
                             ),
                         )
@@ -55,7 +56,6 @@ object EventSubscription {
                     }
                 }
             }
-            val event = dbEvent.toEvent()
             if (event.isEphemeral()) {
                 if (!sentEvent) {
                     connection?.trySend(
@@ -70,10 +70,11 @@ object EventSubscription {
 
     fun closeAll(connectionName: String) {
         Log.d(Citrine.TAG, "finalizing subscriptions from $connectionName")
-        subscriptions.snapshot().keys.forEach {
-            if (subscriptions[it].subscription.connection.name == connectionName) {
-                Log.d(Citrine.TAG, "closing subscription $it")
-                close(it)
+        subscriptions.snapshot().entries.forEach { (key, manager) ->
+            if (manager.subscription.connection.name == connectionName) {
+                Log.d(Citrine.TAG, "closing subscription $key")
+                manager.subscription.scope.coroutineContext.cancelChildren()
+                subscriptions.remove(key)
             }
         }
     }
@@ -85,11 +86,7 @@ object EventSubscription {
     }
 
     fun close(subscriptionId: String) {
-        subscriptions.snapshot().values.filter {
-            it.subscription.id == subscriptionId
-        }.forEach {
-            it.subscription.scope.coroutineContext.cancelChildren()
-        }
+        subscriptions.get(subscriptionId)?.subscription?.scope?.coroutineContext?.cancelChildren()
         subscriptions.remove(subscriptionId)
     }
 
