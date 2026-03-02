@@ -50,7 +50,6 @@ abstract class AppDatabase : RoomDatabase() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
                         db.execSQL("PRAGMA cache_size=-32000;")
-                        db.execSQL("PRAGMA busy_timeout=5000;")
                     }
                 })
                 .build()
