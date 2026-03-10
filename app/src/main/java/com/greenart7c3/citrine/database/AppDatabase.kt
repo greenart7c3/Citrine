@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.database
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
@@ -11,6 +12,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import java.util.concurrent.Executors
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 @Database(
     entities = [EventEntity::class, TagEntity::class, EventFTS::class],
@@ -24,7 +27,31 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var database: AppDatabase? = null
 
+        private val _isDatabaseUpgrading = MutableStateFlow(false)
+        val isDatabaseUpgrading: StateFlow<Boolean> = _isDatabaseUpgrading
+
+        private const val TARGET_VERSION = 11
+
+        private fun checkNeedsMigration(context: Context): Boolean {
+            val dbFile = context.getDatabasePath("citrine_database")
+            if (!dbFile.exists()) return false
+            return try {
+                SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+                    db.version > 0 && db.version < TARGET_VERSION
+                }
+            } catch (e: Exception) {
+                Log.w(Citrine.TAG, "Could not check database version", e)
+                false
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase = database ?: synchronized(this) {
+            if (database != null) return database!!
+
+            if (checkNeedsMigration(context)) {
+                _isDatabaseUpgrading.value = true
+            }
+
             val executor = Executors.newCachedThreadPool()
             val transactionExecutor = Executors.newCachedThreadPool()
 
@@ -50,6 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
                         db.execSQL("PRAGMA cache_size=-32000;")
+                        _isDatabaseUpgrading.value = false
                     }
                 })
                 .build()
