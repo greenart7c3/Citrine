@@ -145,6 +145,35 @@ class WebSocketServerService : Service() {
             100000,
         )
 
+        scope.launch {
+            AppDatabase.isDatabaseUpgrading.collect { isUpgrading ->
+                val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
+                if (isUpgrading) {
+                    val channel = NotificationChannelCompat.Builder(
+                        "citrine",
+                        NotificationManagerCompat.IMPORTANCE_DEFAULT,
+                    )
+                        .setName("Citrine")
+                        .build()
+                    notificationManager.createNotificationChannel(channel)
+
+                    val notification = NotificationCompat.Builder(this@WebSocketServerService, "citrine")
+                        .setContentTitle(getString(R.string.app_name_release))
+                        .setContentText(getString(R.string.upgrading_database))
+                        .setSmallIcon(R.drawable.ic_notification)
+                        .setOngoing(true)
+                        .setOnlyAlertOnce(true)
+                        .build()
+
+                    if (ActivityCompat.checkSelfPermission(this@WebSocketServerService, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                        notificationManager.notify(3, notification)
+                    }
+                } else {
+                    notificationManager.cancel(3)
+                }
+            }
+        }
+
         Log.d(Citrine.TAG, "Starting WebSocket server")
         // Start the WebSocket server
         CustomWebSocketService.server = CustomWebSocketServer(
