@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name_release">Citrine</string>
+    <string name="upgrading_database">Upgrading database, please wait…</string>
     <string name="app_name_debug">Citrine Debug</string>
     <string name="no_follow_list_found">No follow list found</string>
     <string name="no_relays_found">No relays found</string>
