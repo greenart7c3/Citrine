@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name_release">Citrine</string>
+    <string name="upgrading_database">Upgrading database, please wait…</string>
     <string name="app_name_debug">Citrine 调试</string>
     <string name="no_follow_list_found">未找到关注列表</string>
     <string name="no_relays_found">未找到中继</string>

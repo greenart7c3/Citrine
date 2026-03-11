@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name_release">Citrine</string>
+    <string name="upgrading_database">Upgrading database, please wait…</string>
     <string name="app_name_debug">Отладка Citrine</string>
     <string name="no_follow_list_found">Список подписчиков не найден</string>
     <string name="no_relays_found">Реле не найдено</string>
@@ -103,5 +104,5 @@
     <string name="content">Содержание</string>
     <string name="tags">Теги</string>
     <string name="copy_raw_json">Скопировать необработанный json</string>
-    <string name="download_tagged_events">Download tagged events</string>
+    <string name="download_tagged_events">Загрузить отмеченные события</string>
 </resources>
