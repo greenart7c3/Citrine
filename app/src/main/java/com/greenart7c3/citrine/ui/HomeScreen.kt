@@ -53,6 +53,7 @@ import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.AppDatabase.Companion.isDatabaseUpgrading
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -97,6 +98,7 @@ fun HomeScreen(
         }
 
         val state = homeViewModel.state.collectAsStateWithLifecycle()
+        val isUpgradingDatabase = isDatabaseUpgrading.collectAsStateWithLifecycle()
         var deleteAllDialog by remember { mutableStateOf(false) }
         var showDialog by remember { mutableStateOf(false) }
         var showAutoBackupDialog by remember { mutableStateOf(false) }
@@ -296,7 +298,10 @@ fun HomeScreen(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (state.value.loading) {
+            if (isUpgradingDatabase.value) {
+                CircularProgressIndicator()
+                Text(stringResource(R.string.upgrading_database))
+            } else if (state.value.loading) {
                 CircularProgressIndicator()
             } else {
                 val isStarted = homeViewModel.state.value.service?.isStarted() ?: false
