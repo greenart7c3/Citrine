@@ -9,29 +9,22 @@ import android.util.Patterns
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,7 +40,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.text.isDigitsOnly
@@ -59,7 +51,10 @@ import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.OlderThanType
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.ui.components.PubkeyInputRow
+import com.greenart7c3.citrine.ui.components.PubkeyListItem
 import com.greenart7c3.citrine.ui.components.SettingsRow
+import com.greenart7c3.citrine.ui.components.SwitchSettingRow
 import com.greenart7c3.citrine.ui.components.TitleExplainer
 import com.greenart7c3.citrine.ui.components.WebAppInput
 import com.greenart7c3.citrine.ui.components.WebAppRow
@@ -85,74 +80,50 @@ fun SettingsScreen(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Surface(
-        modifier,
-    ) {
+    Surface(modifier) {
         val clipboardManager = LocalClipboard.current
         val context = LocalContext.current
-        var host by remember {
-            mutableStateOf(TextFieldValue(Settings.host))
-        }
-        var port by remember {
-            mutableStateOf(TextFieldValue(Settings.port.toString()))
-        }
-        var deleteExpiredEvents by remember {
-            mutableStateOf(Settings.deleteExpiredEvents)
-        }
-        var listenToPokeyBroadcasts by remember {
-            mutableStateOf(Settings.listenToPokeyBroadcasts)
-        }
-        var useAuth by remember {
-            mutableStateOf(Settings.authEnabled)
-        }
-        var deleteEphemeralEvents by remember {
-            mutableStateOf(Settings.deleteEphemeralEvents)
-        }
-        var relayName by remember {
-            mutableStateOf(TextFieldValue(Settings.name))
-        }
-        var relayOwnerPubkey by remember {
-            mutableStateOf(TextFieldValue(Settings.ownerPubkey))
-        }
-        var relayContact by remember {
-            mutableStateOf(TextFieldValue(Settings.contact))
-        }
-        var relayDescription by remember {
-            mutableStateOf(TextFieldValue(Settings.description))
-        }
-        var relayIconUrl by remember {
-            mutableStateOf(TextFieldValue(Settings.relayIcon))
-        }
-        var useProxy by remember {
-            mutableStateOf(Settings.useProxy)
-        }
-        var proxyPort by remember {
-            mutableStateOf(TextFieldValue(Settings.proxyPort.toString()))
-        }
-        var autoBackup by remember {
-            mutableStateOf(Settings.autoBackup)
-        }
+
+        var host by remember { mutableStateOf(TextFieldValue(Settings.host)) }
+        var port by remember { mutableStateOf(TextFieldValue(Settings.port.toString())) }
+        var relayName by remember { mutableStateOf(TextFieldValue(Settings.name)) }
+        var relayOwnerPubkey by remember { mutableStateOf(TextFieldValue(Settings.ownerPubkey)) }
+        var relayContact by remember { mutableStateOf(TextFieldValue(Settings.contact)) }
+        var relayDescription by remember { mutableStateOf(TextFieldValue(Settings.description)) }
+        var relayIconUrl by remember { mutableStateOf(TextFieldValue(Settings.relayIcon)) }
+
+        var startOnBoot by remember { mutableStateOf(Settings.startOnBoot) }
+        var useAuth by remember { mutableStateOf(Settings.authEnabled) }
+        var listenToPokeyBroadcasts by remember { mutableStateOf(Settings.listenToPokeyBroadcasts) }
+        var deleteExpiredEvents by remember { mutableStateOf(Settings.deleteExpiredEvents) }
+        var deleteEphemeralEvents by remember { mutableStateOf(Settings.deleteEphemeralEvents) }
+        var useProxy by remember { mutableStateOf(Settings.useProxy) }
+        var proxyPort by remember { mutableStateOf(TextFieldValue(Settings.proxyPort.toString())) }
+        var autoBackup by remember { mutableStateOf(Settings.autoBackup) }
+
+        var signedBy by remember { mutableStateOf(TextFieldValue("")) }
+        var referredBy by remember { mutableStateOf(TextFieldValue("")) }
+        var kind by remember { mutableStateOf(TextFieldValue("")) }
+        var deleteFrom by remember { mutableStateOf(TextFieldValue("")) }
+
+        var allowedPubKeys by remember { mutableStateOf(Settings.allowedPubKeys) }
+        var allowedTaggedPubKeys by remember { mutableStateOf(Settings.allowedTaggedPubKeys) }
+        var allowedKinds by remember { mutableStateOf(Settings.allowedKinds) }
+        var neverDeleteFrom by remember { mutableStateOf(Settings.neverDeleteFrom) }
 
         var shouldAddWebClient = false
-        var webPath by remember {
-            mutableStateOf(TextFieldValue(""))
-        }
+        var webPath by remember { mutableStateOf(TextFieldValue("")) }
         val webClients = MutableStateFlow(Settings.webClients.toMutableMap())
         val clients = webClients.collectAsStateWithLifecycle()
+
         storageHelper.onFolderSelected = { _, folder ->
             if (shouldAddWebClient) {
-                val path = if (webPath.text.startsWith("/")) {
-                    webPath.text
-                } else {
-                    "/${webPath.text}"
-                }
+                val path = if (webPath.text.startsWith("/")) webPath.text else "/${webPath.text}"
                 webClients.update { old ->
-                    val clients = old.toMutableMap().apply {
-                        this[path] = folder.uri.toString()
-                    }.toMutableMap()
-                    Settings.webClients = clients
+                    val updated = old.toMutableMap().apply { this[path] = folder.uri.toString() }
+                    Settings.webClients = updated
                     LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    clients
+                    updated
                 }
                 onApplyChanges()
                 webPath = TextFieldValue("")
@@ -164,55 +135,10 @@ fun SettingsScreen(
             }
         }
 
-//        var useSSL by remember {
-//            mutableStateOf(Settings.useSSL)
-//        }
-        var signedBy by remember {
-            mutableStateOf(TextFieldValue(""))
-        }
-        var referredBy by remember {
-            mutableStateOf(TextFieldValue(""))
-        }
-        var kind by remember {
-            mutableStateOf(TextFieldValue(""))
-        }
-        var deleteFrom by remember {
-            mutableStateOf(TextFieldValue(""))
-        }
-
-        var allowedPubKeys by remember {
-            mutableStateOf(Settings.allowedPubKeys)
-        }
-        var allowedTaggedPubKeys by remember {
-            mutableStateOf(Settings.allowedTaggedPubKeys)
-        }
-        var allowedKinds by remember {
-            mutableStateOf(Settings.allowedKinds)
-        }
-        var neverDeleteFrom by remember {
-            mutableStateOf(Settings.neverDeleteFrom)
-        }
-        var startOnBoot by remember {
-            mutableStateOf(Settings.startOnBoot)
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            // ── Server ─────────────────────────────────────────────────────────
             stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.server),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
+                SectionHeader(stringResource(R.string.server))
             }
             item {
                 OutlinedTextField(
@@ -220,12 +146,10 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     value = host,
-                    label = {
-                        Text(text = stringResource(R.string.host))
-                    },
-                    onValueChange = {
-                        host = it
-                    },
+                    label = { Text(stringResource(R.string.host)) },
+                    onValueChange = { host = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
             }
             item {
@@ -234,15 +158,10 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     value = port,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                    ),
-                    label = {
-                        Text(text = stringResource(R.string.port))
-                    },
-                    onValueChange = {
-                        port = it
-                    },
+                    label = { Text(stringResource(R.string.port)) },
+                    onValueChange = { port = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
             item {
@@ -251,12 +170,9 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     value = relayName,
-                    label = {
-                        Text(text = stringResource(R.string.relay_name))
-                    },
-                    onValueChange = {
-                        relayName = it
-                    },
+                    label = { Text(stringResource(R.string.relay_name)) },
+                    onValueChange = { relayName = it },
+                    singleLine = true,
                 )
             }
             item {
@@ -265,12 +181,9 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     value = relayOwnerPubkey,
-                    label = {
-                        Text(text = stringResource(R.string.relay_owner_pubkey))
-                    },
-                    onValueChange = {
-                        relayOwnerPubkey = it
-                    },
+                    label = { Text(stringResource(R.string.relay_owner_pubkey)) },
+                    onValueChange = { relayOwnerPubkey = it },
+                    singleLine = true,
                 )
             }
             item {
@@ -279,12 +192,9 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     value = relayContact,
-                    label = {
-                        Text(text = stringResource(R.string.relay_contact))
-                    },
-                    onValueChange = {
-                        relayContact = it
-                    },
+                    label = { Text(stringResource(R.string.relay_contact)) },
+                    onValueChange = { relayContact = it },
+                    singleLine = true,
                 )
             }
             item {
@@ -293,12 +203,10 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     value = relayDescription,
-                    label = {
-                        Text(text = stringResource(R.string.relay_description))
-                    },
-                    onValueChange = {
-                        relayDescription = it
-                    },
+                    label = { Text(stringResource(R.string.relay_description)) },
+                    onValueChange = { relayDescription = it },
+                    minLines = 2,
+                    maxLines = 4,
                 )
             }
             item {
@@ -307,25 +215,23 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     value = relayIconUrl,
-                    label = {
-                        Text(text = stringResource(R.string.relay_icon_url))
-                    },
-                    onValueChange = {
-                        relayIconUrl = it
-                    },
+                    label = { Text(stringResource(R.string.relay_icon_url)) },
+                    onValueChange = { relayIconUrl = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
             }
             item {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    Arrangement.Center,
-                    Alignment.CenterHorizontally,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 ) {
                     ElevatedButton(
                         enabled = !isLoading,
                         onClick = {
                             if (isLoading) return@ElevatedButton
-
                             scope.launch(Dispatchers.IO) {
                                 isLoading = true
                                 Settings.defaultValues()
@@ -352,626 +258,320 @@ fun SettingsScreen(
                                 isLoading = false
                             }
                         },
-                        content = {
-                            Text(stringResource(R.string.default_value))
-                        },
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
+                    ) {
+                        Text(stringResource(R.string.default_value))
+                    }
 
                     ElevatedButton(
                         enabled = !isLoading,
                         onClick = {
-                            if (host.text.isNotBlank() && isIpValid(host.text) && port.text.isDigitsOnly() && port.text.isNotBlank()) {
-                                if (relayOwnerPubkey.text.isNotBlank() && relayOwnerPubkey.text.toNostrKey() == null) {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.invalid_owner_pubkey),
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
+                            if (!isIpValid(host.text) || host.text.isBlank()) {
+                                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
+                                return@ElevatedButton
+                            }
+                            if (port.text.isBlank() || !port.text.isDigitsOnly()) {
+                                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
+                                return@ElevatedButton
+                            }
+                            if (relayOwnerPubkey.text.isNotBlank() && relayOwnerPubkey.text.toNostrKey() == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_owner_pubkey), Toast.LENGTH_SHORT).show()
+                                return@ElevatedButton
+                            }
+                            if (relayIconUrl.text.isNotBlank()) {
+                                try {
+                                    relayIconUrl.text.toUri()
+                                } catch (_: Exception) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_icon_url), Toast.LENGTH_SHORT).show()
                                     return@ElevatedButton
                                 }
-
-                                if (relayIconUrl.text.isNotBlank()) {
-                                    try {
-                                        relayIconUrl.text.toUri()
-                                    } catch (_: Exception) {
-                                        Toast.makeText(
-                                            context,
-                                            context.getString(R.string.invalid_icon_url),
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
-                                        return@ElevatedButton
-                                    }
-                                }
-
-                                if (isLoading) return@ElevatedButton
-
-                                scope.launch(Dispatchers.IO) {
-                                    isLoading = true
-                                    Settings.port = port.text.toInt()
-                                    Settings.host = host.text
-                                    Settings.name = relayName.text
-                                    Settings.ownerPubkey = relayOwnerPubkey.text.toNostrKey() ?: ""
-                                    Settings.contact = relayContact.text
-                                    Settings.description = relayDescription.text
-                                    Settings.relayIcon = relayIconUrl.text
-                                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                    onApplyChanges()
-                                    delay(1500)
-                                    isLoading = false
-                                }
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.invalid_host_or_port),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
+                            }
+                            if (isLoading) return@ElevatedButton
+                            scope.launch(Dispatchers.IO) {
+                                isLoading = true
+                                Settings.port = port.text.toInt()
+                                Settings.host = host.text
+                                Settings.name = relayName.text
+                                Settings.ownerPubkey = relayOwnerPubkey.text.toNostrKey() ?: ""
+                                Settings.contact = relayContact.text
+                                Settings.description = relayDescription.text
+                                Settings.relayIcon = relayIconUrl.text
+                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                onApplyChanges()
+                                delay(1500)
+                                isLoading = false
                             }
                         },
-                        content = {
-                            Text(stringResource(R.string.apply_changes))
-                        },
-                    )
+                    ) {
+                        Text(stringResource(R.string.apply_changes))
+                    }
                 }
             }
+
+            // ── Accept events signed by ────────────────────────────────────────
             stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.accept_events_signed_by),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
+                SectionHeader(stringResource(R.string.accept_events_signed_by))
             }
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier.fillMaxWidth(0.9f),
-                        value = signedBy,
-                        onValueChange = {
-                            signedBy = it
-                        },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
-                                            signedBy = TextFieldValue(it.text.toString())
-
-                                            val key = signedBy.text.toNostrKey()
-
-                                            if (key == null) {
-                                                Toast.makeText(
-                                                    context,
-                                                    context.getString(R.string.invalid_key),
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
-                                                return@launch
-                                            }
-
-                                            val users = Settings.allowedPubKeys.toMutableSet()
-                                            users.add(key)
-                                            Settings.allowedPubKeys = users
-                                            allowedPubKeys = Settings.allowedPubKeys
-                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                            signedBy = TextFieldValue("")
-                                        }
-                                    }
-                                    signedBy = TextFieldValue("")
-                                },
-                            ) {
-                                Icon(
-                                    Icons.Default.ContentPaste,
-                                    contentDescription = stringResource(R.string.paste_from_clipboard),
-                                )
-                            }
-                        },
-                    )
-                    IconButton(
-                        onClick = {
-                            val key = signedBy.text.toNostrKey()
+                PubkeyInputRow(
+                    value = signedBy,
+                    onValueChange = { signedBy = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            signedBy = TextFieldValue(text)
+                            val key = text.toNostrKey()
                             if (key == null) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.invalid_key),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                                return@IconButton
+                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                return@launch
                             }
-
-                            val users = Settings.allowedPubKeys.toMutableSet()
-                            users.add(key)
+                            val users = Settings.allowedPubKeys.toMutableSet().apply { add(key) }
                             Settings.allowedPubKeys = users
-                            allowedPubKeys = Settings.allowedPubKeys
+                            allowedPubKeys = users
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             signedBy = TextFieldValue("")
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Add",
-                        )
-                    }
-                }
-            }
-            items(allowedPubKeys.size) { index ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        allowedPubKeys.elementAt(index).toShortenHex(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(0.9f),
-                    )
-                    IconButton(
-                        onClick = {
-                            val users = Settings.allowedPubKeys.toMutableSet()
-                            users.remove(allowedPubKeys.elementAt(index))
-                            Settings.allowedPubKeys = users
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            allowedPubKeys = Settings.allowedPubKeys
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                        )
-                    }
-                }
-            }
-            stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.accept_events_that_refer_to),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier.fillMaxWidth(0.9f),
-                        value = referredBy,
-                        onValueChange = {
-                            referredBy = it
-                        },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
-                                            referredBy = TextFieldValue(it.text.toString())
-
-                                            val key = referredBy.text.toNostrKey()
-                                            if (key == null) {
-                                                Toast.makeText(
-                                                    context,
-                                                    context.getString(R.string.invalid_key),
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
-                                                return@launch
-                                            }
-
-                                            val users = Settings.allowedTaggedPubKeys.toMutableSet()
-                                            users.add(key)
-                                            Settings.allowedTaggedPubKeys = users
-                                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
-                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                            referredBy = TextFieldValue("")
-                                        }
-                                    }
-                                    referredBy = TextFieldValue("")
-                                },
-                            ) {
-                                Icon(
-                                    Icons.Default.ContentPaste,
-                                    contentDescription = stringResource(R.string.paste_from_clipboard),
-                                )
-                            }
-                        },
-                    )
-                    IconButton(
-                        onClick = {
-                            val key = referredBy.text.toNostrKey()
-                            if (key == null) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.invalid_key),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                                return@IconButton
-                            }
-
-                            val users = Settings.allowedTaggedPubKeys.toMutableSet()
-                            users.add(key)
-                            Settings.allowedTaggedPubKeys = users
-                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            referredBy = TextFieldValue("")
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = stringResource(R.string.add),
-                        )
-                    }
-                }
-            }
-            items(allowedTaggedPubKeys.size) { index ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        allowedTaggedPubKeys.elementAt(index).toShortenHex(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(0.9f),
-                    )
-                    IconButton(
-                        onClick = {
-                            val users = Settings.allowedTaggedPubKeys.toMutableSet()
-                            users.remove(allowedTaggedPubKeys.elementAt(index))
-                            Settings.allowedTaggedPubKeys = users
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                        )
-                    }
-                }
-            }
-            stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.allowed_kinds),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier.fillMaxWidth(0.9f),
-                        value = kind,
-                        onValueChange = {
-                            kind = it
-                        },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
-                                            kind = TextFieldValue(it.text.toString())
-
-                                            if (kind.text.toIntOrNull() == null) {
-                                                Toast.makeText(
-                                                    context,
-                                                    context.getString(R.string.invalid_kind),
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
-                                                return@launch
-                                            }
-
-                                            val users = Settings.allowedKinds.toMutableSet()
-                                            users.add(kind.text.toInt())
-                                            Settings.allowedKinds = users
-                                            allowedKinds = Settings.allowedKinds
-                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                            kind = TextFieldValue("")
-                                        }
-                                    }
-                                    kind = TextFieldValue("")
-                                },
-                            ) {
-                                Icon(
-                                    Icons.Default.ContentPaste,
-                                    contentDescription = stringResource(R.string.paste_from_clipboard),
-                                )
-                            }
-                        },
-                    )
-                    IconButton(
-                        onClick = {
-                            if (kind.text.toIntOrNull() == null) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.invalid_kind),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                                return@IconButton
-                            }
-
-                            val users = Settings.allowedKinds.toMutableSet()
-                            users.add(kind.text.toInt())
-                            Settings.allowedKinds = users
-                            allowedKinds = Settings.allowedKinds
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            kind = TextFieldValue("")
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = stringResource(R.string.add),
-                        )
-                    }
-                }
-            }
-            items(allowedKinds.size) { index ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        allowedKinds.elementAt(index).toString(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(0.9f),
-                    )
-                    IconButton(
-                        onClick = {
-                            val users = Settings.allowedKinds.toMutableSet()
-                            users.remove(allowedKinds.elementAt(index))
-                            Settings.allowedKinds = users
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            allowedKinds = Settings.allowedKinds
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                        )
-                    }
-                }
-            }
-            stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.others),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            startOnBoot = !startOnBoot
-                            Settings.startOnBoot = !Settings.startOnBoot
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(R.string.start_on_boot),
-                    )
-                    Switch(
-                        checked = startOnBoot,
-                        onCheckedChange = {
-                            startOnBoot = !startOnBoot
-                            Settings.startOnBoot = !Settings.startOnBoot
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            useAuth = !useAuth
-                            Settings.authEnabled = !Settings.authEnabled
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(R.string.enable_disable_auth),
-                    )
-                    Switch(
-                        checked = useAuth,
-                        onCheckedChange = {
-                            useAuth = !useAuth
-                            Settings.authEnabled = !Settings.authEnabled
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            listenToPokeyBroadcasts = !listenToPokeyBroadcasts
-                            Settings.listenToPokeyBroadcasts = !Settings.listenToPokeyBroadcasts
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(R.string.listen_to_pokey_broadcasts),
-                    )
-                    Switch(
-                        checked = listenToPokeyBroadcasts,
-                        onCheckedChange = {
-                            listenToPokeyBroadcasts = !listenToPokeyBroadcasts
-                            Settings.listenToPokeyBroadcasts = !Settings.listenToPokeyBroadcasts
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            if (listenToPokeyBroadcasts) {
-                                Citrine.instance.registerPokeyReceiver()
-                            } else {
-                                Citrine.instance.unregisterPokeyReceiver()
-                            }
-                        },
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            deleteExpiredEvents = !deleteExpiredEvents
-                            Settings.deleteExpiredEvents = !Settings.deleteExpiredEvents
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(R.string.delete_expired_events),
-                    )
-                    Switch(
-                        checked = deleteExpiredEvents,
-                        onCheckedChange = {
-                            deleteExpiredEvents = it
-                            Settings.deleteExpiredEvents = it
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            deleteEphemeralEvents = !deleteEphemeralEvents
-                            Settings.deleteEphemeralEvents = !Settings.deleteEphemeralEvents
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(R.string.delete_ephemeral_events),
-                    )
-                    Switch(
-                        checked = deleteEphemeralEvents,
-                        onCheckedChange = {
-                            deleteEphemeralEvents = it
-                            Settings.deleteEphemeralEvents = it
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            useProxy = !useProxy
-                            Settings.useProxy = !Settings.useProxy
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(R.string.use_proxy),
-                    )
-                    Switch(
-                        checked = useProxy,
-                        onCheckedChange = {
-                            useProxy = it
-                            Settings.useProxy = it
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    )
-                }
-            }
-            item {
-                OutlinedTextField(
-                    proxyPort,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    onValueChange = {
-                        proxyPort = it
-                        if (it.text.toIntOrNull() == null) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.invalid_port),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            return@OutlinedTextField
                         }
-
-                        Settings.proxyPort = it.text.toInt()
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     },
-                    label = {
-                        Text(stringResource(R.string.proxy_port))
+                    onAdd = {
+                        val key = signedBy.text.toNostrKey()
+                        if (key == null) {
+                            Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val users = Settings.allowedPubKeys.toMutableSet().apply { add(key) }
+                        Settings.allowedPubKeys = users
+                        allowedPubKeys = users
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        signedBy = TextFieldValue("")
                     },
                 )
+            }
+            if (allowedPubKeys.isEmpty()) {
+                item {
+                    EmptyListHint(stringResource(R.string.allow_all_pubkeys_hint))
+                }
+            }
+            items(allowedPubKeys.toList()) { pubkey ->
+                PubkeyListItem(
+                    text = pubkey.toShortenHex(),
+                    onDelete = {
+                        val users = Settings.allowedPubKeys.toMutableSet().apply { remove(pubkey) }
+                        Settings.allowedPubKeys = users
+                        allowedPubKeys = users
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+
+            // ── Accept events that refer to ────────────────────────────────────
+            stickyHeader {
+                SectionHeader(stringResource(R.string.accept_events_that_refer_to))
+            }
+            item {
+                PubkeyInputRow(
+                    value = referredBy,
+                    onValueChange = { referredBy = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            referredBy = TextFieldValue(text)
+                            val key = text.toNostrKey()
+                            if (key == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                return@launch
+                            }
+                            val users = Settings.allowedTaggedPubKeys.toMutableSet().apply { add(key) }
+                            Settings.allowedTaggedPubKeys = users
+                            allowedTaggedPubKeys = users
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            referredBy = TextFieldValue("")
+                        }
+                    },
+                    onAdd = {
+                        val key = referredBy.text.toNostrKey()
+                        if (key == null) {
+                            Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val users = Settings.allowedTaggedPubKeys.toMutableSet().apply { add(key) }
+                        Settings.allowedTaggedPubKeys = users
+                        allowedTaggedPubKeys = users
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        referredBy = TextFieldValue("")
+                    },
+                )
+            }
+            if (allowedTaggedPubKeys.isEmpty()) {
+                item {
+                    EmptyListHint(stringResource(R.string.allow_all_tagged_pubkeys_hint))
+                }
+            }
+            items(allowedTaggedPubKeys.toList()) { pubkey ->
+                PubkeyListItem(
+                    text = pubkey.toShortenHex(),
+                    onDelete = {
+                        val users = Settings.allowedTaggedPubKeys.toMutableSet().apply { remove(pubkey) }
+                        Settings.allowedTaggedPubKeys = users
+                        allowedTaggedPubKeys = users
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+
+            // ── Allowed Kinds ──────────────────────────────────────────────────
+            stickyHeader {
+                SectionHeader(stringResource(R.string.allowed_kinds))
+            }
+            item {
+                PubkeyInputRow(
+                    value = kind,
+                    onValueChange = { kind = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            kind = TextFieldValue(text)
+                            if (text.toIntOrNull() == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                return@launch
+                            }
+                            val kinds = Settings.allowedKinds.toMutableSet().apply { add(text.toInt()) }
+                            Settings.allowedKinds = kinds
+                            allowedKinds = kinds
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            kind = TextFieldValue("")
+                        }
+                    },
+                    onAdd = {
+                        if (kind.text.toIntOrNull() == null) {
+                            Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val kinds = Settings.allowedKinds.toMutableSet().apply { add(kind.text.toInt()) }
+                        Settings.allowedKinds = kinds
+                        allowedKinds = kinds
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        kind = TextFieldValue("")
+                    },
+                )
+            }
+            if (allowedKinds.isEmpty()) {
+                item {
+                    EmptyListHint(stringResource(R.string.allow_all_kinds_hint))
+                }
+            }
+            items(allowedKinds.toList()) { k ->
+                PubkeyListItem(
+                    text = k.toString(),
+                    onDelete = {
+                        val kinds = Settings.allowedKinds.toMutableSet().apply { remove(k) }
+                        Settings.allowedKinds = kinds
+                        allowedKinds = kinds
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+
+            // ── Others ─────────────────────────────────────────────────────────
+            stickyHeader {
+                SectionHeader(stringResource(R.string.others))
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.start_on_boot),
+                    description = stringResource(R.string.start_on_boot_description),
+                    checked = startOnBoot,
+                    onCheckedChange = {
+                        startOnBoot = it
+                        Settings.startOnBoot = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.enable_disable_auth),
+                    description = stringResource(R.string.enable_disable_auth_description),
+                    checked = useAuth,
+                    onCheckedChange = {
+                        useAuth = it
+                        Settings.authEnabled = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.listen_to_pokey_broadcasts),
+                    description = stringResource(R.string.listen_to_pokey_broadcasts_description),
+                    checked = listenToPokeyBroadcasts,
+                    onCheckedChange = {
+                        listenToPokeyBroadcasts = it
+                        Settings.listenToPokeyBroadcasts = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        if (it) {
+                            Citrine.instance.registerPokeyReceiver()
+                        } else {
+                            Citrine.instance.unregisterPokeyReceiver()
+                        }
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.delete_expired_events),
+                    description = stringResource(R.string.delete_expired_events_description),
+                    checked = deleteExpiredEvents,
+                    onCheckedChange = {
+                        deleteExpiredEvents = it
+                        Settings.deleteExpiredEvents = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.delete_ephemeral_events),
+                    description = stringResource(R.string.delete_ephemeral_events_description),
+                    checked = deleteEphemeralEvents,
+                    onCheckedChange = {
+                        deleteEphemeralEvents = it
+                        Settings.deleteEphemeralEvents = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.use_proxy),
+                    description = stringResource(R.string.use_proxy_description),
+                    checked = useProxy,
+                    onCheckedChange = {
+                        useProxy = it
+                        Settings.useProxy = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            if (useProxy) {
+                item {
+                    OutlinedTextField(
+                        proxyPort,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        onValueChange = {
+                            proxyPort = it
+                            if (it.text.toIntOrNull() == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_port), Toast.LENGTH_SHORT).show()
+                                return@OutlinedTextField
+                            }
+                            Settings.proxyPort = it.text.toInt()
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                        label = { Text(stringResource(R.string.proxy_port)) },
+                        singleLine = true,
+                    )
+                }
             }
             item {
                 val deleteItems = persistentListOf(
@@ -982,7 +582,10 @@ fun SettingsScreen(
                     TitleExplainer(stringResource(OlderThanType.YEAR.resourceId)),
                 )
                 var olderThanTypeIndex by remember {
-                    mutableIntStateOf(OlderThanType.entries.toTypedArray().indexOfFirst { it.name == Settings.deleteEventsOlderThan.toString() })
+                    mutableIntStateOf(
+                        OlderThanType.entries.toTypedArray()
+                            .indexOfFirst { it.name == Settings.deleteEventsOlderThan.toString() },
+                    )
                 }
                 SettingsRow(
                     name = R.string.delete_events_older_than,
@@ -1002,206 +605,91 @@ fun SettingsScreen(
                     LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                 }
             }
+
+            // ── Never delete from ──────────────────────────────────────────────
             stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.never_delete_from),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
+                SectionHeader(stringResource(R.string.never_delete_from))
             }
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier.fillMaxWidth(0.9f),
-                        value = deleteFrom,
-                        onValueChange = {
-                            deleteFrom = it
-                        },
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.let {
-                                            deleteFrom = TextFieldValue(it.text.toString())
-
-                                            val key = deleteFrom.text.toNostrKey()
-
-                                            if (key == null) {
-                                                Toast.makeText(
-                                                    context,
-                                                    context.getString(R.string.invalid_key),
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
-                                                return@launch
-                                            }
-
-                                            val users = Settings.neverDeleteFrom.toMutableSet()
-                                            users.add(key)
-                                            Settings.neverDeleteFrom = users
-                                            neverDeleteFrom = Settings.neverDeleteFrom
-                                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                            deleteFrom = TextFieldValue("")
-                                        }
-                                    }
-                                    deleteFrom = TextFieldValue("")
-                                },
-                            ) {
-                                Icon(
-                                    Icons.Default.ContentPaste,
-                                    contentDescription = stringResource(R.string.paste_from_clipboard),
-                                )
-                            }
-                        },
-                    )
-                    IconButton(
-                        onClick = {
-                            val key = deleteFrom.text.toNostrKey()
+                PubkeyInputRow(
+                    value = deleteFrom,
+                    onValueChange = { deleteFrom = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            deleteFrom = TextFieldValue(text)
+                            val key = text.toNostrKey()
                             if (key == null) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.invalid_key),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                                return@IconButton
+                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                return@launch
                             }
-
-                            val users = Settings.neverDeleteFrom.toMutableSet()
-                            users.add(key)
+                            val users = Settings.neverDeleteFrom.toMutableSet().apply { add(key) }
                             Settings.neverDeleteFrom = users
-                            neverDeleteFrom = Settings.neverDeleteFrom
+                            neverDeleteFrom = users
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             deleteFrom = TextFieldValue("")
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = stringResource(R.string.add),
-                        )
-                    }
-                }
+                        }
+                    },
+                    onAdd = {
+                        val key = deleteFrom.text.toNostrKey()
+                        if (key == null) {
+                            Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val users = Settings.neverDeleteFrom.toMutableSet().apply { add(key) }
+                        Settings.neverDeleteFrom = users
+                        neverDeleteFrom = users
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        deleteFrom = TextFieldValue("")
+                    },
+                )
             }
-            items(neverDeleteFrom.size) { index ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        neverDeleteFrom.elementAt(index).toShortenHex(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(0.9f),
-                    )
-                    IconButton(
-                        onClick = {
-                            val users = Settings.neverDeleteFrom.toMutableSet()
-                            users.remove(neverDeleteFrom.elementAt(index))
-                            Settings.neverDeleteFrom = users
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            neverDeleteFrom = Settings.neverDeleteFrom
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                        )
-                    }
-                }
+            items(neverDeleteFrom.toList()) { pubkey ->
+                PubkeyListItem(
+                    text = pubkey.toShortenHex(),
+                    onDelete = {
+                        val users = Settings.neverDeleteFrom.toMutableSet().apply { remove(pubkey) }
+                        Settings.neverDeleteFrom = users
+                        neverDeleteFrom = users
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
             }
+
+            // ── Backup ─────────────────────────────────────────────────────────
             stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.backup),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
+                SectionHeader(stringResource(R.string.backup))
             }
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (!autoBackup) {
-                                shouldAddWebClient = false
-                                storageHelper.openFolderPicker()
-                            } else {
-                                autoBackup = false
-                                Settings.autoBackup = false
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            }
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(R.string.auto_backup),
-                    )
-                    Switch(
-                        checked = autoBackup,
-                        onCheckedChange = {
-                            if (!autoBackup) {
-                                shouldAddWebClient = false
-                                storageHelper.openFolderPicker()
-                            } else {
-                                autoBackup = false
-                                Settings.autoBackup = false
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            }
-                        },
-                    )
-                }
+                SwitchSettingRow(
+                    title = stringResource(R.string.auto_backup),
+                    description = stringResource(R.string.auto_backup_description),
+                    checked = autoBackup,
+                    onCheckedChange = {
+                        if (!autoBackup) {
+                            shouldAddWebClient = false
+                            storageHelper.openFolderPicker()
+                        } else {
+                            autoBackup = false
+                            Settings.autoBackup = false
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        }
+                    },
+                )
             }
+
+            // ── Web Clients ────────────────────────────────────────────────────
             stickyHeader {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.web_clients),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
+                SectionHeader(stringResource(R.string.web_clients))
             }
             item {
                 val nameNotBlankResource = stringResource(R.string.name_cannot_be_blank)
                 WebAppInput(
                     value = webPath,
-                    onValueChange = {
-                        webPath = it
-                    },
+                    onValueChange = { webPath = it },
                     onAdd = {
                         if (webPath.text.isBlank()) {
-                            Toast.makeText(
-                                context,
-                                nameNotBlankResource,
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            Toast.makeText(context, nameNotBlankResource, Toast.LENGTH_SHORT).show()
                             return@WebAppInput
                         }
                         shouldAddWebClient = true
@@ -1209,36 +697,66 @@ fun SettingsScreen(
                     },
                 )
             }
-
             items(clients.value.keys.toList()) { item ->
                 WebAppRow(
                     onOpenWebApp = {
-                        val browserIntent = Intent(Intent.ACTION_VIEW, "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri())
+                        val browserIntent = Intent(
+                            Intent.ACTION_VIEW,
+                            "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri(),
+                        )
                         browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         Citrine.instance.startActivity(browserIntent)
                     },
                     onDelete = {
                         webClients.update { old ->
-                            val webClients = old.toMutableMap().apply {
-                                remove(item)
-                            }.toMutableMap()
-
-                            Settings.webClients = webClients
+                            val updated = old.toMutableMap().apply { remove(item) }
+                            Settings.webClients = updated
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            webClients
+                            updated
                         }
                         onApplyChanges()
                     },
                     item = item,
                 )
             }
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
     }
 }
 
+@Composable
+private fun SectionHeader(title: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+        )
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun EmptyListHint(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 4.dp),
+    )
+}
+
 fun String.toShortenHex(): String {
     if (length <= 16) return this
-    return replaceRange(8, length - 8, ":")
+    return "${take(8)}...${takeLast(8)}"
 }
 
 fun isIpValid(ip: String): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
