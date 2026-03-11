@@ -79,6 +79,10 @@ import io.ktor.utils.io.copyTo
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
+import java.net.ServerSocket
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -98,10 +102,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.ServerSocket
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
-import java.util.zip.Deflater
 
 class CustomWebSocketServer(
     private val host: String,
@@ -651,10 +651,12 @@ class CustomWebSocketServer(
 
         // First try requested file
         val targetFile = root.findFileRecursive(requestedPath)?.takeIf { it.exists() && it.isFile }
-        // SPA fallback for root or route paths without file extension
+            // SPA fallback for root or route paths without file extension
             ?: if (requestedPath.isEmpty() || !requestedPath.contains('.')) {
                 root.findFile("index.html")?.takeIf { it.exists() && it.isFile }
-            } else null
+            } else {
+                null
+            }
 
         if (targetFile == null) {
             Log.d(Citrine.TAG, "$requestedPath not found")
@@ -664,7 +666,7 @@ class CustomWebSocketServer(
         resolver.openInputStream(targetFile.uri)?.use { input ->
             Log.d(Citrine.TAG, "${targetFile.name} sent")
             call.respondOutputStream(
-                contentType = ContentType.defaultForFilePath(targetFile.name ?: "index.html")
+                contentType = ContentType.defaultForFilePath(targetFile.name ?: "index.html"),
             ) {
                 input.copyTo(this)
             }
@@ -674,21 +676,18 @@ class CustomWebSocketServer(
         }
     }
 
-
-    fun randomFreePort(): Int =
-        ServerSocket(0).use { it.localPort }
+    fun randomFreePort(): Int = ServerSocket(0).use { it.localPort }
 
     fun startWebClientServer(
         clientName: String,
-        rootUri: Uri
+        rootUri: Uri,
     ): WebClientServer {
-
         val port = randomFreePort()
 
         val server = embeddedServer(
             CIO,
             host = "127.0.0.1",
-            port = port
+            port = port,
         ) {
             routing {
                 // Catch-all: /, /index.html, /assets/foo.js, etc
@@ -702,7 +701,7 @@ class CustomWebSocketServer(
             name = clientName,
             rootUri = rootUri,
             port = port,
-            server = server
+            server = server,
         )
     }
 
@@ -717,11 +716,10 @@ class CustomWebSocketServer(
             .takeIf { it.isNotBlank() }
     }
 
-    private fun HttpMethod.allowsRequestBody(): Boolean =
-        this == HttpMethod.Post ||
-            this == HttpMethod.Put ||
-            this == HttpMethod.Patch ||
-            this == HttpMethod.Delete
+    private fun HttpMethod.allowsRequestBody(): Boolean = this == HttpMethod.Post ||
+        this == HttpMethod.Put ||
+        this == HttpMethod.Patch ||
+        this == HttpMethod.Delete
 
     private val hopByHopHeaders = setOf(
         HttpHeaders.Connection.lowercase(),
@@ -729,7 +727,7 @@ class CustomWebSocketServer(
         HttpHeaders.ProxyAuthorization.lowercase(),
         HttpHeaders.Trailer.lowercase(),
         HttpHeaders.TransferEncoding.lowercase(),
-        HttpHeaders.Upgrade.lowercase()
+        HttpHeaders.Upgrade.lowercase(),
     )
 
     private suspend fun proxyHttp(
@@ -770,14 +768,13 @@ class CustomWebSocketServer(
 
             call.respondBytesWriter(
                 contentType = response.contentType(),
-                status = response.status
+                status = response.status,
             ) {
                 // Streaming happens here
                 response.bodyAsChannel().copyTo(this)
             }
         }
     }
-
 
     fun startWebClients() {
         Settings.webClients.forEach { (name, uriString) ->
@@ -787,7 +784,7 @@ class CustomWebSocketServer(
 
             Log.d(
                 Citrine.TAG,
-                "Started web client '$name' on port ${clientServer.port}"
+                "Started web client '$name' on port ${clientServer.port}",
             )
         }
     }
@@ -1113,9 +1110,8 @@ data class WebClientServer(
     val name: String,
     val rootUri: Uri,
     val port: Int,
-    val server: EmbeddedServer<*, *>
+    val server: EmbeddedServer<*, *>,
 )
-
 
 fun ReceiveChannel<Frame>.asTextMessages(): Flow<String> = receiveAsFlow() // Convert channel to Flow
     .filterIsInstance<Frame.Text>() // Only text frames

@@ -61,13 +61,11 @@ data class EventFilter(
         return searchKeywords.all { it in eventTokens }
     }
 
-    private fun tokenizeSearchString(string: String): Set<String> {
-        return string.split(Regex("\\s+"))
-            .filter { it.isNotEmpty() && !it.contains(":") }
-            .map { it.lowercase().replace(TOKENIZE_REGEX, "") }
-            .filter { it.isNotEmpty() }
-            .toSet()
-    }
+    private fun tokenizeSearchString(string: String): Set<String> = string.split(Regex("\\s+"))
+        .filter { it.isNotEmpty() && !it.contains(":") }
+        .map { it.lowercase().replace(TOKENIZE_REGEX, "") }
+        .filter { it.isNotEmpty() }
+        .toSet()
 
     private fun tokenizeString(string: String): Set<String> = string.split(TOKENIZE_REGEX)
         .filter { it.isNotEmpty() }
