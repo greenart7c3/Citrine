@@ -105,4 +105,14 @@
     <string name="tags">Теги</string>
     <string name="copy_raw_json">Скопировать необработанный json</string>
     <string name="download_tagged_events">Загрузить отмеченные события</string>
+    <string name="allow_all_pubkeys_hint">Empty list allows events from all pubkeys</string>
+    <string name="allow_all_tagged_pubkeys_hint">Empty list allows events referencing any pubkey</string>
+    <string name="allow_all_kinds_hint">Empty list allows all event kinds</string>
+    <string name="start_on_boot_description">Automatically start the relay when the device boots</string>
+    <string name="enable_disable_auth_description">Require NIP-42 authentication for private event kinds</string>
+    <string name="listen_to_pokey_broadcasts_description">Receive events broadcast by the Pokey app</string>
+    <string name="delete_expired_events_description">Automatically remove events past their expiration timestamp</string>
+    <string name="delete_ephemeral_events_description">Automatically remove ephemeral events (kinds 20000–29999)</string>
+    <string name="use_proxy_description">Route outbound connections through a SOCKS5 proxy</string>
+    <string name="auto_backup_description">Periodically back up the database to a selected folder</string>
 </resources>
