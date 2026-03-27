@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name_release">Citrine</string>
-    <string name="upgrading_database">Upgrading database, please wait…</string>
+    <string name="upgrading_database">正在升级数据库，请稍等…</string>
     <string name="app_name_debug">Citrine 调试</string>
     <string name="no_follow_list_found">未找到关注列表</string>
     <string name="no_relays_found">未找到中继</string>
@@ -96,23 +96,23 @@
     <string name="copy_crash_report_to_clipboard">想要复制崩溃报告到剪贴板并打开客户端发送给 Amber 吗？</string>
     <string name="crashreport_found_send">发送</string>
     <string name="crashreport_found">找到崩溃报告</string>
-    <string name="copy">Copy</string>
-    <string name="more">%1$s more…</string>
-    <string name="copy_to_clipboard">Copy to clipboard</string>
-    <string name="pubkey">pubkey</string>
-    <string name="date">Date</string>
-    <string name="content">Content</string>
-    <string name="tags">Tags</string>
-    <string name="copy_raw_json">Copy raw json</string>
-    <string name="download_tagged_events">Download tagged events</string>
-    <string name="allow_all_pubkeys_hint">Empty list allows events from all pubkeys</string>
-    <string name="allow_all_tagged_pubkeys_hint">Empty list allows events referencing any pubkey</string>
-    <string name="allow_all_kinds_hint">Empty list allows all event kinds</string>
-    <string name="start_on_boot_description">Automatically start the relay when the device boots</string>
-    <string name="enable_disable_auth_description">Require NIP-42 authentication for private event kinds</string>
-    <string name="listen_to_pokey_broadcasts_description">Receive events broadcast by the Pokey app</string>
-    <string name="delete_expired_events_description">Automatically remove events past their expiration timestamp</string>
-    <string name="delete_ephemeral_events_description">Automatically remove ephemeral events (kinds 20000–29999)</string>
-    <string name="use_proxy_description">Route outbound connections through a SOCKS5 proxy</string>
-    <string name="auto_backup_description">Periodically back up the database to a selected folder</string>
+    <string name="copy">复制</string>
+    <string name="more">%1$s 项…</string>
+    <string name="copy_to_clipboard">复制到剪贴板</string>
+    <string name="pubkey">公钥</string>
+    <string name="date">日期</string>
+    <string name="content">内容</string>
+    <string name="tags">标签</string>
+    <string name="copy_raw_json">复制原始 JSON</string>
+    <string name="download_tagged_events">下载已标记事件</string>
+    <string name="allow_all_pubkeys_hint">空列表允许所有公钥的事件</string>
+    <string name="allow_all_tagged_pubkeys_hint">空列表允许事件引用任意的公钥</string>
+    <string name="allow_all_kinds_hint">空列表允许所有类型事件</string>
+    <string name="start_on_boot_description">随设备启动时启动中继</string>
+    <string name="enable_disable_auth_description">私密事件类型需要 NIP-42 认证</string>
+    <string name="listen_to_pokey_broadcasts_description">接收由 Pokey 应用广播的事件</string>
+    <string name="delete_expired_events_description">自动删除基于时间戳过期的事件</string>
+    <string name="delete_ephemeral_events_description">自动删除短效事件 (kind 20000–29999)</string>
+    <string name="use_proxy_description">通过 SOCKS5 代理路由出站连接</string>
+    <string name="auto_backup_description">定期备份数据库到选定的文件夹</string>
 </resources>
