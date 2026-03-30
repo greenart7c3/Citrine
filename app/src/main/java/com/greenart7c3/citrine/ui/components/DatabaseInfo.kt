@@ -67,8 +67,8 @@ private data class PieSlice(val label: String, val count: Int, val color: Color)
 
 private fun buildPieSlices(events: List<EventDao.CountResult>): List<PieSlice> {
     val sorted = events.sortedByDescending { it.count }
-    val top = sorted.take(10)
-    val otherCount = sorted.drop(10).sumOf { it.count }
+    val top = sorted.take(9)
+    val otherCount = sorted.drop(9).sumOf { it.count }
     val slices = top.mapIndexed { i, r ->
         PieSlice("Kind ${r.kind}", r.count, pieColors[i % pieColors.size])
     }.toMutableList()
