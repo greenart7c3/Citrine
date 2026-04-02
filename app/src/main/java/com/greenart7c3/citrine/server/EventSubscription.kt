@@ -4,7 +4,7 @@ import android.util.Log
 import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStore
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.utils.isEphemeral
@@ -20,7 +20,7 @@ data class Subscription(
     val id: String,
     val connection: Connection,
     val filters: Set<EventFilter>,
-    val appDatabase: AppDatabase,
+    val eventStore: EventStore,
     val objectMapper: ObjectMapper,
     val count: Boolean,
 ) {
@@ -97,7 +97,7 @@ object EventSubscription {
         subscriptionId: String,
         filters: Set<EventFilter>,
         connection: Connection,
-        appDatabase: AppDatabase,
+        eventStore: EventStore,
         objectMapper: ObjectMapper,
         count: Boolean,
     ) {
@@ -107,7 +107,7 @@ object EventSubscription {
                 subscriptionId,
                 connection,
                 filters,
-                appDatabase,
+                eventStore,
                 objectMapper,
                 count,
             ),

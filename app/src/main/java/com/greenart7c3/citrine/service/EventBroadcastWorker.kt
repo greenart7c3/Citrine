@@ -4,7 +4,8 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStore
+import com.greenart7c3.citrine.database.EventStoreFactory
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.sendAndWaitForResponse
@@ -28,8 +29,8 @@ class EventBroadcastWorker(
                 return@withContext Result.failure()
             }
 
-            val database = AppDatabase.getDatabase(applicationContext)
-            val dbEvent = database.eventDao().getById(eventId)
+            val eventStore = EventStoreFactory.create(applicationContext)
+            val dbEvent = eventStore.getById(eventId)
             if (dbEvent == null) {
                 Log.e(Citrine.TAG, "EventBroadcastWorker: Event $eventId not found in database")
                 return@withContext Result.failure()
@@ -39,7 +40,7 @@ class EventBroadcastWorker(
             Log.d(Citrine.TAG, "EventBroadcastWorker: Broadcasting event $eventId to relays")
 
             // Get relays for the event
-            val relays = getRelaysForEvent(event, database)
+            val relays = getRelaysForEvent(event, eventStore)
             if (relays.isNullOrEmpty()) {
                 Log.d(Citrine.TAG, "EventBroadcastWorker: No relays found for event $eventId")
                 return@withContext Result.success()
@@ -66,7 +67,7 @@ class EventBroadcastWorker(
         }
     }
 
-    private suspend fun getRelaysForEvent(event: Event, database: AppDatabase): Set<NormalizedRelayUrl>? {
+    private suspend fun getRelaysForEvent(event: Event, eventStore: EventStore): Set<NormalizedRelayUrl>? {
         val eventRelays = if (event.kind == AdvertisedRelayListEvent.KIND) {
             val advertisedRelayEvent = event as AdvertisedRelayListEvent
             advertisedRelayEvent.writeRelays()
@@ -85,7 +86,7 @@ class EventBroadcastWorker(
         }
 
         // Try to get relays from the user's advertised relay list (kind 10002)
-        val advertisedRelayList = database.eventDao().getAdvertisedRelayList(event.pubKey)
+        val advertisedRelayList = eventStore.getAdvertisedRelayList(event.pubKey)
         val outboxRelays = advertisedRelayList?.toEvent() as? AdvertisedRelayListEvent
         val writeRelays = outboxRelays?.writeRelays()?.mapNotNull { relay ->
             RelayUrlNormalizer.normalizeOrNull(relay)?.let {

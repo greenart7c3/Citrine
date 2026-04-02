@@ -29,6 +29,7 @@ object Settings {
     var useProxy = false
     var proxyPort = 9050
     var webClients = mutableMapOf<String, String>()
+    var databaseBackend: DatabaseBackend = DatabaseBackend.ROOM
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -55,6 +56,7 @@ object Settings {
         useProxy = false
         proxyPort = 9050
         webClients = mutableMapOf()
+        databaseBackend = DatabaseBackend.ROOM
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)
@@ -76,4 +78,29 @@ enum class OlderThanType(val screenCode: Int, val resourceId: Int) {
     WEEK(2, R.string.one_week),
     MONTH(3, R.string.one_month),
     YEAR(4, R.string.one_year),
+}
+
+/**
+ * The storage backend used for persisting Nostr events.
+ *
+ * Changing this setting requires restarting the relay service. Data is NOT automatically
+ * migrated between backends.
+ */
+enum class DatabaseBackend {
+    /** Android Room ORM backed by SQLite (default). Production-ready. */
+    ROOM,
+
+    /**
+     * NostrDB — a high-performance C library for Nostr event storage.
+     * Requires the `nostrdb-android` native library.
+     * See [com.greenart7c3.citrine.database.NostrDbEventStore] for setup instructions.
+     */
+    NOSTRDB,
+
+    /**
+     * rust-nostr LMDB — Rust-based LMDB storage from the rust-nostr SDK.
+     * Requires the `nostr-sdk-android` native library.
+     * See [com.greenart7c3.citrine.database.RustNostrEventStore] for setup instructions.
+     */
+    RUST_NOSTR_LMDB,
 }

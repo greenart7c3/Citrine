@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.greenart7c3.citrine.okhttp.HttpClientManager
+import com.greenart7c3.citrine.server.DatabaseBackend
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 
@@ -33,6 +34,7 @@ object PrefKeys {
     const val USE_PROXY = "use_proxy"
 
     const val WEB_CLIENTS = "web_clients"
+    const val DATABASE_BACKEND = "database_backend"
 }
 
 object LocalPreferences {
@@ -77,6 +79,7 @@ object LocalPreferences {
                 } else {
                     remove(PrefKeys.WEB_CLIENTS)
                 }
+                putString(PrefKeys.DATABASE_BACKEND, settings.databaseBackend.name)
 
                 HttpClientManager.setDefaultProxyOnPort(settings.proxyPort)
             }
@@ -111,6 +114,9 @@ object LocalPreferences {
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }
+        Settings.databaseBackend = runCatching {
+            DatabaseBackend.valueOf(prefs.getString(PrefKeys.DATABASE_BACKEND, DatabaseBackend.ROOM.name) ?: DatabaseBackend.ROOM.name)
+        }.getOrDefault(DatabaseBackend.ROOM)
 
         HttpClientManager.setDefaultProxyOnPort(Settings.proxyPort)
     }

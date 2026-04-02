@@ -57,7 +57,7 @@ import androidx.core.net.toUri
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStoreFactory
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.EventDownloader
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
@@ -109,8 +109,8 @@ fun SelectRelayModal(
                         if (!Citrine.instance.client.isActive()) {
                             Citrine.instance.client.connect()
                         }
-                        val database = AppDatabase.getDatabase(Citrine.instance)
-                        var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
+                        val database = EventStoreFactory.create(Citrine.instance)
+                        var contactList = database.getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
                         if (contactList == null) {
                             contactList = EventDownloader.fetchContactList(
                                 signer = signer,
@@ -123,7 +123,7 @@ fun SelectRelayModal(
                                 if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
                             }
                         }
-                        var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
+                        var advertisedRelayList = database.getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
                         if (advertisedRelayList == null) {
                             advertisedRelayList = EventDownloader.fetchAdvertisedRelayList(
                                 signer = signer,

@@ -7,8 +7,8 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.util.Log
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventDao
+import com.greenart7c3.citrine.database.EventStore
+import com.greenart7c3.citrine.database.EventStoreFactory
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.TagEntity
 import com.greenart7c3.citrine.database.toEvent
@@ -41,8 +41,7 @@ sealed class QueryResult<out T> {
  */
 class CitrineContentProvider : ContentProvider() {
 
-    private lateinit var database: AppDatabase
-    private lateinit var eventDao: EventDao
+    private lateinit var eventStore: EventStore
 
     companion object {
         private const val TAG = "CitrineContentProvider"
@@ -66,8 +65,7 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     override fun onCreate(): Boolean {
-        database = AppDatabase.getDatabase(context ?: return false)
-        eventDao = database.eventDao()
+        eventStore = EventStoreFactory.create(context ?: return false)
         return true
     }
 
@@ -187,7 +185,7 @@ class CitrineContentProvider : ContentProvider() {
                 }
 
                 // Use optimized database query instead of loading all events into memory
-                val rawEvents = eventDao.getEventsByDateRange(
+                val rawEvents = eventStore.getEventsByDateRange(
                     createdAtFrom = createdAtFrom,
                     createdAtTo = createdAtTo,
                     limit = limit,
@@ -223,7 +221,7 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                val event = eventDao.getById(eventId)
+                val event = eventStore.getById(eventId)
                 if (event != null && shouldIncludeEvent(event, authPubkey)) {
                     QueryResult.Success(listOf(event))
                 } else {
@@ -275,7 +273,7 @@ class CitrineContentProvider : ContentProvider() {
                 }
 
                 // Use optimized database query with pubkey filter
-                val rawEvents = eventDao.getEventsByPubkey(
+                val rawEvents = eventStore.getEventsByPubkey(
                     pubkey = pubkey,
                     kind = kind,
                     createdAtFrom = createdAtFrom,
@@ -341,7 +339,7 @@ class CitrineContentProvider : ContentProvider() {
                 }
 
                 // Use optimized database query with kind filter
-                val rawEvents = eventDao.getEventsByKind(
+                val rawEvents = eventStore.getEventsByKind(
                     kind = kind,
                     pubkey = pubkey,
                     createdAtFrom = createdAtFrom,
@@ -396,7 +394,7 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                val event = eventDao.getById(eventId)
+                val event = eventStore.getById(eventId)
                 if (event != null) {
                     QueryResult.Success(event.tags)
                 } else {
@@ -605,13 +603,13 @@ class CitrineContentProvider : ContentProvider() {
                     }
 
                     // Check if event already exists
-                    val existing = eventDao.getById(eventId)
+                    val existing = eventStore.getById(eventId)
                     if (existing != null) {
                         return@runBlocking QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                     }
 
                     val eventWithTags = event.toEventWithTags()
-                    eventDao.insertEventWithTags(eventWithTags, null, sendEventToSubscriptions = false)
+                    eventStore.insertEventWithTags(eventWithTags, null, sendEventToSubscriptions = false)
                     QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                 }
             } catch (e: Exception) {
@@ -648,7 +646,7 @@ class CitrineContentProvider : ContentProvider() {
 
         return runBlocking {
             // Load event from database
-            val eventWithTags = eventDao.getById(eventId)
+            val eventWithTags = eventStore.getById(eventId)
             if (eventWithTags == null) {
                 Log.d(TAG, "Event not found: $eventId")
                 return@runBlocking 0
@@ -678,7 +676,7 @@ class CitrineContentProvider : ContentProvider() {
                     CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
                     -> {
                         // Event is valid, proceed with deletion
-                        eventDao.delete(listOf(eventId))
+                        eventStore.delete(listOf(eventId))
                         1
                     }
                     CustomWebSocketServer.VerificationResult.InvalidId -> {
@@ -694,7 +692,7 @@ class CitrineContentProvider : ContentProvider() {
                 }
             } else {
                 // Server not available, just delete if authorized
-                eventDao.delete(listOf(eventId))
+                eventStore.delete(listOf(eventId))
                 1
             }
         }

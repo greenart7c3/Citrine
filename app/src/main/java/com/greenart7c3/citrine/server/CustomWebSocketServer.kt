@@ -19,9 +19,10 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStore
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.HistoryDatabase
+import com.greenart7c3.citrine.database.RoomEventStore
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.provider.CitrineContract
 import com.greenart7c3.citrine.service.CustomWebSocketService
@@ -106,8 +107,12 @@ import kotlinx.coroutines.withContext
 class CustomWebSocketServer(
     private val host: String,
     private val port: Int,
-    private val appDatabase: AppDatabase,
+    private val eventStore: EventStore,
 ) {
+    // History archive always uses Room (stores old versions of replaceable events)
+    private val historyEventStore: EventStore by lazy {
+        RoomEventStore(HistoryDatabase.getDatabase(Citrine.instance))
+    }
     val connections = MutableStateFlow(Collections.synchronizedList<Connection>(mutableListOf()))
     lateinit var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>
     private val webClientServers = ConcurrentHashMap<String, WebClientServer>()
@@ -179,7 +184,7 @@ class CustomWebSocketServer(
             )
         }.toSet()
 
-        EventSubscription.subscribe(subscriptionId, filters, connection, appDatabase, objectMapper, count)
+        EventSubscription.subscribe(subscriptionId, filters, connection, eventStore, objectMapper, count)
     }
 
     fun TimeUtils.tenMinutesAgo(): Long {
@@ -357,14 +362,14 @@ class CustomWebSocketServer(
             }
         }
 
-        val deletedEvents = appDatabase.eventDao().getDeletedEvents(event.id)
+        val deletedEvents = eventStore.getDeletedEvents(event.id)
         if (deletedEvents.isNotEmpty()) {
             Log.d(Citrine.TAG, "Event deleted ${event.id}")
             return VerificationResult.Deleted
         }
 
         if (event is AddressableEvent) {
-            val events = appDatabase.eventDao().getDeletedEventsByATag(event.address().toValue())
+            val events = eventStore.getDeletedEventsByATag(event.address().toValue())
             events.forEach { deletedAt ->
                 if (deletedAt >= event.createdAt) {
                     Log.d(Citrine.TAG, "Event deleted ${event.id}")
@@ -385,13 +390,13 @@ class CustomWebSocketServer(
 
         when {
             event.shouldDelete() -> {
-                val eventEntity = appDatabase.eventDao().getById(event.id)
+                val eventEntity = eventStore.getById(event.id)
                 if (eventEntity != null) {
                     Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
                 event.taggedEvents().forEach { taggedEvent ->
-                    val taggedEventEntity = appDatabase.eventDao().getById(taggedEvent.eventId)
+                    val taggedEventEntity = eventStore.getById(taggedEvent.eventId)
                     if (taggedEventEntity != null && taggedEventEntity.event.pubkey != event.pubKey) {
                         Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.id}")
                         return VerificationResult.TaggedPubKeyMismatch
@@ -399,7 +404,7 @@ class CustomWebSocketServer(
                 }
                 event.taggedAddresses().forEach { aTag ->
                     val taggedEvents = EventRepository.query(
-                        appDatabase,
+                        eventStore,
                         EventFilter(
                             authors = setOf(aTag.pubKeyHex),
                             kinds = setOf(aTag.kind),
@@ -416,21 +421,21 @@ class CustomWebSocketServer(
                 }
             }
             event.isParameterizedReplaceable() -> {
-                val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt)
+                val newest = eventStore.getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt)
                 if (newest.isNotEmpty()) {
                     Log.d(Citrine.TAG, "newest event already in database ${event.id}")
                     return VerificationResult.NewestEventAlreadyInDatabase
                 }
             }
             event.shouldOverwrite() -> {
-                val newest = appDatabase.eventDao().getByKindNewest(event.kind, event.pubKey, event.createdAt)
+                val newest = eventStore.getByKindNewest(event.kind, event.pubKey, event.createdAt)
                 if (newest.isNotEmpty()) {
                     Log.d(Citrine.TAG, "newest event already in database ${event.id}")
                     return VerificationResult.NewestEventAlreadyInDatabase
                 }
             }
             else -> {
-                val eventEntity = appDatabase.eventDao().getById(event.id)
+                val eventEntity = eventStore.getById(event.id)
                 if (eventEntity != null && !event.isEphemeral()) {
                     Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
@@ -522,17 +527,17 @@ class CustomWebSocketServer(
 
     private suspend fun handleParameterizedReplaceable(event: Event, connection: Connection?) {
         save(event, connection)
-        val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
-        appDatabase.eventDao().delete(ids, event.pubKey)
-        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
+        val ids = eventStore.getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
+        eventStore.delete(ids, event.pubKey)
+        historyEventStore.insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
     }
 
     private suspend fun override(event: Event, connection: Connection?) {
         save(event, connection)
-        val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
+        val ids = eventStore.getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
-        appDatabase.eventDao().delete(ids, event.pubKey)
-        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
+        eventStore.delete(ids, event.pubKey)
+        historyEventStore.insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
     }
 
     private fun isOffline(): Boolean {
@@ -567,11 +572,11 @@ class CustomWebSocketServer(
     }
 
     private suspend fun save(event: Event, connection: Connection?) {
-        appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
+        eventStore.insertEventWithTags(event.toEventWithTags(), connection = connection)
 
         // Check if offline and broadcast with WorkManager
         if (isOffline()) {
-            val dbEvent = appDatabase.eventDao().getById(event.id)
+            val dbEvent = eventStore.getById(event.id)
             if (dbEvent != null) {
                 broadcastWithWorkManager(dbEvent)
             }
@@ -580,13 +585,13 @@ class CustomWebSocketServer(
 
     private suspend fun deleteEvent(event: Event, connection: Connection?) {
         save(event, connection)
-        appDatabase.eventDao().delete(event.taggedEvents().map { it.eventId }, event.pubKey)
+        eventStore.delete(event.taggedEvents().map { it.eventId }, event.pubKey)
         val taggedAddresses = event.taggedAddresses()
         if (taggedAddresses.isEmpty()) return
 
         event.taggedAddresses().forEach { aTag ->
             val events = EventRepository.query(
-                appDatabase,
+                eventStore,
                 EventFilter(
                     authors = setOf(aTag.pubKeyHex),
                     kinds = setOf(aTag.kind),
@@ -595,7 +600,7 @@ class CustomWebSocketServer(
                 ),
             )
 
-            appDatabase.eventDao().delete(events.map { it.event.id }, event.pubKey)
+            eventStore.delete(events.map { it.event.id }, event.pubKey)
         }
     }
     fun DocumentFile?.findFileRecursive(path: String): DocumentFile? {

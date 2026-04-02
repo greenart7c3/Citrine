@@ -40,8 +40,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventPagingSource
+import com.greenart7c3.citrine.database.EventStoreFactory
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.crashreports.DisplayCrashMessages
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
@@ -127,7 +126,7 @@ fun CitrineScaffold(
                 content = {
                     it.arguments?.getInt("kind")?.let { kind ->
                         val context = LocalContext.current
-                        val database = AppDatabase.getDatabase(context)
+                        val eventStore = EventStoreFactory.create(context)
                         val clipboard = LocalClipboard.current
 
                         val pager = Pager(
@@ -138,10 +137,7 @@ fun CitrineScaffold(
                                 enablePlaceholders = false,
                             ),
                             pagingSourceFactory = {
-                                EventPagingSource(
-                                    dao = database.eventDao(),
-                                    kind = kind,
-                                )
+                                eventStore.createPagingSource(kind)
                             },
                         )
 
@@ -291,15 +287,16 @@ fun CitrineScaffold(
 
             composable(Route.DatabaseInfo.route) {
                 val context = LocalContext.current
+                val eventStore = EventStoreFactory.create(context)
                 val viewModel = viewModel<DatabaseInfoViewModel>(
-                    factory = DatabaseInfoViewModelFactory(AppDatabase.getDatabase(context)),
+                    factory = DatabaseInfoViewModelFactory(eventStore),
                 )
                 DatabaseInfo(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
                         .padding(16.dp),
-                    database = AppDatabase.getDatabase(context),
+                    eventStore = eventStore,
                     navController = navController,
                     viewModel = viewModel,
                 )

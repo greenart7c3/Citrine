@@ -8,7 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
-import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStore
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.server.OlderThan
@@ -105,7 +105,7 @@ class Citrine : Application() {
         job?.cancel()
     }
 
-    suspend fun eventsToDelete(database: AppDatabase) {
+    suspend fun eventsToDelete(eventStore: EventStore) {
         if (!isImportingEvents) {
             Log.d(TAG, "entered eventsToDelete")
             job?.join()
@@ -115,7 +115,7 @@ class Citrine : Application() {
                     if (Settings.deleteEphemeralEvents && isActive) {
                         val duration = measureTime {
                             Log.d(TAG, "Deleting ephemeral events older than one minute ago")
-                            database.eventDao().deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
+                            eventStore.deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
                         }
                         Log.d(TAG, "Deleted ephemeral events in $duration")
                     }
@@ -123,7 +123,7 @@ class Citrine : Application() {
                     if (Settings.deleteExpiredEvents && isActive) {
                         val duration = measureTime {
                             Log.d(TAG, "Deleting expired events")
-                            database.eventDao().deleteEventsWithExpirations(TimeUtils.now())
+                            eventStore.deleteEventsWithExpirations(TimeUtils.now())
                         }
                         Log.d(TAG, "Deleted expired events in $duration")
                     }
@@ -140,9 +140,9 @@ class Citrine : Application() {
                             val duration = measureTime {
                                 Log.d(TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
                                 if (Settings.neverDeleteFrom.isNotEmpty()) {
-                                    database.eventDao().deleteAll(until, Settings.neverDeleteFrom.toTypedArray())
+                                    eventStore.deleteAll(until, Settings.neverDeleteFrom.toTypedArray())
                                 } else {
-                                    database.eventDao().deleteAll(until)
+                                    eventStore.deleteAll(until)
                                 }
                             }
                             Log.d(TAG, "Deleted old events in $duration")

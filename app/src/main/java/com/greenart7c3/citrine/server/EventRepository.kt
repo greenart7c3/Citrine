@@ -1,10 +1,9 @@
 package com.greenart7c3.citrine.server
 
 import android.util.Log
-import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStore
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -126,31 +125,21 @@ object EventRepository {
     }
 
     fun query(
-        database: AppDatabase,
+        eventStore: EventStore,
         filter: EventFilter,
-    ): List<EventWithTags> {
-        val query = createQuery(filter, false)
-
-        val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
-        return database.eventDao().getEvents(rawSql)
-    }
+    ): List<EventWithTags> = eventStore.getEvents(filter)
 
     fun countQuery(
-        database: AppDatabase,
+        eventStore: EventStore,
         filter: EventFilter,
-    ): Int {
-        val query = createQuery(filter, true)
-
-        val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
-        return database.eventDao().count(rawSql)
-    }
+    ): Int = eventStore.countEvents(filter)
 
     fun subscribe(
         subscription: Subscription,
         filter: EventFilter,
     ) {
         if (subscription.count) {
-            val count = countQuery(subscription.appDatabase, filter)
+            val count = countQuery(subscription.eventStore, filter)
             subscription.connection.trySend(
                 subscription.objectMapper.writeValueAsString(
                     listOf(
@@ -163,7 +152,7 @@ object EventRepository {
             return
         }
 
-        val events = query(subscription.appDatabase, filter)
+        val events = query(subscription.eventStore, filter)
         events.forEach {
             val event = it.toEvent()
             if (!event.isExpired()) {

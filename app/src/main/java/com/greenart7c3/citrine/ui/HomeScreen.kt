@@ -52,8 +52,8 @@ import androidx.navigation.NavController
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.AppDatabase.Companion.isDatabaseUpgrading
+import com.greenart7c3.citrine.database.EventStoreFactory
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -107,7 +107,7 @@ fun HomeScreen(
         }
         var saveToPreferences by remember { mutableStateOf(false) }
 
-        val database = AppDatabase.getDatabase(context)
+        val eventStore = CustomWebSocketService.eventStore ?: EventStoreFactory.create(context)
         val launcher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult(),
             onResult = { result ->
@@ -195,7 +195,7 @@ fun HomeScreen(
             }
             homeViewModel.exportDatabase(
                 folder = folder,
-                database = database,
+                eventStore = eventStore,
                 context = context,
             )
         }
@@ -218,7 +218,7 @@ fun HomeScreen(
                         Citrine.job?.join()
                         Citrine.isImportingEvents = true
                         homeViewModel.setProgress("Deleting all events")
-                        database.clearAllTables()
+                        eventStore.deleteAll()
                         homeViewModel.setProgress("")
                         Citrine.isImportingEvents = false
                     }
@@ -237,7 +237,7 @@ fun HomeScreen(
                         files = selectedFiles,
                         shouldDelete = true,
                         context = context,
-                        database = database,
+                        eventStore = eventStore,
                         onFinished = {
                             selectedFiles.clear()
                         },
@@ -249,7 +249,7 @@ fun HomeScreen(
                         files = selectedFiles,
                         shouldDelete = false,
                         context = context,
-                        database = database,
+                        eventStore = eventStore,
                         onFinished = {
                             selectedFiles.clear()
                         },

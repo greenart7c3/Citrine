@@ -23,6 +23,8 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStore
+import com.greenart7c3.citrine.database.EventStoreFactory
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
@@ -54,7 +56,8 @@ class WebSocketServerService : Service() {
         super.onCreate()
 
         Log.d(Citrine.TAG, "Starting WebSocket service")
-        val database = AppDatabase.getDatabase(this@WebSocketServerService)
+        val eventStore: EventStore = EventStoreFactory.create(this@WebSocketServerService)
+        CustomWebSocketService.eventStore = eventStore
 
         Log.d(Citrine.TAG, "Starting timer")
         timer?.cancel()
@@ -68,7 +71,7 @@ class WebSocketServerService : Service() {
 
                     if (!Citrine.isImportingEvents) {
                         Citrine.instance.applicationScope.launch {
-                            Citrine.instance.eventsToDelete(database)
+                            Citrine.instance.eventsToDelete(eventStore)
                         }
                     }
 
@@ -87,7 +90,7 @@ class WebSocketServerService : Service() {
                                     Citrine.job?.cancel()
                                     Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                                         ExportDatabaseUtils.exportDatabase(
-                                            database = database,
+                                            eventStore = eventStore,
                                             context = this@WebSocketServerService,
                                             folder = it,
                                             deleteOldFiles = true,
@@ -179,7 +182,7 @@ class WebSocketServerService : Service() {
         CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
             port = Settings.port,
-            appDatabase = database,
+            eventStore = eventStore,
         )
         CustomWebSocketService.server?.start()
 

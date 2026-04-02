@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.server.DatabaseBackend
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.OlderThanType
 import com.greenart7c3.citrine.server.Settings
@@ -654,6 +655,45 @@ fun SettingsScreen(
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     },
                 )
+            }
+
+            // ── Database Backend ───────────────────────────────────────────────
+            stickyHeader {
+                SectionHeader(stringResource(R.string.database_backend))
+            }
+            item {
+                val backendItems = persistentListOf(
+                    TitleExplainer(
+                        stringResource(R.string.backend_room),
+                        stringResource(R.string.backend_room_description),
+                    ),
+                    TitleExplainer(
+                        stringResource(R.string.backend_nostrdb),
+                        stringResource(R.string.backend_nostrdb_description),
+                    ),
+                    TitleExplainer(
+                        stringResource(R.string.backend_rust_nostr_lmdb),
+                        stringResource(R.string.backend_rust_nostr_lmdb_description),
+                    ),
+                )
+                val backendOrder = listOf(
+                    DatabaseBackend.ROOM,
+                    DatabaseBackend.NOSTRDB,
+                    DatabaseBackend.RUST_NOSTR_LMDB,
+                )
+                var selectedBackendIndex by remember {
+                    mutableIntStateOf(backendOrder.indexOf(Settings.databaseBackend).takeIf { it >= 0 } ?: 0)
+                }
+                SettingsRow(
+                    name = R.string.database_backend,
+                    description = R.string.database_backend_description,
+                    selectedItems = backendItems,
+                    selectedIndex = selectedBackendIndex,
+                ) {
+                    selectedBackendIndex = it
+                    Settings.databaseBackend = backendOrder[it]
+                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                }
             }
 
             // ── Backup ─────────────────────────────────────────────────────────

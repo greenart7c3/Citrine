@@ -20,7 +20,7 @@ import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.openInputStream
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventStore
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.service.ClipboardReceiver
 import com.greenart7c3.citrine.service.CustomWebSocketService
@@ -122,13 +122,13 @@ class HomeViewModel : ViewModel() {
 
     fun exportDatabase(
         folder: DocumentFile,
-        database: AppDatabase,
+        eventStore: EventStore,
         context: Context,
     ) {
         Citrine.instance.cancelJob()
         Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             ExportDatabaseUtils.exportDatabase(
-                database,
+                eventStore,
                 context,
                 folder,
             ) {
@@ -140,7 +140,7 @@ class HomeViewModel : ViewModel() {
     fun importDatabase(
         files: List<DocumentFile>,
         shouldDelete: Boolean,
-        database: AppDatabase,
+        eventStore: EventStore,
         context: Context,
         onFinished: () -> Unit,
     ) {
@@ -168,7 +168,7 @@ class HomeViewModel : ViewModel() {
                     ip.bufferedReader().use {
                         if (shouldDelete) {
                             setProgress(context.getString(R.string.deleting_all_events))
-                            database.eventDao().deleteAll()
+                            eventStore.deleteAll()
                         }
 
                         it.useLines { lines ->

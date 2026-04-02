@@ -42,8 +42,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
+import com.greenart7c3.citrine.database.EventStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -132,23 +132,23 @@ private fun PieLegend(slices: List<PieSlice>, total: Int) {
 }
 
 class DatabaseInfoViewModelFactory(
-    private val database: AppDatabase,
+    private val eventStore: EventStore,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(DatabaseInfoViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return DatabaseInfoViewModel(database) as T
+            return DatabaseInfoViewModel(eventStore) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 
 class DatabaseInfoViewModel(
-    database: AppDatabase,
+    private val eventStore: EventStore,
 ) : ViewModel() {
 
     val countByKind =
-        database.eventDao().countByKind()
+        eventStore.countByKind()
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -164,7 +164,7 @@ class DatabaseInfoViewModel(
 @Composable
 fun DatabaseInfo(
     modifier: Modifier = Modifier,
-    database: AppDatabase,
+    eventStore: EventStore,
     navController: NavController,
     viewModel: DatabaseInfoViewModel,
 ) {
@@ -190,7 +190,7 @@ fun DatabaseInfo(
                     },
                     onClick = {
                         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
-                            database.eventDao().deleteByKind(wantsToDeleteKind!!)
+                            eventStore.deleteByKind(wantsToDeleteKind!!)
                             wantsToDeleteKind = null
                         }
                     },
