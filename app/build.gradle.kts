@@ -25,6 +25,17 @@ android {
             useSupportLibrary = true
         }
 
+        // nostrdb NDK build — only active when the C sources are present.
+        // Run scripts/setup_nostrdb.sh to clone them before building with NOSTRDB=1.
+        if (project.hasProperty("nostrdb") || System.getenv("NOSTRDB") != null) {
+            externalNativeBuild {
+                cmake {
+                    cppFlags("-std=c++17")
+                    arguments("-DANDROID_STL=c++_shared")
+                }
+            }
+        }
+
         androidResources {
             localeFilters.addAll(
                 setOf(
@@ -144,6 +155,15 @@ android {
         compose = true
         buildConfig = true
         resValues = true
+    }
+
+    if (project.hasProperty("nostrdb") || System.getenv("NOSTRDB") != null) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
+        }
     }
 
     packaging {

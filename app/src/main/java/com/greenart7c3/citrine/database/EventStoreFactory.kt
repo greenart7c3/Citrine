@@ -14,7 +14,9 @@ object EventStoreFactory {
 
     fun create(context: Context): EventStore = when (Settings.databaseBackend) {
         DatabaseBackend.ROOM -> RoomEventStore(AppDatabase.getDatabase(context))
-        DatabaseBackend.NOSTRDB -> NostrDbEventStore()
+        DatabaseBackend.NOSTRDB -> NostrDbEventStore(
+            dbPath = context.filesDir.absolutePath + "/nostrdb",
+        )
         DatabaseBackend.RUST_NOSTR_LMDB -> RustNostrEventStore()
     }
 
