@@ -3,11 +3,11 @@ package com.greenart7c3.citrine.server
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventEntity
 import com.greenart7c3.citrine.database.EventWithTags
-import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.database.TagEntity
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
-import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 
@@ -176,22 +176,81 @@ object EventRepository {
             .flatten()
             .groupBy { it.pkEvent }
 
+        val nowSeconds = System.currentTimeMillis() / 1000
+
         eventEntities.forEach { eventEntity ->
             val tags = tagsByEvent[eventEntity.id] ?: emptyList()
-            val event = EventWithTags(eventEntity, tags).toEvent()
-            if (!event.isExpired()) {
-                subscription.connection.trySend(
-                    subscription.objectMapper.writeValueAsString(
-                        listOf(
-                            "EVENT",
-                            subscription.id,
-                            event.toJsonObject(),
-                        ),
-                    ),
-                )
-            }
+
+            // Check NIP-40 expiration directly on tags — avoids allocating a full Event object
+            val expiry = tags.firstOrNull { it.col0Name == "expiration" }?.col1Value?.toLongOrNull()
+            if (expiry != null && expiry < nowSeconds) return@forEach
+
+            // Build the EVENT message as a raw JSON string without Jackson intermediaries
+            subscription.connection.trySend(buildEventMessage(subscription.id, eventEntity, tags))
         }
     }
+}
+
+/** Builds ["EVENT","<subId>",{event}] without Jackson intermediate objects. */
+private fun buildEventMessage(subId: String, entity: EventEntity, tags: List<TagEntity>): String = buildString(capacity = 1024) {
+    append("[\"EVENT\",")
+    appendJsonEncoded(subId)
+    append(",{\"id\":\"")
+    append(entity.id)
+    append("\",\"pubkey\":\"")
+    append(entity.pubkey)
+    append("\",\"created_at\":")
+    append(entity.createdAt)
+    append(",\"kind\":")
+    append(entity.kind)
+    append(",\"tags\":[")
+    tags.forEachIndexed { i, tag ->
+        if (i > 0) append(',')
+        append('[')
+        appendTagParts(tag)
+        append(']')
+    }
+    append("],\"content\":")
+    appendJsonEncoded(entity.content)
+    append(",\"sig\":\"")
+    append(entity.sig)
+    append("\"}]")
+}
+
+/** Appends the non-null tag parts as a comma-separated JSON string list. */
+private fun StringBuilder.appendTagParts(tag: TagEntity) {
+    var first = true
+    fun part(s: String?) {
+        if (s == null) return
+        if (!first) append(',')
+        first = false
+        appendJsonEncoded(s)
+    }
+    part(tag.col0Name)
+    part(tag.col1Value)
+    part(tag.col2Differentiator)
+    part(tag.col3Amount)
+    tag.col4Plus.forEach { part(it) }
+}
+
+/** Appends [s] as a JSON-encoded string (with surrounding quotes and proper escaping). */
+private fun StringBuilder.appendJsonEncoded(s: String) {
+    append('"')
+    for (ch in s) {
+        when {
+            ch == '"' -> append("\\\"")
+            ch == '\\' -> append("\\\\")
+            ch == '\n' -> append("\\n")
+            ch == '\r' -> append("\\r")
+            ch == '\t' -> append("\\t")
+            ch.code < 0x20 -> {
+                append("\\u")
+                append(ch.code.toString(16).padStart(4, '0'))
+            }
+            else -> append(ch)
+        }
+    }
+    append('"')
 }
 
 fun Event.toJsonObject(): JsonNode {
