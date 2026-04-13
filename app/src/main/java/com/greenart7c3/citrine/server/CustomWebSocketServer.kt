@@ -810,7 +810,7 @@ class CustomWebSocketServer(
                         /**
                          * Prevent compressing small outgoing frames.
                          */
-                        compressIfBiggerThan(bytes = 0)
+                        compressIfBiggerThan(bytes = 8192)
                     }
                 }
             }

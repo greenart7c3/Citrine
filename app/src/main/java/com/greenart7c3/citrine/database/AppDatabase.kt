@@ -62,6 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
                 "citrine_database",
             )
 //                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .setQueryExecutor(executor)
                 .setTransactionExecutor(transactionExecutor)
                 .addMigrations(MIGRATION_1_2)
@@ -77,8 +78,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
-                        // journal_mode and mmap_size return a result row, so use query() not execSQL()
-                        db.query("PRAGMA journal_mode=WAL").close()
+                        // mmap_size returns a result row, so use query() not execSQL()
                         db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA cache_size=-32000;")
                         db.execSQL("PRAGMA temp_store=MEMORY;")
@@ -113,6 +113,7 @@ abstract class HistoryDatabase : RoomDatabase() {
                 "citrine_history_database",
             )
 //                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
@@ -126,7 +127,6 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
-                        db.query("PRAGMA journal_mode=WAL").close()
                         db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA cache_size=-32000;")
                         db.execSQL("PRAGMA temp_store=MEMORY;")
