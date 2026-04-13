@@ -91,7 +91,7 @@ abstract class AppDatabase : RoomDatabase() {
                             val delegateField = db.javaClass.getDeclaredField("delegate")
                             delegateField.isAccessible = true
                             val sqliteDb = delegateField.get(db) as? SQLiteDatabase
-                            if (sqliteDb != null && sqliteDb.isWriteAheadLoggingEnabled) {
+                            if (sqliteDb != null) {
                                 val method = SQLiteDatabase::class.java.getDeclaredMethod(
                                     "setMaxConnectionPoolSize",
                                     Int::class.java,
