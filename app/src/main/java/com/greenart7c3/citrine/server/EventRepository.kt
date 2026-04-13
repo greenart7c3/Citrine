@@ -234,27 +234,40 @@ object EventRepository {
     }
 }
 
+// Pre-computed UTF-8 bytes for invariant JSON structural fragments.
+// System.arraycopy from these constants is faster than encoding literal strings per-event.
+private val J_EVENT_OPEN = "[\"EVENT\",".encodeToByteArray()
+private val J_ID_OPEN = ",{\"id\":\"".encodeToByteArray()
+private val J_PUBKEY_OPEN = "\",\"pubkey\":\"".encodeToByteArray()
+private val J_CREATED_AT_OPEN = "\",\"created_at\":".encodeToByteArray()
+private val J_KIND_OPEN = ",\"kind\":".encodeToByteArray()
+private val J_TAGS_OPEN = ",\"tags\":[".encodeToByteArray()
+private val J_CONTENT_OPEN = "],\"content\":".encodeToByteArray()
+private val J_SIG_OPEN = ",\"sig\":\"".encodeToByteArray()
+private val J_EVENT_CLOSE = "\"}]".encodeToByteArray()
+
 /**
  * Builds ["EVENT","<subId>",{event}] directly as a UTF-8 [ByteArray].
  *
  * Writing bytes once (instead of writing chars to a StringBuilder then re-encoding to bytes
  * inside Frame.Text(String)) eliminates a full second O(N) pass over every character.
+ * Structural JSON fragments are pre-computed constants copied via System.arraycopy.
  */
 private fun buildEventMessageBytes(subId: String, entity: EventEntity, tags: List<TagEntity>): ByteArray {
     val estSize = 120 + entity.id.length + entity.pubkey.length + entity.sig.length +
         entity.content.length + tags.sumOf { 6 + (it.col0Name?.length ?: 0) + (it.col1Value?.length ?: 0) }
     val w = ByteWriter(estSize)
-    w.writeAscii("[\"EVENT\",")
+    w.writeRaw(J_EVENT_OPEN)
     w.writeJsonEncoded(subId)
-    w.writeAscii(",{\"id\":\"")
+    w.writeRaw(J_ID_OPEN)
     w.writeAscii(entity.id)
-    w.writeAscii("\",\"pubkey\":\"")
+    w.writeRaw(J_PUBKEY_OPEN)
     w.writeAscii(entity.pubkey)
-    w.writeAscii("\",\"created_at\":")
+    w.writeRaw(J_CREATED_AT_OPEN)
     w.writeAscii(entity.createdAt.toString())
-    w.writeAscii(",\"kind\":")
+    w.writeRaw(J_KIND_OPEN)
     w.writeAscii(entity.kind.toString())
-    w.writeAscii(",\"tags\":[")
+    w.writeRaw(J_TAGS_OPEN)
     tags.forEachIndexed { idx, tag ->
         if (idx > 0) w.writeByte(','.code)
         w.writeByte('['.code)
@@ -272,11 +285,11 @@ private fun buildEventMessageBytes(subId: String, entity: EventEntity, tags: Lis
         tag.col4Plus.forEach { part(it) }
         w.writeByte(']'.code)
     }
-    w.writeAscii("],\"content\":")
+    w.writeRaw(J_CONTENT_OPEN)
     w.writeJsonEncoded(entity.content)
-    w.writeAscii(",\"sig\":\"")
+    w.writeRaw(J_SIG_OPEN)
     w.writeAscii(entity.sig)
-    w.writeAscii("\"}]")
+    w.writeRaw(J_EVENT_CLOSE)
     return w.toByteArray()
 }
 
@@ -303,19 +316,29 @@ private class ByteWriter(initialCapacity: Int) {
         buf[pos++] = b.toByte()
     }
 
-    /** Writes an ASCII-only string byte-for-byte (safe for hex strings and JSON literals). */
+    /** Copies a pre-encoded [ByteArray] directly via [System.arraycopy] — no encoding overhead. */
+    fun writeRaw(bytes: ByteArray) {
+        ensure(bytes.size)
+        System.arraycopy(bytes, 0, buf, pos, bytes.size)
+        pos += bytes.size
+    }
+
+    /**
+     * Encodes [s] as UTF-8 using the native charset encoder and bulk-copies the result.
+     * Faster than char-by-char loop for long strings such as hex event IDs.
+     */
     fun writeAscii(s: String) {
-        val len = s.length
-        ensure(len)
-        for (i in 0 until len) buf[pos++] = s[i].code.toByte()
+        val bytes = s.encodeToByteArray()
+        ensure(bytes.size)
+        System.arraycopy(bytes, 0, buf, pos, bytes.size)
+        pos += bytes.size
     }
 
     /**
      * Writes [s] as a JSON string value (with surrounding quotes and proper escaping).
      *
-     * Uses the same scan-then-flush strategy as the former appendJsonEncoded: skip over
-     * unescaped chars in the fast path, then flush each run via [writeUtf8Run] which handles
-     * multi-byte UTF-8 encoding for non-ASCII characters.
+     * Scans for characters that need escaping; flushes unescaped runs via [writeUtf8Run]
+     * which uses the JDK's native UTF-8 encoder for bulk byte production.
      */
     fun writeJsonEncoded(s: String) {
         ensure(s.length + 2)
@@ -367,35 +390,20 @@ private class ByteWriter(initialCapacity: Int) {
         buf[pos++] = '"'.code.toByte()
     }
 
-    /** Encodes [s] from index [start] (inclusive) to [end] (exclusive) as UTF-8 bytes. */
+    /**
+     * Encodes [s][start..end) as UTF-8 via the JDK's native charset encoder and bulk-copies
+     * the result into [buf].  [CharBuffer.wrap] avoids a [String.substring] allocation.
+     * The returned [java.nio.ByteBuffer] is heap-backed (arrayOffset == 0, position == 0).
+     */
     private fun writeUtf8Run(s: String, start: Int, end: Int) {
         if (start >= end) return
-        ensure((end - start) * 3) // worst-case 3 bytes per BMP char
-        var j = start
-        while (j < end) {
-            val c = s[j]
-            when {
-                c.code < 0x80 -> buf[pos++] = c.code.toByte()
-                c.code < 0x800 -> {
-                    buf[pos++] = (0xC0 or (c.code shr 6)).toByte()
-                    buf[pos++] = (0x80 or (c.code and 0x3F)).toByte()
-                }
-                c.isHighSurrogate() && j + 1 < end && s[j + 1].isLowSurrogate() -> {
-                    val cp = Character.toCodePoint(c, s[j + 1])
-                    buf[pos++] = (0xF0 or (cp shr 18)).toByte()
-                    buf[pos++] = (0x80 or ((cp shr 12) and 0x3F)).toByte()
-                    buf[pos++] = (0x80 or ((cp shr 6) and 0x3F)).toByte()
-                    buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
-                    j++ // consume the low surrogate
-                }
-                else -> {
-                    buf[pos++] = (0xE0 or (c.code shr 12)).toByte()
-                    buf[pos++] = (0x80 or ((c.code shr 6) and 0x3F)).toByte()
-                    buf[pos++] = (0x80 or (c.code and 0x3F)).toByte()
-                }
-            }
-            j++
-        }
+        val bb = java.nio.charset.StandardCharsets.UTF_8.encode(
+            java.nio.CharBuffer.wrap(s, start, end),
+        )
+        val len = bb.limit()
+        ensure(len)
+        System.arraycopy(bb.array(), bb.arrayOffset(), buf, pos, len)
+        pos += len
     }
 
     fun toByteArray(): ByteArray = buf.copyOf(pos)
