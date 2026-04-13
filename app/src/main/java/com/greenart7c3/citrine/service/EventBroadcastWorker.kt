@@ -7,7 +7,7 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
-import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.sendAndWaitForResponse
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.publishAndConfirm
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
@@ -51,7 +51,7 @@ class EventBroadcastWorker(
             }
 
             // Send event to relays
-            val result = Citrine.instance.client.sendAndWaitForResponse(event, relayList = relays)
+            val result = Citrine.instance.client.publishAndConfirm(event, relayList = relays)
             Citrine.instance.client.disconnect()
             Log.d(Citrine.TAG, "EventBroadcastWorker: Success: $result broadcast event $eventId to relays")
             if (result) {

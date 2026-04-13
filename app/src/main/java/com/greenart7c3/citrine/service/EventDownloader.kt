@@ -13,8 +13,8 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
-import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.downloadFirstEvent
-import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.IRelayClientListener
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.fetchFirst
+import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.RelayConnectionListener
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.IRelayClient
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.newSubId
 import com.vitorpamplona.quartz.nip01Core.relay.commands.toClient.ClosedMessage
@@ -85,7 +85,7 @@ object EventDownloader {
             events.clear()
         }
         subscription.closeSubscription()
-        client.unsubscribe(subscription)
+        client.removeConnectionListener(subscription)
     }
 
     suspend fun fetchAdvertisedRelayList(
@@ -114,7 +114,7 @@ object EventDownloader {
             ),
         )
         Citrine.instance.client.connect()
-        val event = Citrine.instance.client.downloadFirstEvent(
+        val event = Citrine.instance.client.fetchFirst(
             subId,
             relays.associateWith {
                 filters
@@ -126,7 +126,7 @@ object EventDownloader {
             result = event as AdvertisedRelayListEvent
         }
 
-        Citrine.instance.client.close(subId)
+        Citrine.instance.client.unsubscribe(subId)
         return result
     }
 
@@ -157,7 +157,7 @@ object EventDownloader {
         )
 
         Citrine.instance.client.connect()
-        val event = Citrine.instance.client.downloadFirstEvent(
+        val event = Citrine.instance.client.fetchFirst(
             subId,
             relays.associateWith {
                 filters
@@ -168,7 +168,7 @@ object EventDownloader {
             CustomWebSocketService.server?.innerProcessEvent(event, null)
             result = event as ContactListEvent
         }
-        Citrine.instance.client.close(subId)
+        Citrine.instance.client.unsubscribe(subId)
         return result
     }
 
@@ -259,14 +259,14 @@ class RelayClientSubscription(
     private val batchSize: Int = 500,
     private val eventConsumer: (Event) -> Unit,
     private val onComplete: ((Int) -> Unit)? = null,
-) : IRelayClientListener {
+) : RelayConnectionListener {
     private var subId = newSubId()
     private var until: Long = (System.currentTimeMillis() / 1000)
     private var oldestTimestamp: Long = until
     private val receivedEvents = mutableListOf<Event>()
 
     init {
-        client.subscribe(this)
+        client.addConnectionListener(this)
     }
 
     override fun onCannotConnect(relay: IRelayClient, errorMessage: String) {
@@ -338,10 +338,10 @@ class RelayClientSubscription(
         }
 
         Log.d("RelayClientSubscription", "Requesting batch with until=$until from relay $relayUrl")
-        client.openReqSubscription(subId, mapOf(relayUrl to filters))
+        client.subscribe(subId, mapOf(relayUrl to filters))
     }
 
     fun closeSubscription() {
-        client.close(subId)
+        client.unsubscribe(subId)
     }
 }

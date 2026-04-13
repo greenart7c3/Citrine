@@ -39,7 +39,7 @@ import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.utils.toDateString
-import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.sendAndWaitForResponse
+import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.publishAndConfirm
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
@@ -214,7 +214,7 @@ fun ContactsScreen(
                                         loading = true
 
                                         delay(1000)
-                                        Citrine.instance.client.sendAndWaitForResponse(signedEvent, relayList = localRelays.toSet())
+                                        Citrine.instance.client.publishAndConfirm(signedEvent, relayList = localRelays.toSet())
                                         CustomWebSocketService.server?.innerProcessEvent(signedEvent, null)
                                         Citrine.instance.client.disconnect()
                                         loading = false
