@@ -83,6 +83,25 @@ abstract class AppDatabase : RoomDatabase() {
                         db.execSQL("PRAGMA cache_size=-32000;")
                         db.execSQL("PRAGMA temp_store=MEMORY;")
                         db.query("PRAGMA mmap_size=268435456").close()
+                        // Increase WAL reader pool beyond the default of 2 so that
+                        // concurrent subscription queries don't serialize on connections.
+                        // FrameworkSQLiteDatabase wraps the real SQLiteDatabase in "delegate";
+                        // setMaxConnectionPoolSize is a hidden API so we reach it via reflection.
+                        try {
+                            val delegateField = db.javaClass.getDeclaredField("delegate")
+                            delegateField.isAccessible = true
+                            val sqliteDb = delegateField.get(db) as? SQLiteDatabase
+                            if (sqliteDb != null && sqliteDb.isWriteAheadLoggingEnabled) {
+                                val method = SQLiteDatabase::class.java.getDeclaredMethod(
+                                    "setMaxConnectionPoolSize",
+                                    Int::class.java,
+                                )
+                                method.isAccessible = true
+                                method.invoke(sqliteDb, numCores)
+                            }
+                        } catch (e: Exception) {
+                            Log.w(Citrine.TAG, "Could not expand WAL connection pool", e)
+                        }
                         _isDatabaseUpgrading.value = false
                     }
                 })
