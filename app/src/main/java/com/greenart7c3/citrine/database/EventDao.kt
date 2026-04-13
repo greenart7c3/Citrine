@@ -33,6 +33,10 @@ interface EventDao {
     @Query("SELECT * FROM TagEntity WHERE pkEvent IN (:eventIds)")
     fun getTagsForEvents(eventIds: List<String>): List<TagEntity>
 
+    /** Batch-loads the pre-serialized JSON cache for the given event IDs. */
+    @Query("SELECT id, json FROM EventEntity WHERE id IN (:ids)")
+    fun getEventJsonForIds(ids: List<String>): List<EventIdAndJson>
+
     @RawQuery
     fun count(query: SupportSQLiteQuery): Int
 
@@ -323,6 +327,12 @@ interface EventDao {
         offset: Int,
     ): List<EventWithTags>
 }
+
+/** Lightweight projection used by [EventDao.getEventJsonForIds] to load cached JSON in bulk. */
+data class EventIdAndJson(
+    val id: String,
+    val json: String,
+)
 
 data class EventKey(
     val createdAt: Long,

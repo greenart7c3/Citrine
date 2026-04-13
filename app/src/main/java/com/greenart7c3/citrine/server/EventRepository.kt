@@ -119,8 +119,12 @@ object EventRepository {
           $predicatesSql
             """.trimIndent()
         } else {
+            // Exclude the `json` column — it's ~500 bytes per event and is loaded separately
+            // in subscribe() to avoid 5× query slowdown from fetching large TEXT blobs in bulk.
+            // expiresAt (INTEGER) is included here since it's tiny and needed for the expiry check.
             """
-        SELECT EventEntity.*
+        SELECT EventEntity.id, EventEntity.pubkey, EventEntity.createdAt, EventEntity.kind,
+               EventEntity.content, EventEntity.sig, EventEntity.expiresAt
           FROM EventEntity EventEntity
           $joinSql
           $predicatesSql
@@ -180,15 +184,23 @@ object EventRepository {
 
             val (sql, params) = createQuery(filter, false)
             val rawSql = SimpleSQLiteQuery(sql, params.toTypedArray())
+            // getEventsOnly uses a SELECT that excludes the large `json` TEXT column; it is
+            // loaded separately below to avoid bloating the main event query from ~12ms to ~66ms.
             val eventEntities = subscription.appDatabase.eventDao().getEventsOnly(rawSql)
             val t2 = System.nanoTime()
             if (eventEntities.isEmpty()) return@withPermit
 
-            // Events inserted before migration 12 have json == ""; those need tag-based fallback.
-            val legacyEventIds = eventEntities.filter { it.json.isEmpty() }.map { it.id }
-            val tagsByEvent = if (legacyEventIds.isNotEmpty()) {
-                // Batch-load tags only for legacy events — chunk to stay under SQLite 999-var limit.
-                legacyEventIds.chunked(500) { chunk ->
+            // Batch-load cached JSON for all event IDs (replaces tags query for new events).
+            // Chunk to stay under SQLite's 999-variable limit.
+            val allIds = eventEntities.map { it.id }
+            val jsonById = allIds.chunked(500) { chunk ->
+                subscription.appDatabase.eventDao().getEventJsonForIds(chunk)
+            }.flatten().associateBy { it.id }
+
+            // Legacy events (json == "") still need tags for NIP-40 check and ByteWriter fallback.
+            val legacyIds = allIds.filter { jsonById[it]?.json.isNullOrEmpty() }
+            val tagsByEvent = if (legacyIds.isNotEmpty()) {
+                legacyIds.chunked(500) { chunk ->
                     subscription.appDatabase.eventDao().getTagsForEvents(chunk)
                 }.flatten().groupBy { it.pkEvent }
             } else {
@@ -197,7 +209,6 @@ object EventRepository {
 
             val t3 = System.nanoTime()
             val nowSeconds = System.currentTimeMillis() / 1000
-            // Pre-encode the subscription ID bytes once for the fast-path frame builder.
             val subIdBytes = subscription.id.encodeToByteArray()
 
             var buildNs = 0L
@@ -205,21 +216,20 @@ object EventRepository {
             eventEntities.forEach { eventEntity ->
                 // NIP-40 expiration: prefer cached expiresAt, fall back to tag scan for legacy events.
                 val expiry = eventEntity.expiresAt
-                    ?: tagsByEvent[eventEntity.id]?.firstOrNull { it.col0Name == "expiration" }?.col1Value?.toLongOrNull()
+                    ?: tagsByEvent[eventEntity.id]?.firstOrNull { it.col0Name == "expiration" }
+                        ?.col1Value?.toLongOrNull()
                 if (expiry != null && expiry < nowSeconds) return@forEach
 
                 val tb = System.nanoTime()
-                val bytes = if (eventEntity.json.isNotEmpty()) {
-                    // Fast path: assemble frame bytes from the cached JSON string using one native
-                    // encodeToByteArray() call — avoids the per-char ByteWriter encoding loop.
-                    buildCachedEventMessageBytes(subIdBytes, eventEntity.json)
+                val eventJson = jsonById[eventEntity.id]?.json ?: ""
+                val bytes = if (eventJson.isNotEmpty()) {
+                    // Fast path: one native encodeToByteArray() + three arraycopy calls.
+                    buildCachedEventMessageBytes(subIdBytes, eventJson)
                 } else {
-                    // Legacy path: build bytes via ByteWriter for events without cached JSON.
-                    val tags = tagsByEvent[eventEntity.id] ?: emptyList()
-                    buildEventMessageBytes(subscription.id, eventEntity, tags)
+                    // Legacy path: ByteWriter char-by-char encoder for pre-migration events.
+                    buildEventMessageBytes(subscription.id, eventEntity, tagsByEvent[eventEntity.id] ?: emptyList())
                 }
                 val ts = System.nanoTime()
-                // Frame.Text(true, byteArray) uses the bytes as-is with no further encoding.
                 subscription.connection.trySend(Frame.Text(true, bytes))
                 val te = System.nanoTime()
                 buildNs += ts - tb
@@ -230,10 +240,10 @@ object EventRepository {
                 Citrine.TAG,
                 "subscribe phases: semWait=${(t1 - t0) / 1_000_000}ms " +
                     "query1=${(t2 - t1) / 1_000_000}ms " +
-                    "tags=${(t3 - t2) / 1_000_000}ms " +
+                    "json=${(t3 - t2) / 1_000_000}ms " +
                     "send=${(t4 - t3) / 1_000_000}ms " +
                     "build=${buildNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
-                    "events=${eventEntities.size} legacy=${legacyEventIds.size}",
+                    "events=${eventEntities.size} legacy=${legacyIds.size}",
             )
         }
     }
