@@ -324,14 +324,13 @@ private class ByteWriter(initialCapacity: Int) {
     }
 
     /**
-     * Encodes [s] as UTF-8 using the native charset encoder and bulk-copies the result.
-     * Faster than char-by-char loop for long strings such as hex event IDs.
+     * Writes a pure-ASCII string byte-by-byte with zero allocation.
+     * Used for hex IDs/pubkeys/sigs and numeric strings where every char is < 0x80.
      */
     fun writeAscii(s: String) {
-        val bytes = s.encodeToByteArray()
-        ensure(bytes.size)
-        System.arraycopy(bytes, 0, buf, pos, bytes.size)
-        pos += bytes.size
+        val len = s.length
+        ensure(len)
+        for (i in 0 until len) buf[pos++] = s[i].code.toByte()
     }
 
     /**
@@ -391,19 +390,47 @@ private class ByteWriter(initialCapacity: Int) {
     }
 
     /**
-     * Encodes [s][start..end) as UTF-8 via the JDK's native charset encoder and bulk-copies
-     * the result into [buf].  [CharBuffer.wrap] avoids a [String.substring] allocation.
-     * The returned [java.nio.ByteBuffer] is heap-backed (arrayOffset == 0, position == 0).
+     * Encodes [s][start..end) as UTF-8 with zero allocation.
+     *
+     * Reserves [3 × (end − start)] bytes up front (safe: surrogate pairs produce 4 bytes
+     * across 2 chars = 2 bytes/char, unpaired surrogates produce 3 bytes/char).
+     * Handles BMP chars and surrogate pairs; unpaired surrogates are encoded as-is (3 bytes).
      */
     private fun writeUtf8Run(s: String, start: Int, end: Int) {
         if (start >= end) return
-        val bb = java.nio.charset.StandardCharsets.UTF_8.encode(
-            java.nio.CharBuffer.wrap(s, start, end),
-        )
-        val len = bb.limit()
-        ensure(len)
-        System.arraycopy(bb.array(), bb.arrayOffset(), buf, pos, len)
-        pos += len
+        ensure((end - start) * 3)
+        var i = start
+        while (i < end) {
+            val cp = s[i].code
+            when {
+                cp < 0x80 -> buf[pos++] = cp.toByte()
+                cp < 0x800 -> {
+                    buf[pos++] = (0xC0 or (cp ushr 6)).toByte()
+                    buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
+                }
+                cp in 0xD800..0xDBFF && i + 1 < end -> {
+                    val low = s[i + 1].code
+                    if (low in 0xDC00..0xDFFF) {
+                        val cp32 = 0x10000 + ((cp - 0xD800) shl 10) + (low - 0xDC00)
+                        buf[pos++] = (0xF0 or (cp32 ushr 18)).toByte()
+                        buf[pos++] = (0x80 or ((cp32 ushr 12) and 0x3F)).toByte()
+                        buf[pos++] = (0x80 or ((cp32 ushr 6) and 0x3F)).toByte()
+                        buf[pos++] = (0x80 or (cp32 and 0x3F)).toByte()
+                        i += 2
+                        continue
+                    }
+                    buf[pos++] = (0xE0 or (cp ushr 12)).toByte()
+                    buf[pos++] = (0x80 or ((cp ushr 6) and 0x3F)).toByte()
+                    buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
+                }
+                else -> {
+                    buf[pos++] = (0xE0 or (cp ushr 12)).toByte()
+                    buf[pos++] = (0x80 or ((cp ushr 6) and 0x3F)).toByte()
+                    buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
+                }
+            }
+            i++
+        }
     }
 
     fun toByteArray(): ByteArray = buf.copyOf(pos)
