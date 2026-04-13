@@ -392,25 +392,28 @@ private class ByteWriter(initialCapacity: Int) {
     /**
      * Encodes [s][start..end) as UTF-8 with zero allocation.
      *
-     * Reserves [3 × (end − start)] bytes up front (safe: surrogate pairs produce 4 bytes
-     * across 2 chars = 2 bytes/char, unpaired surrogates produce 3 bytes/char).
+     * Pre-reserves [end − start] bytes (sufficient for all-ASCII, the common case).
+     * Each non-ASCII code-unit calls [ensure] for the extra bytes it needs, so resize only
+     * happens when the content actually contains multi-byte characters.
      * Handles BMP chars and surrogate pairs; unpaired surrogates are encoded as-is (3 bytes).
      */
     private fun writeUtf8Run(s: String, start: Int, end: Int) {
         if (start >= end) return
-        ensure((end - start) * 3)
+        ensure(end - start) // fast path: enough for pure-ASCII
         var i = start
         while (i < end) {
             val cp = s[i].code
             when {
                 cp < 0x80 -> buf[pos++] = cp.toByte()
                 cp < 0x800 -> {
+                    ensure(2)
                     buf[pos++] = (0xC0 or (cp ushr 6)).toByte()
                     buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
                 }
                 cp in 0xD800..0xDBFF && i + 1 < end -> {
                     val low = s[i + 1].code
                     if (low in 0xDC00..0xDFFF) {
+                        ensure(4)
                         val cp32 = 0x10000 + ((cp - 0xD800) shl 10) + (low - 0xDC00)
                         buf[pos++] = (0xF0 or (cp32 ushr 18)).toByte()
                         buf[pos++] = (0x80 or ((cp32 ushr 12) and 0x3F)).toByte()
@@ -419,11 +422,13 @@ private class ByteWriter(initialCapacity: Int) {
                         i += 2
                         continue
                     }
+                    ensure(3)
                     buf[pos++] = (0xE0 or (cp ushr 12)).toByte()
                     buf[pos++] = (0x80 or ((cp ushr 6) and 0x3F)).toByte()
                     buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
                 }
                 else -> {
+                    ensure(3)
                     buf[pos++] = (0xE0 or (cp ushr 12)).toByte()
                     buf[pos++] = (0x80 or ((cp ushr 6) and 0x3F)).toByte()
                     buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
