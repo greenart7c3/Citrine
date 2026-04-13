@@ -56,12 +56,11 @@ object EventRepository {
             params.addAll(filter.kinds)
         }
 
-        // --- Single JOIN (just for connecting EventEntity with TagEntity if needed) ---
-        if (filter.tags.isNotEmpty()) {
-            joinClause.append(" INNER JOIN TagEntity t ON t.pkEvent = EventEntity.id")
-        }
-
         // --- Add each tag as an AND EXISTS in WHERE ---
+        // Note: there is intentionally no INNER JOIN on TagEntity here.
+        // A JOIN would expand each event into N rows (one per tag) and require DISTINCT to
+        // deduplicate — multiplying work by avg_tags_per_event for no benefit.
+        // EXISTS subqueries handle the filtering directly on the EventEntity rows.
         filter.tags.forEach { tag ->
             val safeTagKey = tag.key.takeIf { it.matches(Regex("^[a-zA-Z0-9]+$")) }
                 ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
@@ -91,7 +90,6 @@ object EventRepository {
         // --- Build SQL ---
         val joinSql = if (joinClause.isNotEmpty()) joinClause.toString() else ""
         val predicatesSql = if (whereClause.isNotEmpty()) whereClause.joinToString(" AND ", prefix = "WHERE ") else ""
-        val distinctSql = if (filter.tags.isNotEmpty()) "DISTINCT " else ""
 
         val orderBy = if (filter.searchKeywords.isNotEmpty()) {
             "EventEntity.rowid DESC"
@@ -101,14 +99,14 @@ object EventRepository {
 
         var query = if (count) {
             """
-        SELECT COUNT(DISTINCT EventEntity.id)
+        SELECT COUNT(EventEntity.id)
           FROM EventEntity EventEntity
           $joinSql
           $predicatesSql
             """.trimIndent()
         } else {
             """
-        SELECT $distinctSql EventEntity.*
+        SELECT EventEntity.*
           FROM EventEntity EventEntity
           $joinSql
           $predicatesSql
