@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 @Database(
     entities = [EventEntity::class, TagEntity::class, EventFTS::class],
-    version = 11,
+    version = 12,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -30,7 +30,7 @@ abstract class AppDatabase : RoomDatabase() {
         private val _isDatabaseUpgrading = MutableStateFlow(false)
         val isDatabaseUpgrading: StateFlow<Boolean> = _isDatabaseUpgrading
 
-        private const val TARGET_VERSION = 11
+        private const val TARGET_VERSION = 12
 
         private fun checkNeedsMigration(context: Context): Boolean {
             val dbFile = context.getDatabasePath("citrine_database")
@@ -75,6 +75,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_8_9)
                 .addMigrations(MIGRATION_9_10)
                 .addMigrations(MIGRATION_10_11)
+                .addMigrations(MIGRATION_11_12)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -83,25 +84,6 @@ abstract class AppDatabase : RoomDatabase() {
                         db.execSQL("PRAGMA cache_size=-32000;")
                         db.execSQL("PRAGMA temp_store=MEMORY;")
                         db.query("PRAGMA mmap_size=268435456").close()
-                        // Increase WAL reader pool beyond the default of 2 so that
-                        // concurrent subscription queries don't serialize on connections.
-                        // FrameworkSQLiteDatabase wraps the real SQLiteDatabase in "delegate";
-                        // setMaxConnectionPoolSize is a hidden API so we reach it via reflection.
-                        try {
-                            val delegateField = db.javaClass.getDeclaredField("delegate")
-                            delegateField.isAccessible = true
-                            val sqliteDb = delegateField.get(db) as? SQLiteDatabase
-                            if (sqliteDb != null) {
-                                val method = SQLiteDatabase::class.java.getDeclaredMethod(
-                                    "setMaxConnectionPoolSize",
-                                    Int::class.java,
-                                )
-                                method.isAccessible = true
-                                method.invoke(sqliteDb, numCores)
-                            }
-                        } catch (e: Exception) {
-                            Log.w(Citrine.TAG, "Could not expand WAL connection pool", e)
-                        }
                         _isDatabaseUpgrading.value = false
                     }
                 })
@@ -143,6 +125,7 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_8_9)
                 .addMigrations(MIGRATION_9_10)
                 .addMigrations(MIGRATION_10_11)
+                .addMigrations(MIGRATION_11_12)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -235,6 +218,15 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         db.execSQL("DROP TABLE IF EXISTS `event_fts` ")
         db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS `event_fts` USING FTS4(content, content=`EventEntity`)")
         db.execSQL("INSERT INTO `event_fts` (`event_fts`) VALUES ('rebuild')")
+    }
+}
+
+/** Adds pre-serialized JSON cache and NIP-40 expiration columns to EventEntity.
+ *  Existing rows get empty json (fall back to ByteWriter path) and null expiresAt. */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `EventEntity` ADD COLUMN `json` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `EventEntity` ADD COLUMN `expiresAt` INTEGER DEFAULT NULL")
     }
 }
 

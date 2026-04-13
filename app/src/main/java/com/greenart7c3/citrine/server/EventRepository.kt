@@ -184,41 +184,46 @@ object EventRepository {
             val t2 = System.nanoTime()
             if (eventEntities.isEmpty()) return@withPermit
 
-            // Batch-load all tags in one query instead of Room's @Relation N+1 pattern.
-            // Chunk to stay under SQLite's 999-variable limit.
-            val tagsByEvent = eventEntities
-                .map { it.id }
-                .chunked(500) { chunk ->
+            // Events inserted before migration 12 have json == ""; those need tag-based fallback.
+            val legacyEventIds = eventEntities.filter { it.json.isEmpty() }.map { it.id }
+            val tagsByEvent = if (legacyEventIds.isNotEmpty()) {
+                // Batch-load tags only for legacy events — chunk to stay under SQLite 999-var limit.
+                legacyEventIds.chunked(500) { chunk ->
                     subscription.appDatabase.eventDao().getTagsForEvents(chunk)
-                }
-                .flatten()
-                .groupBy { it.pkEvent }
+                }.flatten().groupBy { it.pkEvent }
+            } else {
+                emptyMap()
+            }
 
             val t3 = System.nanoTime()
             val nowSeconds = System.currentTimeMillis() / 1000
+            // Pre-encode the subscription ID bytes once for the fast-path frame builder.
+            val subIdBytes = subscription.id.encodeToByteArray()
 
             var buildNs = 0L
-            var frameNs = 0L
             var sendNs = 0L
             eventEntities.forEach { eventEntity ->
-                val tags = tagsByEvent[eventEntity.id] ?: emptyList()
-
-                // Check NIP-40 expiration directly on tags — avoids allocating a full Event object
-                val expiry = tags.firstOrNull { it.col0Name == "expiration" }?.col1Value?.toLongOrNull()
+                // NIP-40 expiration: prefer cached expiresAt, fall back to tag scan for legacy events.
+                val expiry = eventEntity.expiresAt
+                    ?: tagsByEvent[eventEntity.id]?.firstOrNull { it.col0Name == "expiration" }?.col1Value?.toLongOrNull()
                 if (expiry != null && expiry < nowSeconds) return@forEach
 
-                // Build the EVENT message bytes directly — avoids String→ByteArray re-encoding.
                 val tb = System.nanoTime()
-                val bytes = buildEventMessageBytes(subscription.id, eventEntity, tags)
+                val bytes = if (eventEntity.json.isNotEmpty()) {
+                    // Fast path: assemble frame bytes from the cached JSON string using one native
+                    // encodeToByteArray() call — avoids the per-char ByteWriter encoding loop.
+                    buildCachedEventMessageBytes(subIdBytes, eventEntity.json)
+                } else {
+                    // Legacy path: build bytes via ByteWriter for events without cached JSON.
+                    val tags = tagsByEvent[eventEntity.id] ?: emptyList()
+                    buildEventMessageBytes(subscription.id, eventEntity, tags)
+                }
                 val ts = System.nanoTime()
                 // Frame.Text(true, byteArray) uses the bytes as-is with no further encoding.
-                val frame = Frame.Text(true, bytes)
-                val tf = System.nanoTime()
-                subscription.connection.trySend(frame)
+                subscription.connection.trySend(Frame.Text(true, bytes))
                 val te = System.nanoTime()
                 buildNs += ts - tb
-                frameNs += tf - ts
-                sendNs += te - tf
+                sendNs += te - ts
             }
             val t4 = System.nanoTime()
             Log.d(
@@ -227,8 +232,8 @@ object EventRepository {
                     "query1=${(t2 - t1) / 1_000_000}ms " +
                     "tags=${(t3 - t2) / 1_000_000}ms " +
                     "send=${(t4 - t3) / 1_000_000}ms " +
-                    "build=${buildNs / 1_000_000}ms frame=${frameNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
-                    "events=${eventEntities.size}",
+                    "build=${buildNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
+                    "events=${eventEntities.size} legacy=${legacyEventIds.size}",
             )
         }
     }
@@ -236,6 +241,9 @@ object EventRepository {
 
 // Pre-computed UTF-8 bytes for invariant JSON structural fragments.
 // System.arraycopy from these constants is faster than encoding literal strings per-event.
+private val J_CACHED_PREFIX = "[\"EVENT\",\"".encodeToByteArray() // fast-path prefix up to subId
+private val J_CACHED_SEP = "\",".encodeToByteArray() // separator between subId and event JSON
+private val J_CACHED_SUFFIX = "]".encodeToByteArray() // closing bracket
 private val J_EVENT_OPEN = "[\"EVENT\",".encodeToByteArray()
 private val J_ID_OPEN = ",{\"id\":\"".encodeToByteArray()
 private val J_PUBKEY_OPEN = "\",\"pubkey\":\"".encodeToByteArray()
@@ -247,11 +255,38 @@ private val J_SIG_OPEN = ",\"sig\":\"".encodeToByteArray()
 private val J_EVENT_CLOSE = "\"}]".encodeToByteArray()
 
 /**
+ * Fast-path frame builder for events with a pre-serialized [eventJson] cache column.
+ *
+ * Assembles `["EVENT","<subId>",<eventJson>]` via three [System.arraycopy] calls plus one
+ * native [String.encodeToByteArray] for the event JSON — orders of magnitude faster than the
+ * char-by-char [ByteWriter] loop for events that went through the legacy insert path.
+ *
+ * @param subIdBytes pre-encoded subscription ID bytes (computed once per subscribe() call)
+ * @param eventJson  the pre-serialized inner event object stored in [EventEntity.json]
+ */
+private fun buildCachedEventMessageBytes(subIdBytes: ByteArray, eventJson: String): ByteArray {
+    val jsonBytes = eventJson.encodeToByteArray()
+    val total = J_CACHED_PREFIX.size + subIdBytes.size + J_CACHED_SEP.size + jsonBytes.size + J_CACHED_SUFFIX.size
+    val out = ByteArray(total)
+    var pos = 0
+    System.arraycopy(J_CACHED_PREFIX, 0, out, pos, J_CACHED_PREFIX.size)
+    pos += J_CACHED_PREFIX.size
+    System.arraycopy(subIdBytes, 0, out, pos, subIdBytes.size)
+    pos += subIdBytes.size
+    System.arraycopy(J_CACHED_SEP, 0, out, pos, J_CACHED_SEP.size)
+    pos += J_CACHED_SEP.size
+    System.arraycopy(jsonBytes, 0, out, pos, jsonBytes.size)
+    pos += jsonBytes.size
+    System.arraycopy(J_CACHED_SUFFIX, 0, out, pos, J_CACHED_SUFFIX.size)
+    return out
+}
+
+/**
  * Builds ["EVENT","<subId>",{event}] directly as a UTF-8 [ByteArray].
  *
- * Writing bytes once (instead of writing chars to a StringBuilder then re-encoding to bytes
- * inside Frame.Text(String)) eliminates a full second O(N) pass over every character.
- * Structural JSON fragments are pre-computed constants copied via System.arraycopy.
+ * Legacy path for events without a cached [EventEntity.json] column (inserted before
+ * migration 12). Structural JSON fragments are pre-computed constants copied via
+ * [System.arraycopy]; variable fields use the [ByteWriter] char-by-char encoder.
  */
 private fun buildEventMessageBytes(subId: String, entity: EventEntity, tags: List<TagEntity>): ByteArray {
     val estSize = 120 + entity.id.length + entity.pubkey.length + entity.sig.length +

@@ -11,6 +11,7 @@ import androidx.room.TypeConverter
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import com.vitorpamplona.quartz.utils.EventFactory
 
 @Entity(
@@ -45,6 +46,11 @@ data class EventEntity(
     val kind: Int,
     val content: String,
     val sig: String,
+    /** Pre-serialized event JSON object (the inner `{…}` without the outer `["EVENT",…]` wrapper).
+     *  Empty string for events inserted before migration 12; those fall back to ByteWriter encoding. */
+    val json: String = "",
+    /** NIP-40 expiration timestamp in seconds, or null if the event has no expiration tag. */
+    val expiresAt: Long? = null,
 )
 
 data class EventWithTags(
@@ -132,6 +138,32 @@ fun TagEntity.toTags(): Array<String> = listOfNotNull(
 ).plus(col4Plus).toTypedArray()
 
 fun Event.toEventWithTags(): EventWithTags {
+    // Serialize the event JSON once at insert time so subscribe() can avoid per-query encoding.
+    val json = try {
+        val factory = JacksonMapper.mapper.nodeFactory
+        val node = factory.objectNode().apply {
+            put("id", id)
+            put("pubkey", pubKey)
+            put("created_at", createdAt)
+            put("kind", kind)
+            replace(
+                "tags",
+                factory.arrayNode(tags.size).apply {
+                    tags.forEach { tag ->
+                        add(factory.arrayNode(tag.size).apply { tag.forEach { add(it) } })
+                    }
+                },
+            )
+            put("content", content)
+            put("sig", sig)
+        }
+        JacksonMapper.mapper.writeValueAsString(node)
+    } catch (_: Exception) {
+        ""
+    }
+    // Cache the NIP-40 expiration so subscribe() avoids loading tags just for expiry checks.
+    val expiresAt = tags.firstOrNull { it.getOrNull(0) == "expiration" }?.getOrNull(1)?.toLongOrNull()
+
     val dbEvent = EventEntity(
         id = id,
         pubkey = pubKey,
@@ -139,6 +171,8 @@ fun Event.toEventWithTags(): EventWithTags {
         kind = kind,
         content = content,
         sig = sig,
+        json = json,
+        expiresAt = expiresAt,
     )
 
     val dbTags = tags.mapIndexed { index, tag ->
