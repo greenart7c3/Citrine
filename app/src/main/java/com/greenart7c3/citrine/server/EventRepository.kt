@@ -119,12 +119,14 @@ object EventRepository {
           $predicatesSql
             """.trimIndent()
         } else {
-            // Exclude the `json` column — it's ~500 bytes per event and is loaded separately
-            // in subscribe() to avoid 5× query slowdown from fetching large TEXT blobs in bulk.
-            // expiresAt (INTEGER) is included here since it's tiny and needed for the expiry check.
+            // Return '' AS json instead of the real column: Room 2.8 requires the column to be
+            // present for NON-NULL fields, but we don't materialise the actual bytes here —
+            // they're loaded in a separate batch query in subscribe() to avoid the ~5× slowdown
+            // caused by fetching ~500 bytes of JSON text per row in the main event query.
+            // SQLite evaluates the constant '' without reading the json column bytes.
             """
         SELECT EventEntity.id, EventEntity.pubkey, EventEntity.createdAt, EventEntity.kind,
-               EventEntity.content, EventEntity.sig, EventEntity.expiresAt
+               EventEntity.content, EventEntity.sig, EventEntity.expiresAt, '' AS json
           FROM EventEntity EventEntity
           $joinSql
           $predicatesSql
