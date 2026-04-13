@@ -196,6 +196,8 @@ object EventRepository {
             val t3 = System.nanoTime()
             val nowSeconds = System.currentTimeMillis() / 1000
 
+            var buildNs = 0L
+            var sendNs = 0L
             eventEntities.forEach { eventEntity ->
                 val tags = tagsByEvent[eventEntity.id] ?: emptyList()
 
@@ -204,7 +206,13 @@ object EventRepository {
                 if (expiry != null && expiry < nowSeconds) return@forEach
 
                 // Build the EVENT message as a raw JSON string without Jackson intermediaries
-                subscription.connection.trySend(buildEventMessage(subscription.id, eventEntity, tags))
+                val tb = System.nanoTime()
+                val msg = buildEventMessage(subscription.id, eventEntity, tags)
+                val ts = System.nanoTime()
+                subscription.connection.trySend(msg)
+                val te = System.nanoTime()
+                buildNs += ts - tb
+                sendNs += te - ts
             }
             val t4 = System.nanoTime()
             Log.d(
@@ -213,6 +221,7 @@ object EventRepository {
                     "query1=${(t2 - t1) / 1_000_000}ms " +
                     "tags=${(t3 - t2) / 1_000_000}ms " +
                     "send=${(t4 - t3) / 1_000_000}ms " +
+                    "build=${buildNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
                     "events=${eventEntities.size}",
             )
         }
