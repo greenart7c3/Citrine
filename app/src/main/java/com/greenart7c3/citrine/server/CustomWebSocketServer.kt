@@ -1037,7 +1037,7 @@ class CustomWebSocketServer(
                     val thisConnection = Connection(this)
                     connections.emit(connections.value + thisConnection)
 
-                    val maxParallelMessages = 8
+                    val maxParallelMessages = 32
 
                     val job = launch {
                         thisConnection.sharedFlow

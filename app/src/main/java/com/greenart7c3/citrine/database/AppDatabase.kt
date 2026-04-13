@@ -52,8 +52,9 @@ abstract class AppDatabase : RoomDatabase() {
                 _isDatabaseUpgrading.value = true
             }
 
-            val executor = Executors.newCachedThreadPool()
-            val transactionExecutor = Executors.newCachedThreadPool()
+            val numCores = Runtime.getRuntime().availableProcessors()
+            val executor = Executors.newFixedThreadPool(numCores * 2)
+            val transactionExecutor = Executors.newFixedThreadPool(2)
 
             val instance = Room.databaseBuilder(
                 context,
@@ -76,7 +77,11 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
+                        db.execSQL("PRAGMA journal_mode=WAL;")
+                        db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA cache_size=-32000;")
+                        db.execSQL("PRAGMA temp_store=MEMORY;")
+                        db.execSQL("PRAGMA mmap_size=268435456;")
                         _isDatabaseUpgrading.value = false
                     }
                 })
@@ -120,7 +125,11 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
+                        db.execSQL("PRAGMA journal_mode=WAL;")
+                        db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA cache_size=-32000;")
+                        db.execSQL("PRAGMA temp_store=MEMORY;")
+                        db.execSQL("PRAGMA mmap_size=268435456;")
                     }
                 })
                 .build()

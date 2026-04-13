@@ -1,14 +1,16 @@
 package com.greenart7c3.citrine.server
 
 import android.util.Log
-import android.util.LruCache
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.utils.isEphemeral
 import io.ktor.server.websocket.WebSocketServerSession
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -28,32 +30,25 @@ data class Subscription(
 }
 
 object EventSubscription {
-    private val subscriptions = LruCache<String, SubscriptionManager>(500)
+    private val subscriptions = ConcurrentHashMap<String, SubscriptionManager>()
+    private val objectMapper: ObjectMapper = jacksonObjectMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-    fun getConnection(session: WebSocketServerSession): Connection? = subscriptions.snapshot().values.firstOrNull { it.subscription.connection.session == session }?.subscription?.connection
+    fun getConnection(session: WebSocketServerSession): Connection? = subscriptions.values.firstOrNull { it.subscription.connection.session == session }?.subscription?.connection
 
-    fun count(): Int = subscriptions.size()
+    fun count(): Int = subscriptions.size
 
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             val event = dbEvent.toEvent()
-            val eventJson = event.toJsonObject()
+            val eventJsonStr = objectMapper.writeValueAsString(event.toJsonObject())
             var sentEvent = false
-            subscriptions.snapshot().values.forEach {
-                it.subscription.filters.forEach filter@{ filter ->
-                    if (filter.test(event)) {
-                        it.subscription.connection.trySend(
-                            it.subscription.objectMapper.writeValueAsString(
-                                listOf(
-                                    "EVENT",
-                                    it.subscription.id,
-                                    eventJson,
-                                ),
-                            ),
-                        )
-
-                        sentEvent = true
-                    }
+            subscriptions.values.forEach { manager ->
+                val sub = manager.subscription
+                if (sub.filters.any { filter -> filter.test(event) }) {
+                    val subIdJson = objectMapper.writeValueAsString(sub.id)
+                    sub.connection.trySend("""["EVENT",$subIdJson,$eventJsonStr]""")
+                    sentEvent = true
                 }
             }
             if (event.isEphemeral()) {
@@ -70,28 +65,29 @@ object EventSubscription {
 
     fun closeAll(connectionName: String) {
         Log.d(Citrine.TAG, "finalizing subscriptions from $connectionName")
-        subscriptions.snapshot().entries.forEach { (key, manager) ->
-            if (manager.subscription.connection.name == connectionName) {
-                Log.d(Citrine.TAG, "closing subscription $key")
-                manager.subscription.scope.coroutineContext.cancelChildren()
-                subscriptions.remove(key)
+        val iterator = subscriptions.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.value.subscription.connection.name == connectionName) {
+                Log.d(Citrine.TAG, "closing subscription ${entry.key}")
+                entry.value.subscription.scope.coroutineContext.cancelChildren()
+                iterator.remove()
             }
         }
     }
 
     fun closeAll() {
-        subscriptions.snapshot().keys.forEach {
+        subscriptions.keys.forEach {
             close(it)
         }
     }
 
     fun close(subscriptionId: String) {
-        subscriptions.get(subscriptionId)?.subscription?.scope?.coroutineContext?.cancelChildren()
-        subscriptions.remove(subscriptionId)
+        subscriptions.remove(subscriptionId)?.subscription?.scope?.coroutineContext?.cancelChildren()
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    fun containsConnection(connection: Connection): Boolean = subscriptions.snapshot().values.any { it.subscription.connection.name == connection.name && !it.subscription.connection.session.outgoing.isClosedForSend }
+    fun containsConnection(connection: Connection): Boolean = subscriptions.values.any { it.subscription.connection.name == connection.name && !it.subscription.connection.session.outgoing.isClosedForSend }
 
     suspend fun subscribe(
         subscriptionId: String,
@@ -112,10 +108,7 @@ object EventSubscription {
                 count,
             ),
         )
-        subscriptions.put(
-            subscriptionId,
-            manager,
-        )
+        subscriptions[subscriptionId] = manager
         manager.execute()
     }
 }

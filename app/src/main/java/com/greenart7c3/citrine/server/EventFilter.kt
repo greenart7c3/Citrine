@@ -36,7 +36,7 @@ data class EventFilter(
             return false
         }
 
-        if (tags.isNotEmpty() && tags.none { testTag(it, event) }) {
+        if (tags.isNotEmpty() && !tags.all { testTag(it, event) }) {
             return false
         }
 
