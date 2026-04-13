@@ -77,4 +77,22 @@ class Connection(
             Log.d(Citrine.TAG, "Error sending data to client $data", e)
         }
     }
+
+    /** Sends a pre-built [Frame] directly, avoiding a redundant String→ByteArray encoding step. */
+    fun trySend(frame: Frame) {
+        try {
+            session.outgoing.trySend(frame).onClosed {
+                val connection = EventSubscription.getConnection(session)
+                connection?.let {
+                    Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress()}")
+                    Citrine.instance.applicationScope.launch {
+                        CustomWebSocketService.server?.removeConnection(connection)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.d(Citrine.TAG, "Error sending frame to client", e)
+        }
+    }
 }

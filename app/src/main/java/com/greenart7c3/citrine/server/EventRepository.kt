@@ -10,6 +10,7 @@ import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.TagEntity
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
+import io.ktor.websocket.Frame
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 import kotlinx.coroutines.sync.Semaphore
@@ -197,6 +198,7 @@ object EventRepository {
             val nowSeconds = System.currentTimeMillis() / 1000
 
             var buildNs = 0L
+            var frameNs = 0L
             var sendNs = 0L
             eventEntities.forEach { eventEntity ->
                 val tags = tagsByEvent[eventEntity.id] ?: emptyList()
@@ -209,10 +211,14 @@ object EventRepository {
                 val tb = System.nanoTime()
                 val msg = buildEventMessage(subscription.id, eventEntity, tags)
                 val ts = System.nanoTime()
-                subscription.connection.trySend(msg)
+                // Pre-encode String→ByteArray once here; Frame.Text(String) would do this anyway.
+                val frame = Frame.Text(msg)
+                val tf = System.nanoTime()
+                subscription.connection.trySend(frame)
                 val te = System.nanoTime()
                 buildNs += ts - tb
-                sendNs += te - ts
+                frameNs += tf - ts
+                sendNs += te - tf
             }
             val t4 = System.nanoTime()
             Log.d(
@@ -221,7 +227,7 @@ object EventRepository {
                     "query1=${(t2 - t1) / 1_000_000}ms " +
                     "tags=${(t3 - t2) / 1_000_000}ms " +
                     "send=${(t4 - t3) / 1_000_000}ms " +
-                    "build=${buildNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
+                    "build=${buildNs / 1_000_000}ms frame=${frameNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
                     "events=${eventEntities.size}",
             )
         }
@@ -270,23 +276,41 @@ private fun StringBuilder.appendTagParts(tag: TagEntity) {
     tag.col4Plus.forEach { part(it) }
 }
 
-/** Appends [s] as a JSON-encoded string (with surrounding quotes and proper escaping). */
+/**
+ * Appends [s] as a JSON-encoded string (surrounding quotes + proper escaping).
+ *
+ * Uses a bulk-copy strategy: scan for characters that need escaping, and flush
+ * the unescaped runs between them with a single [StringBuilder.append] call that
+ * resolves to [System.arraycopy] internally — orders of magnitude faster than the
+ * previous char-by-char append loop for typical content with few or no special chars.
+ */
 private fun StringBuilder.appendJsonEncoded(s: String) {
     append('"')
-    for (ch in s) {
-        when {
-            ch == '"' -> append("\\\"")
-            ch == '\\' -> append("\\\\")
-            ch == '\n' -> append("\\n")
-            ch == '\r' -> append("\\r")
-            ch == '\t' -> append("\\t")
-            ch.code < 0x20 -> {
-                append("\\u")
-                append(ch.code.toString(16).padStart(4, '0'))
-            }
-            else -> append(ch)
+    var start = 0
+    val len = s.length
+    var i = 0
+    while (i < len) {
+        val ch = s[i]
+        // Fast path: printable ASCII that isn't " or \ needs no escaping — keep scanning.
+        if (ch.code >= 0x20 && ch != '"' && ch != '\\') {
+            i++
+            continue
         }
+        // Flush the unescaped run [start, i) as a single bulk copy (System.arraycopy).
+        if (i > start) append(s, start, i)
+        when (ch) {
+            '"' -> append("\\\"")
+            '\\' -> append("\\\\")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> append("\\u").append(ch.code.toString(16).padStart(4, '0'))
+        }
+        start = i + 1
+        i++
     }
+    // Flush any remaining unescaped suffix.
+    if (start < len) append(s, start, len)
     append('"')
 }
 
