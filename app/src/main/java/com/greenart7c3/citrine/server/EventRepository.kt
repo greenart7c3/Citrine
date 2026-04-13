@@ -1,7 +1,9 @@
 package com.greenart7c3.citrine.server
 
+import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventEntity
 import com.greenart7c3.citrine.database.EventWithTags
@@ -158,7 +160,9 @@ object EventRepository {
     ) {
         // Acquire a permit before touching the DB so that at most queryPermits.availablePermits
         // coroutines block on the connection pool at once, eliminating thundering-herd contention.
+        val t0 = System.nanoTime()
         queryPermits.withPermit {
+            val t1 = System.nanoTime()
             if (subscription.count) {
                 val count = countQuery(subscription.appDatabase, filter)
                 subscription.connection.trySend(
@@ -176,6 +180,7 @@ object EventRepository {
             val (sql, params) = createQuery(filter, false)
             val rawSql = SimpleSQLiteQuery(sql, params.toTypedArray())
             val eventEntities = subscription.appDatabase.eventDao().getEventsOnly(rawSql)
+            val t2 = System.nanoTime()
             if (eventEntities.isEmpty()) return@withPermit
 
             // Batch-load all tags in one query instead of Room's @Relation N+1 pattern.
@@ -188,6 +193,7 @@ object EventRepository {
                 .flatten()
                 .groupBy { it.pkEvent }
 
+            val t3 = System.nanoTime()
             val nowSeconds = System.currentTimeMillis() / 1000
 
             eventEntities.forEach { eventEntity ->
@@ -200,6 +206,15 @@ object EventRepository {
                 // Build the EVENT message as a raw JSON string without Jackson intermediaries
                 subscription.connection.trySend(buildEventMessage(subscription.id, eventEntity, tags))
             }
+            val t4 = System.nanoTime()
+            Log.d(
+                Citrine.TAG,
+                "subscribe phases: semWait=${(t1 - t0) / 1_000_000}ms " +
+                    "query1=${(t2 - t1) / 1_000_000}ms " +
+                    "tags=${(t3 - t2) / 1_000_000}ms " +
+                    "send=${(t4 - t3) / 1_000_000}ms " +
+                    "events=${eventEntities.size}",
+            )
         }
     }
 }
