@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 11,
-    "identityHash": "d6845f839ecfd087ba5f24a376ef4d60",
+    "identityHash": "396296be0412d983e45d6af238f776a2",
     "entities": [
       {
         "tableName": "EventEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `pubkey` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `kind` INTEGER NOT NULL, `content` TEXT NOT NULL, `sig` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `pubkey` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `kind` INTEGER NOT NULL, `content` TEXT NOT NULL, `sig` TEXT NOT NULL, `json` TEXT NOT NULL, `expiresAt` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -43,6 +43,17 @@
             "columnName": "sig",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "json",
+            "columnName": "json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiresAt",
+            "columnName": "expiresAt",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -223,7 +234,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd6845f839ecfd087ba5f24a376ef4d60')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '396296be0412d983e45d6af238f776a2')"
     ]
   }
 }
