@@ -77,11 +77,12 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
-                        db.execSQL("PRAGMA journal_mode=WAL;")
+                        // journal_mode and mmap_size return a result row, so use query() not execSQL()
+                        db.query("PRAGMA journal_mode=WAL").close()
                         db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA cache_size=-32000;")
                         db.execSQL("PRAGMA temp_store=MEMORY;")
-                        db.execSQL("PRAGMA mmap_size=268435456;")
+                        db.query("PRAGMA mmap_size=268435456").close()
                         _isDatabaseUpgrading.value = false
                     }
                 })
@@ -125,11 +126,11 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
-                        db.execSQL("PRAGMA journal_mode=WAL;")
+                        db.query("PRAGMA journal_mode=WAL").close()
                         db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA cache_size=-32000;")
                         db.execSQL("PRAGMA temp_store=MEMORY;")
-                        db.execSQL("PRAGMA mmap_size=268435456;")
+                        db.query("PRAGMA mmap_size=268435456").close()
                     }
                 })
                 .build()
