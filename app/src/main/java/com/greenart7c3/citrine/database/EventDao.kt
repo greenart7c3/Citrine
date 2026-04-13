@@ -25,6 +25,14 @@ interface EventDao {
     @RawQuery
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
+    /** Returns only EventEntity rows — no @Relation tag loading, so no N+1 queries. */
+    @RawQuery
+    fun getEventsOnly(query: SupportSQLiteQuery): List<EventEntity>
+
+    /** Batch-loads all tags for the given event IDs in a single query. */
+    @Query("SELECT * FROM TagEntity WHERE pkEvent IN (:eventIds)")
+    fun getTagsForEvents(eventIds: List<String>): List<TagEntity>
+
     @RawQuery
     fun count(query: SupportSQLiteQuery): Int
 
@@ -178,25 +186,20 @@ interface EventDao {
     @Transaction
     suspend fun deleteAllTags()
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     suspend fun insertEventWithTags(
         dbEvent: EventWithTags,
         connection: Connection?,
         sendEventToSubscriptions: Boolean = true,
-    ) {
-        deletetags(dbEvent.event.id)
-        insertEvent(dbEvent.event)?.let {
-            dbEvent.tags.forEach {
-                it.pkEvent = dbEvent.event.id
-            }
-
-            insertTags(dbEvent.tags)
-
-            if (sendEventToSubscriptions && connection != null) {
-                EventSubscription.executeAll(dbEvent, connection)
-            }
+    ): Boolean {
+        val rowId = insertEvent(dbEvent.event) ?: return false
+        // Only reached for genuinely new events — safe to insert tags now
+        dbEvent.tags.forEach { it.pkEvent = dbEvent.event.id }
+        insertTags(dbEvent.tags)
+        if (sendEventToSubscriptions && connection != null) {
+            EventSubscription.executeAll(dbEvent, connection)
         }
+        return rowId > 0
     }
 
     @Transaction
@@ -239,12 +242,8 @@ interface EventDao {
 
     @Query(
         """
-        SELECT EventEntity.id
-          FROM EventEntity EventEntity
-         INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
-         WHERE TagEntity.col0Name = 'e'
-           AND TagEntity.col1Value = :eTagValue
-           AND EventEntity.kind = 5
+        SELECT pkEvent FROM TagEntity
+         WHERE kind = 5 AND col0Name = 'e' AND col1Value = :eTagValue
         """,
     )
     @Transaction

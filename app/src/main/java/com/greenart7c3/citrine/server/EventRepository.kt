@@ -161,9 +161,24 @@ object EventRepository {
             return
         }
 
-        val events = query(subscription.appDatabase, filter)
-        events.forEach {
-            val event = it.toEvent()
+        val (sql, params) = createQuery(filter, false)
+        val rawSql = SimpleSQLiteQuery(sql, params.toTypedArray())
+        val eventEntities = subscription.appDatabase.eventDao().getEventsOnly(rawSql)
+        if (eventEntities.isEmpty()) return
+
+        // Batch-load all tags in one query instead of Room's @Relation N+1 pattern.
+        // Chunk to stay under SQLite's 999-variable limit.
+        val tagsByEvent = eventEntities
+            .map { it.id }
+            .chunked(500) { chunk ->
+                subscription.appDatabase.eventDao().getTagsForEvents(chunk)
+            }
+            .flatten()
+            .groupBy { it.pkEvent }
+
+        eventEntities.forEach { eventEntity ->
+            val tags = tagsByEvent[eventEntity.id] ?: emptyList()
+            val event = EventWithTags(eventEntity, tags).toEvent()
             if (!event.isExpired()) {
                 subscription.connection.trySend(
                     subscription.objectMapper.writeValueAsString(

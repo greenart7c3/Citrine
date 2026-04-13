@@ -429,13 +429,6 @@ class CustomWebSocketServer(
                     return VerificationResult.NewestEventAlreadyInDatabase
                 }
             }
-            else -> {
-                val eventEntity = appDatabase.eventDao().getById(event.id)
-                if (eventEntity != null && !event.isEphemeral()) {
-                    Log.d(Citrine.TAG, "Event already in database ${event.id}")
-                    return VerificationResult.AlreadyInDatabase
-                }
-            }
         }
         if (!event.verify()) {
             Log.d(Citrine.TAG, "event ${event.id} does not have a valid id or signature")
@@ -492,24 +485,29 @@ class CustomWebSocketServer(
                 connection?.trySend(CommandResult.invalid(event, "newest event already in database").toJson())
             }
             VerificationResult.Valid -> {
-                when {
+                val saved = when {
                     event.shouldDelete() -> {
                         deleteEvent(event, connection)
+                        true
                     }
                     event.isParameterizedReplaceable() -> {
                         handleParameterizedReplaceable(event, connection)
+                        true
                     }
                     event.shouldOverwrite() -> {
                         override(event, connection)
+                        true
                     }
-                    else -> {
-                        save(event, connection)
-                    }
+                    else -> save(event, connection)
                 }
 
                 // if the event is ephemeral the response will be sent after the event is sent to subscriptions
                 if (!event.isEphemeral()) {
-                    connection?.trySend(CommandResult.ok(event).toJson())
+                    if (saved) {
+                        connection?.trySend(CommandResult.ok(event).toJson())
+                    } else {
+                        connection?.trySend(CommandResult.duplicated(event).toJson())
+                    }
                 }
             }
         }
@@ -566,16 +564,17 @@ class CustomWebSocketServer(
         }
     }
 
-    private suspend fun save(event: Event, connection: Connection?) {
-        appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
+    private suspend fun save(event: Event, connection: Connection?): Boolean {
+        val inserted = appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
 
         // Check if offline and broadcast with WorkManager
-        if (isOffline()) {
+        if (inserted && isOffline()) {
             val dbEvent = appDatabase.eventDao().getById(event.id)
             if (dbEvent != null) {
                 broadcastWithWorkManager(dbEvent)
             }
         }
+        return inserted
     }
 
     private suspend fun deleteEvent(event: Event, connection: Connection?) {
