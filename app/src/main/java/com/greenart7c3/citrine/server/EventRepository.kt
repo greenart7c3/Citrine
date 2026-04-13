@@ -207,12 +207,12 @@ object EventRepository {
                 val expiry = tags.firstOrNull { it.col0Name == "expiration" }?.col1Value?.toLongOrNull()
                 if (expiry != null && expiry < nowSeconds) return@forEach
 
-                // Build the EVENT message as a raw JSON string without Jackson intermediaries
+                // Build the EVENT message bytes directly — avoids String→ByteArray re-encoding.
                 val tb = System.nanoTime()
-                val msg = buildEventMessage(subscription.id, eventEntity, tags)
+                val bytes = buildEventMessageBytes(subscription.id, eventEntity, tags)
                 val ts = System.nanoTime()
-                // Pre-encode String→ByteArray once here; Frame.Text(String) would do this anyway.
-                val frame = Frame.Text(msg)
+                // Frame.Text(true, byteArray) uses the bytes as-is with no further encoding.
+                val frame = Frame.Text(true, bytes)
                 val tf = System.nanoTime()
                 subscription.connection.trySend(frame)
                 val te = System.nanoTime()
@@ -234,84 +234,171 @@ object EventRepository {
     }
 }
 
-/** Builds ["EVENT","<subId>",{event}] without Jackson intermediate objects. */
-private fun buildEventMessage(subId: String, entity: EventEntity, tags: List<TagEntity>): String = buildString(capacity = 1024) {
-    append("[\"EVENT\",")
-    appendJsonEncoded(subId)
-    append(",{\"id\":\"")
-    append(entity.id)
-    append("\",\"pubkey\":\"")
-    append(entity.pubkey)
-    append("\",\"created_at\":")
-    append(entity.createdAt)
-    append(",\"kind\":")
-    append(entity.kind)
-    append(",\"tags\":[")
-    tags.forEachIndexed { i, tag ->
-        if (i > 0) append(',')
-        append('[')
-        appendTagParts(tag)
-        append(']')
+/**
+ * Builds ["EVENT","<subId>",{event}] directly as a UTF-8 [ByteArray].
+ *
+ * Writing bytes once (instead of writing chars to a StringBuilder then re-encoding to bytes
+ * inside Frame.Text(String)) eliminates a full second O(N) pass over every character.
+ */
+private fun buildEventMessageBytes(subId: String, entity: EventEntity, tags: List<TagEntity>): ByteArray {
+    val estSize = 120 + entity.id.length + entity.pubkey.length + entity.sig.length +
+        entity.content.length + tags.sumOf { 6 + (it.col0Name?.length ?: 0) + (it.col1Value?.length ?: 0) }
+    val w = ByteWriter(estSize)
+    w.writeAscii("[\"EVENT\",")
+    w.writeJsonEncoded(subId)
+    w.writeAscii(",{\"id\":\"")
+    w.writeAscii(entity.id)
+    w.writeAscii("\",\"pubkey\":\"")
+    w.writeAscii(entity.pubkey)
+    w.writeAscii("\",\"created_at\":")
+    w.writeAscii(entity.createdAt.toString())
+    w.writeAscii(",\"kind\":")
+    w.writeAscii(entity.kind.toString())
+    w.writeAscii(",\"tags\":[")
+    tags.forEachIndexed { idx, tag ->
+        if (idx > 0) w.writeByte(','.code)
+        w.writeByte('['.code)
+        var first = true
+        fun part(s: String?) {
+            if (s == null) return
+            if (!first) w.writeByte(','.code)
+            first = false
+            w.writeJsonEncoded(s)
+        }
+        part(tag.col0Name)
+        part(tag.col1Value)
+        part(tag.col2Differentiator)
+        part(tag.col3Amount)
+        tag.col4Plus.forEach { part(it) }
+        w.writeByte(']'.code)
     }
-    append("],\"content\":")
-    appendJsonEncoded(entity.content)
-    append(",\"sig\":\"")
-    append(entity.sig)
-    append("\"}]")
-}
-
-/** Appends the non-null tag parts as a comma-separated JSON string list. */
-private fun StringBuilder.appendTagParts(tag: TagEntity) {
-    var first = true
-    fun part(s: String?) {
-        if (s == null) return
-        if (!first) append(',')
-        first = false
-        appendJsonEncoded(s)
-    }
-    part(tag.col0Name)
-    part(tag.col1Value)
-    part(tag.col2Differentiator)
-    part(tag.col3Amount)
-    tag.col4Plus.forEach { part(it) }
+    w.writeAscii("],\"content\":")
+    w.writeJsonEncoded(entity.content)
+    w.writeAscii(",\"sig\":\"")
+    w.writeAscii(entity.sig)
+    w.writeAscii("\"}]")
+    return w.toByteArray()
 }
 
 /**
- * Appends [s] as a JSON-encoded string (surrounding quotes + proper escaping).
+ * Minimal resizable byte buffer for building UTF-8 JSON without a String intermediary.
  *
- * Uses a bulk-copy strategy: scan for characters that need escaping, and flush
- * the unescaped runs between them with a single [StringBuilder.append] call that
- * resolves to [System.arraycopy] internally — orders of magnitude faster than the
- * previous char-by-char append loop for typical content with few or no special chars.
+ * Replacing StringBuilder+Frame.Text(String) with this writer eliminates one full O(N)
+ * encoding pass: chars are encoded to bytes exactly once, and Frame.Text(true, byteArray)
+ * uses the result directly with no further conversion.
  */
-private fun StringBuilder.appendJsonEncoded(s: String) {
-    append('"')
-    var start = 0
-    val len = s.length
-    var i = 0
-    while (i < len) {
-        val ch = s[i]
-        // Fast path: printable ASCII that isn't " or \ needs no escaping — keep scanning.
-        if (ch.code >= 0x20 && ch != '"' && ch != '\\') {
-            i++
-            continue
-        }
-        // Flush the unescaped run [start, i) as a single bulk copy (System.arraycopy).
-        if (i > start) append(s, start, i)
-        when (ch) {
-            '"' -> append("\\\"")
-            '\\' -> append("\\\\")
-            '\n' -> append("\\n")
-            '\r' -> append("\\r")
-            '\t' -> append("\\t")
-            else -> append("\\u").append(ch.code.toString(16).padStart(4, '0'))
-        }
-        start = i + 1
-        i++
+private class ByteWriter(initialCapacity: Int) {
+    private var buf = ByteArray(initialCapacity)
+    private var pos = 0
+
+    private fun ensure(n: Int) {
+        if (pos + n <= buf.size) return
+        var cap = buf.size * 2
+        while (cap < pos + n) cap *= 2
+        buf = buf.copyOf(cap)
     }
-    // Flush any remaining unescaped suffix.
-    if (start < len) append(s, start, len)
-    append('"')
+
+    fun writeByte(b: Int) {
+        ensure(1)
+        buf[pos++] = b.toByte()
+    }
+
+    /** Writes an ASCII-only string byte-for-byte (safe for hex strings and JSON literals). */
+    fun writeAscii(s: String) {
+        val len = s.length
+        ensure(len)
+        for (i in 0 until len) buf[pos++] = s[i].code.toByte()
+    }
+
+    /**
+     * Writes [s] as a JSON string value (with surrounding quotes and proper escaping).
+     *
+     * Uses the same scan-then-flush strategy as the former appendJsonEncoded: skip over
+     * unescaped chars in the fast path, then flush each run via [writeUtf8Run] which handles
+     * multi-byte UTF-8 encoding for non-ASCII characters.
+     */
+    fun writeJsonEncoded(s: String) {
+        ensure(s.length + 2)
+        buf[pos++] = '"'.code.toByte()
+        var start = 0
+        val len = s.length
+        var i = 0
+        while (i < len) {
+            val ch = s[i]
+            if (ch.code >= 0x20 && ch != '"' && ch != '\\') {
+                i++
+                continue
+            }
+            writeUtf8Run(s, start, i)
+            ensure(6)
+            when (ch) {
+                '"' -> {
+                    buf[pos++] = '\\'.code.toByte()
+                    buf[pos++] = '"'.code.toByte()
+                }
+                '\\' -> {
+                    buf[pos++] = '\\'.code.toByte()
+                    buf[pos++] = '\\'.code.toByte()
+                }
+                '\n' -> {
+                    buf[pos++] = '\\'.code.toByte()
+                    buf[pos++] = 'n'.code.toByte()
+                }
+                '\r' -> {
+                    buf[pos++] = '\\'.code.toByte()
+                    buf[pos++] = 'r'.code.toByte()
+                }
+                '\t' -> {
+                    buf[pos++] = '\\'.code.toByte()
+                    buf[pos++] = 't'.code.toByte()
+                }
+                else -> {
+                    buf[pos++] = '\\'.code.toByte()
+                    buf[pos++] = 'u'.code.toByte()
+                    val hex = ch.code.toString(16).padStart(4, '0')
+                    for (c in hex) buf[pos++] = c.code.toByte()
+                }
+            }
+            start = i + 1
+            i++
+        }
+        writeUtf8Run(s, start, len)
+        ensure(1)
+        buf[pos++] = '"'.code.toByte()
+    }
+
+    /** Encodes [s] from index [start] (inclusive) to [end] (exclusive) as UTF-8 bytes. */
+    private fun writeUtf8Run(s: String, start: Int, end: Int) {
+        if (start >= end) return
+        ensure((end - start) * 3) // worst-case 3 bytes per BMP char
+        var j = start
+        while (j < end) {
+            val c = s[j]
+            when {
+                c.code < 0x80 -> buf[pos++] = c.code.toByte()
+                c.code < 0x800 -> {
+                    buf[pos++] = (0xC0 or (c.code shr 6)).toByte()
+                    buf[pos++] = (0x80 or (c.code and 0x3F)).toByte()
+                }
+                c.isHighSurrogate() && j + 1 < end && s[j + 1].isLowSurrogate() -> {
+                    val cp = Character.toCodePoint(c, s[j + 1])
+                    buf[pos++] = (0xF0 or (cp shr 18)).toByte()
+                    buf[pos++] = (0x80 or ((cp shr 12) and 0x3F)).toByte()
+                    buf[pos++] = (0x80 or ((cp shr 6) and 0x3F)).toByte()
+                    buf[pos++] = (0x80 or (cp and 0x3F)).toByte()
+                    j++ // consume the low surrogate
+                }
+                else -> {
+                    buf[pos++] = (0xE0 or (c.code shr 12)).toByte()
+                    buf[pos++] = (0x80 or ((c.code shr 6) and 0x3F)).toByte()
+                    buf[pos++] = (0x80 or (c.code and 0x3F)).toByte()
+                }
+            }
+            j++
+        }
+    }
+
+    fun toByteArray(): ByteArray = buf.copyOf(pos)
 }
 
 fun Event.toJsonObject(): JsonNode {
