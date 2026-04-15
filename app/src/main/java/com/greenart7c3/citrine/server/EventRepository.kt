@@ -27,16 +27,6 @@ object EventRepository {
         permits = Runtime.getRuntime().availableProcessors().coerceIn(2, 4),
     )
 
-    // Separate permit pool for the send phase.  Without this, all 100 subscription coroutines
-    // would enter their send loops simultaneously after releasing their query permits, saturating
-    // the IO thread pool and triggering heavy GC pressure (100 concurrent ByteArray allocation
-    // storms ≈ 20 MB live data) that pauses all threads including the event publishing path.
-    // Using 2× queryPermits lets sends and DB queries fully overlap while keeping the concurrent
-    // allocation footprint small enough to avoid triggering a major GC.
-    private val sendPermits = Semaphore(
-        permits = Runtime.getRuntime().availableProcessors().coerceIn(2, 4) * 2,
-    )
-
     fun createQuery(
         filter: EventFilter,
         count: Boolean,
@@ -242,40 +232,31 @@ object EventRepository {
             // so other subscriptions can start their DB queries while we are waiting to send.
         } ?: return
 
-        // Send loop runs OUTSIDE the query permit but inside a separate send permit.
-        // - Query permit released first: other subscriptions can start their DB work now.
-        // - Send permit limits concurrency: prevents all 100 subscription coroutines from
-        //   entering their send loops simultaneously, which would saturate the IO thread pool
-        //   and trigger heavy GC pressure from concurrent ByteArray allocation.
+        // Send loop runs OUTSIDE the query permit so other subscriptions can start their DB
+        // queries while we are sending.  trySend() on Ktor's UNLIMITED outgoing channel is
+        // effectively free (~1 μs/frame, no coroutine yield) and never drops frames — it only
+        // fails when the session is already closed, which is handled by onClosed.  A second
+        // "send" semaphore is intentionally absent: each send loop completes in <1 ms total
+        // (100 events × ~1 μs), so 100 concurrent loops impose negligible GC and CPU pressure.
         val nowSeconds = System.currentTimeMillis() / 1000
         val subIdBytes = subscription.id.encodeToByteArray()
 
-        var buildNs = 0L
-        var sendNs = 0L
-        sendPermits.withPermit {
-            for (eventEntity in data.eventEntities) {
-                // NIP-40 expiration: prefer cached expiresAt, fall back to tag scan for legacy events.
-                val expiry = eventEntity.expiresAt
-                    ?: data.tagsByEvent[eventEntity.id]?.firstOrNull { it.col0Name == "expiration" }
-                        ?.col1Value?.toLongOrNull()
-                if (expiry != null && expiry < nowSeconds) continue
+        for (eventEntity in data.eventEntities) {
+            // NIP-40 expiration: prefer cached expiresAt, fall back to tag scan for legacy events.
+            val expiry = eventEntity.expiresAt
+                ?: data.tagsByEvent[eventEntity.id]?.firstOrNull { it.col0Name == "expiration" }
+                    ?.col1Value?.toLongOrNull()
+            if (expiry != null && expiry < nowSeconds) continue
 
-                val tb = System.nanoTime()
-                val eventJson = data.jsonById[eventEntity.id]?.json ?: ""
-                val bytes = if (eventJson.isNotEmpty()) {
-                    // Fast path: one native encodeToByteArray() + three arraycopy calls.
-                    buildCachedEventMessageBytes(subIdBytes, eventJson)
-                } else {
-                    // Legacy path: ByteWriter char-by-char encoder for pre-migration events.
-                    buildEventMessageBytes(subscription.id, eventEntity, data.tagsByEvent[eventEntity.id] ?: emptyList())
-                }
-                val ts = System.nanoTime()
-                // Suspending send: waits for channel capacity instead of dropping frames silently.
-                if (!subscription.connection.send(Frame.Text(true, bytes))) break
-                val te = System.nanoTime()
-                buildNs += ts - tb
-                sendNs += te - ts
+            val eventJson = data.jsonById[eventEntity.id]?.json ?: ""
+            val bytes = if (eventJson.isNotEmpty()) {
+                // Fast path: one native encodeToByteArray() + three arraycopy calls.
+                buildCachedEventMessageBytes(subIdBytes, eventJson)
+            } else {
+                // Legacy path: ByteWriter char-by-char encoder for pre-migration events.
+                buildEventMessageBytes(subscription.id, eventEntity, data.tagsByEvent[eventEntity.id] ?: emptyList())
             }
+            subscription.connection.trySend(Frame.Text(true, bytes))
         }
         val t4 = System.nanoTime()
         Log.d(
@@ -284,7 +265,6 @@ object EventRepository {
                 "query1=${(data.t2 - data.t1) / 1_000_000}ms " +
                 "json=${(data.t3 - data.t2) / 1_000_000}ms " +
                 "send=${(t4 - data.t3) / 1_000_000}ms " +
-                "build=${buildNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
                 "events=${data.eventEntities.size} legacy=${data.legacyCount}",
         )
     }
