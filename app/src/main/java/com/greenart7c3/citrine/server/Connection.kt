@@ -95,4 +95,21 @@ class Connection(
             Log.d(Citrine.TAG, "Error sending frame to client", e)
         }
     }
+
+    /**
+     * Suspending send that waits for the outgoing channel to accept the frame rather than
+     * dropping it silently. Use this for event frames in subscribe() so that no events are
+     * lost when the outgoing buffer is temporarily full.
+     *
+     * Returns true if the frame was sent, false if the channel was already closed.
+     */
+    suspend fun send(frame: Frame): Boolean = try {
+        session.outgoing.send(frame)
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.d(Citrine.TAG, "Error sending frame to client (connection closed)", e)
+        false
+    }
 }

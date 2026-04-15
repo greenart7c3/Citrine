@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventEntity
+import com.greenart7c3.citrine.database.EventIdAndJson
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.TagEntity
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -161,6 +162,21 @@ object EventRepository {
         return database.eventDao().count(rawSql)
     }
 
+    /**
+     * Query results loaded inside the semaphore permit.
+     * Returned to the send loop which runs outside the permit so that DB queries from other
+     * subscriptions are not blocked while we are waiting for the network.
+     */
+    private class QueryData(
+        val eventEntities: List<EventEntity>,
+        val jsonById: Map<String, EventIdAndJson>,
+        val tagsByEvent: Map<String?, List<TagEntity>>,
+        val legacyCount: Int,
+        val t1: Long,
+        val t2: Long,
+        val t3: Long,
+    )
+
     suspend fun subscribe(
         subscription: Subscription,
         filter: EventFilter,
@@ -168,7 +184,8 @@ object EventRepository {
         // Acquire a permit before touching the DB so that at most queryPermits.availablePermits
         // coroutines block on the connection pool at once, eliminating thundering-herd contention.
         val t0 = System.nanoTime()
-        queryPermits.withPermit {
+
+        val data = queryPermits.withPermit {
             val t1 = System.nanoTime()
             if (subscription.count) {
                 val count = countQuery(subscription.appDatabase, filter)
@@ -181,7 +198,7 @@ object EventRepository {
                         ),
                     ),
                 )
-                return@withPermit
+                return@withPermit null
             }
 
             val (sql, params) = createQuery(filter, false)
@@ -190,7 +207,7 @@ object EventRepository {
             // loaded separately below to avoid bloating the main event query from ~12ms to ~66ms.
             val eventEntities = subscription.appDatabase.eventDao().getEventsOnly(rawSql)
             val t2 = System.nanoTime()
-            if (eventEntities.isEmpty()) return@withPermit
+            if (eventEntities.isEmpty()) return@withPermit null
 
             // Batch-load cached JSON for all event IDs (replaces tags query for new events).
             // Chunk to stay under SQLite's 999-variable limit.
@@ -201,7 +218,7 @@ object EventRepository {
 
             // Legacy events (json == "") still need tags for NIP-40 check and ByteWriter fallback.
             val legacyIds = allIds.filter { jsonById[it]?.json.isNullOrEmpty() }
-            val tagsByEvent = if (legacyIds.isNotEmpty()) {
+            val tagsByEvent: Map<String?, List<TagEntity>> = if (legacyIds.isNotEmpty()) {
                 legacyIds.chunked(500) { chunk ->
                     subscription.appDatabase.eventDao().getTagsForEvents(chunk)
                 }.flatten().groupBy { it.pkEvent }
@@ -210,44 +227,51 @@ object EventRepository {
             }
 
             val t3 = System.nanoTime()
-            val nowSeconds = System.currentTimeMillis() / 1000
-            val subIdBytes = subscription.id.encodeToByteArray()
+            QueryData(eventEntities, jsonById, tagsByEvent, legacyIds.size, t1, t2, t3)
+            // Permit is released here — the send loop below runs without holding the permit,
+            // so other subscriptions can start their DB queries while we are waiting to send.
+        } ?: return
 
-            var buildNs = 0L
-            var sendNs = 0L
-            eventEntities.forEach { eventEntity ->
-                // NIP-40 expiration: prefer cached expiresAt, fall back to tag scan for legacy events.
-                val expiry = eventEntity.expiresAt
-                    ?: tagsByEvent[eventEntity.id]?.firstOrNull { it.col0Name == "expiration" }
-                        ?.col1Value?.toLongOrNull()
-                if (expiry != null && expiry < nowSeconds) return@forEach
+        // Send loop runs OUTSIDE the semaphore permit.  Releasing the permit here lets other
+        // subscription coroutines begin their DB work while we are writing to the network.
+        val nowSeconds = System.currentTimeMillis() / 1000
+        val subIdBytes = subscription.id.encodeToByteArray()
 
-                val tb = System.nanoTime()
-                val eventJson = jsonById[eventEntity.id]?.json ?: ""
-                val bytes = if (eventJson.isNotEmpty()) {
-                    // Fast path: one native encodeToByteArray() + three arraycopy calls.
-                    buildCachedEventMessageBytes(subIdBytes, eventJson)
-                } else {
-                    // Legacy path: ByteWriter char-by-char encoder for pre-migration events.
-                    buildEventMessageBytes(subscription.id, eventEntity, tagsByEvent[eventEntity.id] ?: emptyList())
-                }
-                val ts = System.nanoTime()
-                subscription.connection.trySend(Frame.Text(true, bytes))
-                val te = System.nanoTime()
-                buildNs += ts - tb
-                sendNs += te - ts
+        var buildNs = 0L
+        var sendNs = 0L
+        for (eventEntity in data.eventEntities) {
+            // NIP-40 expiration: prefer cached expiresAt, fall back to tag scan for legacy events.
+            val expiry = eventEntity.expiresAt
+                ?: data.tagsByEvent[eventEntity.id]?.firstOrNull { it.col0Name == "expiration" }
+                    ?.col1Value?.toLongOrNull()
+            if (expiry != null && expiry < nowSeconds) continue
+
+            val tb = System.nanoTime()
+            val eventJson = data.jsonById[eventEntity.id]?.json ?: ""
+            val bytes = if (eventJson.isNotEmpty()) {
+                // Fast path: one native encodeToByteArray() + three arraycopy calls.
+                buildCachedEventMessageBytes(subIdBytes, eventJson)
+            } else {
+                // Legacy path: ByteWriter char-by-char encoder for pre-migration events.
+                buildEventMessageBytes(subscription.id, eventEntity, data.tagsByEvent[eventEntity.id] ?: emptyList())
             }
-            val t4 = System.nanoTime()
-            Log.d(
-                Citrine.TAG,
-                "subscribe phases: semWait=${(t1 - t0) / 1_000_000}ms " +
-                    "query1=${(t2 - t1) / 1_000_000}ms " +
-                    "json=${(t3 - t2) / 1_000_000}ms " +
-                    "send=${(t4 - t3) / 1_000_000}ms " +
-                    "build=${buildNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
-                    "events=${eventEntities.size} legacy=${legacyIds.size}",
-            )
+            val ts = System.nanoTime()
+            // Suspending send: waits for channel capacity instead of dropping frames silently.
+            if (!subscription.connection.send(Frame.Text(true, bytes))) break
+            val te = System.nanoTime()
+            buildNs += ts - tb
+            sendNs += te - ts
         }
+        val t4 = System.nanoTime()
+        Log.d(
+            Citrine.TAG,
+            "subscribe phases: semWait=${(data.t1 - t0) / 1_000_000}ms " +
+                "query1=${(data.t2 - data.t1) / 1_000_000}ms " +
+                "json=${(data.t3 - data.t2) / 1_000_000}ms " +
+                "send=${(t4 - data.t3) / 1_000_000}ms " +
+                "build=${buildNs / 1_000_000}ms trySend=${sendNs / 1_000_000}ms " +
+                "events=${data.eventEntities.size} legacy=${data.legacyCount}",
+        )
     }
 }
 

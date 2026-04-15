@@ -53,7 +53,7 @@ class PokeyReceiver : BroadcastReceiver() {
 
         scope.launch(Dispatchers.IO) {
             try {
-                CustomWebSocketService.server?.innerProcessEvent(Event.fromJson(eventStr), null)
+                CustomWebSocketService.server?.innerProcessEvent(Event.fromJson(eventStr), null, rawJson = eventStr)
             } catch (e: Exception) {
                 Log.e(Citrine.TAG, "Failed to parse Pokey Event", e)
             }

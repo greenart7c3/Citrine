@@ -137,9 +137,19 @@ fun TagEntity.toTags(): Array<String> = listOfNotNull(
     col3Amount,
 ).plus(col4Plus).toTypedArray()
 
-fun Event.toEventWithTags(): EventWithTags {
-    // Serialize the event JSON once at insert time so subscribe() can avoid per-query encoding.
-    val json = try {
+/**
+ * Converts this [Event] to the Room entity pair used for storage.
+ *
+ * @param rawJson  The original JSON string received from the client, if available.
+ *                 When provided it is stored directly in [EventEntity.json] without a
+ *                 round-trip through Jackson, saving the cost of re-serializing fields
+ *                 that were already serialised by the sender.  Callers that do not have
+ *                 the raw string (e.g. import paths) can omit this parameter and the
+ *                 field will be constructed from the [Event] fields as before.
+ */
+fun Event.toEventWithTags(rawJson: String? = null): EventWithTags {
+    // Use the raw request JSON when available; otherwise re-serialize from the Event fields.
+    val json = rawJson ?: try {
         val factory = JacksonMapper.mapper.nodeFactory
         val node = factory.objectNode().apply {
             put("id", id)

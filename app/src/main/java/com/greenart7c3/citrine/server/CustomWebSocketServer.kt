@@ -274,8 +274,9 @@ class CustomWebSocketServer(
                 }
 
                 "EVENT" -> {
-                    val event = Event.fromJson(msgArray.get(1).toString())
-                    processEvent(event, connection)
+                    val rawJson = msgArray.get(1).toString()
+                    val event = Event.fromJson(rawJson)
+                    processEvent(event, connection, rawJson)
                 }
 
                 "CLOSE" -> {
@@ -437,7 +438,7 @@ class CustomWebSocketServer(
         return VerificationResult.Valid
     }
 
-    suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true): VerificationResult {
+    suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true, rawJson: String? = null): VerificationResult {
         val result = verifyEvent(event, connection, shouldVerify)
         when (result) {
             VerificationResult.AuthRequiredForProtectedEvent -> {
@@ -487,18 +488,18 @@ class CustomWebSocketServer(
             VerificationResult.Valid -> {
                 val saved = when {
                     event.shouldDelete() -> {
-                        deleteEvent(event, connection)
+                        deleteEvent(event, connection, rawJson)
                         true
                     }
                     event.isParameterizedReplaceable() -> {
-                        handleParameterizedReplaceable(event, connection)
+                        handleParameterizedReplaceable(event, connection, rawJson)
                         true
                     }
                     event.shouldOverwrite() -> {
-                        override(event, connection)
+                        override(event, connection, rawJson)
                         true
                     }
-                    else -> save(event, connection)
+                    else -> save(event, connection, rawJson)
                 }
 
                 // if the event is ephemeral the response will be sent after the event is sent to subscriptions
@@ -514,23 +515,23 @@ class CustomWebSocketServer(
         return result
     }
 
-    private suspend fun processEvent(event: Event, connection: Connection?) {
-        innerProcessEvent(event, connection)
+    private suspend fun processEvent(event: Event, connection: Connection?, rawJson: String? = null) {
+        innerProcessEvent(event, connection, rawJson = rawJson)
     }
 
-    private suspend fun handleParameterizedReplaceable(event: Event, connection: Connection?) {
-        save(event, connection)
+    private suspend fun handleParameterizedReplaceable(event: Event, connection: Connection?, rawJson: String? = null) {
+        save(event, connection, rawJson)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
         appDatabase.eventDao().delete(ids, event.pubKey)
-        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
+        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(rawJson), connection = connection, sendEventToSubscriptions = false)
     }
 
-    private suspend fun override(event: Event, connection: Connection?) {
-        save(event, connection)
+    private suspend fun override(event: Event, connection: Connection?, rawJson: String? = null) {
+        save(event, connection, rawJson)
         val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
         appDatabase.eventDao().delete(ids, event.pubKey)
-        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection, sendEventToSubscriptions = false)
+        HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(rawJson), connection = connection, sendEventToSubscriptions = false)
     }
 
     private fun isOffline(): Boolean {
@@ -564,8 +565,8 @@ class CustomWebSocketServer(
         }
     }
 
-    private suspend fun save(event: Event, connection: Connection?): Boolean {
-        val inserted = appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
+    private suspend fun save(event: Event, connection: Connection?, rawJson: String? = null): Boolean {
+        val inserted = appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(rawJson), connection = connection)
 
         // Check if offline and broadcast with WorkManager
         if (inserted && isOffline()) {
@@ -577,8 +578,8 @@ class CustomWebSocketServer(
         return inserted
     }
 
-    private suspend fun deleteEvent(event: Event, connection: Connection?) {
-        save(event, connection)
+    private suspend fun deleteEvent(event: Event, connection: Connection?, rawJson: String? = null) {
+        save(event, connection, rawJson)
         appDatabase.eventDao().delete(event.taggedEvents().map { it.eventId }, event.pubKey)
         val taggedAddresses = event.taggedAddresses()
         if (taggedAddresses.isEmpty()) return
