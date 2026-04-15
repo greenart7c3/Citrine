@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventEntity
-import com.greenart7c3.citrine.database.EventIdAndJson
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.TagEntity
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -120,14 +119,9 @@ object EventRepository {
           $predicatesSql
             """.trimIndent()
         } else {
-            // Return '' AS json instead of the real column: Room 2.8 requires the column to be
-            // present for NON-NULL fields, but we don't materialise the actual bytes here —
-            // they're loaded in a separate batch query in subscribe() to avoid the ~5× slowdown
-            // caused by fetching ~500 bytes of JSON text per row in the main event query.
-            // SQLite evaluates the constant '' without reading the json column bytes.
             """
         SELECT EventEntity.id, EventEntity.pubkey, EventEntity.createdAt, EventEntity.kind,
-               EventEntity.content, EventEntity.sig, EventEntity.expiresAt, '' AS json
+               EventEntity.content, EventEntity.sig, EventEntity.expiresAt, EventEntity.json
           FROM EventEntity EventEntity
           $joinSql
           $predicatesSql
@@ -169,12 +163,10 @@ object EventRepository {
      */
     private class QueryData(
         val eventEntities: List<EventEntity>,
-        val jsonById: Map<String, EventIdAndJson>,
         val tagsByEvent: Map<String?, List<TagEntity>>,
         val legacyCount: Int,
         val t1: Long,
         val t2: Long,
-        val t3: Long,
     )
 
     suspend fun subscribe(
@@ -203,21 +195,12 @@ object EventRepository {
 
             val (sql, params) = createQuery(filter, false)
             val rawSql = SimpleSQLiteQuery(sql, params.toTypedArray())
-            // getEventsOnly uses a SELECT that excludes the large `json` TEXT column; it is
-            // loaded separately below to avoid bloating the main event query from ~12ms to ~66ms.
             val eventEntities = subscription.appDatabase.eventDao().getEventsOnly(rawSql)
             val t2 = System.nanoTime()
             if (eventEntities.isEmpty()) return@withPermit null
 
-            // Batch-load cached JSON for all event IDs (replaces tags query for new events).
-            // Chunk to stay under SQLite's 999-variable limit.
-            val allIds = eventEntities.map { it.id }
-            val jsonById = allIds.chunked(500) { chunk ->
-                subscription.appDatabase.eventDao().getEventJsonForIds(chunk)
-            }.flatten().associateBy { it.id }
-
             // Legacy events (json == "") still need tags for NIP-40 check and ByteWriter fallback.
-            val legacyIds = allIds.filter { jsonById[it]?.json.isNullOrEmpty() }
+            val legacyIds = eventEntities.filter { it.json.isEmpty() }.map { it.id }
             val tagsByEvent: Map<String?, List<TagEntity>> = if (legacyIds.isNotEmpty()) {
                 legacyIds.chunked(500) { chunk ->
                     subscription.appDatabase.eventDao().getTagsForEvents(chunk)
@@ -226,8 +209,7 @@ object EventRepository {
                 emptyMap()
             }
 
-            val t3 = System.nanoTime()
-            QueryData(eventEntities, jsonById, tagsByEvent, legacyIds.size, t1, t2, t3)
+            QueryData(eventEntities, tagsByEvent, legacyIds.size, t1, t2)
             // Permit is released here — the send loop below runs without holding the permit,
             // so other subscriptions can start their DB queries while we are waiting to send.
         } ?: return
@@ -248,23 +230,21 @@ object EventRepository {
                     ?.col1Value?.toLongOrNull()
             if (expiry != null && expiry < nowSeconds) continue
 
-            val eventJson = data.jsonById[eventEntity.id]?.json ?: ""
-            val bytes = if (eventJson.isNotEmpty()) {
+            val bytes = if (eventEntity.json.isNotEmpty()) {
                 // Fast path: one native encodeToByteArray() + three arraycopy calls.
-                buildCachedEventMessageBytes(subIdBytes, eventJson)
+                buildCachedEventMessageBytes(subIdBytes, eventEntity.json)
             } else {
                 // Legacy path: ByteWriter char-by-char encoder for pre-migration events.
                 buildEventMessageBytes(subscription.id, eventEntity, data.tagsByEvent[eventEntity.id] ?: emptyList())
             }
             subscription.connection.trySend(Frame.Text(true, bytes))
         }
-        val t4 = System.nanoTime()
+        val t3 = System.nanoTime()
         Log.d(
             Citrine.TAG,
             "subscribe phases: semWait=${(data.t1 - t0) / 1_000_000}ms " +
-                "query1=${(data.t2 - data.t1) / 1_000_000}ms " +
-                "json=${(data.t3 - data.t2) / 1_000_000}ms " +
-                "send=${(t4 - data.t3) / 1_000_000}ms " +
+                "query=${(data.t2 - data.t1) / 1_000_000}ms " +
+                "send=${(t3 - data.t2) / 1_000_000}ms " +
                 "events=${data.eventEntities.size} legacy=${data.legacyCount}",
         )
     }
