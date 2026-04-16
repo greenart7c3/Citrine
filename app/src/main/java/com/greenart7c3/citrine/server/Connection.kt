@@ -54,7 +54,12 @@ class Connection(
     }
     val name = "user${lastId.getAndIncrement()}"
 
-    fun remoteAddress(): String = "${session.call.request.local.remoteHost} ${session.call.request.headers["User-Agent"]}"
+    val remoteAddress: String = try {
+        "${session.call.request.local.remoteHost} ${session.call.request.headers["User-Agent"]}"
+    } catch (e: Exception) {
+        Log.w(Citrine.TAG, "Could not resolve remote address", e)
+        "unknown"
+    }
 
     fun finalize() {
         timer.cancel()
@@ -66,7 +71,7 @@ class Connection(
             session.outgoing.trySend(Frame.Text(data)).onClosed {
                 val connection = EventSubscription.getConnection(session)
                 connection?.let {
-                    Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress()}")
+                    Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress}")
                     Citrine.instance.applicationScope.launch {
                         CustomWebSocketService.server?.removeConnection(connection)
                     }

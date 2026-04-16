@@ -457,7 +457,7 @@ fun HomeScreen(
                                     }
                                 }
                                 items(connectionFlow!!.value) {
-                                    Text("${it.name} - ${it.remoteAddress()} - ${it.since.formatLongToCustomDateTimeWithSeconds()}")
+                                    Text("${it.name} - ${it.remoteAddress} - ${it.since.formatLongToCustomDateTimeWithSeconds()}")
                                 }
                             }
                         }
