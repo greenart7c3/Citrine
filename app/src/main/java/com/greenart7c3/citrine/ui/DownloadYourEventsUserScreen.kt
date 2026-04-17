@@ -57,9 +57,8 @@ import androidx.core.net.toUri
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.EventDownloader
+import com.greenart7c3.citrine.storage.EventStore
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import com.vitorpamplona.quartz.nip01Core.relay.client.auth.RelayAuthenticator
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
@@ -109,8 +108,8 @@ fun SelectRelayModal(
                         if (!Citrine.instance.client.isActive()) {
                             Citrine.instance.client.connect()
                         }
-                        val database = AppDatabase.getDatabase(Citrine.instance)
-                        var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
+                        val store = EventStore.getInstance(Citrine.instance)
+                        var contactList = store.getContactList(signer.pubKey) as ContactListEvent?
                         if (contactList == null) {
                             contactList = EventDownloader.fetchContactList(
                                 signer = signer,
@@ -123,7 +122,7 @@ fun SelectRelayModal(
                                 if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
                             }
                         }
-                        var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
+                        var advertisedRelayList = store.getAdvertisedRelayList(signer.pubKey) as AdvertisedRelayListEvent?
                         if (advertisedRelayList == null) {
                             advertisedRelayList = EventDownloader.fetchAdvertisedRelayList(
                                 signer = signer,

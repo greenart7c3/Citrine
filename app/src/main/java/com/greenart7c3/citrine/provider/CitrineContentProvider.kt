@@ -7,15 +7,10 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.util.Log
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventDao
-import com.greenart7c3.citrine.database.EventWithTags
-import com.greenart7c3.citrine.database.TagEntity
-import com.greenart7c3.citrine.database.toEvent
-import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.greenart7c3.citrine.storage.EventStore
 import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.crypto.verify
@@ -23,9 +18,6 @@ import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
 import com.vitorpamplona.quartz.utils.EventFactory
 import kotlinx.coroutines.runBlocking
 
-/**
- * Result type for ContentProvider operations
- */
 sealed class QueryResult<out T> {
     data class Success<T>(val data: T) : QueryResult<T>()
     data class Error(val message: String, val exception: Throwable? = null) : QueryResult<Nothing>()
@@ -35,19 +27,37 @@ sealed class QueryResult<out T> {
     }
 }
 
-/**
- * Content Provider for exposing Citrine's Nostr event data to other Android apps.
- * Allows external apps to query events and tags using ContentResolver.
- */
+private data class TagRow(
+    val eventId: String,
+    val position: Int,
+    val col0Name: String?,
+    val col1Value: String?,
+    val col2Differentiator: String?,
+    val col3Amount: String?,
+    val col4Plus: List<String>,
+    val kind: Int,
+)
+
+private fun Event.toTagRows(): List<TagRow> = tags.mapIndexed { position, tag ->
+    TagRow(
+        eventId = id,
+        position = position,
+        col0Name = tag.getOrNull(0),
+        col1Value = tag.getOrNull(1),
+        col2Differentiator = tag.getOrNull(2),
+        col3Amount = tag.getOrNull(3),
+        col4Plus = if (tag.size > 4) tag.drop(4) else emptyList(),
+        kind = kind,
+    )
+}
+
 class CitrineContentProvider : ContentProvider() {
 
-    private lateinit var database: AppDatabase
-    private lateinit var eventDao: EventDao
+    private lateinit var store: EventStore
 
     companion object {
         private const val TAG = "CitrineContentProvider"
 
-        // URI matcher codes
         private const val EVENTS = 100
         private const val EVENT_ID = 101
         private const val EVENTS_BY_PUBKEY = 102
@@ -66,31 +76,19 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     override fun onCreate(): Boolean {
-        database = AppDatabase.getDatabase(context ?: return false)
-        eventDao = database.eventDao()
+        store = EventStore.getInstance(context ?: return false)
         return true
     }
 
-    /**
-     * Filters events based on authentication when auth is enabled.
-     * Returns true if the event should be included in results, false otherwise.
-     * Matches the logic from SubscriptionManager.execute() lines 25-58.
-     */
-    private fun shouldIncludeEvent(eventWithTags: EventWithTags, authPubkey: String?): Boolean {
+    private fun shouldIncludeEvent(event: Event, authPubkey: String?): Boolean {
         if (!Settings.authEnabled) {
             return true
         }
 
-        // If no auth pubkey provided, exclude private events and events with p tags/authors
         val authenticatedPubkey = authPubkey ?: return false
 
-        val event = eventWithTags.toEvent()
-        val eventKind = event.kind
-
-        // Check if event is a private event kind
-        if (KINDS_PRIVATE_EVENTS.contains(eventKind)) {
-            // For private events, require auth and check if user is sender or receiver
-            val senders = setOf(eventWithTags.event.pubkey)
+        if (KINDS_PRIVATE_EVENTS.contains(event.kind)) {
+            val senders = setOf(event.pubKey)
             val receivers = event.taggedUsers().map { it.pubKey }.toSet()
 
             val hasAccess = senders.contains(authenticatedPubkey) || receivers.contains(authenticatedPubkey)
@@ -102,21 +100,17 @@ class CitrineContentProvider : ContentProvider() {
             return hasAccess
         }
 
-        // For non-private events, check if they have p tags or authors
-        // This matches SubscriptionManager logic for empty kind filters with p tags or authors
-        val hasPTags = eventWithTags.tags.any { it.col0Name == "p" }
-        val hasAuthors = eventWithTags.event.pubkey.isNotEmpty()
+        val hasPTags = event.tags.any { it.isNotEmpty() && it[0] == "p" }
+        val hasAuthors = event.pubKey.isNotEmpty()
 
         if (!hasPTags && !hasAuthors) {
-            // No p tags and no specific authors, include it
             return true
         }
 
-        // Has p tags or authors, check if authenticated user is sender or receiver
-        val senders = setOf(eventWithTags.event.pubkey)
-        val receivers = eventWithTags.tags
-            .filter { it.col0Name == "p" }
-            .mapNotNull { it.col1Value }
+        val senders = setOf(event.pubKey)
+        val receivers = event.tags
+            .filter { it.isNotEmpty() && it[0] == "p" }
+            .mapNotNull { it.getOrNull(1) }
             .toSet()
 
         val hasAccess = senders.contains(authenticatedPubkey) || receivers.contains(authenticatedPubkey)
@@ -175,7 +169,6 @@ class CitrineContentProvider : ContentProvider() {
                 val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
                     ?: Long.MAX_VALUE
 
-                // Validate parameters
                 if (offset < 0) {
                     return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
                 }
@@ -186,15 +179,13 @@ class CitrineContentProvider : ContentProvider() {
                     return@runBlocking QueryResult.error("Invalid date range: createdAtFrom ($createdAtFrom) > createdAtTo ($createdAtTo)")
                 }
 
-                // Use optimized database query instead of loading all events into memory
-                val rawEvents = eventDao.getEventsByDateRange(
+                val rawEvents = store.getEventsByDateRange(
                     createdAtFrom = createdAtFrom,
                     createdAtTo = createdAtTo,
                     limit = limit,
                     offset = offset,
                 )
 
-                // Apply auth filtering (cannot be done at DB level due to complex logic)
                 val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
 
                 QueryResult.Success(filtered)
@@ -223,11 +214,11 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                val event = eventDao.getById(eventId)
+                val event = store.getById(eventId)
                 if (event != null && shouldIncludeEvent(event, authPubkey)) {
                     QueryResult.Success(listOf(event))
                 } else {
-                    QueryResult.Success(emptyList<EventWithTags>())
+                    QueryResult.Success(emptyList<Event>())
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error querying event by ID: $eventId", e)
@@ -266,7 +257,6 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                // Validate parameters
                 if (limit < 0) {
                     return@runBlocking QueryResult.error("Invalid limit: $limit (must be >= 0)")
                 }
@@ -274,8 +264,7 @@ class CitrineContentProvider : ContentProvider() {
                     return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
                 }
 
-                // Use optimized database query with pubkey filter
-                val rawEvents = eventDao.getEventsByPubkey(
+                val rawEvents = store.getEventsByPubkey(
                     pubkey = pubkey,
                     kind = kind,
                     createdAtFrom = createdAtFrom,
@@ -283,15 +272,12 @@ class CitrineContentProvider : ContentProvider() {
                     limit = limit,
                     offset = offset,
                 )
-                // Apply auth filtering (cannot be done at DB level due to complex logic)
                 val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
 
-                // Note: Sorting is now done at DB level (DESC by default)
-                // If custom sort order is needed, we'd need to add it to the DAO query
                 val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
-                    filtered.sortedBy { it.event.createdAt }
+                    filtered.sortedBy { it.createdAt }
                 } else {
-                    filtered // Already sorted DESC by DB query
+                    filtered
                 }
 
                 QueryResult.Success(sortedEvents)
@@ -332,7 +318,6 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                // Validate parameters
                 if (limit < 0) {
                     return@runBlocking QueryResult.error("Invalid limit: $limit (must be >= 0)")
                 }
@@ -340,8 +325,7 @@ class CitrineContentProvider : ContentProvider() {
                     return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
                 }
 
-                // Use optimized database query with kind filter
-                val rawEvents = eventDao.getEventsByKind(
+                val rawEvents = store.getEventsByKind(
                     kind = kind,
                     pubkey = pubkey,
                     createdAtFrom = createdAtFrom,
@@ -349,15 +333,12 @@ class CitrineContentProvider : ContentProvider() {
                     limit = limit,
                     offset = offset,
                 )
-                // Apply auth filtering (cannot be done at DB level due to complex logic)
                 val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
 
-                // Note: Sorting is now done at DB level (DESC by default)
-                // If custom sort order is needed, we'd need to add it to the DAO query
                 val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
-                    filtered.sortedBy { it.event.createdAt }
+                    filtered.sortedBy { it.createdAt }
                 } else {
-                    filtered // Already sorted DESC by DB query
+                    filtered
                 }
 
                 QueryResult.Success(sortedEvents)
@@ -379,8 +360,6 @@ class CitrineContentProvider : ContentProvider() {
     private fun queryAllTags(
         projection: Array<out String>?,
     ): Cursor {
-        // Tags are typically queried with events, so this returns empty for now
-        // Can be implemented if needed
         return buildTagCursor(emptyList(), projection)
     }
 
@@ -396,11 +375,11 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                val event = eventDao.getById(eventId)
+                val event = store.getById(eventId)
                 if (event != null) {
-                    QueryResult.Success(event.tags)
+                    QueryResult.Success(event.toTagRows())
                 } else {
-                    QueryResult.Success(emptyList<TagEntity>())
+                    QueryResult.Success(emptyList<TagRow>())
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error querying tags for event: $eventId", e)
@@ -418,7 +397,7 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     private fun buildEventCursor(
-        events: List<EventWithTags>,
+        events: List<Event>,
         projection: Array<out String>?,
     ): Cursor {
         val columns = projection ?: arrayOf(
@@ -432,16 +411,16 @@ class CitrineContentProvider : ContentProvider() {
 
         val cursor = MatrixCursor(columns, events.size)
 
-        events.forEach { eventWithTags ->
+        events.forEach { event ->
             val row = arrayOfNulls<Any?>(columns.size)
             columns.forEachIndexed { index, column ->
                 row[index] = when (column) {
-                    CitrineContract.Events.COLUMN_ID -> eventWithTags.event.id
-                    CitrineContract.Events.COLUMN_PUBKEY -> eventWithTags.event.pubkey
-                    CitrineContract.Events.COLUMN_CREATED_AT -> eventWithTags.event.createdAt
-                    CitrineContract.Events.COLUMN_KIND -> eventWithTags.event.kind
-                    CitrineContract.Events.COLUMN_CONTENT -> eventWithTags.event.content
-                    CitrineContract.Events.COLUMN_SIG -> eventWithTags.event.sig
+                    CitrineContract.Events.COLUMN_ID -> event.id
+                    CitrineContract.Events.COLUMN_PUBKEY -> event.pubKey
+                    CitrineContract.Events.COLUMN_CREATED_AT -> event.createdAt
+                    CitrineContract.Events.COLUMN_KIND -> event.kind
+                    CitrineContract.Events.COLUMN_CONTENT -> event.content
+                    CitrineContract.Events.COLUMN_SIG -> event.sig
                     else -> null
                 }
             }
@@ -452,7 +431,7 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     private fun buildTagCursor(
-        tags: List<TagEntity>,
+        tags: List<TagRow>,
         projection: Array<out String>?,
     ): Cursor {
         val columns = projection ?: arrayOf(
@@ -473,8 +452,8 @@ class CitrineContentProvider : ContentProvider() {
             val row = arrayOfNulls<Any?>(columns.size)
             columns.forEachIndexed { index, column ->
                 row[index] = when (column) {
-                    CitrineContract.Tags.COLUMN_PK -> tag.pk
-                    CitrineContract.Tags.COLUMN_PK_EVENT -> tag.pkEvent
+                    CitrineContract.Tags.COLUMN_PK -> 0L
+                    CitrineContract.Tags.COLUMN_PK_EVENT -> tag.eventId
                     CitrineContract.Tags.COLUMN_POSITION -> tag.position
                     CitrineContract.Tags.COLUMN_COL0_NAME -> tag.col0Name
                     CitrineContract.Tags.COLUMN_COL1_VALUE -> tag.col1Value
@@ -524,7 +503,6 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                // Extract and validate event data from ContentValues
                 val eventId = values.getAsString(CitrineContract.Events.COLUMN_ID)
                     ?: return@runBlocking QueryResult.error<Uri>("Event ID is required")
                 val pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
@@ -537,12 +515,8 @@ class CitrineContentProvider : ContentProvider() {
                 val sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
                     ?: return@runBlocking QueryResult.error<Uri>("Signature is required")
 
-                // Extract tags from ContentValues if provided
-                // Tags would be provided as a separate ContentValues or JSON string
-                // For now, we'll create event without tags and let validation handle it
                 val tags = emptyArray<Array<String>>()
 
-                // Create Event object
                 val event: Event = EventFactory.create(
                     id = eventId,
                     pubKey = pubkey,
@@ -553,14 +527,12 @@ class CitrineContentProvider : ContentProvider() {
                     tags = tags,
                 )
 
-                // Validate and process event using the same logic as WebSocket server
                 val server = CustomWebSocketService.server
                 if (server != null) {
                     val verificationResult = server.innerProcessEvent(event, null, shouldVerify = true)
 
                     when (verificationResult) {
                         CustomWebSocketServer.VerificationResult.Valid -> {
-                            // Event was successfully validated and inserted by innerProcessEvent
                             QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                         }
                         CustomWebSocketServer.VerificationResult.InvalidId -> {
@@ -585,7 +557,6 @@ class CitrineContentProvider : ContentProvider() {
                             QueryResult.error<Uri>("Event deleted")
                         }
                         CustomWebSocketServer.VerificationResult.AlreadyInDatabase -> {
-                            // Event already exists, return existing URI
                             QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                         }
                         CustomWebSocketServer.VerificationResult.TaggedPubKeyMismatch -> {
@@ -599,19 +570,16 @@ class CitrineContentProvider : ContentProvider() {
                         }
                     }
                 } else {
-                    // Server not available, do basic validation and insert
                     if (!event.verify()) {
                         return@runBlocking QueryResult.error<Uri>("Event ID hash or signature verification failed")
                     }
 
-                    // Check if event already exists
-                    val existing = eventDao.getById(eventId)
+                    val existing = store.getById(eventId)
                     if (existing != null) {
                         return@runBlocking QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                     }
 
-                    val eventWithTags = event.toEventWithTags()
-                    eventDao.insertEventWithTags(eventWithTags, null, sendEventToSubscriptions = false)
+                    store.insertEvent(event, null, sendEventToSubscriptions = false)
                     QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                 }
             } catch (e: Exception) {
@@ -647,54 +615,45 @@ class CitrineContentProvider : ContentProvider() {
         if (eventId == null) return 0
 
         return runBlocking {
-            // Load event from database
-            val eventWithTags = eventDao.getById(eventId)
-            if (eventWithTags == null) {
+            val event = store.getById(eventId)
+            if (event == null) {
                 Log.d(TAG, "Event not found: $eventId")
                 return@runBlocking 0
             }
 
-            // Validate that auth pubkey matches event author when auth is enabled
             if (Settings.authEnabled) {
                 if (authPubkey == null) {
                     Log.d(TAG, "Delete denied: no auth pubkey provided")
                     throw SecurityException("Authentication required to delete events")
                 }
 
-                if (authPubkey != eventWithTags.event.pubkey) {
-                    Log.d(TAG, "Delete denied: auth pubkey $authPubkey does not match event author ${eventWithTags.event.pubkey}")
+                if (authPubkey != event.pubKey) {
+                    Log.d(TAG, "Delete denied: auth pubkey $authPubkey does not match event author ${event.pubKey}")
                     throw SecurityException("Only the event author can delete this event")
                 }
             }
 
-            // If server is available, validate using server logic
             val server = CustomWebSocketService.server
             if (server != null) {
-                val event = eventWithTags.toEvent()
-                // For delete events (kind 5), we need to validate the delete event itself
-                // For regular events, we just check authorization
-                when (val result = server.verifyEvent(event, null, shouldVerify = true)) {
+                when (val verifyResult = server.verifyEvent(event, null, shouldVerify = true)) {
                     CustomWebSocketServer.VerificationResult.Valid,
                     CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
                     -> {
-                        // Event is valid, proceed with deletion
-                        eventDao.delete(listOf(eventId))
+                        store.delete(listOf(eventId))
                         1
                     }
                     CustomWebSocketServer.VerificationResult.InvalidId -> {
                         throw SecurityException("Event ID hash verification failed")
                     }
                     CustomWebSocketServer.VerificationResult.Deleted -> {
-                        // Already deleted
                         return@runBlocking 0
                     }
                     else -> {
-                        throw SecurityException("Event validation failed: $result")
+                        throw SecurityException("Event validation failed: $verifyResult")
                     }
                 }
             } else {
-                // Server not available, just delete if authorized
-                eventDao.delete(listOf(eventId))
+                store.delete(listOf(eventId))
                 1
             }
         }
@@ -706,8 +665,6 @@ class CitrineContentProvider : ContentProvider() {
         selection: String?,
         selectionArgs: Array<out String>?,
     ): Int {
-        // Nostr events are generally immutable, so updates are not typically supported
-        // This could be used for metadata updates if needed
         throw UnsupportedOperationException("Update not supported for Nostr events")
     }
 }

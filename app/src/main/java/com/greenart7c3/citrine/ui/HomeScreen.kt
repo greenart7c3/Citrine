@@ -52,11 +52,10 @@ import androidx.navigation.NavController
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.AppDatabase.Companion.isDatabaseUpgrading
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.storage.EventStore
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.DeleteAllDialog
 import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
@@ -98,7 +97,8 @@ fun HomeScreen(
         }
 
         val state = homeViewModel.state.collectAsStateWithLifecycle()
-        val isUpgradingDatabase = isDatabaseUpgrading.collectAsStateWithLifecycle()
+        val eventStore = remember { EventStore.getInstance(context) }
+        val isUpgradingDatabase = eventStore.isMigrating.collectAsStateWithLifecycle()
         var deleteAllDialog by remember { mutableStateOf(false) }
         var showDialog by remember { mutableStateOf(false) }
         var showAutoBackupDialog by remember { mutableStateOf(false) }
@@ -107,7 +107,6 @@ fun HomeScreen(
         }
         var saveToPreferences by remember { mutableStateOf(false) }
 
-        val database = AppDatabase.getDatabase(context)
         val launcher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult(),
             onResult = { result ->
@@ -195,7 +194,7 @@ fun HomeScreen(
             }
             homeViewModel.exportDatabase(
                 folder = folder,
-                database = database,
+                store = eventStore,
                 context = context,
             )
         }
@@ -218,7 +217,7 @@ fun HomeScreen(
                         Citrine.job?.join()
                         Citrine.isImportingEvents = true
                         homeViewModel.setProgress("Deleting all events")
-                        database.clearAllTables()
+                        eventStore.deleteAll()
                         homeViewModel.setProgress("")
                         Citrine.isImportingEvents = false
                     }
@@ -237,7 +236,7 @@ fun HomeScreen(
                         files = selectedFiles,
                         shouldDelete = true,
                         context = context,
-                        database = database,
+                        store = eventStore,
                         onFinished = {
                             selectedFiles.clear()
                         },
@@ -249,7 +248,7 @@ fun HomeScreen(
                         files = selectedFiles,
                         shouldDelete = false,
                         context = context,
-                        database = database,
+                        store = eventStore,
                         onFinished = {
                             selectedFiles.clear()
                         },

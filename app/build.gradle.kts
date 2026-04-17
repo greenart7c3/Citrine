@@ -4,7 +4,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.ksp)
     alias(libs.plugins.kt.lint)
     alias(libs.plugins.jetbrainsComposeCompiler)
 }
@@ -162,10 +161,6 @@ android {
     }
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-}
-
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_21
@@ -208,10 +203,6 @@ dependencies {
     implementation(libs.jna) {
         artifact { type = "aar" }
     }
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.room.ktx)
-    annotationProcessor(libs.room.compiler)
-    ksp(libs.room.compiler)
     implementation(libs.okhttp)
     implementation(libs.storage)
     implementation(libs.material.icons.extended)
@@ -220,5 +211,4 @@ dependencies {
     implementation(libs.paging.common)
     implementation(libs.paging.compose)
     implementation(libs.paging.runtime)
-    implementation(libs.room.paging)
 }

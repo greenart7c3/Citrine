@@ -22,10 +22,10 @@ import androidx.documentfile.provider.DocumentFile
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.storage.EventStore
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
@@ -54,7 +54,7 @@ class WebSocketServerService : Service() {
         super.onCreate()
 
         Log.d(Citrine.TAG, "Starting WebSocket service")
-        val database = AppDatabase.getDatabase(this@WebSocketServerService)
+        val eventStore = EventStore.getInstance(this@WebSocketServerService)
 
         Log.d(Citrine.TAG, "Starting timer")
         timer?.cancel()
@@ -68,7 +68,7 @@ class WebSocketServerService : Service() {
 
                     if (!Citrine.isImportingEvents) {
                         Citrine.instance.applicationScope.launch {
-                            Citrine.instance.eventsToDelete(database)
+                            Citrine.instance.eventsToDelete(eventStore)
                         }
                     }
 
@@ -87,7 +87,7 @@ class WebSocketServerService : Service() {
                                     Citrine.job?.cancel()
                                     Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                                         ExportDatabaseUtils.exportDatabase(
-                                            database = database,
+                                            store = eventStore,
                                             context = this@WebSocketServerService,
                                             folder = it,
                                             deleteOldFiles = true,
@@ -146,7 +146,7 @@ class WebSocketServerService : Service() {
         )
 
         scope.launch {
-            AppDatabase.isDatabaseUpgrading.collect { isUpgrading ->
+            eventStore.isMigrating.collect { isUpgrading ->
                 val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
                 if (isUpgrading) {
                     val channel = NotificationChannelCompat.Builder(
@@ -179,7 +179,7 @@ class WebSocketServerService : Service() {
         CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
             port = Settings.port,
-            appDatabase = database,
+            eventStore = eventStore,
         )
         CustomWebSocketService.server?.start()
 

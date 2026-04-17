@@ -42,8 +42,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventDao
+import com.greenart7c3.citrine.storage.CountByKindResult
+import com.greenart7c3.citrine.storage.EventStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -65,7 +65,7 @@ private val pieColors = listOf(
 
 private data class PieSlice(val label: String, val count: Int, val color: Color)
 
-private fun buildPieSlices(events: List<EventDao.CountResult>): List<PieSlice> {
+private fun buildPieSlices(events: List<CountByKindResult>): List<PieSlice> {
     val sorted = events.sortedByDescending { it.count }
     val top = sorted.take(9)
     val otherCount = sorted.drop(9).sumOf { it.count }
@@ -132,23 +132,23 @@ private fun PieLegend(slices: List<PieSlice>, total: Int) {
 }
 
 class DatabaseInfoViewModelFactory(
-    private val database: AppDatabase,
+    private val store: EventStore,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(DatabaseInfoViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return DatabaseInfoViewModel(database) as T
+            return DatabaseInfoViewModel(store) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 
 class DatabaseInfoViewModel(
-    database: AppDatabase,
+    store: EventStore,
 ) : ViewModel() {
 
     val countByKind =
-        database.eventDao().countByKind()
+        store.countByKind()
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -164,7 +164,7 @@ class DatabaseInfoViewModel(
 @Composable
 fun DatabaseInfo(
     modifier: Modifier = Modifier,
-    database: AppDatabase,
+    store: EventStore,
     navController: NavController,
     viewModel: DatabaseInfoViewModel,
 ) {
@@ -190,7 +190,7 @@ fun DatabaseInfo(
                     },
                     onClick = {
                         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
-                            database.eventDao().deleteByKind(wantsToDeleteKind!!)
+                            store.deleteByKind(wantsToDeleteKind!!)
                             wantsToDeleteKind = null
                         }
                     },

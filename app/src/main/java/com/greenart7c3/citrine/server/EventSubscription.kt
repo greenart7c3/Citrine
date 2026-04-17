@@ -4,10 +4,9 @@ import android.util.Log
 import android.util.LruCache
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventWithTags
-import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.storage.EventStore
 import com.greenart7c3.citrine.utils.isEphemeral
+import com.vitorpamplona.quartz.nip01Core.core.Event
 import io.ktor.server.websocket.WebSocketServerSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -20,7 +19,7 @@ data class Subscription(
     val id: String,
     val connection: Connection,
     val filters: Set<EventFilter>,
-    val appDatabase: AppDatabase,
+    val eventStore: EventStore,
     val objectMapper: ObjectMapper,
     val count: Boolean,
 ) {
@@ -34,9 +33,8 @@ object EventSubscription {
 
     fun count(): Int = subscriptions.size()
 
-    fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
+    fun executeAll(event: Event, connection: Connection?) {
         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
-            val event = dbEvent.toEvent()
             val eventJson = event.toJsonObject()
             var sentEvent = false
             subscriptions.snapshot().values.forEach {
@@ -97,7 +95,7 @@ object EventSubscription {
         subscriptionId: String,
         filters: Set<EventFilter>,
         connection: Connection,
-        appDatabase: AppDatabase,
+        eventStore: EventStore,
         objectMapper: ObjectMapper,
         count: Boolean,
     ) {
@@ -107,7 +105,7 @@ object EventSubscription {
                 subscriptionId,
                 connection,
                 filters,
-                appDatabase,
+                eventStore,
                 objectMapper,
                 count,
             ),

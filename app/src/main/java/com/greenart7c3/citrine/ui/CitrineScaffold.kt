@@ -16,6 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,10 +41,9 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventPagingSource
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.crashreports.DisplayCrashMessages
+import com.greenart7c3.citrine.storage.EventPagingSource
+import com.greenart7c3.citrine.storage.EventStore
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
 import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
@@ -127,7 +127,7 @@ fun CitrineScaffold(
                 content = {
                     it.arguments?.getInt("kind")?.let { kind ->
                         val context = LocalContext.current
-                        val database = AppDatabase.getDatabase(context)
+                        val eventStore = remember { EventStore.getInstance(context) }
                         val clipboard = LocalClipboard.current
 
                         val pager = Pager(
@@ -139,7 +139,7 @@ fun CitrineScaffold(
                             ),
                             pagingSourceFactory = {
                                 EventPagingSource(
-                                    dao = database.eventDao(),
+                                    store = eventStore,
                                     kind = kind,
                                 )
                             },
@@ -154,9 +154,7 @@ fun CitrineScaffold(
                         ) {
                             items(events.itemCount) { index ->
                                 val event = events[index]
-                                event?.let { eventWithTags ->
-                                    val event = eventWithTags.toEvent()
-
+                                event?.let { event ->
                                     Card(
                                         modifier = Modifier
                                             .padding(16.dp),
@@ -291,15 +289,16 @@ fun CitrineScaffold(
 
             composable(Route.DatabaseInfo.route) {
                 val context = LocalContext.current
+                val eventStore = remember { EventStore.getInstance(context) }
                 val viewModel = viewModel<DatabaseInfoViewModel>(
-                    factory = DatabaseInfoViewModelFactory(AppDatabase.getDatabase(context)),
+                    factory = DatabaseInfoViewModelFactory(eventStore),
                 )
                 DatabaseInfo(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
                         .padding(16.dp),
-                    database = AppDatabase.getDatabase(context),
+                    store = eventStore,
                     navController = navController,
                     viewModel = viewModel,
                 )

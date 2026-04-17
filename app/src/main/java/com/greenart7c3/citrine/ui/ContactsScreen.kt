@@ -34,10 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.HistoryDatabase
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.greenart7c3.citrine.storage.EventStore
 import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.publishAndConfirm
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
@@ -106,14 +104,14 @@ fun ContactsScreen(
     LaunchedEffect(Unit) {
         coroutineScope.launch(Dispatchers.IO) {
             loading = true
-            val dataBaseEvents = HistoryDatabase.getDatabase(context).eventDao().getContactLists(pubKey)
+            val historyStore = EventStore.getHistoryInstance(context)
+            val dataBaseEvents = historyStore.getContactLists(pubKey)
             for (it in dataBaseEvents) {
-                val contactListEvent = it.toEvent() as ContactListEvent
+                val contactListEvent = it as ContactListEvent
                 Log.d("ContactsScreen", "ContactListEvent: $contactListEvent")
                 events.add(contactListEvent)
             }
-            val dataBaseOutboxRelays = AppDatabase.getDatabase(context).eventDao().getAdvertisedRelayList(pubKey)
-            outboxRelays = dataBaseOutboxRelays?.toEvent() as? AdvertisedRelayListEvent
+            outboxRelays = EventStore.getInstance(context).getAdvertisedRelayList(pubKey) as? AdvertisedRelayListEvent
 
             loading = false
         }
