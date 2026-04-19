@@ -542,31 +542,31 @@ class EventStore private constructor(
         private const val TAG_A = "a"
 
         @Volatile
-        private var INSTANCE: EventStore? = null
+        private var instance: EventStore? = null
 
         @Volatile
-        private var HISTORY_INSTANCE: EventStore? = null
+        private var historyInstance: EventStore? = null
 
         fun getInstance(context: Context): EventStore {
-            val existing = INSTANCE
+            val existing = instance
             if (existing != null) return existing
             synchronized(this) {
-                val again = INSTANCE
+                val again = instance
                 if (again != null) return again
                 val created = EventStore(context.applicationContext, "citrine_lmdb", runLegacyMigration = true)
-                INSTANCE = created
+                instance = created
                 return created
             }
         }
 
         fun getHistoryInstance(context: Context): EventStore {
-            val existing = HISTORY_INSTANCE
+            val existing = historyInstance
             if (existing != null) return existing
             synchronized(this) {
-                val again = HISTORY_INSTANCE
+                val again = historyInstance
                 if (again != null) return again
                 val created = EventStore(context.applicationContext, "citrine_lmdb_history", runLegacyMigration = false)
-                HISTORY_INSTANCE = created
+                historyInstance = created
                 return created
             }
         }

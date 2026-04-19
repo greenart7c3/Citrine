@@ -43,9 +43,9 @@ internal object RoomToLmdbMigration {
                     val kind = cursor.getInt(kindIdx)
                     val content = cursor.getString(contentIdx) ?: ""
                     val sig = cursor.getString(sigIdx) ?: ""
-                    val tags = tagsByEvent[id].orEmpty()
+                    val tags: Array<Array<String>> = tagsByEvent[id] ?: emptyArray()
                     try {
-                        val event = EventFactory.create(
+                        val event = EventFactory.create<Event>(
                             id = id,
                             pubKey = pubkey,
                             createdAt = createdAt,

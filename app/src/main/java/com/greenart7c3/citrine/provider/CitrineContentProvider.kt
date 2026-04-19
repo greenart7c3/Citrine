@@ -359,9 +359,7 @@ class CitrineContentProvider : ContentProvider() {
 
     private fun queryAllTags(
         projection: Array<out String>?,
-    ): Cursor {
-        return buildTagCursor(emptyList(), projection)
-    }
+    ): Cursor = buildTagCursor(emptyList(), projection)
 
     private fun queryTagsByEvent(
         uri: Uri,
@@ -664,7 +662,5 @@ class CitrineContentProvider : ContentProvider() {
         values: ContentValues?,
         selection: String?,
         selectionArgs: Array<out String>?,
-    ): Int {
-        throw UnsupportedOperationException("Update not supported for Nostr events")
-    }
+    ): Int = throw UnsupportedOperationException("Update not supported for Nostr events")
 }

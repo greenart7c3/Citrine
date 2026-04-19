@@ -35,8 +35,9 @@ class LmdbDbi<K : Comparable<K>, V : Any> internal constructor(
     private val journalFile: File = File(env.path, "$name.log")
 
     @Volatile private var journalWriter: BufferedWriter? = null
+
     @Volatile private var pendingWrites = 0
-    private val COMPACT_EVERY = 10_000
+    private val compactEvery = 10_000
 
     internal fun load() {
         map.clear()
@@ -93,7 +94,7 @@ class LmdbDbi<K : Comparable<K>, V : Any> internal constructor(
         w.newLine()
         dirty.set(true)
         pendingWrites++
-        if (pendingWrites >= COMPACT_EVERY) compact()
+        if (pendingWrites >= compactEvery) compact()
     }
 
     fun delete(txn: LmdbTxn, key: K): Boolean {
