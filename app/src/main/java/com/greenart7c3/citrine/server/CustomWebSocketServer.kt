@@ -88,19 +88,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.flatMapMerge
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class CustomWebSocketServer(
@@ -162,9 +150,7 @@ class CustomWebSocketServer(
     ) {
         val filters = filterNodes.map { jsonNode ->
             val tags = jsonNode.properties().asSequence()
-                .filter { it.key.startsWith("#") }
-                .map { it.key.substringAfter("#") to it.value.map { item -> item.asText() }.toSet() }
-                .toMap()
+                .filter { it.key.startsWith("#") }.associate { it.key.substringAfter("#") to it.value.map { item -> item.asText() }.toSet() }
 
             val filter = objectMapper.treeToValue(jsonNode, EventFilter::class.java)
 
@@ -1037,29 +1023,6 @@ class CustomWebSocketServer(
                     val thisConnection = Connection(this)
                     connections.emit(connections.value + thisConnection)
 
-                    val maxParallelMessages = 8
-
-                    val job = launch {
-                        thisConnection.sharedFlow
-                            .buffer(capacity = maxParallelMessages) // decouples producer from consumers
-                            .flatMapMerge(concurrency = maxParallelMessages) { message ->
-                                flow {
-                                    try {
-                                        // process message on IO dispatcher
-                                        withContext(Dispatchers.IO) {
-                                            processNewRelayMessage(message, thisConnection)
-                                        }
-                                        emit(Unit) // emit something to complete the flow
-                                    } catch (e: CancellationException) {
-                                        Log.d(Citrine.TAG, "Message $message cancelled")
-                                        throw e // propagate cancellation
-                                    } catch (e: Exception) {
-                                        Log.e(Citrine.TAG, "Failed to process message $message", e)
-                                    }
-                                }
-                            }
-                            .collect { } // we don’t need the results, just trigger processing
-                    }
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
 
                     if (Settings.authEnabled) {
@@ -1067,12 +1030,13 @@ class CustomWebSocketServer(
                     }
 
                     try {
-                        incoming.asTextMessages()
-                            .onEach { message ->
-                                thisConnection.messageResponseFlow.emit(message) // decoupled by buffer
-                            }
-                            .catch { e ->
-                                // Handle unexpected exceptions (not cancellations)
+                        for (message in incoming) {
+                            if (message !is Frame.Text) continue
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    processNewRelayMessage(message.readText(), thisConnection)
+                                }
+                            } catch (e: Exception) {
                                 if (e !is CancellationException) {
                                     Log.d(Citrine.TAG, "Error processing message: $e", e)
                                     try {
@@ -1083,13 +1047,11 @@ class CustomWebSocketServer(
                                         Log.d(Citrine.TAG, sendEx.toString(), sendEx)
                                     }
                                 }
-                                // CancellationExceptions are handled by finally
                             }
-                            .collect { } // we don’t need the results, just trigger processing
+                        }
                     } finally {
                         // Always clean up, even on cancellation
                         removeConnection(thisConnection)
-                        job.cancel()
                         Log.d(Citrine.TAG, "Connection closed from ${thisConnection.name}")
                     }
                 }
@@ -1112,9 +1074,3 @@ data class WebClientServer(
     val port: Int,
     val server: EmbeddedServer<*, *>,
 )
-
-fun ReceiveChannel<Frame>.asTextMessages(): Flow<String> = receiveAsFlow() // Convert channel to Flow
-    .filterIsInstance<Frame.Text>() // Only text frames
-    .map { it.readText() } // Convert to String once
-    .buffer(Channel.UNLIMITED) // Decouple producer from downstream collectors
-    .catch { e -> println("Error reading frame: $e") } // Optional
