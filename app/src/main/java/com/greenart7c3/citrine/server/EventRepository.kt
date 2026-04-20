@@ -13,6 +13,9 @@ import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 
+private val TAG_KEY_REGEX = Regex("^[a-zA-Z0-9]+$")
+private val JACKSON_NODE_FACTORY = JacksonMapper.mapper.nodeFactory
+
 object EventRepository {
     fun createQuery(
         filter: EventFilter,
@@ -74,7 +77,7 @@ object EventRepository {
 
         // --- Add each tag as an AND EXISTS in WHERE ---
         filter.tags.forEach { tag ->
-            val safeTagKey = tag.key.takeIf { it.matches(Regex("^[a-zA-Z0-9]+$")) }
+            val safeTagKey = tag.key.takeIf { it.matches(TAG_KEY_REGEX) }
                 ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
 
             val existsClause = StringBuilder()
@@ -183,25 +186,21 @@ object EventRepository {
     }
 }
 
-fun Event.toJsonObject(): JsonNode {
-    val factory = JacksonMapper.mapper.nodeFactory
-
-    return factory.objectNode().apply {
-        put("id", id)
-        put("pubkey", pubKey)
-        put("created_at", createdAt)
-        put("kind", kind)
-        replace(
-            "tags",
-            factory.arrayNode(tags.size).apply {
-                tags.forEach { tag ->
-                    add(
-                        factory.arrayNode(tag.size).apply { tag.forEach { add(it) } },
-                    )
-                }
-            },
-        )
-        put("content", content)
-        put("sig", sig)
-    }
+fun Event.toJsonObject(): JsonNode = JACKSON_NODE_FACTORY.objectNode().apply {
+    put("id", id)
+    put("pubkey", pubKey)
+    put("created_at", createdAt)
+    put("kind", kind)
+    replace(
+        "tags",
+        JACKSON_NODE_FACTORY.arrayNode(tags.size).apply {
+            tags.forEach { tag ->
+                add(
+                    JACKSON_NODE_FACTORY.arrayNode(tag.size).apply { tag.forEach { add(it) } },
+                )
+            }
+        },
+    )
+    put("content", content)
+    put("sig", sig)
 }
