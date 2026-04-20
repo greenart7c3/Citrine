@@ -18,43 +18,52 @@ object EventRepository {
         filter: EventFilter,
         count: Boolean,
     ): Pair<String, List<Any>> {
-        val whereClause = mutableListOf<String>()
         val params = mutableListOf<Any>()
         val joinClause = StringBuilder()
+        val whereClause = StringBuilder()
+
+        fun appendWhere(predicate: CharSequence) {
+            if (whereClause.isEmpty()) {
+                whereClause.append(" WHERE ")
+            } else {
+                whereClause.append(" AND ")
+            }
+            whereClause.append(predicate)
+        }
 
         // --- EventEntity filters ---
         filter.since?.let {
-            whereClause.add("EventEntity.createdAt >= ?")
+            appendWhere("EventEntity.createdAt >= ?")
             params.add(it)
         }
 
         filter.until?.let {
-            whereClause.add("EventEntity.createdAt <= ?")
+            appendWhere("EventEntity.createdAt <= ?")
             params.add(it)
         }
 
         if (filter.ids.isNotEmpty()) {
             val placeholders = filter.ids.joinToString(",") { "?" }
-            whereClause.add("EventEntity.id IN ($placeholders)")
+            appendWhere("EventEntity.id IN ($placeholders)")
             params.addAll(filter.ids)
         }
 
         if (filter.authors.isNotEmpty()) {
             val placeholders = filter.authors.joinToString(",") { "?" }
-            whereClause.add("EventEntity.pubkey IN ($placeholders)")
+            appendWhere("EventEntity.pubkey IN ($placeholders)")
             params.addAll(filter.authors)
         }
 
         if (filter.searchKeywords.isNotEmpty()) {
-            joinClause.append("INNER JOIN event_fts ON event_fts.rowid = EventEntity.rowid")
+            joinClause.append(" INNER JOIN event_fts ON event_fts.rowid = EventEntity.rowid")
             val searchParam = filter.searchKeywords.joinToString(" ") { "\"$it\"" }
-            whereClause.add("event_fts MATCH ?")
+            appendWhere("event_fts MATCH ?")
             params.add(searchParam)
         }
 
         if (filter.kinds.isNotEmpty()) {
             val placeholders = filter.kinds.joinToString(",") { "?" }
-            whereClause.add("EventEntity.kind IN ($placeholders)")
+            appendWhere("EventEntity.kind IN ($placeholders)")
             params.addAll(filter.kinds)
         }
 
@@ -68,61 +77,53 @@ object EventRepository {
             val safeTagKey = tag.key.takeIf { it.matches(Regex("^[a-zA-Z0-9]+$")) }
                 ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
 
-            val existsClause = buildString {
-                append("EXISTS (SELECT 1 FROM TagEntity WHERE pkEvent = EventEntity.id AND col0Name = ?")
-                params.add(safeTagKey)
+            val existsClause = StringBuilder()
+                .append("EXISTS (SELECT 1 FROM TagEntity WHERE pkEvent = EventEntity.id AND col0Name = ?")
+            params.add(safeTagKey)
 
-                if (tag.value.isNotEmpty()) {
-                    val valuePlaceholders = tag.value.joinToString(",") { "?" }
-                    append(" AND col1Value IN ($valuePlaceholders)")
-                    params.addAll(tag.value)
-                }
-
-                if (filter.kinds.isNotEmpty()) {
-                    val kindPlaceholders = filter.kinds.joinToString(",") { "?" }
-                    append(" AND kind IN ($kindPlaceholders)")
-                    params.addAll(filter.kinds)
-                }
-
-                append(")")
+            if (tag.value.isNotEmpty()) {
+                val valuePlaceholders = tag.value.joinToString(",") { "?" }
+                existsClause.append(" AND col1Value IN (").append(valuePlaceholders).append(")")
+                params.addAll(tag.value)
             }
 
-            whereClause.add(existsClause)
+            if (filter.kinds.isNotEmpty()) {
+                val kindPlaceholders = filter.kinds.joinToString(",") { "?" }
+                existsClause.append(" AND kind IN (").append(kindPlaceholders).append(")")
+                params.addAll(filter.kinds)
+            }
+
+            existsClause.append(")")
+
+            appendWhere(existsClause)
         }
 
         // --- Build SQL ---
-        val joinSql = if (joinClause.isNotEmpty()) joinClause.toString() else ""
-        val predicatesSql = if (whereClause.isNotEmpty()) whereClause.joinToString(" AND ", prefix = "WHERE ") else ""
-        val distinctSql = if (filter.tags.isNotEmpty()) "DISTINCT " else ""
-
         val orderBy = if (filter.searchKeywords.isNotEmpty()) {
             "EventEntity.rowid DESC"
         } else {
             "EventEntity.createdAt DESC, EventEntity.id ASC"
         }
 
-        var query = if (count) {
-            """
-        SELECT COUNT(DISTINCT EventEntity.id)
-          FROM EventEntity EventEntity
-          $joinSql
-          $predicatesSql
-            """.trimIndent()
+        val query = StringBuilder()
+        if (count) {
+            query.append("SELECT COUNT(DISTINCT EventEntity.id) FROM EventEntity EventEntity")
+            query.append(joinClause)
+            query.append(whereClause)
         } else {
-            """
-        SELECT $distinctSql EventEntity.*
-          FROM EventEntity EventEntity
-          $joinSql
-          $predicatesSql
-          ORDER BY $orderBy
-            """.trimIndent()
+            query.append("SELECT ")
+            if (filter.tags.isNotEmpty()) query.append("DISTINCT ")
+            query.append("EventEntity.* FROM EventEntity EventEntity")
+            query.append(joinClause)
+            query.append(whereClause)
+            query.append(" ORDER BY ").append(orderBy)
         }
 
         filter.limit?.let {
-            query += " LIMIT ?"
+            query.append(" LIMIT ?")
             params.add(it)
         }
-        return Pair(query, params)
+        return Pair(query.toString(), params)
     }
 
     fun query(
