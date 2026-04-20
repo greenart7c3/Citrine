@@ -9,7 +9,7 @@ import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
-import com.vitorpamplona.quartz.nip40Expiration.isExpired
+import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 
@@ -35,6 +35,10 @@ object EventRepository {
         }
 
         // --- EventEntity filters ---
+        // Exclude events whose NIP-40 expiration timestamp is in the past.
+        appendWhere("(EventEntity.expiresAt IS NULL OR EventEntity.expiresAt >= ?)")
+        params.add(TimeUtils.now())
+
         filter.since?.let {
             appendWhere("EventEntity.createdAt >= ?")
             params.add(it)
@@ -170,18 +174,16 @@ object EventRepository {
         val events = query(subscription.appDatabase, filter)
         events.forEach {
             val event = it.toEvent()
-            if (!event.isExpired()) {
-                Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
-                subscription.connection.trySend(
-                    subscription.objectMapper.writeValueAsString(
-                        listOf(
-                            "EVENT",
-                            subscription.id,
-                            event.toJsonObject(),
-                        ),
+            Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
+            subscription.connection.trySend(
+                subscription.objectMapper.writeValueAsString(
+                    listOf(
+                        "EVENT",
+                        subscription.id,
+                        event.toJsonObject(),
                     ),
-                )
-            }
+                ),
+            )
         }
     }
 }

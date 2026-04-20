@@ -35,6 +35,10 @@ import com.vitorpamplona.quartz.utils.EventFactory
             name = "idx_event_pubkey_kind_created_id",
             orders = [Index.Order.ASC, Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
         ),
+        Index(
+            value = ["expiresAt"],
+            name = "idx_event_expires_at",
+        ),
     ],
 )
 data class EventEntity(
@@ -45,6 +49,7 @@ data class EventEntity(
     val kind: Int,
     val content: String,
     val sig: String,
+    val expiresAt: Long? = null,
 )
 
 data class EventWithTags(
@@ -132,6 +137,11 @@ fun TagEntity.toTags(): Array<String> = listOfNotNull(
 ).plus(col4Plus).toTypedArray()
 
 fun Event.toEventWithTags(): EventWithTags {
+    val expiresAt = tags
+        .firstOrNull { it.getOrNull(0) == "expiration" }
+        ?.getOrNull(1)
+        ?.toLongOrNull()
+
     val dbEvent = EventEntity(
         id = id,
         pubkey = pubKey,
@@ -139,6 +149,7 @@ fun Event.toEventWithTags(): EventWithTags {
         kind = kind,
         content = content,
         sig = sig,
+        expiresAt = expiresAt,
     )
 
     val dbTags = tags.mapIndexed { index, tag ->
