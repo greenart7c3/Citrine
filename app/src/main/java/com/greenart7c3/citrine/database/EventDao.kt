@@ -56,7 +56,7 @@ interface EventDao {
         }
     }
 
-    @Query("SELECT TagEntity.pkEvent FROM TagEntity TagEntity WHERE TagEntity.col0Name = 'expiration' AND CAST(TagEntity.col1Value as INTEGER) < :now")
+    @Query("SELECT EventEntity.id FROM EventEntity EventEntity WHERE EventEntity.expiresAt IS NOT NULL AND EventEntity.expiresAt < :now")
     @Transaction
     suspend fun countEventsWithExpirations(now: Long): List<String>
 
