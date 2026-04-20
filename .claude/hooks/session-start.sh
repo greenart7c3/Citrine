@@ -1,5 +1,5 @@
 #!/bin/bash
-# Session start hook: Configure proxy auth, SSL trust, and Android SDK for Claude Code on the web
+# Session start hook: Import TLS inspection CA and install Android SDK for Claude Code on the web
 set -euo pipefail
 
 # Only run in remote (web) environments
@@ -7,64 +7,19 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# --- Proxy credentials: configure Maven/Gradle if authenticated proxy is set ---
-proxy="${https_proxy:-${HTTPS_PROXY:-}}"
-if [ -n "$proxy" ] && echo "$proxy" | grep -q '@'; then
-  rest="${proxy#*://}"
-  userpass="${rest%@*}"
-  hostport="${rest##*@}"
-  user="${userpass%%:*}"
-  pass="${userpass#*:}"
-  host="${hostport%%:*}"
-  port="${hostport##*:}"
-  port="${port%/}"
-
-  mkdir -p ~/.m2
-  cat > ~/.m2/settings.xml << EOF
-<settings>
-  <proxies>
-    <proxy>
-      <id>ccw</id><active>true</active><protocol>https</protocol>
-      <host>$host</host><port>$port</port>
-      <username>$user</username>
-      <password><![CDATA[$pass]]></password>
-    </proxy>
-  </proxies>
-</settings>
-EOF
-
-  # Force wagon transport for Maven 3.9+ proxy auth compatibility
-  cat > ~/.mavenrc << 'MAVENRC'
-MAVEN_OPTS="$MAVEN_OPTS -Dmaven.resolver.transport=wagon"
-MAVENRC
-
-  mkdir -p ~/.gradle
-  cat > ~/.gradle/gradle.properties << EOF
-systemProp.https.proxyHost=$host
-systemProp.https.proxyPort=$port
-systemProp.https.proxyUser=$user
-systemProp.https.proxyPassword=$pass
-systemProp.http.proxyHost=$host
-systemProp.http.proxyPort=$port
-systemProp.http.proxyUser=$user
-systemProp.http.proxyPassword=$pass
-# Override nonProxyHosts: route all external traffic (incl. *.google.com) through proxy
-systemProp.http.nonProxyHosts=localhost|127.0.0.1
-systemProp.https.nonProxyHosts=localhost|127.0.0.1
-# Use Ubuntu's Java trust store (includes Anthropic TLS inspection CA) for all Gradle JVMs.
-# This is needed because Gradle may download a custom JDK (e.g. JetBrains) whose bundled
-# trust store doesn't include the Anthropic CA, causing TLS inspection failures.
-systemProp.javax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts
-systemProp.javax.net.ssl.trustStoreType=JKS
-systemProp.javax.net.ssl.trustStorePassword=changeit
-systemProp.jdk.http.auth.tunneling.disabledSchemes=
-systemProp.jdk.http.auth.proxying.disabledSchemes=
-EOF
-
-  echo "Configured Maven/Gradle proxy from HTTPS_PROXY" >&2
+# The remote environment uses a transparent egress proxy with TLS inspection.
+# No http(s)_proxy env vars are set — traffic is intercepted at the network layer.
+# Any stale gradle proxy config from older hook versions would point at a proxy
+# that no longer exists, so remove it.
+if [ -f ~/.gradle/gradle.properties ] && \
+   grep -qE '^systemProp\.(http|https)\.proxy(Host|User|Password)=' ~/.gradle/gradle.properties 2>/dev/null; then
+  echo "Removing stale proxy config from ~/.gradle/gradle.properties" >&2
+  rm -f ~/.gradle/gradle.properties
 fi
+rm -f ~/.m2/settings.xml ~/.mavenrc 2>/dev/null || true
 
 # --- SSL trust: import Anthropic TLS inspection CA into JVM trust stores ---
+# Required so Gradle/Maven JVMs trust the intercepted TLS connections.
 ANTHROPIC_CA_PEM=$(python3 -c "
 import re, ssl, sys
 try:
@@ -97,13 +52,15 @@ if [ -n "$ANTHROPIC_CA_PEM" ]; then
       echo "Imported Anthropic CA into $cacerts" >&2
   done
   rm -f "$TMPCA"
+else
+  echo "Warning: Anthropic TLS inspection CA not found in system trust store" >&2
 fi
 
 ANDROID_SDK_DIR="/root/android-sdk"
 SDK_REPO_BASE="https://dl.google.com/android/repository"
 
 # Install Android SDK packages by downloading directly with curl
-# (sdkmanager cannot reach the SDK repository through the proxy)
+# (sdkmanager's license negotiation has been flaky through the egress proxy)
 install_sdk_package() {
   local zip_url="$1"
   local dest_dir="$2"
@@ -160,7 +117,7 @@ echo -e "\n504667f4c0de7af1a06de9f4b1727b84351f2910" >> "$ANDROID_SDK_DIR/licens
 echo -e "\nd975f751698a77b662f1254ddbeed3901e976f5a" > "$ANDROID_SDK_DIR/licenses/intel-android-extra-license"
 
 # Create local.properties if missing
-REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null || echo "${CLAUDE_PROJECT_DIR:-/home/user/Amber}")"
+REPO_ROOT="${CLAUDE_PROJECT_DIR:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null || echo "/home/user/Citrine")}"
 LOCAL_PROPS="$REPO_ROOT/local.properties"
 if [ ! -f "$LOCAL_PROPS" ]; then
   echo "sdk.dir=$ANDROID_SDK_DIR" > "$LOCAL_PROPS"
@@ -174,7 +131,8 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   echo "export PATH=\$PATH:$ANDROID_SDK_DIR/platform-tools" >> "$CLAUDE_ENV_FILE"
 fi
 
-cd "$CLAUDE_PROJECT_DIR"
-./gradlew --version > /dev/null 2>&1
+# Warm up Gradle and surface any startup errors (previously silenced).
+cd "$REPO_ROOT"
+./gradlew --version
 
 echo "Android SDK setup complete."
