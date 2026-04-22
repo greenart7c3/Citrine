@@ -107,6 +107,14 @@
     <string name="allow_all_pubkeys_hint">Empty list allows events from all pubkeys</string>
     <string name="allow_all_tagged_pubkeys_hint">Empty list allows events referencing any pubkey</string>
     <string name="allow_all_kinds_hint">Empty list allows all event kinds</string>
+    <string name="use_relay_aggregator_for_downloads">Use relay aggregators for downloads</string>
+    <string name="use_relay_aggregator_for_downloads_description">Automatically discover relays from aggregator relays before downloading</string>
+    <string name="background_sync_enabled">Background sync</string>
+    <string name="background_sync_enabled_description">Periodically pull your events using WorkManager</string>
+    <string name="background_sync_pubkey">Background sync account (npub/hex)</string>
+    <string name="background_sync_interval_hours">Sync interval (hours)</string>
+    <string name="background_sync_wifi_only">Wi‑Fi only sync</string>
+    <string name="background_sync_wifi_only_description">Run background sync only on unmetered networks</string>
     <string name="start_on_boot_description">Automatically start the relay when the device boots</string>
     <string name="enable_disable_auth_description">Require NIP-42 authentication for private event kinds</string>
     <string name="listen_to_pokey_broadcasts_description">Receive events broadcast by the Pokey app</string>

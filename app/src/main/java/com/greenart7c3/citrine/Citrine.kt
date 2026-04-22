@@ -13,6 +13,7 @@ import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.BackgroundSyncScheduler
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
 import com.greenart7c3.citrine.service.WebSocketServerService
@@ -95,6 +96,7 @@ class Citrine : Application() {
         client.connect()
 
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
+        BackgroundSyncScheduler.reschedule(this)
         if (Settings.listenToPokeyBroadcasts) {
             registerPokeyReceiver()
         }

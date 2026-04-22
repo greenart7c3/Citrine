@@ -92,18 +92,7 @@ object EventDownloader {
         signer: NostrSigner,
     ): AdvertisedRelayListEvent? {
         var result: AdvertisedRelayListEvent? = null
-        val relays = listOf(
-            NormalizedRelayUrl(
-                url = "wss://purplepag.es",
-            ),
-            NormalizedRelayUrl(
-                url = "wss://relay.nostr.band",
-            ),
-        )
-        val finishedRelays = mutableMapOf<String, Boolean>()
-        relays.forEach {
-            finishedRelays[it.url] = false
-        }
+        val relays = relayAggregators()
 
         val subId = newSubId()
         val filters = listOf(
@@ -134,18 +123,7 @@ object EventDownloader {
         signer: NostrSigner,
     ): ContactListEvent? {
         var result: ContactListEvent? = null
-        val relays = listOf(
-            NormalizedRelayUrl(
-                url = "wss://purplepag.es",
-            ),
-            NormalizedRelayUrl(
-                url = "wss://relay.nostr.band",
-            ),
-        )
-        val finishedRelays = mutableMapOf<String, Boolean>()
-        relays.forEach {
-            finishedRelays[it.url] = false
-        }
+        val relays = relayAggregators()
         val subId = newSubId()
 
         val filters = listOf(
@@ -171,6 +149,11 @@ object EventDownloader {
         Citrine.instance.client.unsubscribe(subId)
         return result
     }
+
+    private fun relayAggregators(): List<NormalizedRelayUrl> = listOf(
+        NormalizedRelayUrl(url = "wss://purplepag.es"),
+        NormalizedRelayUrl(url = "wss://relay.nostr.band"),
+    )
 
     suspend fun fetchEvents(
         signer: NostrSigner,
@@ -207,6 +190,27 @@ object EventDownloader {
             Log.e(Citrine.TAG, e.message ?: "", e)
             setProgress("Failed to load events")
         }
+    }
+
+    suspend fun resolveDownloadRelays(
+        signer: NostrSigner,
+        useRelayAggregators: Boolean,
+    ): List<NormalizedRelayUrl> {
+        if (!useRelayAggregators) return emptyList()
+
+        val relays = mutableListOf<NormalizedRelayUrl>()
+        fetchContactList(signer)?.relays()?.forEach { relay ->
+            if (!relays.any { current -> current.url == relay.key.url }) {
+                relays.add(relay.key)
+            }
+        }
+        fetchAdvertisedRelayList(signer)?.relays()?.forEach { relay ->
+            if (!relays.any { current -> current.url == relay.relayUrl.url }) {
+                relays.add(relay.relayUrl)
+            }
+        }
+
+        return relays
     }
 
     fun setProgress(message: String) {

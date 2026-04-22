@@ -29,6 +29,11 @@ object Settings {
     var useProxy = false
     var proxyPort = 9050
     var webClients = mutableMapOf<String, String>()
+    var useRelayAggregatorForDownloads: Boolean = true
+    var backgroundSyncEnabled: Boolean = false
+    var backgroundSyncWifiOnly: Boolean = true
+    var backgroundSyncIntervalHours: Int = 6
+    var backgroundSyncPubkey: String = ""
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -55,6 +60,11 @@ object Settings {
         useProxy = false
         proxyPort = 9050
         webClients = mutableMapOf()
+        useRelayAggregatorForDownloads = true
+        backgroundSyncEnabled = false
+        backgroundSyncWifiOnly = true
+        backgroundSyncIntervalHours = 6
+        backgroundSyncPubkey = ""
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)

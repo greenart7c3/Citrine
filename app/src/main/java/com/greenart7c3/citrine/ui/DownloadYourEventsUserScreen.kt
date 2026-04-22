@@ -59,7 +59,10 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.BackgroundSyncScheduler
 import com.greenart7c3.citrine.service.EventDownloader
+import com.greenart7c3.citrine.service.LocalPreferences
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import com.vitorpamplona.quartz.nip01Core.relay.client.auth.RelayAuthenticator
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
@@ -244,6 +247,7 @@ fun DownloadYourEventsUserScreen(
     var npub by remember { mutableStateOf(TextFieldValue()) }
     var signer by remember { mutableStateOf<NostrSigner?>(null) }
     var downloadTaggedEvents by remember { mutableStateOf(true) }
+    var useRelayAggregatorForDownloads by remember { mutableStateOf(Settings.useRelayAggregatorForDownloads) }
 
     val launcherLogin = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -278,6 +282,9 @@ fun DownloadYourEventsUserScreen(
                         )
 
                         npub = TextFieldValue(localNpub)
+                        Settings.backgroundSyncPubkey = returnedKey
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        BackgroundSyncScheduler.reschedule(context)
                     } catch (e: Exception) {
                         Log.d(Citrine.TAG, e.message ?: "", e)
                     }
@@ -347,6 +354,26 @@ fun DownloadYourEventsUserScreen(
                 },
             )
             Text(stringResource(R.string.download_tagged_events))
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable {
+                    useRelayAggregatorForDownloads = !useRelayAggregatorForDownloads
+                    Settings.useRelayAggregatorForDownloads = useRelayAggregatorForDownloads
+                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = useRelayAggregatorForDownloads,
+                onCheckedChange = {
+                    useRelayAggregatorForDownloads = it
+                    Settings.useRelayAggregatorForDownloads = it
+                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                },
+            )
+            Text(stringResource(R.string.use_relay_aggregator_for_downloads))
         }
         ElevatedButton(
             content = {
@@ -432,8 +459,36 @@ fun DownloadYourEventsUserScreen(
                     ).show()
                     return@ElevatedButton
                 }
-
-                shouldShowDialog = true
+                Settings.backgroundSyncPubkey = signer!!.pubKey
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                BackgroundSyncScheduler.reschedule(context)
+                if (useRelayAggregatorForDownloads) {
+                    Citrine.isImportingEvents = true
+                    Citrine.instance.cancelJob()
+                    Citrine.job = Citrine.instance.applicationScope.launch {
+                        val relays = EventDownloader.resolveDownloadRelays(signer!!, true)
+                        if (relays.isEmpty()) {
+                            scope.launch(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.no_relays_found),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                            shouldShowDialog = true
+                            return@launch
+                        }
+                        EventDownloader.setProgress("Connecting to ${relays.size} relays")
+                        EventDownloader.fetchEvents(
+                            signer = signer!!,
+                            relays = relays,
+                            downloadTaggedEvents = downloadTaggedEvents,
+                        )
+                    }
+                    navController.navigateUp()
+                } else {
+                    shouldShowDialog = true
+                }
             },
         )
     }

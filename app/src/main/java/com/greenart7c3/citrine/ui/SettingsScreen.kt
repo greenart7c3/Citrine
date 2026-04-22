@@ -50,6 +50,7 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.OlderThanType
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.BackgroundSyncScheduler
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.PubkeyInputRow
 import com.greenart7c3.citrine.ui.components.PubkeyListItem
@@ -100,6 +101,11 @@ fun SettingsScreen(
         var useProxy by remember { mutableStateOf(Settings.useProxy) }
         var proxyPort by remember { mutableStateOf(TextFieldValue(Settings.proxyPort.toString())) }
         var autoBackup by remember { mutableStateOf(Settings.autoBackup) }
+        var useRelayAggregatorForDownloads by remember { mutableStateOf(Settings.useRelayAggregatorForDownloads) }
+        var backgroundSyncEnabled by remember { mutableStateOf(Settings.backgroundSyncEnabled) }
+        var backgroundSyncWifiOnly by remember { mutableStateOf(Settings.backgroundSyncWifiOnly) }
+        var backgroundSyncIntervalHours by remember { mutableStateOf(TextFieldValue(Settings.backgroundSyncIntervalHours.toString())) }
+        var backgroundSyncPubkey by remember { mutableStateOf(TextFieldValue(Settings.backgroundSyncPubkey)) }
 
         var signedBy by remember { mutableStateOf(TextFieldValue("")) }
         var referredBy by remember { mutableStateOf(TextFieldValue("")) }
@@ -252,7 +258,13 @@ fun SettingsScreen(
                                 allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
                                 allowedKinds = Settings.allowedKinds
                                 neverDeleteFrom = Settings.neverDeleteFrom
+                                useRelayAggregatorForDownloads = Settings.useRelayAggregatorForDownloads
+                                backgroundSyncEnabled = Settings.backgroundSyncEnabled
+                                backgroundSyncWifiOnly = Settings.backgroundSyncWifiOnly
+                                backgroundSyncIntervalHours = TextFieldValue(Settings.backgroundSyncIntervalHours.toString())
+                                backgroundSyncPubkey = TextFieldValue(Settings.backgroundSyncPubkey)
                                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                BackgroundSyncScheduler.reschedule(context)
                                 onApplyChanges()
                                 delay(1500)
                                 isLoading = false
@@ -473,6 +485,81 @@ fun SettingsScreen(
             // ── Others ─────────────────────────────────────────────────────────
             stickyHeader {
                 SectionHeader(stringResource(R.string.others))
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.use_relay_aggregator_for_downloads),
+                    description = stringResource(R.string.use_relay_aggregator_for_downloads_description),
+                    checked = useRelayAggregatorForDownloads,
+                    onCheckedChange = {
+                        useRelayAggregatorForDownloads = it
+                        Settings.useRelayAggregatorForDownloads = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.background_sync_enabled),
+                    description = stringResource(R.string.background_sync_enabled_description),
+                    checked = backgroundSyncEnabled,
+                    onCheckedChange = {
+                        backgroundSyncEnabled = it
+                        Settings.backgroundSyncEnabled = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        BackgroundSyncScheduler.reschedule(context)
+                    },
+                )
+            }
+            if (backgroundSyncEnabled) {
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = backgroundSyncPubkey,
+                        label = { Text(stringResource(R.string.background_sync_pubkey)) },
+                        onValueChange = {
+                            backgroundSyncPubkey = it
+                            Settings.backgroundSyncPubkey = it.text.toNostrKey() ?: it.text
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            BackgroundSyncScheduler.reschedule(context)
+                        },
+                        singleLine = true,
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = backgroundSyncIntervalHours,
+                        label = { Text(stringResource(R.string.background_sync_interval_hours)) },
+                        onValueChange = {
+                            backgroundSyncIntervalHours = it
+                            val interval = it.text.toIntOrNull()
+                            if (interval == null || interval < 1) return@OutlinedTextField
+                            Settings.backgroundSyncIntervalHours = interval.coerceAtMost(24)
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            BackgroundSyncScheduler.reschedule(context)
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.background_sync_wifi_only),
+                        description = stringResource(R.string.background_sync_wifi_only_description),
+                        checked = backgroundSyncWifiOnly,
+                        onCheckedChange = {
+                            backgroundSyncWifiOnly = it
+                            Settings.backgroundSyncWifiOnly = it
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            BackgroundSyncScheduler.reschedule(context)
+                        },
+                    )
+                }
             }
             item {
                 SwitchSettingRow(

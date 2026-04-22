@@ -33,6 +33,11 @@ object PrefKeys {
     const val USE_PROXY = "use_proxy"
 
     const val WEB_CLIENTS = "web_clients"
+    const val USE_RELAY_AGGREGATOR_FOR_DOWNLOADS = "use_relay_aggregator_for_downloads"
+    const val BACKGROUND_SYNC_ENABLED = "background_sync_enabled"
+    const val BACKGROUND_SYNC_WIFI_ONLY = "background_sync_wifi_only"
+    const val BACKGROUND_SYNC_INTERVAL_HOURS = "background_sync_interval_hours"
+    const val BACKGROUND_SYNC_PUBKEY = "background_sync_pubkey"
 }
 
 object LocalPreferences {
@@ -77,6 +82,11 @@ object LocalPreferences {
                 } else {
                     remove(PrefKeys.WEB_CLIENTS)
                 }
+                putBoolean(PrefKeys.USE_RELAY_AGGREGATOR_FOR_DOWNLOADS, settings.useRelayAggregatorForDownloads)
+                putBoolean(PrefKeys.BACKGROUND_SYNC_ENABLED, settings.backgroundSyncEnabled)
+                putBoolean(PrefKeys.BACKGROUND_SYNC_WIFI_ONLY, settings.backgroundSyncWifiOnly)
+                putInt(PrefKeys.BACKGROUND_SYNC_INTERVAL_HOURS, settings.backgroundSyncIntervalHours)
+                putString(PrefKeys.BACKGROUND_SYNC_PUBKEY, settings.backgroundSyncPubkey)
 
                 HttpClientManager.setDefaultProxyOnPort(settings.proxyPort)
             }
@@ -111,6 +121,11 @@ object LocalPreferences {
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }
+        Settings.useRelayAggregatorForDownloads = prefs.getBoolean(PrefKeys.USE_RELAY_AGGREGATOR_FOR_DOWNLOADS, true)
+        Settings.backgroundSyncEnabled = prefs.getBoolean(PrefKeys.BACKGROUND_SYNC_ENABLED, false)
+        Settings.backgroundSyncWifiOnly = prefs.getBoolean(PrefKeys.BACKGROUND_SYNC_WIFI_ONLY, true)
+        Settings.backgroundSyncIntervalHours = prefs.getInt(PrefKeys.BACKGROUND_SYNC_INTERVAL_HOURS, 6).coerceIn(1, 24)
+        Settings.backgroundSyncPubkey = prefs.getString(PrefKeys.BACKGROUND_SYNC_PUBKEY, "") ?: ""
 
         HttpClientManager.setDefaultProxyOnPort(Settings.proxyPort)
     }
