@@ -10,6 +10,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import androidx.room.withTransaction
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
@@ -87,8 +88,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 class CustomWebSocketServer(
@@ -506,6 +511,128 @@ class CustomWebSocketServer(
         innerProcessEvent(event, connection)
     }
 
+    private fun dTagOrEmpty(event: Event): String = event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: ""
+
+    private fun policyAllows(event: Event): Boolean {
+        if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
+            return false
+        }
+        if (Settings.allowedTaggedPubKeys.isNotEmpty() &&
+            event.taggedUsers().isNotEmpty() &&
+            event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }
+        ) {
+            if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
+                return false
+            }
+        }
+        if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
+            if (Settings.allowedTaggedPubKeys.isEmpty() ||
+                event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }
+            ) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
+     * Bulk-insert path used by the download-your-events flow.
+     *
+     * Differs from [innerProcessEvent] by:
+     *  - verifying signatures in parallel on [Dispatchers.Default],
+     *  - batching duplicate and kind-5 deletion checks into a small number of `IN (...)` queries,
+     *  - collapsing in-batch replaceables to the newest per (pubkey, kind[, d-tag]),
+     *  - writing all events and tags in one Room transaction,
+     *  - skipping subscription fanout, offline-broadcast enqueue, and HistoryDatabase writes
+     *    (all of which are irrelevant when importing the caller's own archive).
+     */
+    suspend fun innerProcessEventBatch(events: List<Event>) {
+        if (events.isEmpty()) return
+
+        val filtered = events
+            .asSequence()
+            .filter { !it.isExpired() }
+            .filter { policyAllows(it) }
+            .distinctBy { it.id }
+            .toList()
+        if (filtered.isEmpty()) return
+
+        val verified = withContext(Dispatchers.Default) {
+            val sem = Semaphore(Runtime.getRuntime().availableProcessors().coerceAtLeast(1))
+            filtered.map { e ->
+                async { sem.withPermit { if (e.verify()) e else null } }
+            }.awaitAll().filterNotNull()
+        }
+        if (verified.isEmpty()) return
+
+        val ids = verified.map { it.id }
+        val existing = ids.chunked(500)
+            .flatMap { appDatabase.eventDao().existingIds(it) }
+            .toHashSet()
+        val deletedByE = ids.chunked(500)
+            .flatMap { appDatabase.eventDao().getDeletedEventsByIds(it) }
+            .toHashSet()
+
+        val candidates = verified.filter {
+            it.id !in existing && it.id !in deletedByE && !it.isEphemeral()
+        }
+
+        val addressableDeleted = HashSet<String>()
+        candidates.forEach { e ->
+            if (e is AddressableEvent) {
+                val deletions = appDatabase.eventDao().getDeletedEventsByATag(e.address().toValue())
+                if (deletions.any { deletedAt -> deletedAt >= e.createdAt }) {
+                    addressableDeleted.add(e.id)
+                }
+            }
+        }
+
+        val accepted = candidates.filter { it.id !in addressableDeleted }
+
+        val (replaceable, nonReplaceable) = accepted.partition {
+            it.isParameterizedReplaceable() || it.shouldOverwrite()
+        }
+        val collapsedReplaceables = replaceable
+            .groupBy { Triple(it.pubKey, it.kind, dTagOrEmpty(it)) }
+            .values
+            .map { group -> group.maxByOrNull { it.createdAt }!! }
+
+        val (deletes, inserts) = nonReplaceable.partition { it.shouldDelete() }
+
+        appDatabase.withTransaction {
+            val finalReplaceables = collapsedReplaceables.filter { e ->
+                if (e.isParameterizedReplaceable()) {
+                    appDatabase.eventDao()
+                        .getNewestReplaceable(e.kind, e.pubKey, dTagOrEmpty(e), e.createdAt)
+                        .isEmpty()
+                } else {
+                    appDatabase.eventDao()
+                        .getByKindNewest(e.kind, e.pubKey, e.createdAt)
+                        .isEmpty()
+                }
+            }
+
+            val toStore = inserts + finalReplaceables + deletes
+            if (toStore.isNotEmpty()) {
+                appDatabase.eventDao()
+                    .insertEventsWithTagsBatch(toStore.map { it.toEventWithTags() })
+            }
+
+            finalReplaceables.forEach { e ->
+                if (e.isParameterizedReplaceable()) {
+                    val old = appDatabase.eventDao()
+                        .getOldestReplaceable(e.kind, e.pubKey, dTagOrEmpty(e))
+                    if (old.isNotEmpty()) appDatabase.eventDao().delete(old, e.pubKey)
+                } else {
+                    val old = appDatabase.eventDao().getByKind(e.kind, e.pubKey).drop(1)
+                    if (old.isNotEmpty()) appDatabase.eventDao().delete(old, e.pubKey)
+                }
+            }
+
+            deletes.forEach { applyDeleteTagsOwnedBy(it) }
+        }
+    }
+
     private suspend fun handleParameterizedReplaceable(event: Event, connection: Connection?) {
         save(event, connection)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
@@ -566,11 +693,18 @@ class CustomWebSocketServer(
 
     private suspend fun deleteEvent(event: Event, connection: Connection?) {
         save(event, connection)
-        appDatabase.eventDao().delete(event.taggedEvents().map { it.eventId }, event.pubKey)
+        applyDeleteTagsOwnedBy(event)
+    }
+
+    private suspend fun applyDeleteTagsOwnedBy(event: Event) {
+        val taggedEventIds = event.taggedEvents().map { it.eventId }
+        if (taggedEventIds.isNotEmpty()) {
+            appDatabase.eventDao().delete(taggedEventIds, event.pubKey)
+        }
         val taggedAddresses = event.taggedAddresses()
         if (taggedAddresses.isEmpty()) return
 
-        event.taggedAddresses().forEach { aTag ->
+        taggedAddresses.forEach { aTag ->
             val events = EventRepository.query(
                 appDatabase,
                 EventFilter(
