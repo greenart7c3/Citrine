@@ -343,6 +343,23 @@ class CustomWebSocketServer(
             }
         }
 
+        if (event.isProtected() && connection != null) {
+            val remoteHost = connection.session.call.request.local.remoteHost
+            val isLocalHost = remoteHost in listOf("127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1")
+
+            if (!isLocalHost && !connection.users.contains(event.pubKey)) {
+                Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
+                return VerificationResult.AuthRequiredForProtectedEvent
+            }
+        }
+
+        // Verify the signature before any DB access so invalid events are
+        // rejected without paying for the reads below.
+        if (!event.verify()) {
+            Log.d(Citrine.TAG, "event ${event.id} does not have a valid id or signature")
+            return VerificationResult.InvalidId
+        }
+
         val deletedEvents = appDatabase.eventDao().getDeletedEvents(event.id)
         if (deletedEvents.isNotEmpty()) {
             Log.d(Citrine.TAG, "Event deleted ${event.id}")
@@ -356,16 +373,6 @@ class CustomWebSocketServer(
                     Log.d(Citrine.TAG, "Event deleted ${event.id}")
                     return VerificationResult.Deleted
                 }
-            }
-        }
-
-        if (event.isProtected() && connection != null) {
-            val remoteHost = connection.session.call.request.local.remoteHost
-            val isLocalHost = remoteHost in listOf("127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1")
-
-            if (!isLocalHost && !connection.users.contains(event.pubKey)) {
-                Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
-                return VerificationResult.AuthRequiredForProtectedEvent
             }
         }
 
@@ -422,10 +429,6 @@ class CustomWebSocketServer(
                     return VerificationResult.AlreadyInDatabase
                 }
             }
-        }
-        if (!event.verify()) {
-            Log.d(Citrine.TAG, "event ${event.id} does not have a valid id or signature")
-            return VerificationResult.InvalidId
         }
         return VerificationResult.Valid
     }

@@ -80,18 +80,11 @@ interface EventDao {
     @Transaction
     suspend fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long): List<String>
 
+    // Tags are removed transactionally via the FK ON DELETE CASCADE on
+    // TagEntity.pkEvent, which Room enables by default.
+    @Query("DELETE FROM EventEntity WHERE id IN (:ids) AND pubkey = :pubkey")
     @Transaction
-    suspend fun delete(ids: List<String>, pubkey: String) {
-        ids.forEach {
-            val deleted = deleteById(it, pubkey)
-            if (deleted > 0) {
-                deletetags(it)
-            }
-        }
-    }
-
-    @Query("DELETE FROM EventEntity WHERE id = :id and pubkey = :pubkey")
-    suspend fun deleteById(id: String, pubkey: String): Int
+    suspend fun delete(ids: List<String>, pubkey: String)
 
     @Query("DELETE FROM EventEntity WHERE id in (:ids)")
     @Transaction
@@ -185,7 +178,9 @@ interface EventDao {
         connection: Connection?,
         sendEventToSubscriptions: Boolean = true,
     ) {
-        deletetags(dbEvent.event.id)
+        // insertEvent returns null when the row already exists (IGNORE) —
+        // skip tag I/O and fan-out in that case rather than orphaning the
+        // existing event's tags.
         insertEvent(dbEvent.event)?.let {
             dbEvent.tags.forEach {
                 it.pkEvent = dbEvent.event.id
