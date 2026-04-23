@@ -183,6 +183,10 @@ class WebSocketServerService : Service() {
         )
         CustomWebSocketService.server?.start()
 
+        if (Settings.relayAggregatorEnabled) {
+            RelayAggregator.start(database)
+        }
+
         var error = true
         var attempts = 0
         while (error && attempts < 5) {
@@ -200,6 +204,7 @@ class WebSocketServerService : Service() {
         scope.launch(Dispatchers.IO) {
             timer?.cancel()
             timer = null
+            RelayAggregator.stop()
             EventSubscription.closeAll()
             CustomWebSocketService.server?.stop()
         }

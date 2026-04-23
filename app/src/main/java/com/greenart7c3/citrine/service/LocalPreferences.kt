@@ -33,6 +33,13 @@ object PrefKeys {
     const val USE_PROXY = "use_proxy"
 
     const val WEB_CLIENTS = "web_clients"
+
+    const val RELAY_AGGREGATOR_ENABLED = "relay_aggregator_enabled"
+    const val AGGREGATOR_PUBKEY = "aggregator_pubkey"
+    const val RELAY_AGGREGATOR_KINDS = "relay_aggregator_kinds"
+    const val RELAY_AGGREGATOR_REFRESH_MINUTES = "relay_aggregator_refresh_minutes"
+    const val RELAY_AGGREGATOR_INCLUDE_TAGGED = "relay_aggregator_include_tagged"
+    const val RELAY_AGGREGATOR_LAST_SYNC = "relay_aggregator_last_sync"
 }
 
 object LocalPreferences {
@@ -78,6 +85,17 @@ object LocalPreferences {
                     remove(PrefKeys.WEB_CLIENTS)
                 }
 
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, settings.relayAggregatorEnabled)
+                putString(PrefKeys.AGGREGATOR_PUBKEY, settings.aggregatorPubkey)
+                if (settings.relayAggregatorKinds.isEmpty()) {
+                    remove(PrefKeys.RELAY_AGGREGATOR_KINDS)
+                } else {
+                    putString(PrefKeys.RELAY_AGGREGATOR_KINDS, settings.relayAggregatorKinds.joinToString(","))
+                }
+                putInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, settings.relayAggregatorRefreshMinutes)
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, settings.relayAggregatorIncludeTagged)
+                putLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, settings.relayAggregatorLastSync)
+
                 HttpClientManager.setDefaultProxyOnPort(settings.proxyPort)
             }
         }
@@ -111,6 +129,17 @@ object LocalPreferences {
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }
+
+        Settings.relayAggregatorEnabled = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, false)
+        Settings.aggregatorPubkey = prefs.getString(PrefKeys.AGGREGATOR_PUBKEY, "") ?: ""
+        Settings.relayAggregatorKinds = prefs.getString(PrefKeys.RELAY_AGGREGATOR_KINDS, null)
+            ?.split(",")
+            ?.mapNotNull { it.toIntOrNull() }
+            ?.toSet()
+            ?: setOf(0, 1, 3, 6, 7, 10002, 30023)
+        Settings.relayAggregatorRefreshMinutes = prefs.getInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, 60)
+        Settings.relayAggregatorIncludeTagged = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, true)
+        Settings.relayAggregatorLastSync = prefs.getLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, 0L)
 
         HttpClientManager.setDefaultProxyOnPort(Settings.proxyPort)
     }
