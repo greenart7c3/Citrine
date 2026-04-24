@@ -136,7 +136,7 @@ object LocalPreferences {
             ?.split(",")
             ?.mapNotNull { it.toIntOrNull() }
             ?.toSet()
-            ?: setOf(0, 1, 3, 6, 7, 10002, 30023)
+            ?: setOf(0, 1, 3, 5, 6, 7, 1111, 10002, 30023)
         Settings.relayAggregatorRefreshMinutes = prefs.getInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, 60)
         Settings.relayAggregatorIncludeTagged = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, true)
         Settings.relayAggregatorLastSync = prefs.getLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, 0L)

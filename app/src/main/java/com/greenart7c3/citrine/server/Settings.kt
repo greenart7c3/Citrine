@@ -32,7 +32,7 @@ object Settings {
 
     var relayAggregatorEnabled = false
     var aggregatorPubkey = ""
-    var relayAggregatorKinds: Set<Int> = setOf(0, 1, 3, 6, 7, 10002, 30023)
+    var relayAggregatorKinds: Set<Int> = setOf(0, 1, 3, 5, 6, 7, 1111, 10002, 30023)
     var relayAggregatorRefreshMinutes = 60
     var relayAggregatorIncludeTagged = true
     var relayAggregatorLastSync: Long = 0L
@@ -64,7 +64,7 @@ object Settings {
         webClients = mutableMapOf()
         relayAggregatorEnabled = false
         aggregatorPubkey = ""
-        relayAggregatorKinds = setOf(0, 1, 3, 6, 7, 10002, 30023)
+        relayAggregatorKinds = setOf(0, 1, 3, 5, 6, 7, 1111, 10002, 30023)
         relayAggregatorRefreshMinutes = 60
         relayAggregatorIncludeTagged = true
         relayAggregatorLastSync = 0L
