@@ -183,16 +183,38 @@ class WebSocketServerService : Service() {
         )
         CustomWebSocketService.server?.start()
 
+        if (Settings.relayAggregatorEnabled) {
+            RelayAggregator.start(database)
+        }
+
         var error = true
         var attempts = 0
         while (error && attempts < 5) {
             try {
-                startForeground(1, createNotification())
+                startForeground(1, createNotification(RelayAggregator.status.value.takeIf { it.enabled }))
                 error = false
             } catch (e: Exception) {
                 Log.e(Citrine.TAG, "Error starting foreground service attempt $attempts", e)
             }
             attempts++
+        }
+
+        scope.launch {
+            RelayAggregator.status.collect { status ->
+                try {
+                    val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
+                    val notification = createNotification(status.takeIf { it.enabled })
+                    if (ActivityCompat.checkSelfPermission(
+                            this@WebSocketServerService,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationManager.notify(1, notification)
+                    }
+                } catch (e: Exception) {
+                    Log.e(Citrine.TAG, "Error updating aggregator notification", e)
+                }
+            }
         }
     }
 
@@ -200,6 +222,7 @@ class WebSocketServerService : Service() {
         scope.launch(Dispatchers.IO) {
             timer?.cancel()
             timer = null
+            RelayAggregator.stop()
             EventSubscription.closeAll()
             CustomWebSocketService.server?.stop()
         }
@@ -208,8 +231,7 @@ class WebSocketServerService : Service() {
 
     override fun onBind(intent: Intent?): IBinder = binder
 
-    private fun createNotification(): Notification {
-        Log.d(Citrine.TAG, "Creating notification")
+    private fun createNotification(status: AggregatorStatus? = null): Notification {
         val notificationManager = NotificationManagerCompat.from(this)
         val channelId = "WebSocketServerServiceChannel"
         val groupId = "WebSocketServerServiceGroup"
@@ -252,8 +274,63 @@ class WebSocketServerService : Service() {
             .setContentIntent(resultPendingIntent)
             .setGroup(groupId)
 
+        if (status != null && status.enabled) {
+            val summary = buildAggregatorSummary(status)
+            val details = buildAggregatorDetails(status)
+            notificationBuilder
+                .setContentText(summary)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(details))
+        }
+
         return notificationBuilder.build()
     }
 
     fun isStarted(): Boolean = CustomWebSocketService.server != null
+
+    private fun buildAggregatorSummary(status: AggregatorStatus): String {
+        val phase = when (status.phase) {
+            AggregatorPhase.IDLE -> getString(R.string.relay_aggregator_phase_idle)
+            AggregatorPhase.BOOTSTRAPPING -> getString(R.string.relay_aggregator_phase_bootstrapping)
+            AggregatorPhase.REFRESHING -> getString(R.string.relay_aggregator_phase_refreshing)
+            AggregatorPhase.LISTENING -> getString(R.string.relay_aggregator_phase_listening)
+        }
+        val counts = getString(
+            R.string.relay_aggregator_counts,
+            status.authors,
+            status.relaysConnected,
+            status.relaysConfigured,
+        )
+        return "$phase · $counts"
+    }
+
+    private fun buildAggregatorDetails(status: AggregatorStatus): String {
+        val phase = when (status.phase) {
+            AggregatorPhase.IDLE -> getString(R.string.relay_aggregator_phase_idle)
+            AggregatorPhase.BOOTSTRAPPING -> getString(R.string.relay_aggregator_phase_bootstrapping)
+            AggregatorPhase.REFRESHING -> getString(R.string.relay_aggregator_phase_refreshing)
+            AggregatorPhase.LISTENING -> getString(R.string.relay_aggregator_phase_listening)
+        }
+        val counts = getString(
+            R.string.relay_aggregator_counts,
+            status.authors,
+            status.relaysConnected,
+            status.relaysConfigured,
+        )
+        val events = getString(R.string.relay_aggregator_events_received, status.eventsReceived)
+        val lastRefresh = if (status.lastRefreshEpoch <= 0L) {
+            getString(R.string.relay_aggregator_never_refreshed)
+        } else {
+            val ageSeconds = TimeUtils.now() - status.lastRefreshEpoch
+            getString(R.string.relay_aggregator_last_refresh, formatAge(ageSeconds))
+        }
+        return listOf(phase, counts, events, lastRefresh).joinToString("\n")
+    }
+
+    private fun formatAge(ageSeconds: Long): String = when {
+        ageSeconds < 0L -> "0s"
+        ageSeconds < 60L -> "${ageSeconds}s"
+        ageSeconds < 3600L -> "${ageSeconds / 60L}m"
+        ageSeconds < 86_400L -> "${ageSeconds / 3600L}h"
+        else -> "${ageSeconds / 86_400L}d"
+    }
 }

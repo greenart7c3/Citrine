@@ -188,7 +188,7 @@ interface EventDao {
 
             insertTags(dbEvent.tags)
 
-            if (sendEventToSubscriptions && connection != null) {
+            if (sendEventToSubscriptions) {
                 EventSubscription.executeAll(dbEvent, connection)
             }
         }

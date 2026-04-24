@@ -114,4 +114,25 @@
     <string name="delete_ephemeral_events_description">Automatically remove ephemeral events (kinds 20000–29999)</string>
     <string name="use_proxy_description">Route outbound connections through a SOCKS5 proxy</string>
     <string name="auto_backup_description">Periodically back up the database to a selected folder</string>
+    <string name="relay_aggregator">Relay Aggregator</string>
+    <string name="relay_aggregator_description">Continuously mirror events from the aggregator pubkey\'s follows into this relay</string>
+    <string name="relay_aggregator_pubkey">Aggregator pubkey (hex or npub)</string>
+    <string name="relay_aggregator_pubkey_required">Set the aggregator pubkey first</string>
+    <string name="relay_aggregator_refresh_minutes">Refresh interval (minutes)</string>
+    <string name="relay_aggregator_include_tagged">Also mirror events tagging the aggregator</string>
+    <string name="relay_aggregator_include_tagged_description">Subscribe for any event that p-tags the aggregator pubkey on its read relays</string>
+    <string name="relay_aggregator_kinds_empty_hint">Empty list disables the aggregator subscription</string>
+    <string name="relay_aggregator_extra_relays">Extra relays</string>
+    <string name="relay_aggregator_extra_relays_description">Relays subscribed with a plain kinds/since filter (no author filter). Used as the full relay set when no pubkey is configured.</string>
+    <string name="relay_aggregator_extra_relays_hint">Add at least one relay to run without a pubkey</string>
+    <string name="relay_aggregator_invalid_relay">Invalid relay URL (expected wss:// or ws://)</string>
+    <string name="relay_aggregator_pubkey_or_relays_required">Set an aggregator pubkey or at least one relay first</string>
+    <string name="relay_aggregator_phase_idle">Idle</string>
+    <string name="relay_aggregator_phase_bootstrapping">Fetching follow list and relay lists…</string>
+    <string name="relay_aggregator_phase_refreshing">Opening subscriptions on outbox relays…</string>
+    <string name="relay_aggregator_phase_listening">Listening for new events</string>
+    <string name="relay_aggregator_counts">%1$d authors · %2$d of %3$d relays connected</string>
+    <string name="relay_aggregator_events_received">%1$d events received</string>
+    <string name="relay_aggregator_last_refresh">Last refresh %1$s ago</string>
+    <string name="relay_aggregator_never_refreshed">No refresh yet</string>
 </resources>
