@@ -53,11 +53,17 @@ data class AggregatorStatus(
 object RelayAggregator {
     private const val TAG = "RelayAggregator"
 
-    private val BOOTSTRAP_RELAYS = listOf(
+    private val INDEXER_RELAYS = listOf(
         RelayUrlNormalizer.normalize("wss://purplepag.es/"),
         RelayUrlNormalizer.normalize("wss://user.kindpag.es/"),
         RelayUrlNormalizer.normalize("wss://profiles.nostr1.com/"),
         RelayUrlNormalizer.normalize("wss://directory.yabu.me/"),
+    )
+
+    private val FALLBACK_OUTBOX_RELAYS = listOf(
+        RelayUrlNormalizer.normalize("wss://relay.damus.io/"),
+        RelayUrlNormalizer.normalize("wss://nos.lol/"),
+        RelayUrlNormalizer.normalize("wss://relay.primal.net/"),
     )
 
     private const val MAX_AUTHORS_PER_SUB = 500
@@ -189,7 +195,7 @@ object RelayAggregator {
                     ?.writeRelays()
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
                     ?.takeIf { it.isNotEmpty() }
-                    ?: BOOTSTRAP_RELAYS
+                    ?: FALLBACK_OUTBOX_RELAYS
                 writeRelays.forEach { relay ->
                     relayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
                 }
@@ -245,7 +251,7 @@ object RelayAggregator {
                     ?.readRelays()
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
                     ?: emptyList()
-                taggedSubRelays = (readRelays + BOOTSTRAP_RELAYS).toSet()
+                taggedSubRelays = (readRelays + FALLBACK_OUTBOX_RELAYS).toSet()
                 val id = taggedSubId ?: newSubId().also { taggedSubId = it }
                 trackedSubIds.add(id)
                 val filter = Filter(
@@ -331,7 +337,7 @@ object RelayAggregator {
         val subId = newSubId()
         if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
         val event = try {
-            Citrine.instance.client.fetchFirst(subId, BOOTSTRAP_RELAYS.associateWith { filters })
+            Citrine.instance.client.fetchFirst(subId, INDEXER_RELAYS.associateWith { filters })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -356,7 +362,7 @@ object RelayAggregator {
         val subId = newSubId()
         if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
         val event = try {
-            Citrine.instance.client.fetchFirst(subId, BOOTSTRAP_RELAYS.associateWith { filters })
+            Citrine.instance.client.fetchFirst(subId, INDEXER_RELAYS.associateWith { filters })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
