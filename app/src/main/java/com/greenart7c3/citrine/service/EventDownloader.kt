@@ -57,7 +57,8 @@ object EventDownloader {
         val normalizedUrl = NormalizedRelayUrl(relayUrl)
         var completed = false
         var finishedSignal = CompletableDeferred<Unit>()
-        val buffer = ArrayList<Event>(batchSize)
+        val bufferLock = Any()
+        var buffer = ArrayList<Event>(batchSize)
 
         val subscription = RelayClientSubscription(
             downloadTaggedEvents = downloadTaggedEvents,
@@ -65,7 +66,7 @@ object EventDownloader {
             relayUrl = normalizedUrl,
             authorPubKey = authorPubKey,
             batchSize = batchSize,
-            eventConsumer = { event -> buffer.add(event) },
+            eventConsumer = { event -> synchronized(bufferLock) { buffer.add(event) } },
             onComplete = { received ->
                 completed = received == 0
                 finishedSignal.complete(Unit)
@@ -79,9 +80,17 @@ object EventDownloader {
                     finishedSignal.await()
                 }
                 finishedSignal = CompletableDeferred()
-                if (buffer.isNotEmpty()) {
-                    sink(buffer)
-                    buffer.clear()
+                val toSend = synchronized(bufferLock) {
+                    if (buffer.isEmpty()) {
+                        null
+                    } else {
+                        val current = buffer
+                        buffer = ArrayList(batchSize)
+                        current
+                    }
+                }
+                if (toSend != null) {
+                    sink(toSend)
                 }
             }
         } finally {
