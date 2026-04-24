@@ -94,6 +94,15 @@ object RelayAggregator {
     @Volatile private var authorCount: Int = 0
 
     @Volatile private var taggedSubId: String? = null
+
+    // Pubkey the currently-running aggregator was started for. Used by onConfigChanged
+    // to detect identity changes and trigger a full restart.
+    @Volatile private var currentPubkey: String? = null
+
+    // Signals the next refresh to bypass the kind-3 DB cache (used after a pubkey change
+    // so we don't reuse stale follows that happened to be sitting in the local DB).
+    @Volatile private var forceFreshBootstrap: Boolean = false
+
     private val refreshing = AtomicBoolean(false)
 
     private val _status = MutableStateFlow(AggregatorStatus())
@@ -106,6 +115,7 @@ object RelayAggregator {
         if (Settings.aggregatorPubkey.isBlank()) return
 
         Log.d(TAG, "Starting aggregator for ${Settings.aggregatorPubkey}")
+        currentPubkey = Settings.aggregatorPubkey
         val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = newScope
 
@@ -124,7 +134,9 @@ object RelayAggregator {
                 } catch (e: Exception) {
                     Log.e(TAG, "Refresh failed", e)
                 }
-                val interval = Settings.relayAggregatorRefreshMinutes.coerceAtLeast(1) * 60_000L
+                val minutes = Settings.relayAggregatorRefreshMinutes.coerceAtLeast(1)
+                val interval = minutes * 60_000L
+                Log.d(TAG, "Sleeping ${minutes}m until next refresh")
                 delay(interval)
             }
         }
@@ -144,8 +156,11 @@ object RelayAggregator {
         activeRelaySubs.clear()
         subscribedRelays.clear()
         connectedRelays.clear()
+        eventsReceived.set(0)
         authorCount = 0
         taggedSubId = null
+        currentPubkey = null
+        forceFreshBootstrap = false
 
         scope = null
         s.cancel()
@@ -156,10 +171,31 @@ object RelayAggregator {
     fun onConfigChanged(database: AppDatabase) {
         val enabled = Settings.relayAggregatorEnabled && Settings.aggregatorPubkey.isNotBlank()
         val running = scope != null
+        val pubkey = Settings.aggregatorPubkey
         when {
-            enabled && !running -> start(database)
-            !enabled && running -> stop()
+            enabled && !running -> {
+                Log.d(TAG, "Config change: aggregator enabled, starting")
+                start(database)
+            }
+            !enabled && running -> {
+                Log.d(TAG, "Config change: aggregator disabled or pubkey cleared, stopping")
+                stop()
+            }
+            enabled && running && pubkey != currentPubkey -> {
+                // Identity changed: drop every existing subscription and rebuild from
+                // scratch. Reset lastSync so the new user gets the full cold-start
+                // window, and force a network fetch of their contact list — the
+                // locally cached kind-3, if any, is whatever the relay happened to
+                // receive incidentally and may not reflect the user's current follows.
+                Log.d(TAG, "Aggregator pubkey changed ($currentPubkey -> $pubkey), restarting")
+                stop()
+                Settings.relayAggregatorLastSync = 0L
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+                forceFreshBootstrap = true
+                start(database)
+            }
             enabled && running -> scope?.launch {
+                Log.d(TAG, "Config change: triggering refresh for running aggregator")
                 try {
                     refreshAndSubscribe(database)
                 } catch (e: CancellationException) {
@@ -180,22 +216,34 @@ object RelayAggregator {
             Log.d(TAG, "Refresh already running; skipping")
             return
         }
+        val refreshStartMs = System.currentTimeMillis()
         try {
             val aggPubkey = Settings.aggregatorPubkey
-            if (aggPubkey.isBlank()) return
+            if (aggPubkey.isBlank()) {
+                Log.d(TAG, "Aggregator pubkey is blank; nothing to refresh")
+                return
+            }
             val dao = database.eventDao()
 
             if (!Citrine.instance.client.isActive()) {
+                Log.d(TAG, "Nostr client is not active; connecting")
                 Citrine.instance.client.connect()
             }
 
+            val forceFresh = forceFreshBootstrap.also { if (it) forceFreshBootstrap = false }
+            Log.d(TAG, "Refresh starting for $aggPubkey (forceFresh=$forceFresh)")
             publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
 
-            val contactList = loadOrBootstrapContactList(dao, aggPubkey)
+            val contactListMs = System.currentTimeMillis()
+            val contactList = loadOrBootstrapContactList(dao, aggPubkey, forceFresh)
             val follows = contactList?.verifiedFollowKeySet() ?: emptySet()
             val authors = (follows + aggPubkey).toSet()
             authorCount = authors.size
-            Log.d(TAG, "Loaded ${follows.size} follows (+ self) for $aggPubkey")
+            Log.d(
+                TAG,
+                "Contact list resolved in ${System.currentTimeMillis() - contactListMs}ms: " +
+                    "${follows.size} follows (+ self) for $aggPubkey (createdAt=${contactList?.createdAt ?: "none"})",
+            )
 
             // Resolve NIP-65 for all authors in one batch instead of N sequential fetches.
             val cachedRelayLists = mutableMapOf<String, AdvertisedRelayListEvent>()
@@ -206,38 +254,64 @@ object RelayAggregator {
             }
             Log.d(TAG, "NIP-65 cache: ${cachedRelayLists.size} hit, ${uncached.size} miss")
 
+            val fetchMs = System.currentTimeMillis()
             val fetched = if (uncached.isNotEmpty()) {
+                Log.d(TAG, "Fetching ${uncached.size} NIP-65 records from ${INDEXER_RELAYS.size} indexers")
                 batchFetchRelayLists(uncached, INDEXER_RELAYS, BATCH_FETCH_TIMEOUT_MS)
             } else {
                 emptyMap()
             }
-            Log.d(TAG, "NIP-65 batch fetched ${fetched.size} lists from indexers")
+            if (uncached.isNotEmpty()) {
+                Log.d(
+                    TAG,
+                    "NIP-65 batch fetch returned ${fetched.size}/${uncached.size} lists " +
+                        "in ${System.currentTimeMillis() - fetchMs}ms",
+                )
+            }
 
             val relayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
+            var fellBackCount = 0
             for (pk in authors) {
                 val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
                 val writeRelays = relayListEvent
                     ?.writeRelays()
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
                     ?.takeIf { it.isNotEmpty() }
-                    ?: FALLBACK_OUTBOX_RELAYS
+                    ?: run {
+                        fellBackCount++
+                        FALLBACK_OUTBOX_RELAYS
+                    }
                 writeRelays.forEach { relay ->
                     relayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
                 }
             }
+            Log.d(
+                TAG,
+                "Outbox map built: ${relayToAuthors.size} relays for ${authors.size} authors " +
+                    "($fellBackCount author(s) had no NIP-65, fell back to ${FALLBACK_OUTBOX_RELAYS.size} relays)",
+            )
 
             publishStatus(phase = AggregatorPhase.REFRESHING)
 
             val since = computeSince()
             val kinds = Settings.relayAggregatorKinds.toList()
+            Log.d(
+                TAG,
+                "Subscribing with since=$since (${(TimeUtils.now() - since) / 60}m ago), kinds=$kinds",
+            )
             val newActiveSubs = ConcurrentHashMap<NormalizedRelayUrl, MutableList<Pair<String, List<Filter>>>>()
+            var reusedSubs = 0
+            var freshSubs = 0
+            var closedExtraChunkSubs = 0
 
             for ((relay, authorSet) in relayToAuthors) {
                 val chunks = authorSet.toList().chunked(MAX_AUTHORS_PER_SUB)
                 val existing = activeRelaySubs[relay] ?: emptyList()
                 val entries = mutableListOf<Pair<String, List<Filter>>>()
                 chunks.forEachIndexed { idx, chunk ->
-                    val subId = existing.getOrNull(idx)?.first ?: newSubId()
+                    val reused = existing.getOrNull(idx)?.first
+                    val subId = reused ?: newSubId()
+                    if (reused != null) reusedSubs++ else freshSubs++
                     val filters = listOf(
                         Filter(
                             authors = chunk,
@@ -254,19 +328,27 @@ object RelayAggregator {
                         val (oldId, _) = existing[i]
                         runCatching { Citrine.instance.client.unsubscribe(oldId) }
                         trackedSubIds.remove(oldId)
+                        closedExtraChunkSubs++
                     }
                 }
                 newActiveSubs[relay] = entries
             }
 
+            var closedGoneRelaySubs = 0
             for ((relay, entries) in activeRelaySubs) {
                 if (!newActiveSubs.containsKey(relay)) {
                     entries.forEach { (oldId, _) ->
                         runCatching { Citrine.instance.client.unsubscribe(oldId) }
                         trackedSubIds.remove(oldId)
+                        closedGoneRelaySubs++
                     }
                 }
             }
+            Log.d(
+                TAG,
+                "Main subs pushed: $freshSubs new, $reusedSubs reused; " +
+                    "closed $closedExtraChunkSubs shrunk chunks + $closedGoneRelaySubs dropped relays",
+            )
 
             if (Settings.relayAggregatorIncludeTagged) {
                 val aggRelayList = cachedRelayLists[aggPubkey] ?: fetched[aggPubkey]
@@ -286,6 +368,11 @@ object RelayAggregator {
                     // Send ONE subscribe with the full relay set; Quartz overwrites the prior
                     // desiredSubs[subId] entry on each call, so iterating would leave only the
                     // last relay actually subscribed.
+                    Log.d(
+                        TAG,
+                        "Tagged sub: $id to ${taggedSubRelays.size} relays " +
+                            "(${readRelays.size} from inbox, ${FALLBACK_OUTBOX_RELAYS.size} fallback)",
+                    )
                     runCatching {
                         Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
                     }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
@@ -295,6 +382,7 @@ object RelayAggregator {
                 }
             } else {
                 taggedSubId?.let {
+                    Log.d(TAG, "Tagged sub disabled, unsubscribing $it")
                     runCatching { Citrine.instance.client.unsubscribe(it) }
                     trackedSubIds.remove(it)
                 }
@@ -314,7 +402,9 @@ object RelayAggregator {
             LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
             Log.d(
                 TAG,
-                "Refreshed: ${authors.size} authors across ${newSubscribedRelays.size} relays, tagged=${Settings.relayAggregatorIncludeTagged}",
+                "Refresh complete in ${System.currentTimeMillis() - refreshStartMs}ms: " +
+                    "${authors.size} authors, ${newSubscribedRelays.size} relays, " +
+                    "${trackedSubIds.size} tracked subIds, tagged=${Settings.relayAggregatorIncludeTagged}",
             )
             publishStatus(phase = AggregatorPhase.LISTENING)
         } finally {
@@ -365,8 +455,13 @@ object RelayAggregator {
         return NormalizedRelayUrl(url = n.url)
     }
 
-    private suspend fun loadOrBootstrapContactList(dao: EventDao, pubkey: String): ContactListEvent? {
-        dao.getContactList(pubkey)?.toEvent()?.let { return it as? ContactListEvent }
+    private suspend fun loadOrBootstrapContactList(
+        dao: EventDao,
+        pubkey: String,
+        forceRefresh: Boolean = false,
+    ): ContactListEvent? {
+        val cached = dao.getContactList(pubkey)?.toEvent() as? ContactListEvent
+        if (!forceRefresh && cached != null) return cached
         val filters = listOf(
             Filter(
                 kinds = listOf(ContactListEvent.KIND),
@@ -376,7 +471,7 @@ object RelayAggregator {
         )
         val subId = newSubId()
         if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
-        val event = try {
+        val fetched = try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
                 Citrine.instance.client.fetchFirst(subId, INDEXER_RELAYS.associateWith { filters })
             }
@@ -388,8 +483,15 @@ object RelayAggregator {
         } finally {
             runCatching { Citrine.instance.client.unsubscribe(subId) }
         }
-        event?.let { CustomWebSocketService.server?.innerProcessEvent(it, null) }
-        return event as? ContactListEvent
+        fetched?.let { CustomWebSocketService.server?.innerProcessEvent(it, null) }
+        // Prefer whichever copy is newest — a cache hit may still beat a slow/partial fetch.
+        val fetchedContactList = fetched as? ContactListEvent
+        return when {
+            fetchedContactList == null -> cached
+            cached == null -> fetchedContactList
+            fetchedContactList.createdAt >= cached.createdAt -> fetchedContactList
+            else -> cached
+        }
     }
 
     /**
@@ -485,11 +587,19 @@ object RelayAggregator {
         override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
             if (subscribedRelays.contains(relay.url)) {
                 if (connectedRelays.add(relay.url)) {
+                    Log.d(TAG, "Relay live (${connectedRelays.size}/${subscribedRelays.size}): ${relay.url.url}")
                     refreshStatusCounters()
                 }
             }
             if (msg is EventMessage && trackedSubIds.contains(msg.subId)) {
-                eventsReceived.incrementAndGet()
+                val n = eventsReceived.incrementAndGet()
+                // Periodic progress heartbeat so we can see the stream without per-event spam.
+                if (n == 1L || n % 100L == 0L) {
+                    Log.d(
+                        TAG,
+                        "Events received: $n (${connectedRelays.size}/${subscribedRelays.size} relays connected)",
+                    )
+                }
                 refreshStatusCounters()
                 val s = scope ?: return
                 s.launch {
@@ -510,11 +620,15 @@ object RelayAggregator {
             // anything from here — doing so on every disconnect / onCannotConnect turns
             // unreachable relays into a resub storm.
             if (connectedRelays.remove(relay.url)) {
+                Log.d(TAG, "Disconnected from ${relay.url.url} (now ${connectedRelays.size}/${subscribedRelays.size})")
                 refreshStatusCounters()
             }
         }
 
         override fun onCannotConnect(relay: IRelayClient, errorMessage: String) {
+            if (subscribedRelays.contains(relay.url)) {
+                Log.d(TAG, "Cannot connect to ${relay.url.url}: $errorMessage")
+            }
             if (connectedRelays.remove(relay.url)) {
                 refreshStatusCounters()
             }
