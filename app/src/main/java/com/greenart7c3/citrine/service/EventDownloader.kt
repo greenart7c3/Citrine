@@ -27,31 +27,38 @@ import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
-import io.ktor.util.collections.ConcurrentSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 
 object EventDownloader {
     /**
-     * Fetches all events authored by [authorPubKey] from [relayUrl], in descending time order,
+     * Fetches all events authored by [authorPubKey] from [relayUrl], descending by time,
      * pulling up to [batchSize] (e.g., 500) per request, starting from now and going backwards,
      * until the returned batch has fewer than [batchSize] events.
      *
-     * Returns a list of Events.
+     * Each completed batch is handed to [sink] for persistence, so memory stays bounded to
+     * one in-flight batch per relay instead of accumulating the full set before writing.
      */
     suspend fun fetchAllEventsByUserPaginated(
         client: NostrClient,
         relayUrl: String,
         authorPubKey: String,
         downloadTaggedEvents: Boolean,
+        batchSize: Int = 500,
+        sink: suspend (List<Event>) -> Unit,
     ) {
         val normalizedUrl = NormalizedRelayUrl(relayUrl)
-        val batchSize = 500
         var completed = false
         var finishedSignal = CompletableDeferred<Unit>()
-        val events = ConcurrentSet<Event>()
+        val bufferLock = Any()
+        var buffer = ArrayList<Event>(batchSize)
 
         val subscription = RelayClientSubscription(
             downloadTaggedEvents = downloadTaggedEvents,
@@ -59,33 +66,37 @@ object EventDownloader {
             relayUrl = normalizedUrl,
             authorPubKey = authorPubKey,
             batchSize = batchSize,
-            eventConsumer = { event ->
-                events.add(event)
-            },
-            onComplete = { events ->
-                completed = events == 0
+            eventConsumer = { event -> synchronized(bufferLock) { buffer.add(event) } },
+            onComplete = { received ->
+                completed = received == 0
                 finishedSignal.complete(Unit)
             },
         )
 
-        client.disconnect()
-        delay(2000)
-        client.connect()
-
-        while (!completed) {
-            // Wait until subscription finishes
-            withTimeoutOrNull(30000) {
-                subscription.updateFilter()
-                finishedSignal.await()
+        try {
+            while (!completed) {
+                withTimeoutOrNull(30_000) {
+                    subscription.updateFilter()
+                    finishedSignal.await()
+                }
+                finishedSignal = CompletableDeferred()
+                val toSend = synchronized(bufferLock) {
+                    if (buffer.isEmpty()) {
+                        null
+                    } else {
+                        val current = buffer
+                        buffer = ArrayList(batchSize)
+                        current
+                    }
+                }
+                if (toSend != null) {
+                    sink(toSend)
+                }
             }
-            finishedSignal = CompletableDeferred()
-            events.forEach {
-                CustomWebSocketService.server?.innerProcessEvent(it, null)
-            }
-            events.clear()
+        } finally {
+            subscription.closeSubscription()
+            client.removeConnectionListener(subscription)
         }
-        subscription.closeSubscription()
-        client.removeConnectionListener(subscription)
     }
 
     suspend fun fetchAdvertisedRelayList(
@@ -93,17 +104,9 @@ object EventDownloader {
     ): AdvertisedRelayListEvent? {
         var result: AdvertisedRelayListEvent? = null
         val relays = listOf(
-            NormalizedRelayUrl(
-                url = "wss://purplepag.es",
-            ),
-            NormalizedRelayUrl(
-                url = "wss://relay.nostr.band",
-            ),
+            NormalizedRelayUrl(url = "wss://purplepag.es"),
+            NormalizedRelayUrl(url = "wss://relay.nostr.band"),
         )
-        val finishedRelays = mutableMapOf<String, Boolean>()
-        relays.forEach {
-            finishedRelays[it.url] = false
-        }
 
         val subId = newSubId()
         val filters = listOf(
@@ -116,14 +119,11 @@ object EventDownloader {
         Citrine.instance.client.connect()
         val event = Citrine.instance.client.fetchFirst(
             subId,
-            relays.associateWith {
-                filters
-            },
+            relays.associateWith { filters },
         )
         event?.let {
-            Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
-            CustomWebSocketService.server?.innerProcessEvent(event, null)
-            result = event as AdvertisedRelayListEvent
+            CustomWebSocketService.server?.innerProcessEvent(it, null)
+            result = it as AdvertisedRelayListEvent
         }
 
         Citrine.instance.client.unsubscribe(subId)
@@ -135,17 +135,9 @@ object EventDownloader {
     ): ContactListEvent? {
         var result: ContactListEvent? = null
         val relays = listOf(
-            NormalizedRelayUrl(
-                url = "wss://purplepag.es",
-            ),
-            NormalizedRelayUrl(
-                url = "wss://relay.nostr.band",
-            ),
+            NormalizedRelayUrl(url = "wss://purplepag.es"),
+            NormalizedRelayUrl(url = "wss://relay.nostr.band"),
         )
-        val finishedRelays = mutableMapOf<String, Boolean>()
-        relays.forEach {
-            finishedRelays[it.url] = false
-        }
         val subId = newSubId()
 
         val filters = listOf(
@@ -159,14 +151,11 @@ object EventDownloader {
         Citrine.instance.client.connect()
         val event = Citrine.instance.client.fetchFirst(
             subId,
-            relays.associateWith {
-                filters
-            },
+            relays.associateWith { filters },
         )
         event?.let {
-            Log.d(Citrine.TAG, "Received event ${event.toJson()} from relay")
-            CustomWebSocketService.server?.innerProcessEvent(event, null)
-            result = event as ContactListEvent
+            CustomWebSocketService.server?.innerProcessEvent(it, null)
+            result = it as ContactListEvent
         }
         Citrine.instance.client.unsubscribe(subId)
         return result
@@ -180,32 +169,36 @@ object EventDownloader {
         if (!Citrine.instance.client.isActive()) {
             Citrine.instance.client.connect()
         }
+        val targets = relays.filter { !it.url.contains("127.0.0.1") }
         try {
-            val finishedLoading = mutableMapOf<String, Boolean>()
-
-            relays.filter { !it.url.contains("127.0.0.1") }.forEach {
-                finishedLoading[it.url] = false
+            val sem = Semaphore(3)
+            coroutineScope {
+                targets.map { relay ->
+                    async(Dispatchers.IO) {
+                        sem.withPermit {
+                            setProgress("loading events from ${relay.url}")
+                            fetchAllEventsByUserPaginated(
+                                client = Citrine.instance.client,
+                                relayUrl = relay.url,
+                                authorPubKey = signer.pubKey,
+                                downloadTaggedEvents = downloadTaggedEvents,
+                                sink = { batch ->
+                                    CustomWebSocketService.server?.innerProcessEventBatch(batch)
+                                },
+                            )
+                        }
+                    }
+                }.awaitAll()
             }
 
-            relays.forEach {
-                setProgress("loading events from ${it.url}")
-                fetchAllEventsByUserPaginated(
-                    Citrine.instance.client,
-                    it.url,
-                    signer.pubKey,
-                    downloadTaggedEvents = downloadTaggedEvents,
-                )
-            }
-
-            Citrine.instance.client.disconnect()
-
-            setProgress("Finished loading events from ${relays.size} relays")
-            Citrine.isImportingEvents = false
+            setProgress("Finished loading events from ${targets.size} relays")
         } catch (e: Exception) {
-            Citrine.isImportingEvents = false
             if (e is CancellationException) throw e
             Log.e(Citrine.TAG, e.message ?: "", e)
             setProgress("Failed to load events")
+        } finally {
+            Citrine.isImportingEvents = false
+            Citrine.instance.client.disconnect()
         }
     }
 
@@ -263,36 +256,33 @@ class RelayClientSubscription(
     private var subId = newSubId()
     private var until: Long = (System.currentTimeMillis() / 1000)
     private var oldestTimestamp: Long = until
-    private val receivedEvents = mutableListOf<Event>()
+    private var received: Int = 0
 
     init {
         client.addConnectionListener(this)
     }
 
     override fun onCannotConnect(relay: IRelayClient, errorMessage: String) {
-        Log.d("RelayClientSubscription", "onCannotConnect: ${relay.url}, $errorMessage")
-        onComplete?.invoke(receivedEvents.size)
-        receivedEvents.clear()
+        if (relay.url == relayUrl) {
+            Log.d("RelayClientSubscription", "onCannotConnect: ${relay.url}, $errorMessage")
+            onComplete?.invoke(received)
+            received = 0
+        }
         super.onCannotConnect(relay, errorMessage)
     }
 
-    override fun onConnecting(relay: IRelayClient) {
-        Log.d("RelayClientSubscription", "Connecting: ${relay.url}")
-        super.onConnecting(relay)
-    }
-
     override fun onDisconnected(relay: IRelayClient) {
-        Log.d("RelayClientSubscription", "Disconnected: ${relay.url}")
-        onComplete?.invoke(receivedEvents.size)
-        receivedEvents.clear()
+        if (relay.url == relayUrl) {
+            Log.d("RelayClientSubscription", "Disconnected: ${relay.url}")
+            onComplete?.invoke(received)
+            received = 0
+        }
         super.onDisconnected(relay)
     }
 
     override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
-        Log.d("RelayClientSubscription", "onIncomingMessage: ${relay.url}, $msgStr")
-
         if (msg is EventMessage && this.subId == msg.subId) {
-            receivedEvents.add(msg.event)
+            received++
             if (msg.event.createdAt < oldestTimestamp) {
                 oldestTimestamp = msg.event.createdAt
             }
@@ -300,22 +290,21 @@ class RelayClientSubscription(
         }
 
         if (msg is EoseMessage && this.subId == msg.subId) {
-            onComplete?.invoke(receivedEvents.size)
-            receivedEvents.clear()
+            onComplete?.invoke(received)
+            received = 0
             oldestTimestamp -= 1
             until = oldestTimestamp
         }
 
         if (msg is ClosedMessage) {
-            onComplete?.invoke(receivedEvents.size)
-            receivedEvents.clear()
+            onComplete?.invoke(received)
+            received = 0
         }
 
         super.onIncomingMessage(relay, msgStr, msg)
     }
 
     override fun onSent(relay: IRelayClient, cmdStr: String, cmd: Command, success: Boolean) {
-        Log.d("RelayClientSubscription", "onSendResponse: ${relay.url}, $cmdStr, $success")
         super.onSent(relay, cmdStr, cmd, success)
     }
 
@@ -337,7 +326,6 @@ class RelayClientSubscription(
             )
         }
 
-        Log.d("RelayClientSubscription", "Requesting batch with until=$until from relay $relayUrl")
         client.subscribe(subId, mapOf(relayUrl to filters))
     }
 
