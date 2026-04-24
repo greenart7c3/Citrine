@@ -121,6 +121,8 @@ fun SettingsScreen(
             mutableStateOf(TextFieldValue(Settings.relayAggregatorRefreshMinutes.toString()))
         }
         var aggregatorIncludeTagged by remember { mutableStateOf(Settings.relayAggregatorIncludeTagged) }
+        var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
+        var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
 
         var shouldAddWebClient = false
         var webPath by remember { mutableStateOf(TextFieldValue("")) }
@@ -497,8 +499,8 @@ fun SettingsScreen(
                     description = stringResource(R.string.relay_aggregator_description),
                     checked = relayAggregatorEnabled,
                     onCheckedChange = {
-                        if (it && Settings.aggregatorPubkey.isBlank()) {
-                            Toast.makeText(context, context.getString(R.string.relay_aggregator_pubkey_required), Toast.LENGTH_SHORT).show()
+                        if (it && Settings.aggregatorPubkey.isBlank() && Settings.relayAggregatorExtraRelays.isEmpty()) {
+                            Toast.makeText(context, context.getString(R.string.relay_aggregator_pubkey_or_relays_required), Toast.LENGTH_SHORT).show()
                             return@SwitchSettingRow
                         }
                         relayAggregatorEnabled = it
@@ -614,6 +616,63 @@ fun SettingsScreen(
                         val kinds = Settings.relayAggregatorKinds.toMutableSet().apply { remove(k) }
                         Settings.relayAggregatorKinds = kinds
                         aggregatorKinds = kinds
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.relay_aggregator_extra_relays),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.relay_aggregator_extra_relays_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            item {
+                PubkeyInputRow(
+                    value = aggregatorExtraRelayInput,
+                    onValueChange = { aggregatorExtraRelayInput = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            aggregatorExtraRelayInput = TextFieldValue(text)
+                        }
+                    },
+                    onAdd = {
+                        val normalized = normalizeRelayInput(aggregatorExtraRelayInput.text)
+                        if (normalized == null) {
+                            Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val relays = Settings.relayAggregatorExtraRelays.toMutableSet().apply { add(normalized) }
+                        Settings.relayAggregatorExtraRelays = relays
+                        aggregatorExtraRelays = relays
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                        aggregatorExtraRelayInput = TextFieldValue("")
+                    },
+                )
+            }
+            if (aggregatorExtraRelays.isEmpty()) {
+                item {
+                    EmptyListHint(stringResource(R.string.relay_aggregator_extra_relays_hint))
+                }
+            }
+            items(aggregatorExtraRelays.toList()) { relay ->
+                PubkeyListItem(
+                    text = relay,
+                    onDelete = {
+                        val relays = Settings.relayAggregatorExtraRelays.toMutableSet().apply { remove(relay) }
+                        Settings.relayAggregatorExtraRelays = relays
+                        aggregatorExtraRelays = relays
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                     },
@@ -914,6 +973,20 @@ fun isIpValid(ip: String): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_
 } else {
     @Suppress("DEPRECATION")
     Patterns.IP_ADDRESS.matcher(ip).matches()
+}
+
+fun normalizeRelayInput(raw: String): String? {
+    val trimmed = raw.trim().trimEnd('/')
+    if (trimmed.isEmpty()) return null
+    val withScheme = when {
+        trimmed.startsWith("wss://") || trimmed.startsWith("ws://") -> trimmed
+        "://" in trimmed -> return null
+        else -> "wss://$trimmed"
+    }
+    // Reject schemes we don't speak and anything without a host.
+    val afterScheme = withScheme.substringAfter("://")
+    if (afterScheme.isEmpty() || afterScheme.startsWith("/")) return null
+    return withScheme
 }
 
 fun String.toNostrKey(): String? {

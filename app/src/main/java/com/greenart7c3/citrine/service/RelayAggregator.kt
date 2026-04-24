@@ -112,9 +112,12 @@ object RelayAggregator {
     fun start(database: AppDatabase) {
         if (scope != null) return
         if (!Settings.relayAggregatorEnabled) return
-        if (Settings.aggregatorPubkey.isBlank()) return
+        val hasPubkey = Settings.aggregatorPubkey.isNotBlank()
+        val hasExtraRelays = Settings.relayAggregatorExtraRelays.isNotEmpty()
+        if (!hasPubkey && !hasExtraRelays) return
 
-        Log.d(TAG, "Starting aggregator for ${Settings.aggregatorPubkey}")
+        val startLabel = if (hasPubkey) Settings.aggregatorPubkey else "no-pubkey mode (${Settings.relayAggregatorExtraRelays.size} relays)"
+        Log.d(TAG, "Starting aggregator for $startLabel")
         currentPubkey = Settings.aggregatorPubkey
         val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = newScope
@@ -169,16 +172,17 @@ object RelayAggregator {
     }
 
     fun onConfigChanged(database: AppDatabase) {
-        val enabled = Settings.relayAggregatorEnabled && Settings.aggregatorPubkey.isNotBlank()
-        val running = scope != null
         val pubkey = Settings.aggregatorPubkey
+        val hasExtraRelays = Settings.relayAggregatorExtraRelays.isNotEmpty()
+        val enabled = Settings.relayAggregatorEnabled && (pubkey.isNotBlank() || hasExtraRelays)
+        val running = scope != null
         when {
             enabled && !running -> {
                 Log.d(TAG, "Config change: aggregator enabled, starting")
                 start(database)
             }
             !enabled && running -> {
-                Log.d(TAG, "Config change: aggregator disabled or pubkey cleared, stopping")
+                Log.d(TAG, "Config change: aggregator disabled or no pubkey+relays, stopping")
                 stop()
             }
             enabled && running && pubkey != currentPubkey -> {
@@ -219,8 +223,11 @@ object RelayAggregator {
         val refreshStartMs = System.currentTimeMillis()
         try {
             val aggPubkey = Settings.aggregatorPubkey
-            if (aggPubkey.isBlank()) {
-                Log.d(TAG, "Aggregator pubkey is blank; nothing to refresh")
+            val extraRelays = Settings.relayAggregatorExtraRelays
+                .mapNotNull { raw -> normalizeRemote(raw) }
+                .toSet()
+            if (aggPubkey.isBlank() && extraRelays.isEmpty()) {
+                Log.d(TAG, "No pubkey and no extra relays; nothing to refresh")
                 return
             }
             val dao = database.eventDao()
@@ -230,66 +237,91 @@ object RelayAggregator {
                 Citrine.instance.client.connect()
             }
 
+            // When no pubkey is configured, the aggregator becomes a plain relay listener:
+            // subscribe to every extra relay with the configured kinds and the sync window,
+            // no author filter, no NIP-65 lookups, no tagged sub. This path uses the same
+            // diff-vs-activeRelaySubs + cleanup logic as the pubkey path by representing
+            // each relay as a single empty-author "chunk".
+            val noPubkeyMode = aggPubkey.isBlank()
             val forceFresh = forceFreshBootstrap.also { if (it) forceFreshBootstrap = false }
-            Log.d(TAG, "Refresh starting for $aggPubkey (forceFresh=$forceFresh)")
+            Log.d(
+                TAG,
+                if (noPubkeyMode) {
+                    "Refresh starting: no-pubkey mode, ${extraRelays.size} relay(s)"
+                } else {
+                    "Refresh starting for $aggPubkey (forceFresh=$forceFresh, extraRelays=${extraRelays.size})"
+                },
+            )
             publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
 
-            val contactListMs = System.currentTimeMillis()
-            val contactList = loadOrBootstrapContactList(dao, aggPubkey, forceFresh)
-            val follows = contactList?.verifiedFollowKeySet() ?: emptySet()
-            val authors = (follows + aggPubkey).toSet()
-            authorCount = authors.size
-            Log.d(
-                TAG,
-                "Contact list resolved in ${System.currentTimeMillis() - contactListMs}ms: " +
-                    "${follows.size} follows (+ self) for $aggPubkey (createdAt=${contactList?.createdAt ?: "none"})",
-            )
-
-            // Resolve NIP-65 for all authors in one batch instead of N sequential fetches.
             val cachedRelayLists = mutableMapOf<String, AdvertisedRelayListEvent>()
-            val uncached = mutableSetOf<String>()
-            for (pk in authors) {
-                val cached = dao.getAdvertisedRelayList(pk)?.toEvent() as? AdvertisedRelayListEvent
-                if (cached != null) cachedRelayLists[pk] = cached else uncached.add(pk)
-            }
-            Log.d(TAG, "NIP-65 cache: ${cachedRelayLists.size} hit, ${uncached.size} miss")
+            val fetched: Map<String, AdvertisedRelayListEvent>
+            val relayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
 
-            val fetchMs = System.currentTimeMillis()
-            val fetched = if (uncached.isNotEmpty()) {
-                Log.d(TAG, "Fetching ${uncached.size} NIP-65 records from ${INDEXER_RELAYS.size} indexers")
-                batchFetchRelayLists(uncached, INDEXER_RELAYS, BATCH_FETCH_TIMEOUT_MS)
+            if (noPubkeyMode) {
+                authorCount = 0
+                fetched = emptyMap()
+                extraRelays.forEach { relay ->
+                    // Empty author set is a marker the subscribe loop recognizes to
+                    // issue a filter without the `authors` field.
+                    relayToAuthors[relay] = mutableSetOf()
+                }
             } else {
-                emptyMap()
-            }
-            if (uncached.isNotEmpty()) {
+                val contactListMs = System.currentTimeMillis()
+                val contactList = loadOrBootstrapContactList(dao, aggPubkey, forceFresh)
+                val follows = contactList?.verifiedFollowKeySet() ?: emptySet()
+                val authors = (follows + aggPubkey).toSet()
+                authorCount = authors.size
                 Log.d(
                     TAG,
-                    "NIP-65 batch fetch returned ${fetched.size}/${uncached.size} lists " +
-                        "in ${System.currentTimeMillis() - fetchMs}ms",
+                    "Contact list resolved in ${System.currentTimeMillis() - contactListMs}ms: " +
+                        "${follows.size} follows (+ self) for $aggPubkey (createdAt=${contactList?.createdAt ?: "none"})",
+                )
+
+                // Resolve NIP-65 for all authors in one batch instead of N sequential fetches.
+                val uncached = mutableSetOf<String>()
+                for (pk in authors) {
+                    val cached = dao.getAdvertisedRelayList(pk)?.toEvent() as? AdvertisedRelayListEvent
+                    if (cached != null) cachedRelayLists[pk] = cached else uncached.add(pk)
+                }
+                Log.d(TAG, "NIP-65 cache: ${cachedRelayLists.size} hit, ${uncached.size} miss")
+
+                val fetchMs = System.currentTimeMillis()
+                fetched = if (uncached.isNotEmpty()) {
+                    Log.d(TAG, "Fetching ${uncached.size} NIP-65 records from ${INDEXER_RELAYS.size} indexers")
+                    batchFetchRelayLists(uncached, INDEXER_RELAYS, BATCH_FETCH_TIMEOUT_MS)
+                } else {
+                    emptyMap()
+                }
+                if (uncached.isNotEmpty()) {
+                    Log.d(
+                        TAG,
+                        "NIP-65 batch fetch returned ${fetched.size}/${uncached.size} lists " +
+                            "in ${System.currentTimeMillis() - fetchMs}ms",
+                    )
+                }
+
+                var fellBackCount = 0
+                for (pk in authors) {
+                    val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
+                    val writeRelays = relayListEvent
+                        ?.writeRelays()
+                        ?.mapNotNull { raw -> normalizeRemote(raw) }
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: run {
+                            fellBackCount++
+                            FALLBACK_OUTBOX_RELAYS
+                        }
+                    writeRelays.forEach { relay ->
+                        relayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
+                    }
+                }
+                Log.d(
+                    TAG,
+                    "Outbox map built: ${relayToAuthors.size} relays for ${authors.size} authors " +
+                        "($fellBackCount author(s) had no NIP-65, fell back to ${FALLBACK_OUTBOX_RELAYS.size} relays)",
                 )
             }
-
-            val relayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
-            var fellBackCount = 0
-            for (pk in authors) {
-                val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
-                val writeRelays = relayListEvent
-                    ?.writeRelays()
-                    ?.mapNotNull { raw -> normalizeRemote(raw) }
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: run {
-                        fellBackCount++
-                        FALLBACK_OUTBOX_RELAYS
-                    }
-                writeRelays.forEach { relay ->
-                    relayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
-                }
-            }
-            Log.d(
-                TAG,
-                "Outbox map built: ${relayToAuthors.size} relays for ${authors.size} authors " +
-                    "($fellBackCount author(s) had no NIP-65, fell back to ${FALLBACK_OUTBOX_RELAYS.size} relays)",
-            )
 
             publishStatus(phase = AggregatorPhase.REFRESHING)
 
@@ -305,7 +337,12 @@ object RelayAggregator {
             var closedExtraChunkSubs = 0
 
             for ((relay, authorSet) in relayToAuthors) {
-                val chunks = authorSet.toList().chunked(MAX_AUTHORS_PER_SUB)
+                // Empty author set → single unfiltered chunk (no-pubkey mode).
+                val chunks = if (authorSet.isEmpty()) {
+                    listOf(emptyList())
+                } else {
+                    authorSet.toList().chunked(MAX_AUTHORS_PER_SUB)
+                }
                 val existing = activeRelaySubs[relay] ?: emptyList()
                 val entries = mutableListOf<Pair<String, List<Filter>>>()
                 chunks.forEachIndexed { idx, chunk ->
@@ -314,7 +351,7 @@ object RelayAggregator {
                     if (reused != null) reusedSubs++ else freshSubs++
                     val filters = listOf(
                         Filter(
-                            authors = chunk,
+                            authors = if (chunk.isEmpty()) null else chunk,
                             kinds = kinds,
                             since = since,
                         ),
@@ -350,7 +387,7 @@ object RelayAggregator {
                     "closed $closedExtraChunkSubs shrunk chunks + $closedGoneRelaySubs dropped relays",
             )
 
-            if (Settings.relayAggregatorIncludeTagged) {
+            if (!noPubkeyMode && Settings.relayAggregatorIncludeTagged) {
                 val aggRelayList = cachedRelayLists[aggPubkey] ?: fetched[aggPubkey]
                 val readRelays = aggRelayList?.readRelays()
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
@@ -403,8 +440,9 @@ object RelayAggregator {
             Log.d(
                 TAG,
                 "Refresh complete in ${System.currentTimeMillis() - refreshStartMs}ms: " +
-                    "${authors.size} authors, ${newSubscribedRelays.size} relays, " +
-                    "${trackedSubIds.size} tracked subIds, tagged=${Settings.relayAggregatorIncludeTagged}",
+                    "$authorCount authors, ${newSubscribedRelays.size} relays, " +
+                    "${trackedSubIds.size} tracked subIds, " +
+                    "noPubkey=$noPubkeyMode, tagged=${Settings.relayAggregatorIncludeTagged}",
             )
             publishStatus(phase = AggregatorPhase.LISTENING)
         } finally {

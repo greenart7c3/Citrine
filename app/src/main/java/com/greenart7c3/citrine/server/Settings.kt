@@ -37,6 +37,10 @@ object Settings {
     var relayAggregatorIncludeTagged = true
     var relayAggregatorLastSync: Long = 0L
 
+    // Relays the aggregator listens to when no pubkey is configured — plain kinds+since
+    // subscription, no author filter. Also usable as an explicit extra relay set.
+    var relayAggregatorExtraRelays: Set<String> = emptySet()
+
     fun defaultValues() {
         allowedKinds = emptySet()
         allowedPubKeys = emptySet()
@@ -68,6 +72,7 @@ object Settings {
         relayAggregatorRefreshMinutes = 60
         relayAggregatorIncludeTagged = true
         relayAggregatorLastSync = 0L
+        relayAggregatorExtraRelays = emptySet()
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)

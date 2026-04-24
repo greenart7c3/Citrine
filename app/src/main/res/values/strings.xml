@@ -122,6 +122,11 @@
     <string name="relay_aggregator_include_tagged">Also mirror events tagging the aggregator</string>
     <string name="relay_aggregator_include_tagged_description">Subscribe for any event that p-tags the aggregator pubkey on its read relays</string>
     <string name="relay_aggregator_kinds_empty_hint">Empty list disables the aggregator subscription</string>
+    <string name="relay_aggregator_extra_relays">Extra relays</string>
+    <string name="relay_aggregator_extra_relays_description">Relays subscribed with a plain kinds/since filter (no author filter). Used as the full relay set when no pubkey is configured.</string>
+    <string name="relay_aggregator_extra_relays_hint">Add at least one relay to run without a pubkey</string>
+    <string name="relay_aggregator_invalid_relay">Invalid relay URL (expected wss:// or ws://)</string>
+    <string name="relay_aggregator_pubkey_or_relays_required">Set an aggregator pubkey or at least one relay first</string>
     <string name="relay_aggregator_phase_idle">Idle</string>
     <string name="relay_aggregator_phase_bootstrapping">Fetching follow list and relay lists…</string>
     <string name="relay_aggregator_phase_refreshing">Opening subscriptions on outbox relays…</string>
