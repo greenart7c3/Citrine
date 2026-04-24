@@ -24,6 +24,7 @@ import com.vitorpamplona.quartz.nip01Core.relay.commands.toClient.Message
 import com.vitorpamplona.quartz.nip01Core.relay.commands.toRelay.Command
 import com.vitorpamplona.quartz.nip01Core.relay.filters.Filter
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
@@ -93,12 +94,10 @@ object EventDownloader {
     ): AdvertisedRelayListEvent? {
         var result: AdvertisedRelayListEvent? = null
         val relays = listOf(
-            NormalizedRelayUrl(
-                url = "wss://purplepag.es",
-            ),
-            NormalizedRelayUrl(
-                url = "wss://relay.nostr.band",
-            ),
+            RelayUrlNormalizer.normalize("wss://purplepag.es/"),
+            RelayUrlNormalizer.normalize("wss://user.kindpag.es/"),
+            RelayUrlNormalizer.normalize("wss://profiles.nostr1.com/"),
+            RelayUrlNormalizer.normalize("wss://directory.yabu.me/"),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
         relays.forEach {
@@ -135,12 +134,10 @@ object EventDownloader {
     ): ContactListEvent? {
         var result: ContactListEvent? = null
         val relays = listOf(
-            NormalizedRelayUrl(
-                url = "wss://purplepag.es",
-            ),
-            NormalizedRelayUrl(
-                url = "wss://relay.nostr.band",
-            ),
+            RelayUrlNormalizer.normalize("wss://purplepag.es/"),
+            RelayUrlNormalizer.normalize("wss://user.kindpag.es/"),
+            RelayUrlNormalizer.normalize("wss://profiles.nostr1.com/"),
+            RelayUrlNormalizer.normalize("wss://directory.yabu.me/"),
         )
         val finishedRelays = mutableMapOf<String, Boolean>()
         relays.forEach {

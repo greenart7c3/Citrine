@@ -33,8 +33,10 @@ object RelayAggregator {
     private const val TAG = "RelayAggregator"
 
     private val BOOTSTRAP_RELAYS = listOf(
-        NormalizedRelayUrl(url = "wss://purplepag.es"),
-        NormalizedRelayUrl(url = "wss://relay.nostr.band"),
+        RelayUrlNormalizer.normalize("wss://purplepag.es/"),
+        RelayUrlNormalizer.normalize("wss://user.kindpag.es/"),
+        RelayUrlNormalizer.normalize("wss://profiles.nostr1.com/"),
+        RelayUrlNormalizer.normalize("wss://directory.yabu.me/"),
     )
 
     private const val MAX_AUTHORS_PER_SUB = 500
