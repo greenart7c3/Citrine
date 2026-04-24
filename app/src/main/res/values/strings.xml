@@ -122,4 +122,12 @@
     <string name="relay_aggregator_include_tagged">Also mirror events tagging the aggregator</string>
     <string name="relay_aggregator_include_tagged_description">Subscribe for any event that p-tags the aggregator pubkey on its read relays</string>
     <string name="relay_aggregator_kinds_empty_hint">Empty list disables the aggregator subscription</string>
+    <string name="relay_aggregator_phase_idle">Idle</string>
+    <string name="relay_aggregator_phase_bootstrapping">Fetching follow list and relay lists…</string>
+    <string name="relay_aggregator_phase_refreshing">Opening subscriptions on outbox relays…</string>
+    <string name="relay_aggregator_phase_listening">Listening for new events</string>
+    <string name="relay_aggregator_counts">%1$d authors · %2$d of %3$d relays connected</string>
+    <string name="relay_aggregator_events_received">%1$d events received</string>
+    <string name="relay_aggregator_last_refresh">Last refresh %1$s ago</string>
+    <string name="relay_aggregator_never_refreshed">No refresh yet</string>
 </resources>

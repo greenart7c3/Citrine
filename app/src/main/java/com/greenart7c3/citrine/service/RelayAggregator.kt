@@ -20,14 +20,35 @@ import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+enum class AggregatorPhase {
+    IDLE,
+    BOOTSTRAPPING,
+    REFRESHING,
+    LISTENING,
+}
+
+data class AggregatorStatus(
+    val enabled: Boolean = false,
+    val phase: AggregatorPhase = AggregatorPhase.IDLE,
+    val authors: Int = 0,
+    val relaysConfigured: Int = 0,
+    val relaysConnected: Int = 0,
+    val eventsReceived: Long = 0L,
+    val lastRefreshEpoch: Long = 0L,
+)
 
 object RelayAggregator {
     private const val TAG = "RelayAggregator"
@@ -51,10 +72,19 @@ object RelayAggregator {
     private val relaySubs = mutableMapOf<NormalizedRelayUrl, MutableList<String>>()
     private val trackedSubIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
+    private val subscribedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
+    private val connectedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
+    private val eventsReceived = AtomicLong(0)
+
+    @Volatile private var authorCount: Int = 0
+
     @Volatile private var taggedSubId: String? = null
     private val refreshing = AtomicBoolean(false)
 
     @Volatile private var lastReconnectRefresh = 0L
+
+    private val _status = MutableStateFlow(AggregatorStatus())
+    val status: StateFlow<AggregatorStatus> = _status.asStateFlow()
 
     @Synchronized
     fun start(database: AppDatabase) {
@@ -69,6 +99,8 @@ object RelayAggregator {
         val newListener = AggregatorListener()
         listener = newListener
         Citrine.instance.client.addConnectionListener(newListener)
+
+        publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
 
         newScope.launch {
             while (isActive) {
@@ -97,10 +129,15 @@ object RelayAggregator {
         }
         trackedSubIds.clear()
         relaySubs.clear()
+        subscribedRelays.clear()
+        connectedRelays.clear()
+        authorCount = 0
         taggedSubId = null
 
         scope = null
         s.cancel()
+
+        _status.value = AggregatorStatus(enabled = false, phase = AggregatorPhase.IDLE)
     }
 
     fun onConfigChanged(database: AppDatabase) {
@@ -139,9 +176,12 @@ object RelayAggregator {
                 Citrine.instance.client.connect()
             }
 
+            publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
+
             val contactList = loadOrBootstrapContactList(dao, aggPubkey)
             val follows = contactList?.verifiedFollowKeySet() ?: emptySet()
             val authors = (follows + aggPubkey).toSet()
+            authorCount = authors.size
 
             val relayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
             for (pk in authors) {
@@ -154,6 +194,8 @@ object RelayAggregator {
                     relayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
                 }
             }
+
+            publishStatus(phase = AggregatorPhase.REFRESHING)
 
             val since = computeSince()
             val kinds = Settings.relayAggregatorKinds.toList()
@@ -197,12 +239,13 @@ object RelayAggregator {
             relaySubs.clear()
             relaySubs.putAll(newRelaySubs)
 
+            val taggedSubRelays: Set<NormalizedRelayUrl>
             if (Settings.relayAggregatorIncludeTagged) {
                 val readRelays = loadOrBootstrapAdvertisedRelayList(dao, aggPubkey)
                     ?.readRelays()
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
                     ?: emptyList()
-                val relaySet = (readRelays + BOOTSTRAP_RELAYS).toSet()
+                taggedSubRelays = (readRelays + BOOTSTRAP_RELAYS).toSet()
                 val id = taggedSubId ?: newSubId().also { taggedSubId = it }
                 trackedSubIds.add(id)
                 val filter = Filter(
@@ -210,9 +253,10 @@ object RelayAggregator {
                     since = since,
                 )
                 runCatching {
-                    Citrine.instance.client.subscribe(id, relaySet.associateWith { listOf(filter) })
+                    Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { listOf(filter) })
                 }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
             } else {
+                taggedSubRelays = emptySet()
                 taggedSubId?.let {
                     runCatching { Citrine.instance.client.unsubscribe(it) }
                     trackedSubIds.remove(it)
@@ -220,15 +264,43 @@ object RelayAggregator {
                 taggedSubId = null
             }
 
+            val newSubscribedRelays = relayToAuthors.keys + taggedSubRelays
+            subscribedRelays.clear()
+            subscribedRelays.addAll(newSubscribedRelays)
+            // Drop liveness entries for relays we no longer track
+            connectedRelays.retainAll(newSubscribedRelays)
+
             Settings.relayAggregatorLastSync = TimeUtils.now()
             LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
             Log.d(
                 TAG,
                 "Refreshed: ${authors.size} authors across ${relayToAuthors.size} relays, tagged=${Settings.relayAggregatorIncludeTagged}",
             )
+            publishStatus(phase = AggregatorPhase.LISTENING)
         } finally {
             refreshing.set(false)
         }
+    }
+
+    private fun publishStatus(phase: AggregatorPhase) {
+        _status.value = AggregatorStatus(
+            enabled = scope != null,
+            phase = phase,
+            authors = authorCount,
+            relaysConfigured = subscribedRelays.size,
+            relaysConnected = connectedRelays.size,
+            eventsReceived = eventsReceived.get(),
+            lastRefreshEpoch = Settings.relayAggregatorLastSync,
+        )
+    }
+
+    private fun refreshStatusCounters() {
+        val current = _status.value
+        _status.value = current.copy(
+            relaysConfigured = subscribedRelays.size,
+            relaysConnected = connectedRelays.size,
+            eventsReceived = eventsReceived.get(),
+        )
     }
 
     private fun computeSince(): Long {
@@ -316,7 +388,15 @@ object RelayAggregator {
 
     private class AggregatorListener : RelayConnectionListener {
         override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+            if (subscribedRelays.contains(relay.url)) {
+                // Any incoming traffic from a tracked relay means we're alive on it.
+                if (connectedRelays.add(relay.url)) {
+                    refreshStatusCounters()
+                }
+            }
             if (msg is EventMessage && trackedSubIds.contains(msg.subId)) {
+                eventsReceived.incrementAndGet()
+                refreshStatusCounters()
                 val s = scope ?: return
                 s.launch {
                     try {
@@ -332,11 +412,17 @@ object RelayAggregator {
 
         override fun onDisconnected(relay: IRelayClient) {
             Log.d(TAG, "Disconnected from ${relay.url}")
+            if (connectedRelays.remove(relay.url)) {
+                refreshStatusCounters()
+            }
             kickReconnectRefresh()
         }
 
         override fun onCannotConnect(relay: IRelayClient, errorMessage: String) {
             Log.d(TAG, "Cannot connect to ${relay.url}: $errorMessage")
+            if (connectedRelays.remove(relay.url)) {
+                refreshStatusCounters()
+            }
         }
     }
 }
