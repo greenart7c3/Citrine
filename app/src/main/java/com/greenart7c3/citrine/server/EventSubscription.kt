@@ -42,7 +42,6 @@ object EventSubscription {
             subscriptions.snapshot().values.forEach {
                 it.subscription.filters.forEach filter@{ filter ->
                     if (filter.test(event)) {
-                        Log.d(Citrine.TAG, "Sending event ${event.id} to sub: ${it.subscription.id}")
                         it.subscription.connection.trySend(
                             it.subscription.objectMapper.writeValueAsString(
                                 listOf(
