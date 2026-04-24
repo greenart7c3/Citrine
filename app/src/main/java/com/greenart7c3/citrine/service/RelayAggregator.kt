@@ -69,17 +69,19 @@ object RelayAggregator {
         RelayUrlNormalizer.normalize("wss://relay.primal.net/"),
     )
 
-    private const val MAX_AUTHORS_PER_SUB = 500
+    // Keep well under the per-filter author cap that stricter relays enforce (often 100–200).
+    private const val MAX_AUTHORS_PER_SUB = 100
     private const val DEFAULT_COLD_START_WINDOW_SEC = 24L * 60L * 60L
     private const val OVERLAP_SEC = 5L * 60L
     private const val BATCH_FETCH_TIMEOUT_MS = 15_000L
-    private const val RESUB_DELAY_MS = 1_500L
 
     @Volatile private var scope: CoroutineScope? = null
 
     @Volatile private var listener: AggregatorListener? = null
 
-    // Per-relay bookkeeping of active subscriptions so we can re-send them after a reconnect.
+    // Per-relay bookkeeping of active subscriptions so subIds stay stable across refreshes.
+    // Quartz re-sends every desired REQ on reconnect via syncFilters(), so we don't track
+    // these for resub purposes — only for preserving the subId set across refresh cycles.
     // relay -> list of (subId, filters)
     private val activeRelaySubs: ConcurrentHashMap<NormalizedRelayUrl, MutableList<Pair<String, List<Filter>>>> =
         ConcurrentHashMap()
@@ -88,7 +90,6 @@ object RelayAggregator {
     private val subscribedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
     private val connectedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
     private val eventsReceived = AtomicLong(0)
-    private val pendingResub: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
 
     @Volatile private var authorCount: Int = 0
 
@@ -143,7 +144,6 @@ object RelayAggregator {
         activeRelaySubs.clear()
         subscribedRelays.clear()
         connectedRelays.clear()
-        pendingResub.clear()
         authorCount = 0
         taggedSubId = null
 
@@ -268,13 +268,12 @@ object RelayAggregator {
                 }
             }
 
-            val taggedSubRelays: Set<NormalizedRelayUrl>
             if (Settings.relayAggregatorIncludeTagged) {
                 val aggRelayList = cachedRelayLists[aggPubkey] ?: fetched[aggPubkey]
                 val readRelays = aggRelayList?.readRelays()
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
                     ?: emptyList()
-                taggedSubRelays = (readRelays + FALLBACK_OUTBOX_RELAYS).toSet()
+                val taggedSubRelays = (readRelays + FALLBACK_OUTBOX_RELAYS).toSet()
                 val id = taggedSubId ?: newSubId().also { taggedSubId = it }
                 trackedSubIds.add(id)
                 val filters = listOf(
@@ -283,12 +282,18 @@ object RelayAggregator {
                         since = since,
                     ),
                 )
-                taggedSubRelays.forEach { relay ->
-                    sendSubscribe(relay, id, filters)
-                    newActiveSubs.getOrPut(relay) { mutableListOf() }.add(id to filters)
+                if (taggedSubRelays.isNotEmpty()) {
+                    // Send ONE subscribe with the full relay set; Quartz overwrites the prior
+                    // desiredSubs[subId] entry on each call, so iterating would leave only the
+                    // last relay actually subscribed.
+                    runCatching {
+                        Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
+                    }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
+                    taggedSubRelays.forEach { relay ->
+                        newActiveSubs.getOrPut(relay) { mutableListOf() }.add(id to filters)
+                    }
                 }
             } else {
-                taggedSubRelays = emptySet()
                 taggedSubId?.let {
                     runCatching { Citrine.instance.client.unsubscribe(it) }
                     trackedSubIds.remove(it)
@@ -321,28 +326,6 @@ object RelayAggregator {
         runCatching {
             Citrine.instance.client.subscribe(subId, mapOf(relay to filters))
         }.onFailure { Log.e(TAG, "subscribe to ${relay.url} failed", it) }
-    }
-
-    private fun resendSubsForRelay(relay: NormalizedRelayUrl) {
-        val entries = activeRelaySubs[relay] ?: return
-        if (entries.isEmpty()) return
-        Log.d(TAG, "Re-sending ${entries.size} subscription(s) to ${relay.url}")
-        entries.forEach { (subId, filters) ->
-            sendSubscribe(relay, subId, filters)
-        }
-    }
-
-    private fun scheduleResub(relay: NormalizedRelayUrl) {
-        val s = scope ?: return
-        if (!pendingResub.add(relay)) return
-        s.launch {
-            delay(RESUB_DELAY_MS)
-            pendingResub.remove(relay)
-            if (!Citrine.instance.client.isActive()) {
-                runCatching { Citrine.instance.client.connect() }
-            }
-            resendSubsForRelay(relay)
-        }
     }
 
     private fun publishStatus(phase: AggregatorPhase) {
@@ -473,19 +456,18 @@ object RelayAggregator {
 
         Citrine.instance.client.addConnectionListener(collector)
         try {
-            // Chunk the authors list to stay well under common relay filter size caps.
-            val chunks = pubkeys.toList().chunked(MAX_AUTHORS_PER_SUB)
-            chunks.forEach { chunk ->
-                val filters = listOf(
-                    Filter(
-                        kinds = listOf(AdvertisedRelayListEvent.KIND),
-                        authors = chunk,
-                    ),
+            // Pack every author chunk into a single REQ as multiple filters.
+            // Calling subscribe() once per chunk with the same subId would overwrite the
+            // previous filter set in Quartz, leaving only the last chunk actually queried.
+            val filters = pubkeys.toList().chunked(MAX_AUTHORS_PER_SUB).map { chunk ->
+                Filter(
+                    kinds = listOf(AdvertisedRelayListEvent.KIND),
+                    authors = chunk,
                 )
-                runCatching {
-                    Citrine.instance.client.subscribe(subId, relays.associateWith { filters })
-                }.onFailure { Log.e(TAG, "batch relay-list subscribe failed", it) }
             }
+            runCatching {
+                Citrine.instance.client.subscribe(subId, relays.associateWith { filters })
+            }.onFailure { Log.e(TAG, "batch relay-list subscribe failed", it) }
             withTimeoutOrNull(timeoutMs) { done.await() }
         } finally {
             runCatching { Citrine.instance.client.unsubscribe(subId) }
@@ -523,23 +505,18 @@ object RelayAggregator {
         }
 
         override fun onDisconnected(relay: IRelayClient) {
-            Log.d(TAG, "Disconnected from ${relay.url}")
+            // Quartz's NostrClient.onConnected() calls syncFilters() on reconnect, which
+            // re-issues every REQ stored in desiredSubs for that relay. We don't re-send
+            // anything from here — doing so on every disconnect / onCannotConnect turns
+            // unreachable relays into a resub storm.
             if (connectedRelays.remove(relay.url)) {
                 refreshStatusCounters()
-            }
-            if (subscribedRelays.contains(relay.url)) {
-                // Quartz reconnects on its own but doesn't re-send our REQs; push them again.
-                scheduleResub(relay.url)
             }
         }
 
         override fun onCannotConnect(relay: IRelayClient, errorMessage: String) {
-            Log.d(TAG, "Cannot connect to ${relay.url}: $errorMessage")
             if (connectedRelays.remove(relay.url)) {
                 refreshStatusCounters()
-            }
-            if (subscribedRelays.contains(relay.url)) {
-                scheduleResub(relay.url)
             }
         }
     }

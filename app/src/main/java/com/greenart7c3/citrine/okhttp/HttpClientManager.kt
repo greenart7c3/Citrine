@@ -25,12 +25,22 @@ import com.greenart7c3.citrine.Citrine
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.time.Duration
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 
 object HttpClientManager {
+    // Default OkHttp dispatcher caps in-flight Calls at 64 (5 per host), which throttles
+    // the aggregator when it tries to open hundreds of relay WebSockets in parallel.
+    // Give it room for the full fan-out; long-lived WebSocket upgrades each hold a slot.
+    private val dispatcher = Dispatcher().apply {
+        maxRequests = 1024
+        maxRequestsPerHost = 32
+    }
+
     private val rootClient =
         OkHttpClient
             .Builder()
+            .dispatcher(dispatcher)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
