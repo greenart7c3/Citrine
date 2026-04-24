@@ -232,7 +232,6 @@ class WebSocketServerService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     private fun createNotification(status: AggregatorStatus? = null): Notification {
-        Log.d(Citrine.TAG, "Creating notification")
         val notificationManager = NotificationManagerCompat.from(this)
         val channelId = "WebSocketServerServiceChannel"
         val groupId = "WebSocketServerServiceGroup"
