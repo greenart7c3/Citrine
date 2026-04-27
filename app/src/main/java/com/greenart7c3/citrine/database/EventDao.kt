@@ -183,7 +183,6 @@ interface EventDao {
     suspend fun insertEventWithTags(
         dbEvent: EventWithTags,
         connection: Connection?,
-        sendEventToSubscriptions: Boolean = true,
     ) {
         deletetags(dbEvent.event.id)
         insertEvent(dbEvent.event)?.let {
@@ -192,10 +191,7 @@ interface EventDao {
             }
 
             insertTags(dbEvent.tags)
-
-            if (sendEventToSubscriptions) {
-                EventSubscription.executeAll(dbEvent, connection)
-            }
+            EventSubscription.executeAll(dbEvent, connection)
         }
     }
 
