@@ -218,11 +218,17 @@ fun HomeScreen(
                     Citrine.instance.cancelJob()
                     Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                         Citrine.job?.join()
+                        // Stop the aggregator before wiping the database so its listener
+                        // can't ingest new events into tables we're clearing. Restart it
+                        // afterwards if the setting is still enabled.
+                        val resumeAggregator = Settings.relayAggregatorEnabled
+                        if (resumeAggregator) RelayAggregator.stop()
                         Citrine.isImportingEvents = true
                         homeViewModel.setProgress("Deleting all events")
                         database.clearAllTables()
                         homeViewModel.setProgress("")
                         Citrine.isImportingEvents = false
+                        if (resumeAggregator) RelayAggregator.start(database)
                     }
                 },
             )
