@@ -563,6 +563,7 @@ object RelayAggregator {
                 val filters = listOf(
                     Filter(
                         tags = mapOf("p" to listOf(aggPubkey)),
+                        kinds = kinds,
                         since = bootstrapSince,
                     ),
                 )
