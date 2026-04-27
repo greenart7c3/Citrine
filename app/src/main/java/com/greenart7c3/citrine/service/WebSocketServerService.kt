@@ -33,8 +33,12 @@ import java.util.TimerTask
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
+
+private const val NOTIFICATION_THROTTLE_MS = 5_000L
 
 class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -199,22 +203,30 @@ class WebSocketServerService : Service() {
             attempts++
         }
 
+        @OptIn(FlowPreview::class)
         scope.launch {
-            RelayAggregator.status.collect { status ->
-                try {
-                    val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
-                    val notification = createNotification(status.takeIf { it.enabled })
-                    if (ActivityCompat.checkSelfPermission(
-                            this@WebSocketServerService,
-                            Manifest.permission.POST_NOTIFICATIONS,
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notificationManager.notify(1, notification)
+            // The aggregator publishes status on every received event and every relay
+            // connect/disconnect, so the StateFlow can fire dozens of times per second.
+            // Updating the foreground-service notification that often racks up wakelocks
+            // and thrashes the system UI. Sample so the notification is rewritten at
+            // most once per [NOTIFICATION_THROTTLE_MS].
+            RelayAggregator.status
+                .sample(NOTIFICATION_THROTTLE_MS)
+                .collect { status ->
+                    try {
+                        val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
+                        val notification = createNotification(status.takeIf { it.enabled })
+                        if (ActivityCompat.checkSelfPermission(
+                                this@WebSocketServerService,
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationManager.notify(1, notification)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(Citrine.TAG, "Error updating aggregator notification", e)
                     }
-                } catch (e: Exception) {
-                    Log.e(Citrine.TAG, "Error updating aggregator notification", e)
                 }
-            }
         }
     }
 
