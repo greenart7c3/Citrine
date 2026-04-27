@@ -309,7 +309,7 @@ object RelayAggregator {
                 Log.d(TAG, "Config change: aggregator disabled or no pubkey+relays, stopping")
                 stop()
             }
-            enabled && running && pubkey != currentPubkey -> {
+            enabled && pubkey != currentPubkey -> {
                 // Identity changed: drop every existing subscription and rebuild from
                 // scratch. Reset lastSync so the new user gets the full cold-start
                 // window, and force a network fetch of their contact list — the
@@ -504,7 +504,7 @@ object RelayAggregator {
                     if (chunkSince > newestChunkSince) newestChunkSince = chunkSince
                     val filters = listOf(
                         Filter(
-                            authors = if (chunk.isEmpty()) null else chunk,
+                            authors = chunk.ifEmpty { null },
                             kinds = kinds,
                             since = chunkSince,
                         ),
