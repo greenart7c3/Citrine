@@ -121,6 +121,9 @@
     <string name="relay_aggregator_refresh_minutes">Refresh interval (minutes)</string>
     <string name="relay_aggregator_include_tagged">Also mirror events tagging the aggregator</string>
     <string name="relay_aggregator_include_tagged_description">Subscribe for any event that p-tags the aggregator pubkey on its read relays</string>
+    <string name="relay_aggregator_wifi_only">Pause on mobile data</string>
+    <string name="relay_aggregator_wifi_only_description">Stop fetching events while the device is on mobile data or a metered Wi-Fi network. Resumes automatically on unmetered Wi-Fi.</string>
+    <string name="relay_aggregator_phase_paused">Paused (metered network)</string>
     <string name="relay_aggregator_kinds_empty_hint">Empty list disables the aggregator subscription</string>
     <string name="relay_aggregator_extra_relays">Extra relays</string>
     <string name="relay_aggregator_extra_relays_description">Relays subscribed with a plain kinds/since filter (no author filter). Used as the full relay set when no pubkey is configured.</string>

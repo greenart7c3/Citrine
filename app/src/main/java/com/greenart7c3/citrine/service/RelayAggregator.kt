@@ -1,9 +1,14 @@
 package com.greenart7c3.citrine.service
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
+import com.greenart7c3.citrine.database.PubkeyTimestamp
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.Settings
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.fetchFirst
@@ -41,6 +46,7 @@ enum class AggregatorPhase {
     BOOTSTRAPPING,
     REFRESHING,
     LISTENING,
+    PAUSED,
 }
 
 data class AggregatorStatus(
@@ -51,6 +57,12 @@ data class AggregatorStatus(
     val relaysConnected: Int = 0,
     val eventsReceived: Long = 0L,
     val lastRefreshEpoch: Long = 0L,
+)
+
+private data class ChunkSubscription(
+    val subId: String,
+    val authors: Set<String>,
+    val since: Long,
 )
 
 object RelayAggregator {
@@ -81,11 +93,17 @@ object RelayAggregator {
 
     // Per-relay bookkeeping of active subscriptions so subIds stay stable across refreshes.
     // Quartz re-sends every desired REQ on reconnect via syncFilters(), so we don't track
-    // these for resub purposes — only for preserving the subId set across refresh cycles.
-    // relay -> list of (subId, filters)
-    private val activeRelaySubs: ConcurrentHashMap<NormalizedRelayUrl, MutableList<Pair<String, List<Filter>>>> =
+    // these for resub purposes — only for preserving the subId set across refresh cycles
+    // and for diagnosing which authors / since each chunk covers.
+    private val activeRelaySubs: ConcurrentHashMap<NormalizedRelayUrl, MutableList<ChunkSubscription>> =
         ConcurrentHashMap()
     private val trackedSubIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    // Latest event createdAt observed per pubkey. Seeded from the local DB at the start of
+    // every refresh and updated as events arrive on tracked subs. Used to compute a per-chunk
+    // `since` so a newly-followed pubkey gets backfilled while caught-up authors don't refetch
+    // their full window.
+    private val lastEventByPubkey: ConcurrentHashMap<String, Long> = ConcurrentHashMap()
 
     private val subscribedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
     private val connectedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
@@ -103,6 +121,17 @@ object RelayAggregator {
     // so we don't reuse stale follows that happened to be sitting in the local DB).
     @Volatile private var forceFreshBootstrap: Boolean = false
 
+    // True while subscriptions are torn down because the active network is metered and
+    // [Settings.relayAggregatorWifiOnly] is enabled. The refresh loop checks this flag and
+    // skips its body until [resumeFromMetered] resets it.
+    @Volatile private var pausedForMetered: Boolean = false
+
+    // The database the aggregator was started with — saved so the network callback can
+    // trigger a refresh on resume without the caller threading it through.
+    @Volatile private var database: AppDatabase? = null
+
+    @Volatile private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
     private val refreshing = AtomicBoolean(false)
 
     private val _status = MutableStateFlow(AggregatorStatus())
@@ -119,6 +148,7 @@ object RelayAggregator {
         val startLabel = if (hasPubkey) Settings.aggregatorPubkey else "no-pubkey mode (${Settings.relayAggregatorExtraRelays.size} relays)"
         Log.d(TAG, "Starting aggregator for $startLabel")
         currentPubkey = Settings.aggregatorPubkey
+        this.database = database
         val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = newScope
 
@@ -126,16 +156,25 @@ object RelayAggregator {
         listener = newListener
         Citrine.instance.client.addConnectionListener(newListener)
 
-        publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
+        registerNetworkCallback()
+        // Initial check: if we're already on a metered network and the user wants
+        // wifi-only, start in the paused state instead of opening subs.
+        evaluateNetworkState()
+
+        if (!pausedForMetered) {
+            publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
+        }
 
         newScope.launch {
             while (isActive) {
-                try {
-                    refreshAndSubscribe(database)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "Refresh failed", e)
+                if (!pausedForMetered) {
+                    try {
+                        refreshAndSubscribe(database)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Refresh failed", e)
+                    }
                 }
                 val minutes = Settings.relayAggregatorRefreshMinutes.coerceAtLeast(1)
                 val interval = minutes * 60_000L
@@ -152,6 +191,8 @@ object RelayAggregator {
         listener?.let { Citrine.instance.client.removeConnectionListener(it) }
         listener = null
 
+        unregisterNetworkCallback()
+
         trackedSubIds.forEach {
             runCatching { Citrine.instance.client.unsubscribe(it) }
         }
@@ -159,16 +200,99 @@ object RelayAggregator {
         activeRelaySubs.clear()
         subscribedRelays.clear()
         connectedRelays.clear()
+        lastEventByPubkey.clear()
         eventsReceived.set(0)
         authorCount = 0
         taggedSubId = null
         currentPubkey = null
         forceFreshBootstrap = false
+        pausedForMetered = false
+        database = null
 
         scope = null
         s.cancel()
 
         _status.value = AggregatorStatus(enabled = false, phase = AggregatorPhase.IDLE)
+    }
+
+    private fun connectivityManager(): ConnectivityManager? = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+
+    private fun isOnMeteredNetwork(): Boolean {
+        val cm = connectivityManager() ?: return false
+        val net = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(net) ?: return false
+        // Treat "no internet capability" as not-metered for our purposes — we'll have
+        // bigger problems than bandwidth if there's no internet at all.
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
+        return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }
+
+    private fun registerNetworkCallback() {
+        if (networkCallback != null) return
+        val cm = connectivityManager() ?: return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = evaluateNetworkState()
+            override fun onLost(network: Network) = evaluateNetworkState()
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = evaluateNetworkState()
+        }
+        runCatching { cm.registerDefaultNetworkCallback(cb) }
+            .onSuccess { networkCallback = cb }
+            .onFailure { Log.e(TAG, "registerDefaultNetworkCallback failed", it) }
+    }
+
+    private fun unregisterNetworkCallback() {
+        val cb = networkCallback ?: return
+        networkCallback = null
+        val cm = connectivityManager() ?: return
+        runCatching { cm.unregisterNetworkCallback(cb) }
+            .onFailure { Log.e(TAG, "unregisterNetworkCallback failed", it) }
+    }
+
+    /**
+     * Reconciles the current network state against the wifi-only setting and pauses or
+     * resumes the aggregator accordingly. Cheap to call repeatedly; only acts when the
+     * desired state diverges from the actual one.
+     */
+    @Synchronized
+    private fun evaluateNetworkState() {
+        if (scope == null) return
+        val shouldPause = Settings.relayAggregatorWifiOnly && isOnMeteredNetwork()
+        if (shouldPause && !pausedForMetered) {
+            pauseForMetered()
+        } else if (!shouldPause && pausedForMetered) {
+            resumeFromMetered()
+        }
+    }
+
+    private fun pauseForMetered() {
+        Log.d(TAG, "Pausing aggregator: metered network detected and wifi-only enabled")
+        pausedForMetered = true
+        // Tear down active subscriptions so we stop receiving events. Keep
+        // [lastEventByPubkey] and [currentPubkey] in place — when we resume, the next
+        // refresh uses them to compute tight per-chunk `since` values.
+        trackedSubIds.forEach { runCatching { Citrine.instance.client.unsubscribe(it) } }
+        trackedSubIds.clear()
+        activeRelaySubs.clear()
+        subscribedRelays.clear()
+        connectedRelays.clear()
+        taggedSubId = null
+        publishStatus(phase = AggregatorPhase.PAUSED)
+    }
+
+    private fun resumeFromMetered() {
+        Log.d(TAG, "Resuming aggregator: unmetered network available")
+        pausedForMetered = false
+        publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
+        val db = database ?: return
+        scope?.launch {
+            try {
+                refreshAndSubscribe(db)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Resume refresh failed", e)
+            }
+        }
     }
 
     fun onConfigChanged(database: AppDatabase) {
@@ -198,14 +322,22 @@ object RelayAggregator {
                 forceFreshBootstrap = true
                 start(database)
             }
-            enabled && running -> scope?.launch {
-                Log.d(TAG, "Config change: triggering refresh for running aggregator")
-                try {
-                    refreshAndSubscribe(database)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "Config refresh failed", e)
+            enabled && running -> {
+                // The wifi-only toggle may have just changed; re-evaluate before
+                // dispatching a refresh so a flip to "pause on metered" doesn't kick
+                // off a doomed refresh that we'd immediately tear down.
+                evaluateNetworkState()
+                if (!pausedForMetered) {
+                    scope?.launch {
+                        Log.d(TAG, "Config change: triggering refresh for running aggregator")
+                        try {
+                            refreshAndSubscribe(database)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Config refresh failed", e)
+                        }
+                    }
                 }
             }
         }
@@ -214,6 +346,10 @@ object RelayAggregator {
     private suspend fun refreshAndSubscribe(database: AppDatabase) {
         if (Citrine.isImportingEvents) {
             Log.d(TAG, "Import in progress; skipping refresh")
+            return
+        }
+        if (pausedForMetered) {
+            Log.d(TAG, "Paused for metered network; skipping refresh")
             return
         }
         if (!refreshing.compareAndSet(false, true)) {
@@ -325,44 +461,67 @@ object RelayAggregator {
 
             publishStatus(phase = AggregatorPhase.REFRESHING)
 
-            val since = computeSince()
             val kinds = Settings.relayAggregatorKinds.toList()
+            val bootstrapSince = computeBootstrapSince()
+            val allAuthors = relayToAuthors.values.flatten().toSet()
+            seedLastEventTimestamps(dao, allAuthors, kinds)
             Log.d(
                 TAG,
-                "Subscribing with since=$since (${(TimeUtils.now() - since) / 60}m ago), kinds=$kinds",
+                "lastEvent map seeded: ${lastEventByPubkey.size} entries " +
+                    "(${allAuthors.size} authors in scope, bootstrapSince=$bootstrapSince)",
             )
-            val newActiveSubs = ConcurrentHashMap<NormalizedRelayUrl, MutableList<Pair<String, List<Filter>>>>()
+            val newActiveSubs = ConcurrentHashMap<NormalizedRelayUrl, MutableList<ChunkSubscription>>()
             var reusedSubs = 0
             var freshSubs = 0
             var closedExtraChunkSubs = 0
+            var coldChunks = 0
+            var oldestChunkSince = Long.MAX_VALUE
+            var newestChunkSince = Long.MIN_VALUE
 
             for ((relay, authorSet) in relayToAuthors) {
                 // Empty author set → single unfiltered chunk (no-pubkey mode).
-                val chunks = if (authorSet.isEmpty()) {
+                val chunks: List<List<String>> = if (authorSet.isEmpty()) {
                     listOf(emptyList())
                 } else {
-                    authorSet.toList().chunked(MAX_AUTHORS_PER_SUB)
+                    // Sort by lastSeen DESC so chunks group authors with similar `since`
+                    // together: caught-up authors share recent `since`, never-seen authors
+                    // bucket into the tail chunk that pulls the cold-start window.
+                    authorSet
+                        .sortedByDescending { lastEventByPubkey[it] ?: 0L }
+                        .chunked(MAX_AUTHORS_PER_SUB)
                 }
                 val existing = activeRelaySubs[relay] ?: emptyList()
-                val entries = mutableListOf<Pair<String, List<Filter>>>()
+                val entries = mutableListOf<ChunkSubscription>()
                 chunks.forEachIndexed { idx, chunk ->
-                    val reused = existing.getOrNull(idx)?.first
+                    val reused = existing.getOrNull(idx)?.subId
                     val subId = reused ?: newSubId()
                     if (reused != null) reusedSubs++ else freshSubs++
+                    val chunkSince = computeChunkSince(chunk, bootstrapSince)
+                    if (chunk.isNotEmpty() && chunk.any { (lastEventByPubkey[it] ?: 0L) <= 0L }) {
+                        coldChunks++
+                    }
+                    if (chunkSince < oldestChunkSince) oldestChunkSince = chunkSince
+                    if (chunkSince > newestChunkSince) newestChunkSince = chunkSince
                     val filters = listOf(
                         Filter(
                             authors = if (chunk.isEmpty()) null else chunk,
                             kinds = kinds,
-                            since = since,
+                            since = chunkSince,
                         ),
                     )
                     sendSubscribe(relay, subId, filters)
                     trackedSubIds.add(subId)
-                    entries.add(subId to filters)
+                    entries.add(
+                        ChunkSubscription(
+                            subId = subId,
+                            authors = chunk.toSet(),
+                            since = chunkSince,
+                        ),
+                    )
                 }
                 if (existing.size > chunks.size) {
                     for (i in chunks.size until existing.size) {
-                        val (oldId, _) = existing[i]
+                        val oldId = existing[i].subId
                         runCatching { Citrine.instance.client.unsubscribe(oldId) }
                         trackedSubIds.remove(oldId)
                         closedExtraChunkSubs++
@@ -374,17 +533,23 @@ object RelayAggregator {
             var closedGoneRelaySubs = 0
             for ((relay, entries) in activeRelaySubs) {
                 if (!newActiveSubs.containsKey(relay)) {
-                    entries.forEach { (oldId, _) ->
-                        runCatching { Citrine.instance.client.unsubscribe(oldId) }
-                        trackedSubIds.remove(oldId)
+                    entries.forEach { entry ->
+                        runCatching { Citrine.instance.client.unsubscribe(entry.subId) }
+                        trackedSubIds.remove(entry.subId)
                         closedGoneRelaySubs++
                     }
                 }
             }
+            val sinceSpread = if (newestChunkSince >= oldestChunkSince) {
+                "since spread=[$oldestChunkSince..$newestChunkSince]"
+            } else {
+                "since spread=n/a"
+            }
             Log.d(
                 TAG,
-                "Main subs pushed: $freshSubs new, $reusedSubs reused; " +
-                    "closed $closedExtraChunkSubs shrunk chunks + $closedGoneRelaySubs dropped relays",
+                "Main subs pushed: $freshSubs new, $reusedSubs reused, $coldChunks cold; " +
+                    "closed $closedExtraChunkSubs shrunk chunks + $closedGoneRelaySubs dropped relays; " +
+                    sinceSpread,
             )
 
             if (!noPubkeyMode && Settings.relayAggregatorIncludeTagged) {
@@ -398,7 +563,7 @@ object RelayAggregator {
                 val filters = listOf(
                     Filter(
                         tags = mapOf("p" to listOf(aggPubkey)),
-                        since = since,
+                        since = bootstrapSince,
                     ),
                 )
                 if (taggedSubRelays.isNotEmpty()) {
@@ -413,8 +578,13 @@ object RelayAggregator {
                     runCatching {
                         Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
                     }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
+                    val taggedEntry = ChunkSubscription(
+                        subId = id,
+                        authors = emptySet(),
+                        since = bootstrapSince,
+                    )
                     taggedSubRelays.forEach { relay ->
-                        newActiveSubs.getOrPut(relay) { mutableListOf() }.add(id to filters)
+                        newActiveSubs.getOrPut(relay) { mutableListOf() }.add(taggedEntry)
                     }
                 }
             } else {
@@ -477,13 +647,64 @@ object RelayAggregator {
         )
     }
 
-    private fun computeSince(): Long {
+    /**
+     * Bootstrap `since` used when there is no per-author history to draw from
+     * (no-pubkey mode, the tagged sub, and as the cold-start fallback for chunks
+     * whose authors are all unknown to us).
+     */
+    private fun computeBootstrapSince(): Long {
         val now = TimeUtils.now()
         val last = Settings.relayAggregatorLastSync
         return if (last <= 0L) {
             now - DEFAULT_COLD_START_WINDOW_SEC
         } else {
             maxOf(last - OVERLAP_SEC, now - DEFAULT_COLD_START_WINDOW_SEC)
+        }
+    }
+
+    /**
+     * Per-chunk `since`: the oldest lastSeen of any author in [chunk] minus an overlap window.
+     * If any author has no recorded lastSeen, we fall back to the cold-start window so a
+     * brand-new follow gets backfilled instead of inheriting the rest of the chunk's recent
+     * cursor.
+     */
+    private fun computeChunkSince(chunk: List<String>, fallback: Long): Long {
+        if (chunk.isEmpty()) return fallback
+        val now = TimeUtils.now()
+        val coldStart = now - DEFAULT_COLD_START_WINDOW_SEC
+        var minSeen = Long.MAX_VALUE
+        for (pk in chunk) {
+            val seen = lastEventByPubkey[pk] ?: 0L
+            if (seen <= 0L) return coldStart
+            if (seen < minSeen) minSeen = seen
+        }
+        return maxOf(minSeen - OVERLAP_SEC, coldStart)
+    }
+
+    private suspend fun seedLastEventTimestamps(
+        dao: EventDao,
+        authors: Set<String>,
+        kinds: List<Int>,
+    ) {
+        if (authors.isEmpty() || kinds.isEmpty()) return
+        // SQLite caps bound parameters at ~999; chunk to stay well under that with two
+        // IN-lists in the same query.
+        val chunkSize = 400
+        val authorChunks = authors.toList().chunked(chunkSize)
+        val rows = mutableListOf<PubkeyTimestamp>()
+        for (chunk in authorChunks) {
+            try {
+                rows.addAll(dao.getLatestEventTimestamps(chunk, kinds))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "seedLastEventTimestamps chunk failed", e)
+            }
+        }
+        rows.forEach { row ->
+            // Keep the larger of (DB seed, in-memory live update). A live update that arrived
+            // mid-refresh shouldn't be rolled back by a slightly older DB read.
+            lastEventByPubkey.merge(row.pubkey, row.createdAt) { a, b -> maxOf(a, b) }
         }
     }
 
@@ -630,6 +851,12 @@ object RelayAggregator {
                 }
             }
             if (msg is EventMessage && trackedSubIds.contains(msg.subId)) {
+                val ev = msg.event
+                // Track lastSeen by author so the next refresh can compute a tighter
+                // per-chunk `since`. Update for every received event — events from
+                // tagged subs (random pubkeys) cost a bit of memory but are harmless;
+                // events from main subs are exactly what we want to record.
+                lastEventByPubkey.merge(ev.pubKey, ev.createdAt) { a, b -> maxOf(a, b) }
                 val n = eventsReceived.incrementAndGet()
                 // Periodic progress heartbeat so we can see the stream without per-event spam.
                 if (n == 1L || n % 100L == 0L) {
@@ -642,7 +869,7 @@ object RelayAggregator {
                 val s = scope ?: return
                 s.launch {
                     try {
-                        CustomWebSocketService.server?.innerProcessEvent(msg.event, null)
+                        CustomWebSocketService.server?.innerProcessEvent(ev, null)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

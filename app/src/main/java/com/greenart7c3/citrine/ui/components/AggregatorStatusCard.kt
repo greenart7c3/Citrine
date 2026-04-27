@@ -25,6 +25,7 @@ fun AggregatorStatusCard(
         AggregatorPhase.BOOTSTRAPPING -> stringResource(R.string.relay_aggregator_phase_bootstrapping)
         AggregatorPhase.REFRESHING -> stringResource(R.string.relay_aggregator_phase_refreshing)
         AggregatorPhase.LISTENING -> stringResource(R.string.relay_aggregator_phase_listening)
+        AggregatorPhase.PAUSED -> stringResource(R.string.relay_aggregator_phase_paused)
     }
 
     val lastRefresh = if (status.lastRefreshEpoch <= 0L) {

@@ -293,6 +293,7 @@ class WebSocketServerService : Service() {
             AggregatorPhase.BOOTSTRAPPING -> getString(R.string.relay_aggregator_phase_bootstrapping)
             AggregatorPhase.REFRESHING -> getString(R.string.relay_aggregator_phase_refreshing)
             AggregatorPhase.LISTENING -> getString(R.string.relay_aggregator_phase_listening)
+            AggregatorPhase.PAUSED -> getString(R.string.relay_aggregator_phase_paused)
         }
         val counts = getString(
             R.string.relay_aggregator_counts,
@@ -309,6 +310,7 @@ class WebSocketServerService : Service() {
             AggregatorPhase.BOOTSTRAPPING -> getString(R.string.relay_aggregator_phase_bootstrapping)
             AggregatorPhase.REFRESHING -> getString(R.string.relay_aggregator_phase_refreshing)
             AggregatorPhase.LISTENING -> getString(R.string.relay_aggregator_phase_listening)
+            AggregatorPhase.PAUSED -> getString(R.string.relay_aggregator_phase_paused)
         }
         val counts = getString(
             R.string.relay_aggregator_counts,

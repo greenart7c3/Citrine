@@ -41,6 +41,11 @@ object Settings {
     // subscription, no author filter. Also usable as an explicit extra relay set.
     var relayAggregatorExtraRelays: Set<String> = emptySet()
 
+    // When true, the aggregator suspends subscriptions whenever the active network is
+    // metered (mobile data or metered Wi-Fi) and resumes once an unmetered network is
+    // available again.
+    var relayAggregatorWifiOnly: Boolean = false
+
     fun defaultValues() {
         allowedKinds = emptySet()
         allowedPubKeys = emptySet()
@@ -73,6 +78,7 @@ object Settings {
         relayAggregatorIncludeTagged = true
         relayAggregatorLastSync = 0L
         relayAggregatorExtraRelays = emptySet()
+        relayAggregatorWifiOnly = false
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)

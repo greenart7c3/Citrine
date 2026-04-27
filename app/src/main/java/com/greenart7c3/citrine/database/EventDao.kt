@@ -72,6 +72,17 @@ interface EventDao {
     @Transaction
     suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?
 
+    @Query(
+        """
+        SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
+          FROM EventEntity
+         WHERE pubkey IN (:pubkeys)
+           AND kind IN (:kinds)
+         GROUP BY pubkey
+        """,
+    )
+    suspend fun getLatestEventTimestamps(pubkeys: List<String>, kinds: List<Int>): List<PubkeyTimestamp>
+
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC, id ASC")
     @Transaction
     suspend fun getByKind(kind: Int, pubkey: String): List<String>
@@ -324,6 +335,11 @@ interface EventDao {
 data class EventKey(
     val createdAt: Long,
     val id: String,
+)
+
+data class PubkeyTimestamp(
+    val pubkey: String,
+    val createdAt: Long,
 )
 
 class EventPagingSource(

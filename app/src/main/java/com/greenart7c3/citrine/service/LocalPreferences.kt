@@ -41,6 +41,7 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_INCLUDE_TAGGED = "relay_aggregator_include_tagged"
     const val RELAY_AGGREGATOR_LAST_SYNC = "relay_aggregator_last_sync"
     const val RELAY_AGGREGATOR_EXTRA_RELAYS = "relay_aggregator_extra_relays"
+    const val RELAY_AGGREGATOR_WIFI_ONLY = "relay_aggregator_wifi_only"
 }
 
 object LocalPreferences {
@@ -97,6 +98,7 @@ object LocalPreferences {
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, settings.relayAggregatorIncludeTagged)
                 putLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, settings.relayAggregatorLastSync)
                 putStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, settings.relayAggregatorExtraRelays)
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
 
                 HttpClientManager.setDefaultProxyOnPort(settings.proxyPort)
             }
@@ -143,6 +145,7 @@ object LocalPreferences {
         Settings.relayAggregatorIncludeTagged = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, true)
         Settings.relayAggregatorLastSync = prefs.getLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, 0L)
         Settings.relayAggregatorExtraRelays = prefs.getStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, emptySet()) ?: emptySet()
+        Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, false)
 
         HttpClientManager.setDefaultProxyOnPort(Settings.proxyPort)
     }

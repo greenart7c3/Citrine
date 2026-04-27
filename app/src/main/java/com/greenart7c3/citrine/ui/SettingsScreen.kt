@@ -121,6 +121,7 @@ fun SettingsScreen(
             mutableStateOf(TextFieldValue(Settings.relayAggregatorRefreshMinutes.toString()))
         }
         var aggregatorIncludeTagged by remember { mutableStateOf(Settings.relayAggregatorIncludeTagged) }
+        var aggregatorWifiOnly by remember { mutableStateOf(Settings.relayAggregatorWifiOnly) }
         var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
         var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
 
@@ -270,6 +271,7 @@ fun SettingsScreen(
                                 aggregatorKinds = Settings.relayAggregatorKinds
                                 aggregatorRefreshMinutes = TextFieldValue(Settings.relayAggregatorRefreshMinutes.toString())
                                 aggregatorIncludeTagged = Settings.relayAggregatorIncludeTagged
+                                aggregatorWifiOnly = Settings.relayAggregatorWifiOnly
                                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                                 RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                                 onApplyChanges()
@@ -563,6 +565,19 @@ fun SettingsScreen(
                     onCheckedChange = {
                         aggregatorIncludeTagged = it
                         Settings.relayAggregatorIncludeTagged = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.relay_aggregator_wifi_only),
+                    description = stringResource(R.string.relay_aggregator_wifi_only_description),
+                    checked = aggregatorWifiOnly,
+                    onCheckedChange = {
+                        aggregatorWifiOnly = it
+                        Settings.relayAggregatorWifiOnly = it
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                     },
