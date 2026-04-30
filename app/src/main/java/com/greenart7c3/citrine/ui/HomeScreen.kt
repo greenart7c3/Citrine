@@ -320,6 +320,49 @@ fun HomeScreen(
                             }
                         },
                     )
+                    if (Settings.useTor) {
+                        val torState by com.greenart7c3.citrine.service.TorManager.state.collectAsStateWithLifecycle()
+                        when (val s = torState) {
+                            com.greenart7c3.citrine.service.TorManager.State.Off -> {
+                                if (Settings.onionHostname.isNotBlank()) {
+                                    val onionUrl = "ws://${Settings.onionHostname}:${Settings.torVirtualPort}"
+                                    Text(
+                                        onionUrl,
+                                        color = Color.Gray,
+                                        modifier = Modifier.clickable {
+                                            coroutineScope.launch {
+                                                clipboardManager.setClipEntry(
+                                                    ClipEntry(ClipData.newPlainText("", onionUrl)),
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                            com.greenart7c3.citrine.service.TorManager.State.Bootstrapping -> {
+                                Text(stringResource(R.string.tor_starting))
+                            }
+                            is com.greenart7c3.citrine.service.TorManager.State.Running -> {
+                                val onionUrl = "ws://${s.hostname}:${Settings.torVirtualPort}"
+                                Text(
+                                    onionUrl,
+                                    modifier = Modifier.clickable {
+                                        coroutineScope.launch {
+                                            clipboardManager.setClipEntry(
+                                                ClipEntry(ClipData.newPlainText("", onionUrl)),
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                            is com.greenart7c3.citrine.service.TorManager.State.Error -> {
+                                Text(
+                                    stringResource(R.string.tor_error, s.message),
+                                    color = Color.Red,
+                                )
+                            }
+                        }
+                    }
                     ElevatedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {

@@ -31,6 +31,9 @@ object PrefKeys {
     const val LAST_BACKUP = "last_backup"
     const val PROXY_PORT = "proxy_port"
     const val USE_PROXY = "use_proxy"
+    const val USE_TOR = "use_tor"
+    const val TOR_VIRTUAL_PORT = "tor_virtual_port"
+    const val ONION_HOSTNAME = "onion_hostname"
 
     const val WEB_CLIENTS = "web_clients"
 }
@@ -72,6 +75,9 @@ object LocalPreferences {
                 putLong(PrefKeys.LAST_BACKUP, settings.lastBackup)
                 putInt(PrefKeys.PROXY_PORT, settings.proxyPort)
                 putBoolean(PrefKeys.USE_PROXY, settings.useProxy)
+                putBoolean(PrefKeys.USE_TOR, settings.useTor)
+                putInt(PrefKeys.TOR_VIRTUAL_PORT, settings.torVirtualPort)
+                putString(PrefKeys.ONION_HOSTNAME, settings.onionHostname)
                 if (Settings.webClients.isNotEmpty()) {
                     putString(PrefKeys.WEB_CLIENTS, Settings.webClientsToJson())
                 } else {
@@ -108,6 +114,9 @@ object LocalPreferences {
         Settings.lastBackup = prefs.getLong(PrefKeys.LAST_BACKUP, 0)
         Settings.proxyPort = prefs.getInt(PrefKeys.PROXY_PORT, 9050)
         Settings.useProxy = prefs.getBoolean(PrefKeys.USE_PROXY, false)
+        Settings.useTor = prefs.getBoolean(PrefKeys.USE_TOR, false)
+        Settings.torVirtualPort = prefs.getInt(PrefKeys.TOR_VIRTUAL_PORT, 80)
+        Settings.onionHostname = prefs.getString(PrefKeys.ONION_HOSTNAME, "") ?: ""
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }

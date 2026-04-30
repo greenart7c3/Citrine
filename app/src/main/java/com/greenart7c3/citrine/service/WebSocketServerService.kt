@@ -183,6 +183,11 @@ class WebSocketServerService : Service() {
         )
         CustomWebSocketService.server?.start()
 
+        if (Settings.useTor) {
+            Log.d(Citrine.TAG, "Starting Tor onion service")
+            TorManager.start(Settings.port, Settings.torVirtualPort)
+        }
+
         var error = true
         var attempts = 0
         while (error && attempts < 5) {
@@ -202,6 +207,7 @@ class WebSocketServerService : Service() {
             timer = null
             EventSubscription.closeAll()
             CustomWebSocketService.server?.stop()
+            TorManager.stop()
         }
         super.onDestroy()
     }

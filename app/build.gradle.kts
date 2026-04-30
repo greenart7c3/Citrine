@@ -151,6 +151,9 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
     splits {
         abi {
@@ -221,4 +224,8 @@ dependencies {
     implementation(libs.paging.compose)
     implementation(libs.paging.runtime)
     implementation(libs.room.paging)
+    implementation(libs.kmp.tor.runtime)
+    implementation(libs.kmp.tor.runtime.service)
+    implementation(libs.kmp.tor.runtime.service.ui)
+    implementation(libs.kmp.tor.resource.exec)
 }

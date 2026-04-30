@@ -28,6 +28,9 @@ object Settings {
     var lastBackup: Long = 0L
     var useProxy = false
     var proxyPort = 9050
+    var useTor = false
+    var torVirtualPort = 80
+    var onionHostname = ""
     var webClients = mutableMapOf<String, String>()
 
     fun defaultValues() {
@@ -54,6 +57,9 @@ object Settings {
         lastBackup = 0L
         useProxy = false
         proxyPort = 9050
+        useTor = false
+        torVirtualPort = 80
+        onionHostname = ""
         webClients = mutableMapOf()
     }
 

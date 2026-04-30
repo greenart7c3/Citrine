@@ -99,6 +99,9 @@ fun SettingsScreen(
         var deleteEphemeralEvents by remember { mutableStateOf(Settings.deleteEphemeralEvents) }
         var useProxy by remember { mutableStateOf(Settings.useProxy) }
         var proxyPort by remember { mutableStateOf(TextFieldValue(Settings.proxyPort.toString())) }
+        var useTor by remember { mutableStateOf(Settings.useTor) }
+        var torVirtualPort by remember { mutableStateOf(TextFieldValue(Settings.torVirtualPort.toString())) }
+        val torState = com.greenart7c3.citrine.service.TorManager.state.collectAsStateWithLifecycle()
         var autoBackup by remember { mutableStateOf(Settings.autoBackup) }
 
         var signedBy by remember { mutableStateOf(TextFieldValue("")) }
@@ -571,6 +574,59 @@ fun SettingsScreen(
                         label = { Text(stringResource(R.string.proxy_port)) },
                         singleLine = true,
                     )
+                }
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.use_tor),
+                    description = stringResource(R.string.use_tor_description),
+                    checked = useTor,
+                    onCheckedChange = {
+                        useTor = it
+                        Settings.useTor = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            if (useTor) {
+                item {
+                    OutlinedTextField(
+                        torVirtualPort,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        onValueChange = {
+                            torVirtualPort = it
+                            val parsed = it.text.toIntOrNull()
+                            if (parsed == null || parsed !in 1..65535) {
+                                Toast.makeText(context, context.getString(R.string.invalid_port), Toast.LENGTH_SHORT).show()
+                                return@OutlinedTextField
+                            }
+                            Settings.torVirtualPort = parsed
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                        label = { Text(stringResource(R.string.tor_virtual_port)) },
+                        singleLine = true,
+                    )
+                }
+                val displayHostname = when (val s = torState.value) {
+                    is com.greenart7c3.citrine.service.TorManager.State.Running -> s.hostname
+                    else -> Settings.onionHostname
+                }
+                if (displayHostname.isNotBlank()) {
+                    item {
+                        OutlinedTextField(
+                            value = TextFieldValue("ws://$displayHostname:${Settings.torVirtualPort}"),
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.onion_address)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            singleLine = true,
+                        )
+                    }
                 }
             }
             item {
