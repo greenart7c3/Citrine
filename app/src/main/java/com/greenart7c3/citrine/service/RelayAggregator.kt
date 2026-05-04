@@ -625,25 +625,33 @@ object RelayAggregator {
     /**
      * Validate that [ev] matches the filter we asked [relayUrl] for under [subId]. Misbehaving or
      * lax relays sometimes ship events outside of the REQ filter (wrong author, wrong kind, older
-     * than `since`, missing the required tag). Drop those before they hit the database.
+     * than `since`, missing the required tag). Returns null when it matches; otherwise a short
+     * human-readable reason for the caller to log.
      */
-    private fun matchesRequestedFilter(relayUrl: NormalizedRelayUrl, subId: String, ev: Event): Boolean {
-        val entry = activeRelaySubs[relayUrl]?.firstOrNull { it.subId == subId } ?: return false
+    private fun filterMismatchReason(relayUrl: NormalizedRelayUrl, subId: String, ev: Event): String? {
+        val entries = activeRelaySubs[relayUrl] ?: return "unknown relay (no active subs)"
+        val entry = entries.firstOrNull { it.subId == subId } ?: return "unknown subId"
 
         val kinds = Settings.relayAggregatorKinds
-        if (kinds.isNotEmpty() && ev.kind !in kinds) return false
+        if (kinds.isNotEmpty() && ev.kind !in kinds) {
+            return "kind ${ev.kind} not in requested kinds $kinds"
+        }
 
-        if (ev.createdAt < entry.since) return false
+        if (ev.createdAt < entry.since) {
+            return "createdAt ${ev.createdAt} < requested since ${entry.since}"
+        }
 
         if (entry.authors.isNotEmpty()) {
-            if (ev.pubKey !in entry.authors) return false
+            if (ev.pubKey !in entry.authors) {
+                return "pubkey ${ev.pubKey} not in requested authors (${entry.authors.size})"
+            }
         } else if (subId == taggedSubId) {
             val aggPubkey = Settings.aggregatorPubkey
-            if (aggPubkey.isBlank()) return false
+            if (aggPubkey.isBlank()) return "tagged sub active but aggregator pubkey is blank"
             val tagged = ev.tags.any { it.size > 1 && it[0] == "p" && it[1] == aggPubkey }
-            if (!tagged) return false
+            if (!tagged) return "missing required p-tag for $aggPubkey"
         }
-        return true
+        return null
     }
 
     private fun sendSubscribe(relay: NormalizedRelayUrl, subId: String, filters: List<Filter>) {
@@ -892,8 +900,9 @@ object RelayAggregator {
                     )
                 }
                 refreshStatusCounters()
-                if (!matchesRequestedFilter(relay.url, msg.subId, ev)) {
-                    Log.d(TAG, "Dropping event ${ev.id} from ${relay.url.url} sub ${msg.subId}: does not match requested filter")
+                val mismatchReason = filterMismatchReason(relay.url, msg.subId, ev)
+                if (mismatchReason != null) {
+                    Log.d(TAG, "Dropping event ${ev.id} (kind ${ev.kind}) from ${relay.url.url} sub ${msg.subId}: $mismatchReason")
                     return
                 }
                 val s = scope ?: return
