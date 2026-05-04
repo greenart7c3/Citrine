@@ -63,6 +63,7 @@ abstract class AppDatabase : RoomDatabase() {
 //                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
                 .setQueryExecutor(executor)
                 .setTransactionExecutor(transactionExecutor)
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
@@ -78,6 +79,8 @@ abstract class AppDatabase : RoomDatabase() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
                         db.execSQL("PRAGMA cache_size=-32000;")
+                        db.execSQL("PRAGMA synchronous=NORMAL;")
+                        db.execSQL("PRAGMA temp_store=MEMORY;")
                         _isDatabaseUpgrading.value = false
                     }
                 })
@@ -108,6 +111,7 @@ abstract class HistoryDatabase : RoomDatabase() {
                 "citrine_history_database",
             )
 //                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
@@ -123,6 +127,8 @@ abstract class HistoryDatabase : RoomDatabase() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
                         db.execSQL("PRAGMA cache_size=-32000;")
+                        db.execSQL("PRAGMA synchronous=NORMAL;")
+                        db.execSQL("PRAGMA temp_store=MEMORY;")
                     }
                 })
                 .build()

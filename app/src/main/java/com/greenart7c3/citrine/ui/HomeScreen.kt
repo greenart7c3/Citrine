@@ -57,6 +57,8 @@ import com.greenart7c3.citrine.database.AppDatabase.Companion.isDatabaseUpgradin
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.service.RelayAggregator
+import com.greenart7c3.citrine.ui.components.AggregatorStatusCard
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.DeleteAllDialog
 import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
@@ -216,11 +218,17 @@ fun HomeScreen(
                     Citrine.instance.cancelJob()
                     Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                         Citrine.job?.join()
+                        // Stop the aggregator before wiping the database so its listener
+                        // can't ingest new events into tables we're clearing. Restart it
+                        // afterwards if the setting is still enabled.
+                        val resumeAggregator = Settings.relayAggregatorEnabled
+                        if (resumeAggregator) RelayAggregator.stop()
                         Citrine.isImportingEvents = true
                         homeViewModel.setProgress("Deleting all events")
                         database.clearAllTables()
                         homeViewModel.setProgress("")
                         Citrine.isImportingEvents = false
+                        if (resumeAggregator) RelayAggregator.start(database)
                     }
                 },
             )
@@ -342,6 +350,14 @@ fun HomeScreen(
                         content = {
                             Text(stringResource(R.string.start))
                         },
+                    )
+                }
+
+                if (Settings.relayAggregatorEnabled) {
+                    val aggregatorStatus = RelayAggregator.status.collectAsStateWithLifecycle()
+                    AggregatorStatusCard(
+                        status = aggregatorStatus.value,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
 
