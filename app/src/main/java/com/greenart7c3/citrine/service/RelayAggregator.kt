@@ -11,6 +11,7 @@ import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.PubkeyTimestamp
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.Settings
+import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.fetchFirst
 import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.RelayConnectionListener
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.IRelayClient
@@ -492,6 +493,7 @@ object RelayAggregator {
                 }
                 val existing = activeRelaySubs[relay] ?: emptyList()
                 val entries = mutableListOf<ChunkSubscription>()
+                val pendingSubscribes = mutableListOf<Pair<String, List<Filter>>>()
                 chunks.forEachIndexed { idx, chunk ->
                     val reused = existing.getOrNull(idx)?.subId
                     val subId = reused ?: newSubId()
@@ -509,8 +511,6 @@ object RelayAggregator {
                             since = chunkSince,
                         ),
                     )
-                    sendSubscribe(relay, subId, filters)
-                    trackedSubIds.add(subId)
                     entries.add(
                         ChunkSubscription(
                             subId = subId,
@@ -518,7 +518,16 @@ object RelayAggregator {
                             since = chunkSince,
                         ),
                     )
+                    trackedSubIds.add(subId)
+                    pendingSubscribes.add(subId to filters)
                 }
+                // Publish the new entries to activeRelaySubs BEFORE issuing any REQ for this
+                // relay. Otherwise the listener races: an event response arrives between
+                // sendSubscribe() and the final swap below, lookup misses, and the event is
+                // dropped as "unknown relay (no active subs)".
+                newActiveSubs[relay] = entries
+                activeRelaySubs[relay] = entries.toMutableList()
+                pendingSubscribes.forEach { (subId, filters) -> sendSubscribe(relay, subId, filters) }
                 if (existing.size > chunks.size) {
                     for (i in chunks.size until existing.size) {
                         val oldId = existing[i].subId
@@ -527,7 +536,6 @@ object RelayAggregator {
                         closedExtraChunkSubs++
                     }
                 }
-                newActiveSubs[relay] = entries
             }
 
             var closedGoneRelaySubs = 0
@@ -576,9 +584,6 @@ object RelayAggregator {
                         "Tagged sub: $id to ${taggedSubRelays.size} relays " +
                             "(${readRelays.size} from inbox, ${FALLBACK_OUTBOX_RELAYS.size} fallback)",
                     )
-                    runCatching {
-                        Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
-                    }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
                     val taggedEntry = ChunkSubscription(
                         subId = id,
                         authors = emptySet(),
@@ -586,7 +591,17 @@ object RelayAggregator {
                     )
                     taggedSubRelays.forEach { relay ->
                         newActiveSubs.getOrPut(relay) { mutableListOf() }.add(taggedEntry)
+                        // Publish into live state BEFORE the subscribe call, same race fix as
+                        // the main-sub loop above.
+                        activeRelaySubs.compute(relay) { _, current ->
+                            val list = current?.let { ArrayList(it) } ?: ArrayList()
+                            list.add(taggedEntry)
+                            list
+                        }
                     }
+                    runCatching {
+                        Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
+                    }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
                 }
             } else {
                 taggedSubId?.let {
@@ -597,8 +612,15 @@ object RelayAggregator {
                 taggedSubId = null
             }
 
-            activeRelaySubs.clear()
-            activeRelaySubs.putAll(newActiveSubs)
+            // activeRelaySubs has been populated incrementally during the main-sub and
+            // tagged-sub passes (so the listener can resolve responses without racing the
+            // final swap). Just drop relays that vanished this refresh — their subIds were
+            // already unsubscribed in the closedGoneRelaySubs loop above.
+            val staleRelays = activeRelaySubs.keys.toSet() - newActiveSubs.keys
+            staleRelays.forEach { activeRelaySubs.remove(it) }
+            // Replace lists for relays that survived to make sure the in-memory state matches
+            // newActiveSubs exactly (e.g., picks up tagged-sub-only relays uniformly).
+            newActiveSubs.forEach { (relay, entries) -> activeRelaySubs[relay] = entries }
 
             val newSubscribedRelays = newActiveSubs.keys
             subscribedRelays.clear()
@@ -619,6 +641,38 @@ object RelayAggregator {
         } finally {
             refreshing.set(false)
         }
+    }
+
+    /**
+     * Validate that [ev] matches the filter we asked [relayUrl] for under [subId]. Misbehaving or
+     * lax relays sometimes ship events outside of the REQ filter (wrong author, wrong kind, older
+     * than `since`, missing the required tag). Returns null when it matches; otherwise a short
+     * human-readable reason for the caller to log.
+     */
+    private fun filterMismatchReason(relayUrl: NormalizedRelayUrl, subId: String, ev: Event): String? {
+        val entries = activeRelaySubs[relayUrl] ?: return "unknown relay (no active subs)"
+        val entry = entries.firstOrNull { it.subId == subId } ?: return "unknown subId"
+
+        val kinds = Settings.relayAggregatorKinds
+        if (kinds.isNotEmpty() && ev.kind !in kinds) {
+            return "kind ${ev.kind} not in requested kinds $kinds"
+        }
+
+        if (ev.createdAt < entry.since) {
+            return "createdAt ${ev.createdAt} < requested since ${entry.since}"
+        }
+
+        if (entry.authors.isNotEmpty()) {
+            if (ev.pubKey !in entry.authors) {
+                return "pubkey ${ev.pubKey} not in requested authors (${entry.authors.size})"
+            }
+        } else if (subId == taggedSubId) {
+            val aggPubkey = Settings.aggregatorPubkey
+            if (aggPubkey.isBlank()) return "tagged sub active but aggregator pubkey is blank"
+            val tagged = ev.tags.any { it.size > 1 && it[0] == "p" && it[1] == aggPubkey }
+            if (!tagged) return "missing required p-tag for $aggPubkey"
+        }
+        return null
     }
 
     private fun sendSubscribe(relay: NormalizedRelayUrl, subId: String, filters: List<Filter>) {
@@ -867,6 +921,11 @@ object RelayAggregator {
                     )
                 }
                 refreshStatusCounters()
+                val mismatchReason = filterMismatchReason(relay.url, msg.subId, ev)
+                if (mismatchReason != null) {
+                    Log.d(TAG, "Dropping event ${ev.id} (kind ${ev.kind}) from ${relay.url.url} sub ${msg.subId}: $mismatchReason")
+                    return
+                }
                 val s = scope ?: return
                 s.launch {
                     try {
