@@ -97,8 +97,6 @@ fun SettingsScreen(
         var startOnBoot by remember { mutableStateOf(Settings.startOnBoot) }
         var useAuth by remember { mutableStateOf(Settings.authEnabled) }
         var listenToPokeyBroadcasts by remember { mutableStateOf(Settings.listenToPokeyBroadcasts) }
-        var deleteExpiredEvents by remember { mutableStateOf(Settings.deleteExpiredEvents) }
-        var deleteEphemeralEvents by remember { mutableStateOf(Settings.deleteEphemeralEvents) }
         var useProxy by remember { mutableStateOf(Settings.useProxy) }
         var proxyPort by remember { mutableStateOf(TextFieldValue(Settings.proxyPort.toString())) }
         var autoBackup by remember { mutableStateOf(Settings.autoBackup) }
@@ -251,8 +249,6 @@ fun SettingsScreen(
                                 Settings.defaultValues()
                                 host = TextFieldValue(Settings.host)
                                 port = TextFieldValue(Settings.port.toString())
-                                deleteExpiredEvents = Settings.deleteExpiredEvents
-                                deleteEphemeralEvents = Settings.deleteEphemeralEvents
                                 relayName = TextFieldValue(Settings.name)
                                 relayOwnerPubkey = TextFieldValue(Settings.ownerPubkey)
                                 relayContact = TextFieldValue(Settings.contact)
@@ -736,30 +732,6 @@ fun SettingsScreen(
                         } else {
                             Citrine.instance.unregisterPokeyReceiver()
                         }
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.delete_expired_events),
-                    description = stringResource(R.string.delete_expired_events_description),
-                    checked = deleteExpiredEvents,
-                    onCheckedChange = {
-                        deleteExpiredEvents = it
-                        Settings.deleteExpiredEvents = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.delete_ephemeral_events),
-                    description = stringResource(R.string.delete_ephemeral_events_description),
-                    checked = deleteEphemeralEvents,
-                    onCheckedChange = {
-                        deleteEphemeralEvents = it
-                        Settings.deleteEphemeralEvents = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     },
                 )
             }

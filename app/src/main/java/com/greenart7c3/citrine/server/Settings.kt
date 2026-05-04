@@ -9,8 +9,6 @@ object Settings {
     var allowedPubKeys: Set<String> = emptySet()
     var allowedTaggedPubKeys: Set<String> = emptySet()
     var deleteEventsOlderThan: OlderThan = OlderThan.NEVER
-    var deleteExpiredEvents: Boolean = true
-    var deleteEphemeralEvents: Boolean = true
     var useSSL: Boolean = false
     var host: String = "127.0.0.1"
     var port: Int = 4869
@@ -51,8 +49,6 @@ object Settings {
         allowedPubKeys = emptySet()
         allowedTaggedPubKeys = emptySet()
         deleteEventsOlderThan = OlderThan.NEVER
-        deleteExpiredEvents = true
-        deleteEphemeralEvents = true
         useSSL = false
         host = "127.0.0.1"
         port = 4869
