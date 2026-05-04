@@ -25,9 +25,7 @@ object Settings {
     var startOnBoot = true
     var lastBackup: Long = 0L
     var useProxy = false
-    var proxyPort = 9050
     var useTor = false
-    var torVirtualPort = 80
     var onionHostname = ""
     var webClients = mutableMapOf<String, String>()
 
@@ -68,9 +66,7 @@ object Settings {
         startOnBoot = true
         lastBackup = 0L
         useProxy = false
-        proxyPort = 9050
         useTor = false
-        torVirtualPort = 80
         onionHostname = ""
         webClients = mutableMapOf()
         relayAggregatorEnabled = false

@@ -187,9 +187,9 @@ class WebSocketServerService : Service() {
         )
         CustomWebSocketService.server?.start()
 
-        if (Settings.useTor) {
-            Log.d(Citrine.TAG, "Starting Tor onion service")
-            TorManager.start(Settings.port, Settings.torVirtualPort)
+        if (Settings.useTor || Settings.useProxy) {
+            Log.d(Citrine.TAG, "Starting embedded Tor (hiddenService=${Settings.useTor}, socks=${Settings.useProxy})")
+            TorManager.start(Settings.port, enableHiddenService = Settings.useTor)
         }
 
         if (Settings.relayAggregatorEnabled) {

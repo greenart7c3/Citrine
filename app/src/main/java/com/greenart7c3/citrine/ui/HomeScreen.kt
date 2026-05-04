@@ -333,7 +333,7 @@ fun HomeScreen(
                         when (val s = torState) {
                             com.greenart7c3.citrine.service.TorManager.State.Off -> {
                                 if (Settings.onionHostname.isNotBlank()) {
-                                    val onionUrl = "ws://${Settings.onionHostname}:${Settings.torVirtualPort}"
+                                    val onionUrl = "ws://${Settings.onionHostname}"
                                     Text(
                                         onionUrl,
                                         color = Color.Gray,
@@ -351,23 +351,34 @@ fun HomeScreen(
                                 Text(stringResource(R.string.tor_starting))
                             }
                             is com.greenart7c3.citrine.service.TorManager.State.Running -> {
-                                val onionUrl = "ws://${s.hostname}:${Settings.torVirtualPort}"
-                                Text(
-                                    onionUrl,
-                                    modifier = Modifier.clickable {
-                                        coroutineScope.launch {
-                                            clipboardManager.setClipEntry(
-                                                ClipEntry(ClipData.newPlainText("", onionUrl)),
-                                            )
-                                        }
-                                    },
-                                )
+                                if (s.hostname.isNotBlank()) {
+                                    val onionUrl = "ws://${s.hostname}"
+                                    Text(
+                                        onionUrl,
+                                        modifier = Modifier.clickable {
+                                            coroutineScope.launch {
+                                                clipboardManager.setClipEntry(
+                                                    ClipEntry(ClipData.newPlainText("", onionUrl)),
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
                             }
                             is com.greenart7c3.citrine.service.TorManager.State.Error -> {
                                 Text(
                                     stringResource(R.string.tor_error, s.message),
                                     color = Color.Red,
                                 )
+                                ElevatedButton(
+                                    onClick = {
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            com.greenart7c3.citrine.service.TorManager.retry()
+                                        }
+                                    },
+                                ) {
+                                    Text(stringResource(R.string.tor_retry))
+                                }
                             }
                         }
                     }
