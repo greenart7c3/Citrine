@@ -47,10 +47,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.OlderThanType
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.ui.components.PubkeyInputRow
 import com.greenart7c3.citrine.ui.components.PubkeyListItem
 import com.greenart7c3.citrine.ui.components.SettingsRow
@@ -95,8 +97,6 @@ fun SettingsScreen(
         var startOnBoot by remember { mutableStateOf(Settings.startOnBoot) }
         var useAuth by remember { mutableStateOf(Settings.authEnabled) }
         var listenToPokeyBroadcasts by remember { mutableStateOf(Settings.listenToPokeyBroadcasts) }
-        var deleteExpiredEvents by remember { mutableStateOf(Settings.deleteExpiredEvents) }
-        var deleteEphemeralEvents by remember { mutableStateOf(Settings.deleteEphemeralEvents) }
         var useProxy by remember { mutableStateOf(Settings.useProxy) }
         var proxyPort by remember { mutableStateOf(TextFieldValue(Settings.proxyPort.toString())) }
         var useTor by remember { mutableStateOf(Settings.useTor) }
@@ -113,6 +113,18 @@ fun SettingsScreen(
         var allowedTaggedPubKeys by remember { mutableStateOf(Settings.allowedTaggedPubKeys) }
         var allowedKinds by remember { mutableStateOf(Settings.allowedKinds) }
         var neverDeleteFrom by remember { mutableStateOf(Settings.neverDeleteFrom) }
+
+        var relayAggregatorEnabled by remember { mutableStateOf(Settings.relayAggregatorEnabled) }
+        var aggregatorPubkey by remember { mutableStateOf(TextFieldValue(Settings.aggregatorPubkey)) }
+        var aggregatorKinds by remember { mutableStateOf(Settings.relayAggregatorKinds) }
+        var aggregatorKindInput by remember { mutableStateOf(TextFieldValue("")) }
+        var aggregatorRefreshMinutes by remember {
+            mutableStateOf(TextFieldValue(Settings.relayAggregatorRefreshMinutes.toString()))
+        }
+        var aggregatorIncludeTagged by remember { mutableStateOf(Settings.relayAggregatorIncludeTagged) }
+        var aggregatorWifiOnly by remember { mutableStateOf(Settings.relayAggregatorWifiOnly) }
+        var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
+        var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
 
         var shouldAddWebClient = false
         var webPath by remember { mutableStateOf(TextFieldValue("")) }
@@ -240,8 +252,6 @@ fun SettingsScreen(
                                 Settings.defaultValues()
                                 host = TextFieldValue(Settings.host)
                                 port = TextFieldValue(Settings.port.toString())
-                                deleteExpiredEvents = Settings.deleteExpiredEvents
-                                deleteEphemeralEvents = Settings.deleteEphemeralEvents
                                 relayName = TextFieldValue(Settings.name)
                                 relayOwnerPubkey = TextFieldValue(Settings.ownerPubkey)
                                 relayContact = TextFieldValue(Settings.contact)
@@ -255,7 +265,14 @@ fun SettingsScreen(
                                 allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
                                 allowedKinds = Settings.allowedKinds
                                 neverDeleteFrom = Settings.neverDeleteFrom
+                                relayAggregatorEnabled = Settings.relayAggregatorEnabled
+                                aggregatorPubkey = TextFieldValue(Settings.aggregatorPubkey)
+                                aggregatorKinds = Settings.relayAggregatorKinds
+                                aggregatorRefreshMinutes = TextFieldValue(Settings.relayAggregatorRefreshMinutes.toString())
+                                aggregatorIncludeTagged = Settings.relayAggregatorIncludeTagged
+                                aggregatorWifiOnly = Settings.relayAggregatorWifiOnly
                                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                                RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                                 onApplyChanges()
                                 delay(1500)
                                 isLoading = false
@@ -473,6 +490,209 @@ fun SettingsScreen(
                 )
             }
 
+            // ── Relay Aggregator ───────────────────────────────────────────────
+            stickyHeader {
+                SectionHeader(stringResource(R.string.relay_aggregator))
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.relay_aggregator),
+                    description = stringResource(R.string.relay_aggregator_description),
+                    checked = relayAggregatorEnabled,
+                    onCheckedChange = {
+                        if (it && Settings.aggregatorPubkey.isBlank() && Settings.relayAggregatorExtraRelays.isEmpty()) {
+                            Toast.makeText(context, context.getString(R.string.relay_aggregator_pubkey_or_relays_required), Toast.LENGTH_SHORT).show()
+                            return@SwitchSettingRow
+                        }
+                        relayAggregatorEnabled = it
+                        Settings.relayAggregatorEnabled = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+            item {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    value = aggregatorPubkey,
+                    label = { Text(stringResource(R.string.relay_aggregator_pubkey)) },
+                    onValueChange = { newValue ->
+                        aggregatorPubkey = newValue
+                        val text = newValue.text.trim()
+                        if (text.isBlank()) {
+                            Settings.aggregatorPubkey = ""
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                            return@OutlinedTextField
+                        }
+                        val key = text.toNostrKey()
+                        if (key == null) {
+                            return@OutlinedTextField
+                        }
+                        Settings.aggregatorPubkey = key
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                    singleLine = true,
+                )
+            }
+            item {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    value = aggregatorRefreshMinutes,
+                    label = { Text(stringResource(R.string.relay_aggregator_refresh_minutes)) },
+                    onValueChange = {
+                        aggregatorRefreshMinutes = it
+                        val n = it.text.toIntOrNull() ?: return@OutlinedTextField
+                        if (n < 1) return@OutlinedTextField
+                        Settings.relayAggregatorRefreshMinutes = n
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.relay_aggregator_include_tagged),
+                    description = stringResource(R.string.relay_aggregator_include_tagged_description),
+                    checked = aggregatorIncludeTagged,
+                    onCheckedChange = {
+                        aggregatorIncludeTagged = it
+                        Settings.relayAggregatorIncludeTagged = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.relay_aggregator_wifi_only),
+                    description = stringResource(R.string.relay_aggregator_wifi_only_description),
+                    checked = aggregatorWifiOnly,
+                    onCheckedChange = {
+                        aggregatorWifiOnly = it
+                        Settings.relayAggregatorWifiOnly = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+            item {
+                PubkeyInputRow(
+                    value = aggregatorKindInput,
+                    onValueChange = { aggregatorKindInput = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            aggregatorKindInput = TextFieldValue(text)
+                            val k = text.toIntOrNull()
+                            if (k == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                return@launch
+                            }
+                            val kinds = Settings.relayAggregatorKinds.toMutableSet().apply { add(k) }
+                            Settings.relayAggregatorKinds = kinds
+                            aggregatorKinds = kinds
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                            aggregatorKindInput = TextFieldValue("")
+                        }
+                    },
+                    onAdd = {
+                        val k = aggregatorKindInput.text.toIntOrNull()
+                        if (k == null) {
+                            Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val kinds = Settings.relayAggregatorKinds.toMutableSet().apply { add(k) }
+                        Settings.relayAggregatorKinds = kinds
+                        aggregatorKinds = kinds
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                        aggregatorKindInput = TextFieldValue("")
+                    },
+                )
+            }
+            if (aggregatorKinds.isEmpty()) {
+                item {
+                    EmptyListHint(stringResource(R.string.relay_aggregator_kinds_empty_hint))
+                }
+            }
+            items(aggregatorKinds.toList()) { k ->
+                PubkeyListItem(
+                    text = k.toString(),
+                    onDelete = {
+                        val kinds = Settings.relayAggregatorKinds.toMutableSet().apply { remove(k) }
+                        Settings.relayAggregatorKinds = kinds
+                        aggregatorKinds = kinds
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.relay_aggregator_extra_relays),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.relay_aggregator_extra_relays_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            item {
+                PubkeyInputRow(
+                    value = aggregatorExtraRelayInput,
+                    onValueChange = { aggregatorExtraRelayInput = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            aggregatorExtraRelayInput = TextFieldValue(text)
+                        }
+                    },
+                    onAdd = {
+                        val normalized = normalizeRelayInput(aggregatorExtraRelayInput.text)
+                        if (normalized == null) {
+                            Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val relays = Settings.relayAggregatorExtraRelays.toMutableSet().apply { add(normalized) }
+                        Settings.relayAggregatorExtraRelays = relays
+                        aggregatorExtraRelays = relays
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                        aggregatorExtraRelayInput = TextFieldValue("")
+                    },
+                )
+            }
+            if (aggregatorExtraRelays.isEmpty()) {
+                item {
+                    EmptyListHint(stringResource(R.string.relay_aggregator_extra_relays_hint))
+                }
+            }
+            items(aggregatorExtraRelays.toList()) { relay ->
+                PubkeyListItem(
+                    text = relay,
+                    onDelete = {
+                        val relays = Settings.relayAggregatorExtraRelays.toMutableSet().apply { remove(relay) }
+                        Settings.relayAggregatorExtraRelays = relays
+                        aggregatorExtraRelays = relays
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+
             // ── Others ─────────────────────────────────────────────────────────
             stickyHeader {
                 SectionHeader(stringResource(R.string.others))
@@ -515,30 +735,6 @@ fun SettingsScreen(
                         } else {
                             Citrine.instance.unregisterPokeyReceiver()
                         }
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.delete_expired_events),
-                    description = stringResource(R.string.delete_expired_events_description),
-                    checked = deleteExpiredEvents,
-                    onCheckedChange = {
-                        deleteExpiredEvents = it
-                        Settings.deleteExpiredEvents = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.delete_ephemeral_events),
-                    description = stringResource(R.string.delete_ephemeral_events_description),
-                    checked = deleteEphemeralEvents,
-                    onCheckedChange = {
-                        deleteEphemeralEvents = it
-                        Settings.deleteEphemeralEvents = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     },
                 )
             }
@@ -820,6 +1016,20 @@ fun isIpValid(ip: String): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_
 } else {
     @Suppress("DEPRECATION")
     Patterns.IP_ADDRESS.matcher(ip).matches()
+}
+
+fun normalizeRelayInput(raw: String): String? {
+    val trimmed = raw.trim().trimEnd('/')
+    if (trimmed.isEmpty()) return null
+    val withScheme = when {
+        trimmed.startsWith("wss://") || trimmed.startsWith("ws://") -> trimmed
+        "://" in trimmed -> return null
+        else -> "wss://$trimmed"
+    }
+    // Reject schemes we don't speak and anything without a host.
+    val afterScheme = withScheme.substringAfter("://")
+    if (afterScheme.isEmpty() || afterScheme.startsWith("/")) return null
+    return withScheme
 }
 
 fun String.toNostrKey(): String? {

@@ -112,7 +112,7 @@ class Citrine : Application() {
             cancelJob()
             job = applicationScope.launch(Dispatchers.IO) {
                 try {
-                    if (Settings.deleteEphemeralEvents && isActive) {
+                    if (isActive) {
                         val duration = measureTime {
                             Log.d(TAG, "Deleting ephemeral events older than one minute ago")
                             database.eventDao().deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
@@ -120,7 +120,7 @@ class Citrine : Application() {
                         Log.d(TAG, "Deleted ephemeral events in $duration")
                     }
 
-                    if (Settings.deleteExpiredEvents && isActive) {
+                    if (isActive) {
                         val duration = measureTime {
                             Log.d(TAG, "Deleting expired events")
                             database.eventDao().deleteEventsWithExpirations(TimeUtils.now())

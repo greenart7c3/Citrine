@@ -12,8 +12,6 @@ object PrefKeys {
     const val ALLOWED_PUB_KEYS = "allowed_pub_keys"
     const val ALLOWED_TAGGED_PUB_KEYS = "allowed_tagged_pub_keys"
     const val DELETE_EVENTS_OLDER_THAN = "delete_events_older_than"
-    const val DELETE_EXPIRED_EVENTS = "delete_expired_events"
-    const val DELETE_EPHEMERAL_EVENTS = "delete_ephemeral_events"
     const val USE_SSL = "use_ssl"
     const val HOST = "host"
     const val PORT = "port"
@@ -36,6 +34,15 @@ object PrefKeys {
     const val ONION_HOSTNAME = "onion_hostname"
 
     const val WEB_CLIENTS = "web_clients"
+
+    const val RELAY_AGGREGATOR_ENABLED = "relay_aggregator_enabled"
+    const val AGGREGATOR_PUBKEY = "aggregator_pubkey"
+    const val RELAY_AGGREGATOR_KINDS = "relay_aggregator_kinds"
+    const val RELAY_AGGREGATOR_REFRESH_MINUTES = "relay_aggregator_refresh_minutes"
+    const val RELAY_AGGREGATOR_INCLUDE_TAGGED = "relay_aggregator_include_tagged"
+    const val RELAY_AGGREGATOR_LAST_SYNC = "relay_aggregator_last_sync"
+    const val RELAY_AGGREGATOR_EXTRA_RELAYS = "relay_aggregator_extra_relays"
+    const val RELAY_AGGREGATOR_WIFI_ONLY = "relay_aggregator_wifi_only"
 }
 
 object LocalPreferences {
@@ -56,8 +63,6 @@ object LocalPreferences {
                 putStringSet(PrefKeys.ALLOWED_PUB_KEYS, settings.allowedPubKeys)
                 putStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, settings.allowedTaggedPubKeys)
                 putString(PrefKeys.DELETE_EVENTS_OLDER_THAN, settings.deleteEventsOlderThan.toString())
-                putBoolean(PrefKeys.DELETE_EXPIRED_EVENTS, settings.deleteExpiredEvents)
-                putBoolean(PrefKeys.DELETE_EPHEMERAL_EVENTS, settings.deleteEphemeralEvents)
                 putBoolean(PrefKeys.USE_SSL, settings.useSSL)
                 putString(PrefKeys.HOST, settings.host)
                 putInt(PrefKeys.PORT, settings.port)
@@ -84,6 +89,19 @@ object LocalPreferences {
                     remove(PrefKeys.WEB_CLIENTS)
                 }
 
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, settings.relayAggregatorEnabled)
+                putString(PrefKeys.AGGREGATOR_PUBKEY, settings.aggregatorPubkey)
+                if (settings.relayAggregatorKinds.isEmpty()) {
+                    remove(PrefKeys.RELAY_AGGREGATOR_KINDS)
+                } else {
+                    putString(PrefKeys.RELAY_AGGREGATOR_KINDS, settings.relayAggregatorKinds.joinToString(","))
+                }
+                putInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, settings.relayAggregatorRefreshMinutes)
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, settings.relayAggregatorIncludeTagged)
+                putLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, settings.relayAggregatorLastSync)
+                putStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, settings.relayAggregatorExtraRelays)
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
+
                 HttpClientManager.setDefaultProxyOnPort(settings.proxyPort)
             }
         }
@@ -95,8 +113,6 @@ object LocalPreferences {
         Settings.allowedPubKeys = prefs.getStringSet(PrefKeys.ALLOWED_PUB_KEYS, emptySet()) ?: emptySet()
         Settings.allowedTaggedPubKeys = prefs.getStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, emptySet()) ?: emptySet()
         Settings.deleteEventsOlderThan = OlderThan.valueOf(prefs.getString(PrefKeys.DELETE_EVENTS_OLDER_THAN, OlderThan.NEVER.toString()) ?: OlderThan.NEVER.toString())
-        Settings.deleteExpiredEvents = prefs.getBoolean(PrefKeys.DELETE_EXPIRED_EVENTS, true)
-        Settings.deleteEphemeralEvents = prefs.getBoolean(PrefKeys.DELETE_EPHEMERAL_EVENTS, true)
         Settings.useSSL = prefs.getBoolean(PrefKeys.USE_SSL, false)
         Settings.host = prefs.getString(PrefKeys.HOST, "127.0.0.1") ?: "127.0.0.1"
         Settings.port = prefs.getInt(PrefKeys.PORT, 4869)
@@ -120,6 +136,19 @@ object LocalPreferences {
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }
+
+        Settings.relayAggregatorEnabled = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, false)
+        Settings.aggregatorPubkey = prefs.getString(PrefKeys.AGGREGATOR_PUBKEY, "") ?: ""
+        Settings.relayAggregatorKinds = prefs.getString(PrefKeys.RELAY_AGGREGATOR_KINDS, null)
+            ?.split(",")
+            ?.mapNotNull { it.toIntOrNull() }
+            ?.toSet()
+            ?: setOf(0, 1, 3, 5, 6, 7, 1111, 10002, 30023)
+        Settings.relayAggregatorRefreshMinutes = prefs.getInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, 60)
+        Settings.relayAggregatorIncludeTagged = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, true)
+        Settings.relayAggregatorLastSync = prefs.getLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, 0L)
+        Settings.relayAggregatorExtraRelays = prefs.getStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, emptySet()) ?: emptySet()
+        Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, false)
 
         HttpClientManager.setDefaultProxyOnPort(Settings.proxyPort)
     }

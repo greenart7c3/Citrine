@@ -36,8 +36,41 @@ interface EventDao {
     suspend fun insertEvent(event: EventEntity): Long?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEvents(events: List<EventEntity>): List<Long>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     suspend fun insertTags(tags: List<TagEntity>): List<Long>?
+
+    @Query("SELECT id FROM EventEntity WHERE id IN (:ids)")
+    suspend fun existingIds(ids: List<String>): List<String>
+
+    @Query(
+        """
+        SELECT DISTINCT TagEntity.col1Value
+          FROM TagEntity
+         INNER JOIN EventEntity ON EventEntity.id = TagEntity.pkEvent
+         WHERE EventEntity.kind = 5
+           AND TagEntity.col0Name = 'e'
+           AND TagEntity.col1Value IN (:ids)
+        """,
+    )
+    suspend fun getDeletedEventsByIds(ids: List<String>): List<String>
+
+    @Query("DELETE FROM TagEntity WHERE pkEvent IN (:ids)")
+    suspend fun deleteTagsForIds(ids: List<String>)
+
+    @Transaction
+    suspend fun insertEventsWithTagsBatch(batch: List<EventWithTags>) {
+        if (batch.isEmpty()) return
+        val ids = batch.map { it.event.id }
+        ids.chunked(500).forEach { deleteTagsForIds(it) }
+        insertEvents(batch.map { it.event })
+        val tags = batch.flatMap { ewt ->
+            ewt.tags.onEach { it.pkEvent = ewt.event.id }
+        }
+        if (tags.isNotEmpty()) insertTags(tags)
+    }
 
     @Query("SELECT * FROM EventEntity WHERE id = :id")
     @Transaction
@@ -68,9 +101,24 @@ interface EventDao {
     @Transaction
     suspend fun getContactList(pubkey: String): EventWithTags?
 
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 0 ORDER BY createdAt DESC, id ASC LIMIT 1")
+    @Transaction
+    suspend fun getMetadata(pubkey: String): EventWithTags?
+
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10002 ORDER BY createdAt DESC, id ASC LIMIT 1")
     @Transaction
     suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?
+
+    @Query(
+        """
+        SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
+          FROM EventEntity
+         WHERE pubkey IN (:pubkeys)
+           AND kind IN (:kinds)
+         GROUP BY pubkey
+        """,
+    )
+    suspend fun getLatestEventTimestamps(pubkeys: List<String>, kinds: List<Int>): List<PubkeyTimestamp>
 
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC, id ASC")
     @Transaction
@@ -176,7 +224,6 @@ interface EventDao {
     suspend fun insertEventWithTags(
         dbEvent: EventWithTags,
         connection: Connection?,
-        sendEventToSubscriptions: Boolean = true,
     ) {
         // insertEvent returns null when the row already exists (IGNORE) —
         // skip tag I/O and fan-out in that case rather than orphaning the
@@ -187,10 +234,7 @@ interface EventDao {
             }
 
             insertTags(dbEvent.tags)
-
-            if (sendEventToSubscriptions && connection != null) {
-                EventSubscription.executeAll(dbEvent, connection)
-            }
+            EventSubscription.executeAll(dbEvent, connection)
         }
     }
 
@@ -323,6 +367,11 @@ interface EventDao {
 data class EventKey(
     val createdAt: Long,
     val id: String,
+)
+
+data class PubkeyTimestamp(
+    val pubkey: String,
+    val createdAt: Long,
 )
 
 class EventPagingSource(

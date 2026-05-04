@@ -8,6 +8,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.utils.isEphemeral
+import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import io.ktor.server.websocket.WebSocketServerSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -15,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
+
+private val ENVELOPE_MAPPER = JacksonMapper.mapper
 
 data class Subscription(
     val id: String,
@@ -25,6 +28,7 @@ data class Subscription(
     val count: Boolean,
 ) {
     val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    val escapedId: String = ENVELOPE_MAPPER.writeValueAsString(id)
 }
 
 object EventSubscription {
@@ -34,26 +38,18 @@ object EventSubscription {
 
     fun count(): Int = subscriptions.size()
 
+    @OptIn(DelicateCoroutinesApi::class)
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             val event = dbEvent.toEvent()
-            val eventJson = event.toJsonObject()
+            val eventJsonStr = ENVELOPE_MAPPER.writeValueAsString(event.toJsonObject())
             var sentEvent = false
-            subscriptions.snapshot().values.forEach {
-                it.subscription.filters.forEach filter@{ filter ->
-                    if (filter.test(event)) {
-                        it.subscription.connection.trySend(
-                            it.subscription.objectMapper.writeValueAsString(
-                                listOf(
-                                    "EVENT",
-                                    it.subscription.id,
-                                    eventJson,
-                                ),
-                            ),
-                        )
-
-                        sentEvent = true
-                    }
+            for (manager in subscriptions.snapshot().values) {
+                val sub = manager.subscription
+                if (sub.connection.session.outgoing.isClosedForSend) continue
+                if (sub.filters.any { it.test(event) }) {
+                    sub.connection.trySend("[\"EVENT\",${sub.escapedId},$eventJsonStr]")
+                    sentEvent = true
                 }
             }
             if (event.isEphemeral()) {
