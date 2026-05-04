@@ -98,7 +98,8 @@ fun SettingsScreen(
         var useAuth by remember { mutableStateOf(Settings.authEnabled) }
         var listenToPokeyBroadcasts by remember { mutableStateOf(Settings.listenToPokeyBroadcasts) }
         var useProxy by remember { mutableStateOf(Settings.useProxy) }
-        var proxyPort by remember { mutableStateOf(TextFieldValue(Settings.proxyPort.toString())) }
+        var useTor by remember { mutableStateOf(Settings.useTor) }
+        val torState = com.greenart7c3.citrine.service.TorManager.state.collectAsStateWithLifecycle()
         var autoBackup by remember { mutableStateOf(Settings.autoBackup) }
 
         var signedBy by remember { mutableStateOf(TextFieldValue("")) }
@@ -747,26 +748,36 @@ fun SettingsScreen(
                     },
                 )
             }
-            if (useProxy) {
-                item {
-                    OutlinedTextField(
-                        proxyPort,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        onValueChange = {
-                            proxyPort = it
-                            if (it.text.toIntOrNull() == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_port), Toast.LENGTH_SHORT).show()
-                                return@OutlinedTextField
-                            }
-                            Settings.proxyPort = it.text.toInt()
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                        label = { Text(stringResource(R.string.proxy_port)) },
-                        singleLine = true,
-                    )
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.use_tor),
+                    description = stringResource(R.string.use_tor_description),
+                    checked = useTor,
+                    onCheckedChange = {
+                        useTor = it
+                        Settings.useTor = it
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+            if (useTor) {
+                val displayHostname = when (val s = torState.value) {
+                    is com.greenart7c3.citrine.service.TorManager.State.Running -> s.hostname
+                    else -> Settings.onionHostname
+                }
+                if (displayHostname.isNotBlank()) {
+                    item {
+                        OutlinedTextField(
+                            value = TextFieldValue("ws://$displayHostname"),
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.onion_address)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            singleLine = true,
+                        )
+                    }
                 }
             }
             item {

@@ -3,7 +3,6 @@ package com.greenart7c3.citrine.service
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 
@@ -27,8 +26,9 @@ object PrefKeys {
     const val LISTEN_TO_POKEY_BROADCASTS = "listen_to_pokey_broadcasts"
     const val START_ON_BOOT = "start_on_boot"
     const val LAST_BACKUP = "last_backup"
-    const val PROXY_PORT = "proxy_port"
     const val USE_PROXY = "use_proxy"
+    const val USE_TOR = "use_tor"
+    const val ONION_HOSTNAME = "onion_hostname"
 
     const val WEB_CLIENTS = "web_clients"
 
@@ -75,8 +75,9 @@ object LocalPreferences {
                 putBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, settings.listenToPokeyBroadcasts)
                 putBoolean(PrefKeys.START_ON_BOOT, settings.startOnBoot)
                 putLong(PrefKeys.LAST_BACKUP, settings.lastBackup)
-                putInt(PrefKeys.PROXY_PORT, settings.proxyPort)
                 putBoolean(PrefKeys.USE_PROXY, settings.useProxy)
+                putBoolean(PrefKeys.USE_TOR, settings.useTor)
+                putString(PrefKeys.ONION_HOSTNAME, settings.onionHostname)
                 if (Settings.webClients.isNotEmpty()) {
                     putString(PrefKeys.WEB_CLIENTS, Settings.webClientsToJson())
                 } else {
@@ -95,8 +96,6 @@ object LocalPreferences {
                 putLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, settings.relayAggregatorLastSync)
                 putStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, settings.relayAggregatorExtraRelays)
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
-
-                HttpClientManager.setDefaultProxyOnPort(settings.proxyPort)
             }
         }
     }
@@ -122,8 +121,9 @@ object LocalPreferences {
         Settings.listenToPokeyBroadcasts = prefs.getBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, true)
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
         Settings.lastBackup = prefs.getLong(PrefKeys.LAST_BACKUP, 0)
-        Settings.proxyPort = prefs.getInt(PrefKeys.PROXY_PORT, 9050)
         Settings.useProxy = prefs.getBoolean(PrefKeys.USE_PROXY, false)
+        Settings.useTor = prefs.getBoolean(PrefKeys.USE_TOR, false)
+        Settings.onionHostname = prefs.getString(PrefKeys.ONION_HOSTNAME, "") ?: ""
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }
@@ -140,7 +140,5 @@ object LocalPreferences {
         Settings.relayAggregatorLastSync = prefs.getLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, 0L)
         Settings.relayAggregatorExtraRelays = prefs.getStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, emptySet()) ?: emptySet()
         Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, false)
-
-        HttpClientManager.setDefaultProxyOnPort(Settings.proxyPort)
     }
 }

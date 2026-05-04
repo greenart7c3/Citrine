@@ -25,6 +25,8 @@ ktlint = "14.2.0"
 securityCryptoKtx = "1.1.0"
 collections = "0.4.0"
 pagingCommon = "3.4.2"
+kmpTor = "2.6.0"
+kmpTorResource = "408.22.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -64,6 +66,10 @@ room-paging = { module = "androidx.room:room-paging", version.ref = "room" }
 paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "pagingCommon" }
 paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "pagingCommon" }
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "pagingCommon" }
+kmp-tor-runtime = { module = "io.matthewnelson.kmp-tor:runtime", version.ref = "kmpTor" }
+kmp-tor-runtime-service = { module = "io.matthewnelson.kmp-tor:runtime-service", version.ref = "kmpTor" }
+kmp-tor-runtime-service-ui = { module = "io.matthewnelson.kmp-tor:runtime-service-ui", version.ref = "kmpTor" }
+kmp-tor-resource-exec = { module = "io.matthewnelson.kmp-tor:resource-exec-tor", version.ref = "kmpTorResource" }
 
 [plugins]
 jetbrainsComposeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
