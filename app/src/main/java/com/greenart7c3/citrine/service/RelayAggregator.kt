@@ -459,11 +459,32 @@ object RelayAggregator {
                         "($fellBackCount author(s) had no NIP-65, fell back to ${FALLBACK_OUTBOX_RELAYS.size} relays)",
                 )
 
+                // Route each author's kind-0 fetch to their NIP-65 write relays when known,
+                // falling back to the indexer relays for authors without a relay list. Reuses
+                // the cached + freshly fetched NIP-65 maps resolved above.
+                val metadataRelayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
+                var metadataIndexerFallback = 0
+                for (pk in authors) {
+                    val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
+                    val targetRelays = relayListEvent
+                        ?.writeRelays()
+                        ?.mapNotNull { raw -> normalizeRemote(raw) }
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: run {
+                            metadataIndexerFallback++
+                            INDEXER_RELAYS
+                        }
+                    targetRelays.forEach { relay ->
+                        metadataRelayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
+                    }
+                }
                 val metadataMs = System.currentTimeMillis()
-                val metadataFetched = batchFetchMetadata(authors, INDEXER_RELAYS, BATCH_FETCH_TIMEOUT_MS)
+                val metadataFetched = batchFetchMetadata(metadataRelayToAuthors, BATCH_FETCH_TIMEOUT_MS)
                 Log.d(
                     TAG,
                     "Metadata batch fetch returned ${metadataFetched.size}/${authors.size} " +
+                        "from ${metadataRelayToAuthors.size} relays " +
+                        "($metadataIndexerFallback author(s) had no NIP-65, fell back to indexers) " +
                         "in ${System.currentTimeMillis() - metadataMs}ms",
                 )
             }
@@ -783,12 +804,17 @@ object RelayAggregator {
     }
 
     /**
-     * Fetches a single replaceable event of [kind] for [pubkey] from the indexer relays with
-     * no `since` filter. Used both for the user's own kind 3 / kind 0 and for opportunistic
-     * backfill of strangers whose events arrive on the tagged sub. Returns null on timeout,
-     * error, or relay miss.
+     * Fetches a single replaceable event of [kind] for [pubkey] from [relays] with no `since`
+     * filter. Used both for the user's own kind 3 / kind 0 and for opportunistic backfill of
+     * strangers whose events arrive on the tagged sub. Returns null on timeout, error, or
+     * relay miss.
      */
-    private suspend fun fetchSingleReplaceable(kind: Int, pubkey: String): Event? {
+    private suspend fun fetchSingleReplaceable(
+        kind: Int,
+        pubkey: String,
+        relays: List<NormalizedRelayUrl>,
+    ): Event? {
+        if (relays.isEmpty()) return null
         val filters = listOf(
             Filter(
                 kinds = listOf(kind),
@@ -800,7 +826,7 @@ object RelayAggregator {
         if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
         return try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                Citrine.instance.client.fetchFirst(subId, INDEXER_RELAYS.associateWith { filters })
+                Citrine.instance.client.fetchFirst(subId, relays.associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e
@@ -813,26 +839,52 @@ object RelayAggregator {
     }
 
     /**
-     * For an author we just saw an event from but who has no profile / contact list in the
-     * local DB, pull both from the indexer relays once and persist them. No-op when both are
-     * already cached. Caller is responsible for deduping repeated invocations via
-     * [backfilledPubkeys].
+     * For an author we just saw an event from but who has no profile / contact list / NIP-65
+     * relay list in the local DB, pull whatever's missing from the indexer relays once and
+     * persist it. The kind-10002 list is fetched first so that, if we just learned it, we can
+     * route the kind-0 fetch to the user's own write relays instead of the indexers. No-op
+     * when everything is already cached. Caller is responsible for deduping repeated
+     * invocations via [backfilledPubkeys].
      */
     private suspend fun backfillUserIfMissing(dao: EventDao, pubkey: String) {
         val needsMetadata = dao.getMetadata(pubkey) == null
         val needsContactList = dao.getContactList(pubkey) == null
-        if (!needsMetadata && !needsContactList) return
-        Log.d(TAG, "Backfilling unknown user $pubkey (metadata=$needsMetadata, contacts=$needsContactList)")
+        val needsRelayList = dao.getAdvertisedRelayList(pubkey) == null
+        if (!needsMetadata && !needsContactList && !needsRelayList) return
+        Log.d(
+            TAG,
+            "Backfilling unknown user $pubkey " +
+                "(metadata=$needsMetadata, contacts=$needsContactList, relayList=$needsRelayList)",
+        )
+        if (needsRelayList) {
+            fetchSingleReplaceable(AdvertisedRelayListEvent.KIND, pubkey, INDEXER_RELAYS)?.let {
+                CustomWebSocketService.server?.innerProcessEvent(it, null)
+            }
+        }
         if (needsMetadata) {
-            fetchSingleReplaceable(MetadataEvent.KIND, pubkey)?.let {
+            val metadataRelays = userWriteRelays(dao, pubkey) ?: INDEXER_RELAYS
+            fetchSingleReplaceable(MetadataEvent.KIND, pubkey, metadataRelays)?.let {
                 CustomWebSocketService.server?.innerProcessEvent(it, null)
             }
         }
         if (needsContactList) {
-            fetchSingleReplaceable(ContactListEvent.KIND, pubkey)?.let {
+            fetchSingleReplaceable(ContactListEvent.KIND, pubkey, INDEXER_RELAYS)?.let {
                 CustomWebSocketService.server?.innerProcessEvent(it, null)
             }
         }
+    }
+
+    /**
+     * Returns [pubkey]'s NIP-65 write relays as a normalized list, or null when no relay list
+     * is cached or the cached list has no usable write relays. Reads the freshly persisted
+     * value from the DB so a kind-10002 fetch performed earlier in the same refresh is visible.
+     */
+    private suspend fun userWriteRelays(dao: EventDao, pubkey: String): List<NormalizedRelayUrl>? {
+        val relayList = dao.getAdvertisedRelayList(pubkey)?.toEvent() as? AdvertisedRelayListEvent
+        return relayList
+            ?.writeRelays()
+            ?.mapNotNull { raw -> normalizeRemote(raw) }
+            ?.takeIf { it.isNotEmpty() }
     }
 
     private suspend fun loadOrBootstrapContactList(
@@ -962,23 +1014,23 @@ object RelayAggregator {
     }
 
     /**
-     * Issues one subscription to all [relays] asking for kind-0 (metadata) events authored by
-     * any pubkey in [pubkeys] with no `since` filter, and collects the latest per author. Used
-     * to keep follow profiles fresh without subjecting kind 0 to the main subscription's
-     * `since` ceiling. Returns when every relay sends EOSE or after [timeoutMs] elapses.
+     * Issues a single subscription that asks each relay in [relayToAuthors] for kind-0 events
+     * authored by the pubkeys mapped to it (no `since`), then collects the latest per author.
+     * The per-relay routing lets the caller send each author's metadata fetch to their own
+     * NIP-65 write relays when known, falling back to indexer relays otherwise. Returns when
+     * every relay sends EOSE or after [timeoutMs] elapses.
      */
     private suspend fun batchFetchMetadata(
-        pubkeys: Set<String>,
-        relays: List<NormalizedRelayUrl>,
+        relayToAuthors: Map<NormalizedRelayUrl, Set<String>>,
         timeoutMs: Long,
     ): Map<String, MetadataEvent> {
-        if (pubkeys.isEmpty() || relays.isEmpty()) return emptyMap()
+        if (relayToAuthors.isEmpty()) return emptyMap()
         if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
 
         val results = ConcurrentHashMap<String, MetadataEvent>()
         val subId = newSubId()
         val eoseSeen: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
-        val expected = relays.toSet()
+        val expected = relayToAuthors.keys
         val done = CompletableDeferred<Unit>()
 
         val collector = object : RelayConnectionListener {
@@ -1026,14 +1078,19 @@ object RelayAggregator {
 
         Citrine.instance.client.addConnectionListener(collector)
         try {
-            val filters = pubkeys.toList().chunked(MAX_AUTHORS_PER_SUB).map { chunk ->
-                Filter(
-                    kinds = listOf(MetadataEvent.KIND),
-                    authors = chunk,
-                )
+            // One filter list per relay so each relay only gets asked about the authors that
+            // actually advertised it as a write relay. Authors with no NIP-65 are routed to
+            // the indexer relays by the caller.
+            val perRelayFilters = relayToAuthors.mapValues { (_, authors) ->
+                authors.toList().chunked(MAX_AUTHORS_PER_SUB).map { chunk ->
+                    Filter(
+                        kinds = listOf(MetadataEvent.KIND),
+                        authors = chunk,
+                    )
+                }
             }
             runCatching {
-                Citrine.instance.client.subscribe(subId, relays.associateWith { filters })
+                Citrine.instance.client.subscribe(subId, perRelayFilters)
             }.onFailure { Log.e(TAG, "batch metadata subscribe failed", it) }
             withTimeoutOrNull(timeoutMs) { done.await() }
         } finally {
