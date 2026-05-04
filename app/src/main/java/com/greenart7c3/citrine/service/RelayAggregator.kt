@@ -493,6 +493,7 @@ object RelayAggregator {
                 }
                 val existing = activeRelaySubs[relay] ?: emptyList()
                 val entries = mutableListOf<ChunkSubscription>()
+                val pendingSubscribes = mutableListOf<Pair<String, List<Filter>>>()
                 chunks.forEachIndexed { idx, chunk ->
                     val reused = existing.getOrNull(idx)?.subId
                     val subId = reused ?: newSubId()
@@ -510,8 +511,6 @@ object RelayAggregator {
                             since = chunkSince,
                         ),
                     )
-                    sendSubscribe(relay, subId, filters)
-                    trackedSubIds.add(subId)
                     entries.add(
                         ChunkSubscription(
                             subId = subId,
@@ -519,7 +518,16 @@ object RelayAggregator {
                             since = chunkSince,
                         ),
                     )
+                    trackedSubIds.add(subId)
+                    pendingSubscribes.add(subId to filters)
                 }
+                // Publish the new entries to activeRelaySubs BEFORE issuing any REQ for this
+                // relay. Otherwise the listener races: an event response arrives between
+                // sendSubscribe() and the final swap below, lookup misses, and the event is
+                // dropped as "unknown relay (no active subs)".
+                newActiveSubs[relay] = entries
+                activeRelaySubs[relay] = entries.toMutableList()
+                pendingSubscribes.forEach { (subId, filters) -> sendSubscribe(relay, subId, filters) }
                 if (existing.size > chunks.size) {
                     for (i in chunks.size until existing.size) {
                         val oldId = existing[i].subId
@@ -528,7 +536,6 @@ object RelayAggregator {
                         closedExtraChunkSubs++
                     }
                 }
-                newActiveSubs[relay] = entries
             }
 
             var closedGoneRelaySubs = 0
@@ -577,9 +584,6 @@ object RelayAggregator {
                         "Tagged sub: $id to ${taggedSubRelays.size} relays " +
                             "(${readRelays.size} from inbox, ${FALLBACK_OUTBOX_RELAYS.size} fallback)",
                     )
-                    runCatching {
-                        Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
-                    }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
                     val taggedEntry = ChunkSubscription(
                         subId = id,
                         authors = emptySet(),
@@ -587,7 +591,17 @@ object RelayAggregator {
                     )
                     taggedSubRelays.forEach { relay ->
                         newActiveSubs.getOrPut(relay) { mutableListOf() }.add(taggedEntry)
+                        // Publish into live state BEFORE the subscribe call, same race fix as
+                        // the main-sub loop above.
+                        activeRelaySubs.compute(relay) { _, current ->
+                            val list = current?.let { ArrayList(it) } ?: ArrayList()
+                            list.add(taggedEntry)
+                            list
+                        }
                     }
+                    runCatching {
+                        Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
+                    }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
                 }
             } else {
                 taggedSubId?.let {
@@ -598,8 +612,15 @@ object RelayAggregator {
                 taggedSubId = null
             }
 
-            activeRelaySubs.clear()
-            activeRelaySubs.putAll(newActiveSubs)
+            // activeRelaySubs has been populated incrementally during the main-sub and
+            // tagged-sub passes (so the listener can resolve responses without racing the
+            // final swap). Just drop relays that vanished this refresh — their subIds were
+            // already unsubscribed in the closedGoneRelaySubs loop above.
+            val staleRelays = activeRelaySubs.keys.toSet() - newActiveSubs.keys
+            staleRelays.forEach { activeRelaySubs.remove(it) }
+            // Replace lists for relays that survived to make sure the in-memory state matches
+            // newActiveSubs exactly (e.g., picks up tagged-sub-only relays uniformly).
+            newActiveSubs.forEach { (relay, entries) -> activeRelaySubs[relay] = entries }
 
             val newSubscribedRelays = newActiveSubs.keys
             subscribedRelays.clear()
