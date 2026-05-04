@@ -48,9 +48,16 @@ object HttpClientManager {
     val DEFAULT_TIMEOUT_ON_WIFI: Duration = Duration.ofSeconds(10L)
     val DEFAULT_TIMEOUT_ON_MOBILE: Duration = Duration.ofSeconds(30L)
 
+    // Routes connections at an immediately-refused local port so that requests
+    // requiring a proxy fail closed (rather than leaking direct) while no real
+    // proxy is configured.
+    private val failClosedProxy: Proxy =
+        Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", 1))
+
     private var defaultTimeout = DEFAULT_TIMEOUT_ON_WIFI
     private var defaultHttpClient: OkHttpClient? = null
     private var defaultHttpClientWithoutProxy: OkHttpClient? = null
+    private var failClosedHttpClient: OkHttpClient? = null
     private var userAgent: String = "Amethyst"
 
     private var currentProxy: Proxy? = null
@@ -63,7 +70,7 @@ object HttpClientManager {
             currentProxy = proxy
 
             // recreates singleton
-            defaultHttpClient = buildHttpClient(currentProxy, defaultTimeout)
+            defaultHttpClient = buildHttpClient(currentProxy ?: failClosedProxy, defaultTimeout)
         }
     }
 
@@ -73,8 +80,9 @@ object HttpClientManager {
             defaultTimeout = timeout
 
             // recreates singleton
-            defaultHttpClient = buildHttpClient(currentProxy, defaultTimeout)
+            defaultHttpClient = buildHttpClient(currentProxy ?: failClosedProxy, defaultTimeout)
             defaultHttpClientWithoutProxy = buildHttpClient(null, defaultTimeout)
+            failClosedHttpClient = buildHttpClient(failClosedProxy, defaultTimeout)
         }
     }
 
@@ -82,8 +90,9 @@ object HttpClientManager {
         Log.d(Citrine.TAG, "Changing userAgent")
         if (userAgent != userAgentHeader) {
             userAgent = userAgentHeader
-            defaultHttpClient = buildHttpClient(currentProxy, defaultTimeout)
+            defaultHttpClient = buildHttpClient(currentProxy ?: failClosedProxy, defaultTimeout)
             defaultHttpClientWithoutProxy = buildHttpClient(null, defaultTimeout)
+            failClosedHttpClient = buildHttpClient(failClosedProxy, defaultTimeout)
         }
     }
 
@@ -106,10 +115,20 @@ object HttpClientManager {
     }
 
     fun getHttpClient(useProxy: Boolean): OkHttpClient = if (useProxy) {
-        if (defaultHttpClient == null) {
-            defaultHttpClient = buildHttpClient(currentProxy, defaultTimeout)
+        if (currentProxy == null) {
+            // Fail closed: caller asked for proxied traffic but no proxy is up.
+            // Return a client whose connections fail at connect time rather
+            // than silently going direct.
+            if (failClosedHttpClient == null) {
+                failClosedHttpClient = buildHttpClient(failClosedProxy, defaultTimeout)
+            }
+            failClosedHttpClient!!
+        } else {
+            if (defaultHttpClient == null) {
+                defaultHttpClient = buildHttpClient(currentProxy, defaultTimeout)
+            }
+            defaultHttpClient!!
         }
-        defaultHttpClient!!
     } else {
         if (defaultHttpClientWithoutProxy == null) {
             defaultHttpClientWithoutProxy = buildHttpClient(null, defaultTimeout)
