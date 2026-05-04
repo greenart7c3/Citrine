@@ -101,6 +101,10 @@ interface EventDao {
     @Transaction
     suspend fun getContactList(pubkey: String): EventWithTags?
 
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 0 ORDER BY createdAt DESC, id ASC LIMIT 1")
+    @Transaction
+    suspend fun getMetadata(pubkey: String): EventWithTags?
+
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10002 ORDER BY createdAt DESC, id ASC LIMIT 1")
     @Transaction
     suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?

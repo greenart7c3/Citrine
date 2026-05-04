@@ -107,6 +107,11 @@ object RelayAggregator {
     // their full window.
     private val lastEventByPubkey: ConcurrentHashMap<String, Long> = ConcurrentHashMap()
 
+    // Pubkeys we've already considered for opportunistic kind-0 / kind-3 backfill in this
+    // session. Add()-on-first-sight guarantees we only spawn one backfill coroutine per pubkey
+    // even when many events arrive in quick succession.
+    private val backfilledPubkeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     private val subscribedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
     private val connectedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
     private val eventsReceived = AtomicLong(0)
@@ -199,6 +204,7 @@ object RelayAggregator {
         subscribedRelays.clear()
         connectedRelays.clear()
         lastEventByPubkey.clear()
+        backfilledPubkeys.clear()
         eventsReceived.set(0)
         authorCount = 0
         taggedSubId = null
@@ -776,6 +782,59 @@ object RelayAggregator {
         return NormalizedRelayUrl(url = n.url)
     }
 
+    /**
+     * Fetches a single replaceable event of [kind] for [pubkey] from the indexer relays with
+     * no `since` filter. Used both for the user's own kind 3 / kind 0 and for opportunistic
+     * backfill of strangers whose events arrive on the tagged sub. Returns null on timeout,
+     * error, or relay miss.
+     */
+    private suspend fun fetchSingleReplaceable(kind: Int, pubkey: String): Event? {
+        val filters = listOf(
+            Filter(
+                kinds = listOf(kind),
+                authors = listOf(pubkey),
+                limit = 1,
+            ),
+        )
+        val subId = newSubId()
+        if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
+        return try {
+            withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
+                Citrine.instance.client.fetchFirst(subId, INDEXER_RELAYS.associateWith { filters })
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "fetch kind $kind for $pubkey failed", e)
+            null
+        } finally {
+            runCatching { Citrine.instance.client.unsubscribe(subId) }
+        }
+    }
+
+    /**
+     * For an author we just saw an event from but who has no profile / contact list in the
+     * local DB, pull both from the indexer relays once and persist them. No-op when both are
+     * already cached. Caller is responsible for deduping repeated invocations via
+     * [backfilledPubkeys].
+     */
+    private suspend fun backfillUserIfMissing(dao: EventDao, pubkey: String) {
+        val needsMetadata = dao.getMetadata(pubkey) == null
+        val needsContactList = dao.getContactList(pubkey) == null
+        if (!needsMetadata && !needsContactList) return
+        Log.d(TAG, "Backfilling unknown user $pubkey (metadata=$needsMetadata, contacts=$needsContactList)")
+        if (needsMetadata) {
+            fetchSingleReplaceable(MetadataEvent.KIND, pubkey)?.let {
+                CustomWebSocketService.server?.innerProcessEvent(it, null)
+            }
+        }
+        if (needsContactList) {
+            fetchSingleReplaceable(ContactListEvent.KIND, pubkey)?.let {
+                CustomWebSocketService.server?.innerProcessEvent(it, null)
+            }
+        }
+    }
+
     private suspend fun loadOrBootstrapContactList(
         dao: EventDao,
         pubkey: String,
@@ -1025,6 +1084,23 @@ object RelayAggregator {
                         throw e
                     } catch (e: Exception) {
                         Log.e(TAG, "innerProcessEvent failed", e)
+                    }
+                }
+                // First time we see this author in the live stream, kick off a one-shot
+                // backfill of their kind 0 / kind 3 from the indexer relays so unknown users
+                // surfaced via the tagged sub get a profile + follow list. The DAO check
+                // inside backfillUserIfMissing skips the network call when both are already
+                // cached, so authors covered by the periodic batch fetch are a no-op.
+                val db = database
+                if (db != null && backfilledPubkeys.add(ev.pubKey)) {
+                    s.launch {
+                        try {
+                            backfillUserIfMissing(db.eventDao(), ev.pubKey)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e(TAG, "backfill for ${ev.pubKey} failed", e)
+                        }
                     }
                 }
             }
