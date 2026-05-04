@@ -11,6 +11,7 @@ import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.PubkeyTimestamp
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.server.Settings
+import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.fetchFirst
 import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.RelayConnectionListener
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.IRelayClient
@@ -621,6 +622,30 @@ object RelayAggregator {
         }
     }
 
+    /**
+     * Validate that [ev] matches the filter we asked [relayUrl] for under [subId]. Misbehaving or
+     * lax relays sometimes ship events outside of the REQ filter (wrong author, wrong kind, older
+     * than `since`, missing the required tag). Drop those before they hit the database.
+     */
+    private fun matchesRequestedFilter(relayUrl: NormalizedRelayUrl, subId: String, ev: Event): Boolean {
+        val entry = activeRelaySubs[relayUrl]?.firstOrNull { it.subId == subId } ?: return false
+
+        val kinds = Settings.relayAggregatorKinds
+        if (kinds.isNotEmpty() && ev.kind !in kinds) return false
+
+        if (ev.createdAt < entry.since) return false
+
+        if (entry.authors.isNotEmpty()) {
+            if (ev.pubKey !in entry.authors) return false
+        } else if (subId == taggedSubId) {
+            val aggPubkey = Settings.aggregatorPubkey
+            if (aggPubkey.isBlank()) return false
+            val tagged = ev.tags.any { it.size > 1 && it[0] == "p" && it[1] == aggPubkey }
+            if (!tagged) return false
+        }
+        return true
+    }
+
     private fun sendSubscribe(relay: NormalizedRelayUrl, subId: String, filters: List<Filter>) {
         runCatching {
             Citrine.instance.client.subscribe(subId, mapOf(relay to filters))
@@ -867,6 +892,10 @@ object RelayAggregator {
                     )
                 }
                 refreshStatusCounters()
+                if (!matchesRequestedFilter(relay.url, msg.subId, ev)) {
+                    Log.d(TAG, "Dropping event ${ev.id} from ${relay.url.url} sub ${msg.subId}: does not match requested filter")
+                    return
+                }
                 val s = scope ?: return
                 s.launch {
                     try {
