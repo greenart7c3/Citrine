@@ -36,8 +36,41 @@ interface EventDao {
     suspend fun insertEvent(event: EventEntity): Long?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEvents(events: List<EventEntity>): List<Long>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     suspend fun insertTags(tags: List<TagEntity>): List<Long>?
+
+    @Query("SELECT id FROM EventEntity WHERE id IN (:ids)")
+    suspend fun existingIds(ids: List<String>): List<String>
+
+    @Query(
+        """
+        SELECT DISTINCT TagEntity.col1Value
+          FROM TagEntity
+         INNER JOIN EventEntity ON EventEntity.id = TagEntity.pkEvent
+         WHERE EventEntity.kind = 5
+           AND TagEntity.col0Name = 'e'
+           AND TagEntity.col1Value IN (:ids)
+        """,
+    )
+    suspend fun getDeletedEventsByIds(ids: List<String>): List<String>
+
+    @Query("DELETE FROM TagEntity WHERE pkEvent IN (:ids)")
+    suspend fun deleteTagsForIds(ids: List<String>)
+
+    @Transaction
+    suspend fun insertEventsWithTagsBatch(batch: List<EventWithTags>) {
+        if (batch.isEmpty()) return
+        val ids = batch.map { it.event.id }
+        ids.chunked(500).forEach { deleteTagsForIds(it) }
+        insertEvents(batch.map { it.event })
+        val tags = batch.flatMap { ewt ->
+            ewt.tags.onEach { it.pkEvent = ewt.event.id }
+        }
+        if (tags.isNotEmpty()) insertTags(tags)
+    }
 
     @Query("SELECT * FROM EventEntity WHERE id = :id")
     @Transaction
