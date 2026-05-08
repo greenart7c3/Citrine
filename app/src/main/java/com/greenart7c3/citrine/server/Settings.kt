@@ -25,6 +25,7 @@ object Settings {
     var startOnBoot = true
     var lastBackup: Long = 0L
     var useProxy = false
+    var proxyAllUrls = false
     var useTor = false
     var onionHostname = ""
     var webClients = mutableMapOf<String, String>()
@@ -66,6 +67,7 @@ object Settings {
         startOnBoot = true
         lastBackup = 0L
         useProxy = false
+        proxyAllUrls = false
         useTor = false
         onionHostname = ""
         webClients = mutableMapOf()

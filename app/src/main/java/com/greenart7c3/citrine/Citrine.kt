@@ -39,7 +39,25 @@ class Citrine : Application() {
         }
     val applicationScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
     val factory = OkHttpWebSocket.Builder { url ->
-        HttpClientManager.getHttpClient(if (isPrivateIp(url.url)) false else Settings.useProxy)
+        HttpClientManager.getHttpClient(shouldUseProxyFor(url.url))
+    }
+
+    fun shouldUseProxyFor(url: String): Boolean {
+        if (!Settings.useProxy) return false
+        if (isPrivateIp(url)) return false
+        if (Settings.proxyAllUrls) return true
+        return isOnionUrl(url)
+    }
+
+    fun isOnionUrl(url: String): Boolean {
+        val host = url
+            .substringAfter("://", url)
+            .substringBefore('/')
+            .substringBefore('?')
+            .substringBefore('#')
+            .substringBefore(':')
+            .lowercase()
+        return host.endsWith(".onion")
     }
     val client: NostrClient = NostrClient(factory, applicationScope)
 
