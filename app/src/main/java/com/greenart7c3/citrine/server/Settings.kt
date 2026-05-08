@@ -42,8 +42,9 @@ object Settings {
 
     // When true, the aggregator suspends subscriptions whenever the active network is
     // metered (mobile data or metered Wi-Fi) and resumes once an unmetered network is
-    // available again.
-    var relayAggregatorWifiOnly: Boolean = false
+    // available again. Default-on because the aggregator holds many WebSockets open and
+    // is the dominant battery cost on cellular.
+    var relayAggregatorWifiOnly: Boolean = true
 
     fun defaultValues() {
         allowedKinds = emptySet()
@@ -76,7 +77,7 @@ object Settings {
         relayAggregatorIncludeTagged = true
         relayAggregatorLastSync = 0L
         relayAggregatorExtraRelays = emptySet()
-        relayAggregatorWifiOnly = false
+        relayAggregatorWifiOnly = true
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)

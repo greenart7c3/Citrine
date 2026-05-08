@@ -33,8 +33,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -89,6 +92,23 @@ object RelayAggregator {
     private const val OVERLAP_SEC = 5L * 60L
     private const val BATCH_FETCH_TIMEOUT_MS = 15_000L
 
+    // Floor on time between two refreshes regardless of trigger (loop tick, network resume,
+    // config change). Prevents back-to-back full bootstraps from a flapping connection.
+    private const val MIN_REFRESH_INTERVAL_MS = 30_000L
+
+    // Cap on how many configured intervals we'll skip after consecutive refresh failures.
+    private const val MAX_FAILURE_BACKOFF_MULTIPLIER = 8
+
+    // Bounded buffer for events handed off from the relay listener to the consumer
+    // coroutine. DROP_OLDEST means a chatty relay can't OOM the IO pool; the next refresh
+    // re-queries with a `since` derived from the DB so any dropped event is recoverable.
+    private const val EVENT_CHANNEL_CAPACITY = 256
+
+    // How long to wait after the last connectivity callback before re-evaluating the
+    // network state. Collapses bursts of `onCapabilitiesChanged` during signal flapping
+    // into a single evaluation.
+    private const val NETWORK_DEBOUNCE_MS = 2_000L
+
     @Volatile private var scope: CoroutineScope? = null
 
     @Volatile private var listener: AggregatorListener? = null
@@ -135,6 +155,26 @@ object RelayAggregator {
 
     @Volatile private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
+    // Debounced re-evaluation of network state. Cancelled and rescheduled by every
+    // ConnectivityManager callback so a burst of changes only triggers one evaluation.
+    @Volatile private var networkEvalJob: Job? = null
+
+    // Hand-off queues from AggregatorListener to single consumer coroutines. Replacing
+    // per-event `scope.launch { ... }` cuts coroutine creation under heavy event load.
+    @Volatile private var eventChannel: Channel<Event>? = null
+
+    @Volatile private var backfillChannel: Channel<String>? = null
+
+    // Wall-clock time of the last refreshAndSubscribe completion. Used to throttle
+    // back-to-back refresh requests (start, network resume, config change).
+    @Volatile private var lastRefreshFinishedAt: Long = 0L
+
+    // Number of consecutive refresh failures. Multiplies the loop sleep by 2^n up to
+    // MAX_FAILURE_BACKOFF_MULTIPLIER, then resets on success.
+    @Volatile private var consecutiveFailures: Int = 0
+
+    private val droppedEvents = AtomicLong(0)
+
     private val refreshing = AtomicBoolean(false)
 
     private val _status = MutableStateFlow(AggregatorStatus())
@@ -155,6 +195,38 @@ object RelayAggregator {
         val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = newScope
 
+        val newEventChannel = Channel<Event>(EVENT_CHANNEL_CAPACITY, BufferOverflow.DROP_OLDEST)
+        val newBackfillChannel = Channel<String>(EVENT_CHANNEL_CAPACITY, BufferOverflow.DROP_OLDEST)
+        eventChannel = newEventChannel
+        backfillChannel = newBackfillChannel
+
+        // Single consumer for inbound events: persist sequentially instead of spawning a
+        // coroutine per event in onIncomingMessage.
+        newScope.launch {
+            for (ev in newEventChannel) {
+                try {
+                    CustomWebSocketService.server?.innerProcessEvent(ev, null)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "innerProcessEvent failed", e)
+                }
+            }
+        }
+
+        // Single consumer for opportunistic kind-0 / kind-3 backfill of newly-seen authors.
+        newScope.launch {
+            for (pubkey in newBackfillChannel) {
+                try {
+                    backfillUserIfMissing(database.eventDao(), pubkey)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "backfill for $pubkey failed", e)
+                }
+            }
+        }
+
         val newListener = AggregatorListener()
         listener = newListener
         Citrine.instance.client.addConnectionListener(newListener)
@@ -173,16 +245,29 @@ object RelayAggregator {
                 if (!pausedForMetered) {
                     try {
                         refreshAndSubscribe(database)
+                        consecutiveFailures = 0
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.e(TAG, "Refresh failed", e)
+                        consecutiveFailures++
+                        Log.e(TAG, "Refresh failed (consecutiveFailures=$consecutiveFailures)", e)
                     }
                 }
                 val minutes = Settings.relayAggregatorRefreshMinutes.coerceAtLeast(1)
                 val interval = minutes * 60_000L
-                Log.d(TAG, "Sleeping ${minutes}m until next refresh")
-                delay(interval)
+                val multiplier = if (consecutiveFailures <= 0) {
+                    1
+                } else {
+                    val shift = consecutiveFailures.coerceAtMost(30)
+                    (1 shl shift).coerceAtMost(MAX_FAILURE_BACKOFF_MULTIPLIER)
+                }
+                val sleepMs = interval * multiplier
+                if (multiplier > 1) {
+                    Log.d(TAG, "Sleeping ${minutes}m × $multiplier until next refresh (backoff)")
+                } else {
+                    Log.d(TAG, "Sleeping ${minutes}m until next refresh")
+                }
+                delay(sleepMs)
             }
         }
     }
@@ -206,11 +291,19 @@ object RelayAggregator {
         lastEventByPubkey.clear()
         backfilledPubkeys.clear()
         eventsReceived.set(0)
+        droppedEvents.set(0)
         authorCount = 0
         taggedSubId = null
         currentPubkey = null
         pausedForMetered = false
         database = null
+        lastRefreshFinishedAt = 0L
+        consecutiveFailures = 0
+
+        eventChannel?.close()
+        backfillChannel?.close()
+        eventChannel = null
+        backfillChannel = null
 
         scope = null
         s.cancel()
@@ -234,9 +327,9 @@ object RelayAggregator {
         if (networkCallback != null) return
         val cm = connectivityManager() ?: return
         val cb = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) = evaluateNetworkState()
-            override fun onLost(network: Network) = evaluateNetworkState()
-            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = evaluateNetworkState()
+            override fun onAvailable(network: Network) = scheduleNetworkEval()
+            override fun onLost(network: Network) = scheduleNetworkEval()
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = scheduleNetworkEval()
         }
         runCatching { cm.registerDefaultNetworkCallback(cb) }
             .onSuccess { networkCallback = cb }
@@ -246,9 +339,20 @@ object RelayAggregator {
     private fun unregisterNetworkCallback() {
         val cb = networkCallback ?: return
         networkCallback = null
+        networkEvalJob?.cancel()
+        networkEvalJob = null
         val cm = connectivityManager() ?: return
         runCatching { cm.unregisterNetworkCallback(cb) }
             .onFailure { Log.e(TAG, "unregisterNetworkCallback failed", it) }
+    }
+
+    private fun scheduleNetworkEval() {
+        val s = scope ?: return
+        networkEvalJob?.cancel()
+        networkEvalJob = s.launch {
+            delay(NETWORK_DEBOUNCE_MS)
+            evaluateNetworkState()
+        }
     }
 
     /**
@@ -359,6 +463,12 @@ object RelayAggregator {
             return
         }
         val refreshStartMs = System.currentTimeMillis()
+        val sinceLastFinish = refreshStartMs - lastRefreshFinishedAt
+        if (lastRefreshFinishedAt > 0L && sinceLastFinish < MIN_REFRESH_INTERVAL_MS) {
+            Log.d(TAG, "Refresh requested ${sinceLastFinish}ms after last completion; skipping (floor=${MIN_REFRESH_INTERVAL_MS}ms)")
+            refreshing.set(false)
+            return
+        }
         try {
             val aggPubkey = Settings.aggregatorPubkey
             val extraRelays = Settings.relayAggregatorExtraRelays
@@ -673,6 +783,7 @@ object RelayAggregator {
             )
             publishStatus(phase = AggregatorPhase.LISTENING)
         } finally {
+            lastRefreshFinishedAt = System.currentTimeMillis()
             refreshing.set(false)
         }
     }
@@ -1130,35 +1241,23 @@ object RelayAggregator {
                 refreshStatusCounters()
                 val mismatchReason = filterMismatchReason(relay.url, msg.subId, ev)
                 if (mismatchReason != null) {
-                    Log.d(TAG, "Dropping event ${ev.id} (kind ${ev.kind}) from ${relay.url.url} sub ${msg.subId}: $mismatchReason")
+                    val d = droppedEvents.incrementAndGet()
+                    if (d == 1L || d % 100L == 0L) {
+                        Log.d(TAG, "Dropping event ${ev.id} (kind ${ev.kind}) from ${relay.url.url} sub ${msg.subId}: $mismatchReason (total dropped: $d)")
+                    }
                     return
                 }
-                val s = scope ?: return
-                s.launch {
-                    try {
-                        CustomWebSocketService.server?.innerProcessEvent(ev, null)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "innerProcessEvent failed", e)
-                    }
-                }
+                // Hand the event off to the consumer coroutine instead of launching a fresh
+                // coroutine per event. trySend is non-blocking; the bounded channel is
+                // configured with DROP_OLDEST so a chatty relay degrades gracefully.
+                eventChannel?.trySend(ev)
                 // First time we see this author in the live stream, kick off a one-shot
                 // backfill of their kind 0 / kind 3 from the indexer relays so unknown users
                 // surfaced via the tagged sub get a profile + follow list. The DAO check
                 // inside backfillUserIfMissing skips the network call when both are already
                 // cached, so authors covered by the periodic batch fetch are a no-op.
-                val db = database
-                if (db != null && backfilledPubkeys.add(ev.pubKey)) {
-                    s.launch {
-                        try {
-                            backfillUserIfMissing(db.eventDao(), ev.pubKey)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.e(TAG, "backfill for ${ev.pubKey} failed", e)
-                        }
-                    }
+                if (backfilledPubkeys.add(ev.pubKey)) {
+                    backfillChannel?.trySend(ev.pubKey)
                 }
             }
         }
