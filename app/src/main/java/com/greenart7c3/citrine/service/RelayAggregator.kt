@@ -109,6 +109,12 @@ object RelayAggregator {
     // into a single evaluation.
     private const val NETWORK_DEBOUNCE_MS = 2_000L
 
+    // Cap on how often counter-only status updates (relay count, event count) are pushed
+    // through `_status`. Phase changes (BOOTSTRAPPING/REFRESHING/LISTENING/PAUSED) still
+    // emit immediately. Without this, the StateFlow fires on every received event and
+    // every Compose collector recomposes hundreds of times per second on the UI thread.
+    private const val STATUS_EMIT_INTERVAL_MS = 500L
+
     @Volatile private var scope: CoroutineScope? = null
 
     @Volatile private var listener: AggregatorListener? = null
@@ -175,6 +181,11 @@ object RelayAggregator {
 
     private val droppedEvents = AtomicLong(0)
 
+    // Set by refreshStatusCounters when relay counts or eventsReceived change; consumed
+    // by the periodic emitter started in `start()` to push at most one StateFlow update
+    // per STATUS_EMIT_INTERVAL_MS.
+    private val statusDirty = AtomicBoolean(false)
+
     private val refreshing = AtomicBoolean(false)
 
     private val _status = MutableStateFlow(AggregatorStatus())
@@ -224,6 +235,17 @@ object RelayAggregator {
                 } catch (e: Exception) {
                     Log.e(TAG, "backfill for $pubkey failed", e)
                 }
+            }
+        }
+
+        // Periodic flusher for counter-only status updates. Coalesces a burst of
+        // refreshStatusCounters() calls (one per received event) into at most one
+        // StateFlow emission per STATUS_EMIT_INTERVAL_MS so Compose collectors don't
+        // recompose on the UI thread for every event.
+        newScope.launch {
+            while (isActive) {
+                delay(STATUS_EMIT_INTERVAL_MS)
+                flushPendingStatus()
             }
         }
 
@@ -292,6 +314,7 @@ object RelayAggregator {
         backfilledPubkeys.clear()
         eventsReceived.set(0)
         droppedEvents.set(0)
+        statusDirty.set(false)
         authorCount = 0
         taggedSubId = null
         currentPubkey = null
@@ -838,7 +861,19 @@ object RelayAggregator {
         )
     }
 
+    // Marks the counters as needing publication. The periodic emitter started in `start()`
+    // observes the flag at most once per STATUS_EMIT_INTERVAL_MS and writes a single
+    // snapshot to `_status` if set. Cheap enough to call on the relay listener thread for
+    // every received event.
     private fun refreshStatusCounters() {
+        statusDirty.set(true)
+    }
+
+    // Publishes the current counter snapshot to `_status` if any counter changed since
+    // the last emission. Phase changes go through `publishStatus` directly and bypass
+    // the throttle so UI/notification reflect transitions promptly.
+    private fun flushPendingStatus() {
+        if (!statusDirty.compareAndSet(true, false)) return
         val current = _status.value
         _status.value = current.copy(
             relaysConfigured = subscribedRelays.size,
