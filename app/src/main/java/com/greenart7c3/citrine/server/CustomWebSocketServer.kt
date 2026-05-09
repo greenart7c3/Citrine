@@ -1200,8 +1200,7 @@ class CustomWebSocketServer(
         Log.d(Citrine.TAG, "Removing ${connection.name}!")
         connection.session.cancel()
         connection.finalize()
-        connections.value.remove(connection)
-        connections.emit(connections.value)
+        connections.emit(connections.value.filterNot { it === connection })
     }
 }
 
