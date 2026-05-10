@@ -111,6 +111,8 @@ fun SettingsScreen(
         var allowedTaggedPubKeys by remember { mutableStateOf(Settings.allowedTaggedPubKeys) }
         var allowedKinds by remember { mutableStateOf(Settings.allowedKinds) }
         var neverDeleteFrom by remember { mutableStateOf(Settings.neverDeleteFrom) }
+        var preservedKindsFromDeletion by remember { mutableStateOf(Settings.preservedKindsFromDeletion) }
+        var preservedKindInput by remember { mutableStateOf(TextFieldValue("")) }
 
         var relayAggregatorEnabled by remember { mutableStateOf(Settings.relayAggregatorEnabled) }
         var aggregatorPubkey by remember { mutableStateOf(TextFieldValue(Settings.aggregatorPubkey)) }
@@ -858,6 +860,57 @@ fun SettingsScreen(
                         val users = Settings.neverDeleteFrom.toMutableSet().apply { remove(pubkey) }
                         Settings.neverDeleteFrom = users
                         neverDeleteFrom = users
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    },
+                )
+            }
+
+            // ── Preserved kinds ────────────────────────────────────────────────
+            stickyHeader {
+                SectionHeader(stringResource(R.string.preserved_kinds_from_deletion))
+            }
+            item {
+                EmptyListHint(stringResource(R.string.preserved_kinds_from_deletion_description))
+            }
+            item {
+                PubkeyInputRow(
+                    value = preservedKindInput,
+                    onValueChange = { preservedKindInput = it },
+                    onPaste = {
+                        scope.launch {
+                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                            preservedKindInput = TextFieldValue(text)
+                            if (text.toIntOrNull() == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                return@launch
+                            }
+                            val kinds = Settings.preservedKindsFromDeletion.toMutableSet().apply { add(text.toInt()) }
+                            Settings.preservedKindsFromDeletion = kinds
+                            preservedKindsFromDeletion = kinds
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            preservedKindInput = TextFieldValue("")
+                        }
+                    },
+                    onAdd = {
+                        if (preservedKindInput.text.toIntOrNull() == null) {
+                            Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                            return@PubkeyInputRow
+                        }
+                        val kinds = Settings.preservedKindsFromDeletion.toMutableSet().apply { add(preservedKindInput.text.toInt()) }
+                        Settings.preservedKindsFromDeletion = kinds
+                        preservedKindsFromDeletion = kinds
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        preservedKindInput = TextFieldValue("")
+                    },
+                )
+            }
+            items(preservedKindsFromDeletion.toList()) { k ->
+                PubkeyListItem(
+                    text = k.toString(),
+                    onDelete = {
+                        val kinds = Settings.preservedKindsFromDeletion.toMutableSet().apply { remove(k) }
+                        Settings.preservedKindsFromDeletion = kinds
+                        preservedKindsFromDeletion = kinds
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     },
                 )
