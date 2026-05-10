@@ -216,7 +216,7 @@ object RelayAggregator {
         newScope.launch {
             for (ev in newEventChannel) {
                 try {
-                    CustomWebSocketService.server?.innerProcessEvent(ev, null)
+                    CustomWebSocketService.server?.innerProcessEvent(ev, null, fromAggregator = true)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -1004,18 +1004,18 @@ object RelayAggregator {
         )
         if (needsRelayList) {
             fetchSingleReplaceable(AdvertisedRelayListEvent.KIND, pubkey, INDEXER_RELAYS)?.let {
-                CustomWebSocketService.server?.innerProcessEvent(it, null)
+                CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true)
             }
         }
         if (needsMetadata) {
             val metadataRelays = userWriteRelays(dao, pubkey) ?: INDEXER_RELAYS
             fetchSingleReplaceable(MetadataEvent.KIND, pubkey, metadataRelays)?.let {
-                CustomWebSocketService.server?.innerProcessEvent(it, null)
+                CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true)
             }
         }
         if (needsContactList) {
             fetchSingleReplaceable(ContactListEvent.KIND, pubkey, INDEXER_RELAYS)?.let {
-                CustomWebSocketService.server?.innerProcessEvent(it, null)
+                CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true)
             }
         }
     }
@@ -1059,7 +1059,7 @@ object RelayAggregator {
         } finally {
             runCatching { Citrine.instance.client.unsubscribe(subId) }
         }
-        fetched?.let { CustomWebSocketService.server?.innerProcessEvent(it, null) }
+        fetched?.let { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
         // Prefer whichever copy is newest — a cache hit may still beat a slow/partial fetch.
         val fetchedContactList = fetched as? ContactListEvent
         return when {
@@ -1154,7 +1154,7 @@ object RelayAggregator {
 
         // Persist what we learned so future refreshes are a cache hit.
         results.values.forEach {
-            runCatching { CustomWebSocketService.server?.innerProcessEvent(it, null) }
+            runCatching { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
         }
         return results
     }
@@ -1245,7 +1245,7 @@ object RelayAggregator {
         }
 
         results.values.forEach {
-            runCatching { CustomWebSocketService.server?.innerProcessEvent(it, null) }
+            runCatching { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
         }
         return results
     }
