@@ -45,7 +45,9 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -147,8 +149,10 @@ class DatabaseInfoViewModel(
     database: AppDatabase,
 ) : ViewModel() {
 
+    @OptIn(FlowPreview::class)
     val countByKind =
         database.eventDao().countByKind()
+            .sample(2_000)
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),

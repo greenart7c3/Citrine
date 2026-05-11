@@ -6,14 +6,16 @@ import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
-import java.util.Timer
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.onClosed
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class Connection(
@@ -25,28 +27,18 @@ class Connection(
     val sharedFlow = messageResponseFlow.asSharedFlow()
 
     val since = System.currentTimeMillis()
-    val timer = Timer()
-
-    init {
-        timer.schedule(
-            object : java.util.TimerTask() {
-                override fun run() {
-                    val hasTenMinutesPassed = System.currentTimeMillis() - since > 10 * 60 * 1000
-                    if (hasTenMinutesPassed) {
-                        if (!EventSubscription.containsConnection(this@Connection)) {
-                            Log.d(Citrine.TAG, "Closing session due to inactivity")
-                            finalize()
-                            Citrine.instance.applicationScope.launch {
-                                session.cancel()
-                                CustomWebSocketService.server?.removeConnection(this@Connection)
-                            }
-                        }
-                    }
-                }
-            },
-            0,
-            60000,
-        )
+    private val inactivityJob: Job = Citrine.instance.applicationScope.launch {
+        while (isActive) {
+            delay(60_000)
+            val hasTenMinutesPassed = System.currentTimeMillis() - since > 10 * 60 * 1000
+            if (hasTenMinutesPassed && !EventSubscription.containsConnection(this@Connection)) {
+                Log.d(Citrine.TAG, "Closing session due to inactivity")
+                finalize()
+                session.cancel()
+                CustomWebSocketService.server?.removeConnection(this@Connection)
+                break
+            }
+        }
     }
 
     companion object {
@@ -62,7 +54,7 @@ class Connection(
     }
 
     fun finalize() {
-        timer.cancel()
+        inactivityJob.cancel()
         EventSubscription.closeAll(name)
     }
 

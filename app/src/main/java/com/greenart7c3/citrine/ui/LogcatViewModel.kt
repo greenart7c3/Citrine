@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val MAX_LOG_LINES = 500
+
 class LogcatViewModel : ViewModel() {
     private val _logMessages = MutableStateFlow<List<String>>(emptyList())
     val logMessages = _logMessages.asStateFlow()
@@ -35,12 +37,12 @@ class LogcatViewModel : ViewModel() {
                 val process = Runtime.getRuntime().exec("logcat --pid=$processId -s ${Citrine.TAG}:* -s CitrineContentProvider:*")
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
 
-                var log = mutableListOf<String>()
+                val buffer = ArrayDeque<String>()
                 reader.useLines { lines ->
                     lines.forEach { logMessage ->
-                        // Update logs with the new log message added at the top (inverted order)
-                        log = (mutableListOf(logMessage) + log).toMutableList()
-                        _logMessages.value = log
+                        buffer.addFirst(logMessage)
+                        while (buffer.size > MAX_LOG_LINES) buffer.removeLast()
+                        _logMessages.value = buffer.toList()
                     }
                 }
             } catch (e: Exception) {

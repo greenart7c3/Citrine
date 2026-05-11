@@ -71,6 +71,8 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 
 @Composable
@@ -408,7 +410,9 @@ fun HomeScreen(
                 }
 
                 if (Settings.relayAggregatorEnabled) {
-                    val aggregatorStatus = RelayAggregator.status.collectAsStateWithLifecycle()
+                    @OptIn(FlowPreview::class)
+                    val aggregatorStatus = remember { RelayAggregator.status.sample(2_000) }
+                        .collectAsStateWithLifecycle(initialValue = RelayAggregator.status.value)
                     AggregatorStatusCard(
                         status = aggregatorStatus.value,
                         modifier = Modifier.fillMaxWidth(),

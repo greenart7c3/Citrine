@@ -42,13 +42,18 @@ object EventSubscription {
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             val event = dbEvent.toEvent()
-            val eventJsonStr = ENVELOPE_MAPPER.writeValueAsString(event.toJsonObject())
+            var eventJsonStr: String? = null
             var sentEvent = false
             for (manager in subscriptions.snapshot().values) {
                 val sub = manager.subscription
-                if (sub.connection.session.outgoing.isClosedForSend) continue
+                if (sub.connection.session.outgoing.isClosedForSend) {
+                    // Drop closed subscriptions so future fanouts skip them entirely.
+                    close(sub.id)
+                    continue
+                }
                 if (sub.filters.any { it.test(event) }) {
-                    sub.connection.trySend("[\"EVENT\",${sub.escapedId},$eventJsonStr]")
+                    val json = eventJsonStr ?: ENVELOPE_MAPPER.writeValueAsString(event.toJsonObject()).also { eventJsonStr = it }
+                    sub.connection.trySend("[\"EVENT\",${sub.escapedId},$json]")
                     sentEvent = true
                 }
             }
