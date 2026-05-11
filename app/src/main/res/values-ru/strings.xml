@@ -116,6 +116,8 @@
     <string name="delete_expired_events_description">Automatically remove events past their expiration timestamp</string>
     <string name="delete_ephemeral_events_description">Automatically remove ephemeral events (kinds 20000–29999)</string>
     <string name="use_proxy_description">Route outbound connections through a SOCKS5 proxy</string>
+    <string name="proxy_all_urls">Use Tor for all URLs</string>
+    <string name="proxy_all_urls_description">Route every outbound connection through Tor, not just .onion addresses</string>
     <string name="auto_backup_description">Periodically back up the database to a selected folder</string>
     <string name="use_tor">Expose relay over Tor</string>
     <string name="use_tor_description">Run an onion service so other Nostr clients can reach this relay over the Tor network</string>
