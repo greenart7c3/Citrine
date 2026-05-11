@@ -48,6 +48,14 @@ object Settings {
     // is the dominant battery cost on cellular.
     var relayAggregatorWifiOnly: Boolean = true
 
+    // When true the aggregator answers NIP-42 AUTH challenges from upstream relays using
+    // the external signer identified by [aggregatorSignerPubkey] / [aggregatorSignerPackageName].
+    // Requires the user to first log in via the external signer so we have a packageName
+    // for the ContentResolver-based signing path.
+    var relayAggregatorAuthEnabled: Boolean = false
+    var aggregatorSignerPubkey: String = ""
+    var aggregatorSignerPackageName: String = ""
+
     fun defaultValues() {
         allowedKinds = emptySet()
         allowedPubKeys = emptySet()
@@ -82,6 +90,9 @@ object Settings {
         relayAggregatorLastSync = 0L
         relayAggregatorExtraRelays = emptySet()
         relayAggregatorWifiOnly = true
+        relayAggregatorAuthEnabled = false
+        aggregatorSignerPubkey = ""
+        aggregatorSignerPackageName = ""
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)

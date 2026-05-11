@@ -14,6 +14,7 @@ import com.greenart7c3.citrine.server.Settings
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.metadata.MetadataEvent
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.fetchFirst
+import com.vitorpamplona.quartz.nip01Core.relay.client.auth.RelayAuthenticator
 import com.vitorpamplona.quartz.nip01Core.relay.client.listeners.RelayConnectionListener
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.IRelayClient
 import com.vitorpamplona.quartz.nip01Core.relay.client.single.newSubId
@@ -24,6 +25,7 @@ import com.vitorpamplona.quartz.nip01Core.relay.filters.Filter
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
+import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.concurrent.ConcurrentHashMap
@@ -161,6 +163,11 @@ object RelayAggregator {
 
     @Volatile private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
+    // RelayAuthenticator listens for NIP-42 AUTH challenges from upstream relays and signs
+    // a kind-22242 event using the external signer. Held so the start/stop lifecycle ties
+    // the authenticator's lifespan to the aggregator's scope; it stops listening on cancel.
+    @Volatile private var authenticator: RelayAuthenticator? = null
+
     // Debounced re-evaluation of network state. Cancelled and rescheduled by every
     // ConnectivityManager callback so a burst of changes only triggers one evaluation.
     @Volatile private var networkEvalJob: Job? = null
@@ -253,6 +260,8 @@ object RelayAggregator {
         listener = newListener
         Citrine.instance.client.addConnectionListener(newListener)
 
+        installAuthenticatorIfNeeded(newScope)
+
         registerNetworkCallback()
         // Initial check: if we're already on a metered network and the user wants
         // wifi-only, start in the paused state instead of opening subs.
@@ -301,6 +310,11 @@ object RelayAggregator {
         listener?.let { Citrine.instance.client.removeConnectionListener(it) }
         listener = null
 
+        // The RelayAuthenticator listens via the cancelled scope, so its coroutines die with
+        // the aggregator. Drop the reference here so a subsequent start() recreates it
+        // against the new scope rather than reusing the dead one.
+        authenticator = null
+
         unregisterNetworkCallback()
 
         trackedSubIds.forEach {
@@ -332,6 +346,40 @@ object RelayAggregator {
         s.cancel()
 
         _status.value = AggregatorStatus(enabled = false, phase = AggregatorPhase.IDLE)
+    }
+
+    /**
+     * Construct a [RelayAuthenticator] bound to [scope] when the user has enabled NIP-42 AUTH
+     * for the aggregator and a signer identity is configured. Re-entrant: drops a previously
+     * installed authenticator before installing a new one. No-op when AUTH is disabled or
+     * the signer pubkey/packageName is missing — relays that send AUTH challenges will
+     * simply not get a response, which matches the prior behavior.
+     */
+    private fun installAuthenticatorIfNeeded(scope: CoroutineScope) {
+        if (!Settings.relayAggregatorAuthEnabled) {
+            authenticator = null
+            return
+        }
+        val pubkey = Settings.aggregatorSignerPubkey
+        val pkg = Settings.aggregatorSignerPackageName
+        if (pubkey.isBlank() || pkg.isBlank()) {
+            Log.d(TAG, "AUTH enabled but signer pubkey/packageName missing; skipping authenticator install")
+            authenticator = null
+            return
+        }
+        val signer = NostrSignerExternal(pubkey, pkg, Citrine.instance.contentResolver)
+        Log.d(TAG, "Installing RelayAuthenticator for $pubkey via $pkg")
+        authenticator = RelayAuthenticator(Citrine.instance.client, scope) { template ->
+            try {
+                val signed = signer.sign(template)
+                listOf(signed)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to sign AUTH challenge", e)
+                emptyList()
+            }
+        }
     }
 
     private fun connectivityManager(): ConnectivityManager? = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -452,6 +500,10 @@ object RelayAggregator {
                 start(database)
             }
             enabled && running -> {
+                // The AUTH toggle / signer identity may have changed. Reinstall the
+                // authenticator against the running scope so the new settings take effect
+                // without a full restart.
+                scope?.let { installAuthenticatorIfNeeded(it) }
                 // The wifi-only toggle may have just changed; re-evaluate before
                 // dispatching a refresh so a flip to "pause on metered" doesn't kick
                 // off a doomed refresh that we'd immediately tear down.

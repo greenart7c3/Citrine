@@ -7,6 +7,8 @@ import android.net.InetAddresses.isNumericAddress
 import android.os.Build
 import android.util.Patterns
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -126,6 +128,45 @@ fun SettingsScreen(
         var aggregatorWifiOnly by remember { mutableStateOf(Settings.relayAggregatorWifiOnly) }
         var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
         var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
+        var aggregatorAuthEnabled by remember { mutableStateOf(Settings.relayAggregatorAuthEnabled) }
+        var aggregatorSignerPubkey by remember { mutableStateOf(Settings.aggregatorSignerPubkey) }
+        var aggregatorSignerPackageName by remember { mutableStateOf(Settings.aggregatorSignerPackageName) }
+
+        val aggregatorSignerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            if (result.resultCode != android.app.Activity.RESULT_OK) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.sign_request_rejected),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                result.data?.let {
+                    try {
+                        val key = it.getStringExtra("signature") ?: ""
+                        val packageName = it.getStringExtra("package") ?: ""
+                        val returnedKey = if (key.startsWith("npub")) {
+                            when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+                                is NPub -> parsed.hex
+                                else -> ""
+                            }
+                        } else {
+                            key
+                        }
+                        if (returnedKey.isBlank() || packageName.isBlank()) return@let
+                        Settings.aggregatorSignerPubkey = returnedKey
+                        Settings.aggregatorSignerPackageName = packageName
+                        aggregatorSignerPubkey = returnedKey
+                        aggregatorSignerPackageName = packageName
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    } catch (e: Exception) {
+                        android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                    }
+                }
+            }
+        }
 
         var shouldAddWebClient = false
         var webPath by remember { mutableStateOf(TextFieldValue("")) }
@@ -688,6 +729,102 @@ fun SettingsScreen(
                         val relays = Settings.relayAggregatorExtraRelays.toMutableSet().apply { remove(relay) }
                         Settings.relayAggregatorExtraRelays = relays
                         aggregatorExtraRelays = relays
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    },
+                )
+            }
+
+            item {
+                Text(
+                    text = stringResource(R.string.relay_aggregator_signer),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+            item {
+                val loggedInLabel = if (aggregatorSignerPubkey.isNotBlank()) {
+                    stringResource(R.string.relay_aggregator_signer_logged_in_as, aggregatorSignerPubkey.take(16) + "…")
+                } else {
+                    stringResource(R.string.relay_aggregator_signer_not_logged_in)
+                }
+                Text(
+                    text = loggedInLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            item {
+                ElevatedButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+                            intent.putExtra("type", "get_public_key")
+                            val permission = com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission(
+                                com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType.SIGN_EVENT,
+                                22242,
+                            )
+                            intent.putExtra("permissions", "[${permission.toJson()}]")
+                            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            aggregatorSignerLauncher.launch(intent)
+                        } catch (e: Exception) {
+                            android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.no_external_signer_installed),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            val fallback = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
+                            aggregatorSignerLauncher.launch(fallback)
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.relay_aggregator_signer_login))
+                }
+            }
+            if (aggregatorSignerPubkey.isNotBlank()) {
+                item {
+                    ElevatedButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        onClick = {
+                            // Logging out also disables AUTH so the aggregator doesn't fail
+                            // to sign challenges on the next refresh.
+                            Settings.aggregatorSignerPubkey = ""
+                            Settings.aggregatorSignerPackageName = ""
+                            Settings.relayAggregatorAuthEnabled = false
+                            aggregatorSignerPubkey = ""
+                            aggregatorSignerPackageName = ""
+                            aggregatorAuthEnabled = false
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                            RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                        },
+                    ) {
+                        Text(stringResource(R.string.relay_aggregator_signer_logout))
+                    }
+                }
+            }
+            item {
+                SwitchSettingRow(
+                    title = stringResource(R.string.relay_aggregator_auth_enabled),
+                    description = stringResource(R.string.relay_aggregator_auth_enabled_description),
+                    checked = aggregatorAuthEnabled,
+                    onCheckedChange = { newValue ->
+                        if (newValue && Settings.aggregatorSignerPubkey.isBlank()) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.relay_aggregator_auth_signer_required),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            return@SwitchSettingRow
+                        }
+                        aggregatorAuthEnabled = newValue
+                        Settings.relayAggregatorAuthEnabled = newValue
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                     },

@@ -151,4 +151,12 @@
     <string name="relay_aggregator_events_received">%1$d events received</string>
     <string name="relay_aggregator_last_refresh">Last refresh %1$s ago</string>
     <string name="relay_aggregator_never_refreshed">No refresh yet</string>
+    <string name="relay_aggregator_auth_enabled">Authenticate to upstream relays</string>
+    <string name="relay_aggregator_auth_enabled_description">Answer NIP-42 AUTH challenges from upstream relays by signing a kind 22242 event with the external signer below. Required by some relays before they will return events from their authors\' write set.</string>
+    <string name="relay_aggregator_auth_signer_required">Log in with an external signer first</string>
+    <string name="relay_aggregator_signer">External signer</string>
+    <string name="relay_aggregator_signer_login">Log in with external signer</string>
+    <string name="relay_aggregator_signer_logout">Sign out of external signer</string>
+    <string name="relay_aggregator_signer_logged_in_as">Logged in as %1$s</string>
+    <string name="relay_aggregator_signer_not_logged_in">Not logged in</string>
 </resources>

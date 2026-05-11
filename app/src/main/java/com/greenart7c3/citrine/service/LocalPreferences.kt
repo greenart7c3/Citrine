@@ -42,6 +42,9 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_LAST_SYNC = "relay_aggregator_last_sync"
     const val RELAY_AGGREGATOR_EXTRA_RELAYS = "relay_aggregator_extra_relays"
     const val RELAY_AGGREGATOR_WIFI_ONLY = "relay_aggregator_wifi_only"
+    const val RELAY_AGGREGATOR_AUTH_ENABLED = "relay_aggregator_auth_enabled"
+    const val AGGREGATOR_SIGNER_PUBKEY = "aggregator_signer_pubkey"
+    const val AGGREGATOR_SIGNER_PACKAGE_NAME = "aggregator_signer_package_name"
 }
 
 object LocalPreferences {
@@ -103,6 +106,9 @@ object LocalPreferences {
                 putLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, settings.relayAggregatorLastSync)
                 putStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, settings.relayAggregatorExtraRelays)
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_AUTH_ENABLED, settings.relayAggregatorAuthEnabled)
+                putString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, settings.aggregatorSignerPubkey)
+                putString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, settings.aggregatorSignerPackageName)
             }
         }
     }
@@ -155,5 +161,8 @@ object LocalPreferences {
         Settings.relayAggregatorLastSync = prefs.getLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, 0L)
         Settings.relayAggregatorExtraRelays = prefs.getStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, emptySet()) ?: emptySet()
         Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, true)
+        Settings.relayAggregatorAuthEnabled = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_AUTH_ENABLED, false)
+        Settings.aggregatorSignerPubkey = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, "") ?: ""
+        Settings.aggregatorSignerPackageName = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, "") ?: ""
     }
 }
