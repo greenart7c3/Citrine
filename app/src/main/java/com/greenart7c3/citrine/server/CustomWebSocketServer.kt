@@ -1183,9 +1183,7 @@ class CustomWebSocketServer(
                         for (message in incoming) {
                             if (message !is Frame.Text) continue
                             try {
-                                withContext(Dispatchers.IO) {
-                                    processNewRelayMessage(message.readText(), thisConnection)
-                                }
+                                processNewRelayMessage(message.readText(), thisConnection)
                             } catch (e: Exception) {
                                 if (e !is CancellationException) {
                                     Log.d(Citrine.TAG, "Error processing message: $e", e)
