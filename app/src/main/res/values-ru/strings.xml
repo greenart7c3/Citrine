@@ -91,6 +91,8 @@
     <string name="others">Другие</string>
     <string name="invalid_port">Неверный порт</string>
     <string name="never_delete_from">Никогда не удалять из</string>
+    <string name="preserved_kinds_from_deletion">Preserved kinds</string>
+    <string name="preserved_kinds_from_deletion_description">Events of these kinds are never removed by the age-based cleanup, regardless of the \"delete events older than\" setting.</string>
     <string name="name_access_client_with_name_localhost_port">Имя (доступ к клиенту с помощью name.localhost:port)</string>
     <string name="name_cannot_be_blank">Имя не может быть пустым</string>
     <string name="copy_crash_report_to_clipboard">Хотите скопировать отчет о сбое в буфер обмена и открыть клиент, чтобы отправить его Amber?</string>

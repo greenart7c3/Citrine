@@ -91,6 +91,8 @@
     <string name="others">Others</string>
     <string name="invalid_port">Invalid port</string>
     <string name="never_delete_from">Never delete from</string>
+    <string name="preserved_kinds_from_deletion">Preserved kinds</string>
+    <string name="preserved_kinds_from_deletion_description">Events of these kinds are never removed by the age-based cleanup, regardless of the \"delete events older than\" setting.</string>
     <string name="name_access_client_with_name_localhost_port">Name (access client with name.localhost:port)</string>
     <string name="name_cannot_be_blank">Name cannot be blank</string>
     <string name="copy_crash_report_to_clipboard">Would you like to copy the crash report to your clipboard and open a Client to send it to Amber?</string>
