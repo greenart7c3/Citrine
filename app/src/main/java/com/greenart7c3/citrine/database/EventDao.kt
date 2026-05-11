@@ -267,6 +267,14 @@ interface EventDao {
     @Transaction
     suspend fun deleteAll(until: Long, pubKeys: Array<String>)
 
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND kind NOT IN (:kinds)")
+    @Transaction
+    suspend fun deleteAll(until: Long, kinds: IntArray)
+
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND pubkey NOT IN (:pubKeys) AND kind NOT IN (:kinds)")
+    @Transaction
+    suspend fun deleteAll(until: Long, pubKeys: Array<String>, kinds: IntArray)
+
     @Transaction
     suspend fun deleteEphemeralEvents(oneMinuteAgo: Long) {
         val ids = getEphemeralEvents(oneMinuteAgo)
