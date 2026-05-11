@@ -223,7 +223,9 @@ class CustomWebSocketServer(
     @OptIn(DelicateCoroutinesApi::class)
     private suspend fun processNewRelayMessage(newMessage: String, connection: Connection?) {
         try {
-            Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
+            if (Log.isLoggable(Citrine.TAG, Log.DEBUG)) {
+                Log.d(Citrine.TAG, newMessage + " from ${connection?.session?.call?.request?.local?.remoteHost} ${connection?.session?.call?.request?.headers?.get("User-Agent")}")
+            }
             val msgArray = JacksonMapper.mapper.readTree(newMessage)
             when (val type = msgArray.get(0).asText()) {
                 "COUNT" -> {
@@ -651,13 +653,24 @@ class CustomWebSocketServer(
         HistoryDatabase.getDatabase(Citrine.instance).eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
     }
 
-    private fun isOffline(): Boolean {
-        val connectivityManager = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return true
+    @Volatile private var cachedIsOffline: Boolean = false
 
-        val network = connectivityManager.activeNetwork
-        val capabilities = connectivityManager.getNetworkCapabilities(network)
-        return capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    @Volatile private var cachedIsOfflineAt: Long = 0L
+
+    private fun isOffline(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - cachedIsOfflineAt < 5_000L) return cachedIsOffline
+
+        val connectivityManager = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val offline = if (connectivityManager == null) {
+            true
+        } else {
+            val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+            capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
+        cachedIsOffline = offline
+        cachedIsOfflineAt = now
+        return offline
     }
 
     private fun broadcastWithWorkManager(dbEvent: EventWithTags) {
