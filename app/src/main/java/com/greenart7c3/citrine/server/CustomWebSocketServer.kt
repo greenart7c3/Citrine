@@ -275,6 +275,36 @@ class CustomWebSocketServer(
                     EventSubscription.close(msgArray.get(1).asText())
                 }
 
+                "NEG-OPEN" -> {
+                    connection?.let {
+                        NegentropyHandler.handleOpen(
+                            connection = it,
+                            subId = msgArray.get(1).asText(),
+                            filterNode = msgArray.get(2),
+                            initialMsgHex = msgArray.get(3).asText(),
+                            appDatabase = appDatabase,
+                            objectMapper = objectMapper,
+                        )
+                    }
+                }
+
+                "NEG-MSG" -> {
+                    connection?.let {
+                        NegentropyHandler.handleMsg(
+                            connection = it,
+                            subId = msgArray.get(1).asText(),
+                            msgHex = msgArray.get(2).asText(),
+                            objectMapper = objectMapper,
+                        )
+                    }
+                }
+
+                "NEG-CLOSE" -> {
+                    connection?.let {
+                        NegentropyHandler.handleClose(it, msgArray.get(1).asText())
+                    }
+                }
+
                 "PING" -> {
                     try {
                         connection?.trySend(NoticeResult("PONG").toJson())
@@ -989,7 +1019,7 @@ class CustomWebSocketServer(
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
-                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70)
+                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70, 77)
                         if (Settings.authEnabled) supportedNips.add(42)
 
                         call.respondText(

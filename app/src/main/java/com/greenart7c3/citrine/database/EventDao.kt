@@ -28,6 +28,9 @@ interface EventDao {
     @RawQuery
     fun count(query: SupportSQLiteQuery): Int
 
+    @RawQuery
+    fun getIdsAndCreatedAt(query: SupportSQLiteQuery): List<IdAndCreatedAt>
+
     @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
     fun countByKind(): Flow<List<CountResult>>
 
