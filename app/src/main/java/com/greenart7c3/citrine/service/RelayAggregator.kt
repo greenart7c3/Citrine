@@ -349,21 +349,15 @@ object RelayAggregator {
     }
 
     /**
-     * Construct a [RelayAuthenticator] bound to [scope] when the user has enabled NIP-42 AUTH
-     * for the aggregator and a signer identity is configured. Re-entrant: drops a previously
-     * installed authenticator before installing a new one. No-op when AUTH is disabled or
-     * the signer pubkey/packageName is missing — relays that send AUTH challenges will
-     * simply not get a response, which matches the prior behavior.
+     * Construct a [RelayAuthenticator] bound to [scope] when a signer identity is configured.
+     * Re-entrant: drops a previously installed authenticator before installing a new one.
+     * No-op when the signer pubkey/packageName is missing — relays that send AUTH challenges
+     * will simply not get a response, which matches the prior behavior.
      */
     private fun installAuthenticatorIfNeeded(scope: CoroutineScope) {
-        if (!Settings.relayAggregatorAuthEnabled) {
-            authenticator = null
-            return
-        }
         val pubkey = Settings.aggregatorSignerPubkey
         val pkg = Settings.aggregatorSignerPackageName
         if (pubkey.isBlank() || pkg.isBlank()) {
-            Log.d(TAG, "AUTH enabled but signer pubkey/packageName missing; skipping authenticator install")
             authenticator = null
             return
         }

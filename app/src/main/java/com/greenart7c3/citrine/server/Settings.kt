@@ -48,11 +48,10 @@ object Settings {
     // is the dominant battery cost on cellular.
     var relayAggregatorWifiOnly: Boolean = true
 
-    // When true the aggregator answers NIP-42 AUTH challenges from upstream relays using
-    // the external signer identified by [aggregatorSignerPubkey] / [aggregatorSignerPackageName].
-    // Requires the user to first log in via the external signer so we have a packageName
-    // for the ContentResolver-based signing path.
-    var relayAggregatorAuthEnabled: Boolean = false
+    // External signer used by the aggregator to answer NIP-42 AUTH challenges from upstream
+    // relays. Populated by the "Log in with external signer" flow in settings. When both
+    // fields are set, the aggregator installs a RelayAuthenticator and signs kind-22242
+    // challenges via the configured Amber-compatible signer.
     var aggregatorSignerPubkey: String = ""
     var aggregatorSignerPackageName: String = ""
 
@@ -90,7 +89,6 @@ object Settings {
         relayAggregatorLastSync = 0L
         relayAggregatorExtraRelays = emptySet()
         relayAggregatorWifiOnly = true
-        relayAggregatorAuthEnabled = false
         aggregatorSignerPubkey = ""
         aggregatorSignerPackageName = ""
     }

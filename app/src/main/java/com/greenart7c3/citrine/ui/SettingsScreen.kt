@@ -128,7 +128,6 @@ fun SettingsScreen(
         var aggregatorWifiOnly by remember { mutableStateOf(Settings.relayAggregatorWifiOnly) }
         var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
         var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
-        var aggregatorAuthEnabled by remember { mutableStateOf(Settings.relayAggregatorAuthEnabled) }
         var aggregatorSignerPubkey by remember { mutableStateOf(Settings.aggregatorSignerPubkey) }
         var aggregatorSignerPackageName by remember { mutableStateOf(Settings.aggregatorSignerPackageName) }
 
@@ -793,14 +792,10 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
                         onClick = {
-                            // Logging out also disables AUTH so the aggregator doesn't fail
-                            // to sign challenges on the next refresh.
                             Settings.aggregatorSignerPubkey = ""
                             Settings.aggregatorSignerPackageName = ""
-                            Settings.relayAggregatorAuthEnabled = false
                             aggregatorSignerPubkey = ""
                             aggregatorSignerPackageName = ""
-                            aggregatorAuthEnabled = false
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                         },
@@ -808,27 +803,6 @@ fun SettingsScreen(
                         Text(stringResource(R.string.relay_aggregator_signer_logout))
                     }
                 }
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.relay_aggregator_auth_enabled),
-                    description = stringResource(R.string.relay_aggregator_auth_enabled_description),
-                    checked = aggregatorAuthEnabled,
-                    onCheckedChange = { newValue ->
-                        if (newValue && Settings.aggregatorSignerPubkey.isBlank()) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.relay_aggregator_auth_signer_required),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            return@SwitchSettingRow
-                        }
-                        aggregatorAuthEnabled = newValue
-                        Settings.relayAggregatorAuthEnabled = newValue
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                    },
-                )
             }
 
             // ── Others ─────────────────────────────────────────────────────────
