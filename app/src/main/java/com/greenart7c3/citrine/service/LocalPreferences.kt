@@ -124,7 +124,9 @@ object LocalPreferences {
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
         Settings.lastBackup = prefs.getLong(PrefKeys.LAST_BACKUP, 0)
         Settings.useProxy = prefs.getBoolean(PrefKeys.USE_PROXY, false)
-        Settings.proxyAllUrls = prefs.getBoolean(PrefKeys.PROXY_ALL_URLS, false)
+        // Migration: pre-existing installs with proxy enabled used to route every URL through Tor.
+        // Preserve that behavior unless the user has explicitly chosen otherwise.
+        Settings.proxyAllUrls = prefs.getBoolean(PrefKeys.PROXY_ALL_URLS, Settings.useProxy)
         Settings.useTor = prefs.getBoolean(PrefKeys.USE_TOR, false)
         Settings.onionHostname = prefs.getString(PrefKeys.ONION_HOSTNAME, "") ?: ""
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
