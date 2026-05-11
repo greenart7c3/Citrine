@@ -91,6 +91,8 @@
     <string name="others">其他</string>
     <string name="invalid_port">无效的端口</string>
     <string name="never_delete_from">永不删除特定公钥的事件</string>
+    <string name="preserved_kinds_from_deletion">Preserved kinds</string>
+    <string name="preserved_kinds_from_deletion_description">Events of these kinds are never removed by the age-based cleanup, regardless of the \"delete events older than\" setting.</string>
     <string name="name_access_client_with_name_localhost_port">名称（使用 name.localhost:port 访问客户端）</string>
     <string name="name_cannot_be_blank">名称不能为空</string>
     <string name="copy_crash_report_to_clipboard">想要复制崩溃报告到剪贴板并打开客户端发送给 Amber 吗？</string>
