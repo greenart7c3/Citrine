@@ -28,6 +28,7 @@ object PrefKeys {
     const val START_ON_BOOT = "start_on_boot"
     const val LAST_BACKUP = "last_backup"
     const val USE_PROXY = "use_proxy"
+    const val PROXY_ALL_URLS = "proxy_all_urls"
     const val USE_TOR = "use_tor"
     const val ONION_HOSTNAME = "onion_hostname"
 
@@ -81,6 +82,7 @@ object LocalPreferences {
                 putBoolean(PrefKeys.START_ON_BOOT, settings.startOnBoot)
                 putLong(PrefKeys.LAST_BACKUP, settings.lastBackup)
                 putBoolean(PrefKeys.USE_PROXY, settings.useProxy)
+                putBoolean(PrefKeys.PROXY_ALL_URLS, settings.proxyAllUrls)
                 putBoolean(PrefKeys.USE_TOR, settings.useTor)
                 putString(PrefKeys.ONION_HOSTNAME, settings.onionHostname)
                 if (Settings.webClients.isNotEmpty()) {
@@ -132,6 +134,9 @@ object LocalPreferences {
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
         Settings.lastBackup = prefs.getLong(PrefKeys.LAST_BACKUP, 0)
         Settings.useProxy = prefs.getBoolean(PrefKeys.USE_PROXY, false)
+        // Migration: pre-existing installs with proxy enabled used to route every URL through Tor.
+        // Preserve that behavior unless the user has explicitly chosen otherwise.
+        Settings.proxyAllUrls = prefs.getBoolean(PrefKeys.PROXY_ALL_URLS, Settings.useProxy)
         Settings.useTor = prefs.getBoolean(PrefKeys.USE_TOR, false)
         Settings.onionHostname = prefs.getString(PrefKeys.ONION_HOSTNAME, "") ?: ""
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {

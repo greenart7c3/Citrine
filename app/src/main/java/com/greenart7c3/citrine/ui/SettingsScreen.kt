@@ -98,6 +98,7 @@ fun SettingsScreen(
         var useAuth by remember { mutableStateOf(Settings.authEnabled) }
         var listenToPokeyBroadcasts by remember { mutableStateOf(Settings.listenToPokeyBroadcasts) }
         var useProxy by remember { mutableStateOf(Settings.useProxy) }
+        var proxyAllUrls by remember { mutableStateOf(Settings.proxyAllUrls) }
         var useTor by remember { mutableStateOf(Settings.useTor) }
         val torState = com.greenart7c3.citrine.service.TorManager.state.collectAsStateWithLifecycle()
         var autoBackup by remember { mutableStateOf(Settings.autoBackup) }
@@ -749,6 +750,20 @@ fun SettingsScreen(
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     },
                 )
+            }
+            if (useProxy) {
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.proxy_all_urls),
+                        description = stringResource(R.string.proxy_all_urls_description),
+                        checked = proxyAllUrls,
+                        onCheckedChange = {
+                            proxyAllUrls = it
+                            Settings.proxyAllUrls = it
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        },
+                    )
+                }
             }
             item {
                 SwitchSettingRow(
