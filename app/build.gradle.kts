@@ -228,4 +228,5 @@ dependencies {
     implementation(libs.kmp.tor.runtime.service)
     implementation(libs.kmp.tor.runtime.service.ui)
     implementation(libs.kmp.tor.resource.exec)
+    implementation(libs.negentropy)
 }

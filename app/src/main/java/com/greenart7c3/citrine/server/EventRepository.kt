@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
+import com.greenart7c3.citrine.database.IdAndCreatedAt
 import com.greenart7c3.citrine.database.toEvent
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
@@ -17,9 +18,15 @@ private val TAG_KEY_REGEX = Regex("^[a-zA-Z0-9]+$")
 private val JACKSON_NODE_FACTORY = JacksonMapper.mapper.nodeFactory
 
 object EventRepository {
+    enum class SelectMode {
+        FULL_EVENTS,
+        COUNT,
+        IDS_AND_CREATED_AT,
+    }
+
     fun createQuery(
         filter: EventFilter,
-        count: Boolean,
+        mode: SelectMode,
     ): Pair<String, List<Any>> {
         val params = mutableListOf<Any>()
         val joinClause = StringBuilder()
@@ -113,17 +120,28 @@ object EventRepository {
         }
 
         val query = StringBuilder()
-        if (count) {
-            query.append("SELECT COUNT(DISTINCT EventEntity.id) FROM EventEntity EventEntity")
-            query.append(joinClause)
-            query.append(whereClause)
-        } else {
-            query.append("SELECT ")
-            if (filter.tags.isNotEmpty()) query.append("DISTINCT ")
-            query.append("EventEntity.* FROM EventEntity EventEntity")
-            query.append(joinClause)
-            query.append(whereClause)
-            query.append(" ORDER BY ").append(orderBy)
+        when (mode) {
+            SelectMode.COUNT -> {
+                query.append("SELECT COUNT(DISTINCT EventEntity.id) FROM EventEntity EventEntity")
+                query.append(joinClause)
+                query.append(whereClause)
+            }
+            SelectMode.FULL_EVENTS -> {
+                query.append("SELECT ")
+                if (filter.tags.isNotEmpty()) query.append("DISTINCT ")
+                query.append("EventEntity.* FROM EventEntity EventEntity")
+                query.append(joinClause)
+                query.append(whereClause)
+                query.append(" ORDER BY ").append(orderBy)
+            }
+            SelectMode.IDS_AND_CREATED_AT -> {
+                query.append("SELECT ")
+                if (filter.tags.isNotEmpty()) query.append("DISTINCT ")
+                query.append("EventEntity.id AS id, EventEntity.createdAt AS createdAt FROM EventEntity EventEntity")
+                query.append(joinClause)
+                query.append(whereClause)
+                query.append(" ORDER BY ").append(orderBy)
+            }
         }
 
         filter.limit?.let {
@@ -137,7 +155,7 @@ object EventRepository {
         database: AppDatabase,
         filter: EventFilter,
     ): List<EventWithTags> {
-        val query = createQuery(filter, false)
+        val query = createQuery(filter, SelectMode.FULL_EVENTS)
 
         val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
         return database.eventDao().getEvents(rawSql)
@@ -147,10 +165,20 @@ object EventRepository {
         database: AppDatabase,
         filter: EventFilter,
     ): Int {
-        val query = createQuery(filter, true)
+        val query = createQuery(filter, SelectMode.COUNT)
 
         val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
         return database.eventDao().count(rawSql)
+    }
+
+    fun idsAndCreatedAt(
+        database: AppDatabase,
+        filter: EventFilter,
+    ): List<IdAndCreatedAt> {
+        val query = createQuery(filter, SelectMode.IDS_AND_CREATED_AT)
+
+        val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
+        return database.eventDao().getIdsAndCreatedAt(rawSql)
     }
 
     fun subscribe(

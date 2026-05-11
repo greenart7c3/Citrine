@@ -3,10 +3,12 @@ package com.greenart7c3.citrine.server
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.vitorpamplona.negentropy.Negentropy
 import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -25,6 +27,8 @@ class Connection(
 ) {
     val messageResponseFlow = MutableSharedFlow<String>()
     val sharedFlow = messageResponseFlow.asSharedFlow()
+
+    val negentropySessions: MutableMap<String, Negentropy> = ConcurrentHashMap()
 
     val since = System.currentTimeMillis()
     private val inactivityJob: Job = Citrine.instance.applicationScope.launch {
@@ -56,6 +60,7 @@ class Connection(
     fun finalize() {
         inactivityJob.cancel()
         EventSubscription.closeAll(name)
+        negentropySessions.clear()
     }
 
     fun trySend(data: String) {
