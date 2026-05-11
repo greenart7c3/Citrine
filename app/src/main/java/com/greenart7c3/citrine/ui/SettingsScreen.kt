@@ -22,8 +22,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -154,8 +158,14 @@ fun SettingsScreen(
                             key
                         }
                         if (returnedKey.isBlank() || packageName.isBlank()) return@let
+                        // The pubkey field is the aggregator's identity — populate it
+                        // from the signer's reply so a fresh login is enough to start the
+                        // aggregator. Storing the packageName too lets RelayAggregator
+                        // reconstruct a NostrSignerExternal for AUTH challenges.
+                        Settings.aggregatorPubkey = returnedKey
                         Settings.aggregatorSignerPubkey = returnedKey
                         Settings.aggregatorSignerPackageName = packageName
+                        aggregatorPubkey = TextFieldValue(returnedKey)
                         aggregatorSignerPubkey = returnedKey
                         aggregatorSignerPackageName = packageName
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
@@ -564,6 +574,14 @@ fun SettingsScreen(
                         val text = newValue.text.trim()
                         if (text.isBlank()) {
                             Settings.aggregatorPubkey = ""
+                            // A manually cleared pubkey invalidates any previously-stored
+                            // signer identity — they were tied to the pubkey that was just
+                            // removed, and the packageName alone can't sign for a different
+                            // user.
+                            Settings.aggregatorSignerPubkey = ""
+                            Settings.aggregatorSignerPackageName = ""
+                            aggregatorSignerPubkey = ""
+                            aggregatorSignerPackageName = ""
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                             return@OutlinedTextField
@@ -573,10 +591,50 @@ fun SettingsScreen(
                             return@OutlinedTextField
                         }
                         Settings.aggregatorPubkey = key
+                        // Manually editing the pubkey to something other than the
+                        // signed-in identity clears the AUTH signer — Amber can only
+                        // sign for the pubkey it actually controls.
+                        if (key != Settings.aggregatorSignerPubkey) {
+                            Settings.aggregatorSignerPubkey = ""
+                            Settings.aggregatorSignerPackageName = ""
+                            aggregatorSignerPubkey = ""
+                            aggregatorSignerPackageName = ""
+                        }
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                     },
                     singleLine = true,
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+                                    intent.putExtra("type", "get_public_key")
+                                    val permission = com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission(
+                                        com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType.SIGN_EVENT,
+                                        22242,
+                                    )
+                                    intent.putExtra("permissions", "[${permission.toJson()}]")
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                    aggregatorSignerLauncher.launch(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.no_external_signer_installed),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                    val fallback = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
+                                    aggregatorSignerLauncher.launch(fallback)
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Key,
+                                contentDescription = stringResource(R.string.relay_aggregator_signer_login),
+                            )
+                        }
+                    },
                 )
             }
             item {
@@ -732,77 +790,6 @@ fun SettingsScreen(
                         RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                     },
                 )
-            }
-
-            item {
-                Text(
-                    text = stringResource(R.string.relay_aggregator_signer),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            }
-            item {
-                val loggedInLabel = if (aggregatorSignerPubkey.isNotBlank()) {
-                    stringResource(R.string.relay_aggregator_signer_logged_in_as, aggregatorSignerPubkey.take(16) + "…")
-                } else {
-                    stringResource(R.string.relay_aggregator_signer_not_logged_in)
-                }
-                Text(
-                    text = loggedInLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
-            item {
-                ElevatedButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
-                            intent.putExtra("type", "get_public_key")
-                            val permission = com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission(
-                                com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType.SIGN_EVENT,
-                                22242,
-                            )
-                            intent.putExtra("permissions", "[${permission.toJson()}]")
-                            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                            aggregatorSignerLauncher.launch(intent)
-                        } catch (e: Exception) {
-                            android.util.Log.d(Citrine.TAG, e.message ?: "", e)
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.no_external_signer_installed),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            val fallback = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
-                            aggregatorSignerLauncher.launch(fallback)
-                        }
-                    },
-                ) {
-                    Text(stringResource(R.string.relay_aggregator_signer_login))
-                }
-            }
-            if (aggregatorSignerPubkey.isNotBlank()) {
-                item {
-                    ElevatedButton(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        onClick = {
-                            Settings.aggregatorSignerPubkey = ""
-                            Settings.aggregatorSignerPackageName = ""
-                            aggregatorSignerPubkey = ""
-                            aggregatorSignerPackageName = ""
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                        },
-                    ) {
-                        Text(stringResource(R.string.relay_aggregator_signer_logout))
-                    }
-                }
             }
 
             // ── Others ─────────────────────────────────────────────────────────
