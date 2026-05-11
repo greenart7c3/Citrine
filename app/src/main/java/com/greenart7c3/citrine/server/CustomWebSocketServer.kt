@@ -319,7 +319,7 @@ class CustomWebSocketServer(
         AuthRequiredForProtectedEvent,
     }
 
-    suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean): VerificationResult {
+    suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean, fromAggregator: Boolean = false): VerificationResult {
         if (!shouldVerify) {
             return VerificationResult.Valid
         }
@@ -334,17 +334,22 @@ class CustomWebSocketServer(
             return VerificationResult.KindNotAllowed
         }
 
-        if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
-            if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
-                Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.id}")
-                return VerificationResult.TaggedPubkeyNotAllowed
+        // Aggregator-fetched events bypass the author/tagged-pubkey allowlists
+        // because the aggregator already validated them against the user's
+        // requested subscription filter before handing them off here.
+        if (!fromAggregator) {
+            if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
+                if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
+                    Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.id}")
+                    return VerificationResult.TaggedPubkeyNotAllowed
+                }
             }
-        }
 
-        if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
-            if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
-                Log.d(Citrine.TAG, "pubkey not allowed ${event.id}")
-                return VerificationResult.PubkeyNotAllowed
+            if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
+                if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
+                    Log.d(Citrine.TAG, "pubkey not allowed ${event.id}")
+                    return VerificationResult.PubkeyNotAllowed
+                }
             }
         }
 
@@ -438,8 +443,8 @@ class CustomWebSocketServer(
         return VerificationResult.Valid
     }
 
-    suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true): VerificationResult {
-        val result = verifyEvent(event, connection, shouldVerify)
+    suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true, fromAggregator: Boolean = false): VerificationResult {
+        val result = verifyEvent(event, connection, shouldVerify, fromAggregator)
         when (result) {
             VerificationResult.AuthRequiredForProtectedEvent -> {
                 connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
