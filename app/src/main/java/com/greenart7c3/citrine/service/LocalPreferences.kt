@@ -149,6 +149,6 @@ object LocalPreferences {
         Settings.relayAggregatorIncludeTagged = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, true)
         Settings.relayAggregatorLastSync = prefs.getLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, 0L)
         Settings.relayAggregatorExtraRelays = prefs.getStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, emptySet()) ?: emptySet()
-        Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, false)
+        Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, true)
     }
 }
