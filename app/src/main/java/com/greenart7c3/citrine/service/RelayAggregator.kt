@@ -26,6 +26,7 @@ import com.vitorpamplona.quartz.nip01Core.relay.filters.Filter
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
+import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -181,6 +182,11 @@ object RelayAggregator {
     // in-flight AUTH state.
     @Volatile private var installedAuthIdentity: Pair<String, String>? = null
 
+    // Cache of (relay → last challenge string, signed AUTH event) so a relay re-sending
+    // the same challenge — common on reconnect, and what was driving the duplicate Amber
+    // prompts — returns the previously-signed event without re-invoking the signer.
+    private val signedAuthCache: ConcurrentHashMap<String, Pair<String, RelayAuthEvent>> = ConcurrentHashMap()
+
     // Debounced re-evaluation of network state. Cancelled and rescheduled by every
     // ConnectivityManager callback so a burst of changes only triggers one evaluation.
     @Volatile private var networkEvalJob: Job? = null
@@ -331,6 +337,7 @@ object RelayAggregator {
         authenticator = null
         relayAuthSigner = null
         installedAuthIdentity = null
+        signedAuthCache.clear()
 
         unregisterNetworkCallback()
 
@@ -428,10 +435,23 @@ object RelayAggregator {
         }
         relayAuthSigner = signer
         installedAuthIdentity = desired
+        signedAuthCache.clear()
         Log.d(TAG, "Installing RelayAuthenticator for $pubkey via $pkg")
         authenticator = RelayAuthenticator(Citrine.instance.client, scope) { template ->
+            val relay = template.tags.firstOrNull { it.size > 1 && it[0] == "relay" }?.get(1)
+            val challenge = template.tags.firstOrNull { it.size > 1 && it[0] == "challenge" }?.get(1)
+            if (relay != null && challenge != null) {
+                val cached = signedAuthCache[relay]
+                if (cached != null && cached.first == challenge) {
+                    Log.d(TAG, "Reusing cached AUTH for $relay (challenge unchanged)")
+                    return@RelayAuthenticator listOf(cached.second)
+                }
+            }
             try {
                 val signed = signer.sign(template)
+                if (relay != null && challenge != null) {
+                    signedAuthCache[relay] = challenge to signed
+                }
                 listOf(signed)
             } catch (e: CancellationException) {
                 throw e
