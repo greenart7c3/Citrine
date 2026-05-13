@@ -426,11 +426,11 @@ object RelayAggregator {
 
         if (desired == null) return
         val signer = NostrSignerExternal(pubkey, pkg, Citrine.instance.contentResolver)
-        // Allow the signer to fall back to Amber's UI when the background ContentResolver
-        // path can't auto-approve. We're running in a Service, so the launched intent must
-        // carry FLAG_ACTIVITY_NEW_TASK to start from the application context. The signer's
-        // response Intent is delivered back via MainActivity.onNewIntent → relayAuthSigner
-        // forwarding when the user finishes the Amber flow.
+        // Lets the signer fall back to Amber's UI when the background ContentResolver path
+        // can't auto-approve. The launcher routes through MainActivity's
+        // ActivityResultLauncher (set via [registerActivityLauncher]), which preserves
+        // callingPackage on the intent and feeds Amber's reply back into this signer via
+        // [deliverSignerResponse] so the suspended sign() resumes.
         signer.registerForegroundLauncher { intent ->
             // Must go through the ActivityResultLauncher MainActivity registered with us —
             // that's what populates Intent.callingPackage so Amber can authenticate the
