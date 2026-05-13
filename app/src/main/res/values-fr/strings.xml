@@ -33,8 +33,6 @@
     <string name="cancel">Annuler</string>
     <string name="logs">Journaux</string>
     <string name="use_proxy">Utiliser un proxy</string>
-    <string name="proxy_port">Port du proxy</string>
-    <string name="imported">Importé %1$s/%2$s</string>
     <string name="imported2">Importé %1$s</string>
     <string name="deleting_all_events">suppression de tous les événements</string>
     <string name="reading_file">Lecture du fichier %1$s</string>
@@ -51,7 +49,6 @@
     <string name="go_back">Retour</string>
     <string name="total">Total %1$s</string>
     <string name="kind">Type</string>
-    <string name="count">Compte</string>
     <string name="database">Base de données</string>
     <string name="download_your_events">Download your events</string>
     <string name="fetch_events">Fetch events</string>
@@ -61,12 +58,9 @@
     <string name="delete">Delete</string>
     <string name="are_you_sure_you_want_to_delete_all_events_of_kind">Are you sure you want to delete all events of kind %1$d?</string>
     <string name="listen_to_pokey_broadcasts">Listen to pokey broadcasts</string>
-    <string name="delete_expired_events">Delete expired events</string>
-    <string name="delete_ephemeral_events">Delete ephemeral events</string>
     <string name="enable_disable_auth">Enable/Disable Auth</string>
     <string name="start_on_boot">Start on boot</string>
     <string name="backup">Backup</string>
-    <string name="backup_folder">Backup folder</string>
     <string name="web_clients">Web Clients</string>
     <string name="relay_description">Relay Description</string>
     <string name="relay_contact">Relay Contact</string>
@@ -89,7 +83,6 @@
     <string name="allowed_kinds">Allowed kinds</string>
     <string name="invalid_kind">Invalid kind</string>
     <string name="others">Others</string>
-    <string name="invalid_port">Invalid port</string>
     <string name="never_delete_from">Never delete from</string>
     <string name="preserved_kinds_from_deletion">Preserved kinds</string>
     <string name="preserved_kinds_from_deletion_description">Events of these kinds are never removed by the age-based cleanup, regardless of the \"delete events older than\" setting.</string>
@@ -113,15 +106,12 @@
     <string name="start_on_boot_description">Automatically start the relay when the device boots</string>
     <string name="enable_disable_auth_description">Require NIP-42 authentication for private event kinds</string>
     <string name="listen_to_pokey_broadcasts_description">Receive events broadcast by the Pokey app</string>
-    <string name="delete_expired_events_description">Automatically remove events past their expiration timestamp</string>
-    <string name="delete_ephemeral_events_description">Automatically remove ephemeral events (kinds 20000–29999)</string>
     <string name="use_proxy_description">Route outbound connections through a SOCKS5 proxy</string>
     <string name="proxy_all_urls">Use Tor for all URLs</string>
     <string name="proxy_all_urls_description">Route every outbound connection through Tor, not just .onion addresses</string>
     <string name="auto_backup_description">Periodically back up the database to a selected folder</string>
     <string name="use_tor">Expose relay over Tor</string>
     <string name="use_tor_description">Run an onion service so other Nostr clients can reach this relay over the Tor network</string>
-    <string name="tor_virtual_port">Onion port</string>
     <string name="onion_address">Onion address</string>
     <string name="tor_starting">Starting Tor…</string>
     <string name="tor_error">Tor error: %1$s</string>
@@ -131,7 +121,6 @@
     <string name="relay_aggregator">Relay Aggregator</string>
     <string name="relay_aggregator_description">Continuously mirror events from the aggregator pubkey\'s follows into this relay</string>
     <string name="relay_aggregator_pubkey">Aggregator pubkey (hex or npub)</string>
-    <string name="relay_aggregator_pubkey_required">Set the aggregator pubkey first</string>
     <string name="relay_aggregator_refresh_minutes">Refresh interval (minutes)</string>
     <string name="relay_aggregator_include_tagged">Also mirror events tagging the aggregator</string>
     <string name="relay_aggregator_include_tagged_description">Subscribe for any event that p-tags the aggregator pubkey on its read relays</string>
