@@ -445,6 +445,7 @@ object RelayAggregator {
                 return@registerForegroundLauncher
             }
             try {
+                intent.`package` = pkg
                 intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 launcher(intent)
             } catch (e: Exception) {
