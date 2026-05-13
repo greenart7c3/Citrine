@@ -1,14 +1,12 @@
 package com.greenart7c3.citrine
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
-import android.os.Bundle
 import android.util.Log
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.okhttp.HttpClientManager
@@ -65,31 +63,6 @@ class Citrine : Application() {
 
     private val pokeyReceiver = PokeyReceiver()
 
-    // Tracks the currently-resumed Activity so headless callers (e.g. RelayAggregator's
-    // foreground signer launcher) can route Activity-context-requiring intents through a
-    // real Activity instead of resorting to FLAG_ACTIVITY_NEW_TASK from the Application
-    // context — the latter nulls the caller's UID, which breaks Amber's setResult round
-    // trip.
-    @Volatile
-    var currentActivity: Activity? = null
-        private set
-
-    private val activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
-        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-        override fun onActivityStarted(activity: Activity) {}
-        override fun onActivityResumed(activity: Activity) {
-            currentActivity = activity
-        }
-        override fun onActivityPaused(activity: Activity) {
-            if (currentActivity === activity) currentActivity = null
-        }
-        override fun onActivityStopped(activity: Activity) {}
-        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
-        override fun onActivityDestroyed(activity: Activity) {
-            if (currentActivity === activity) currentActivity = null
-        }
-    }
-
     fun isPrivateIp(url: String): Boolean = url.contains("127.0.0.1") ||
         url.contains("localhost") ||
         url.contains("192.168.") ||
@@ -134,8 +107,6 @@ class Citrine : Application() {
         super.onCreate()
 
         instance = this
-
-        registerActivityLifecycleCallbacks(activityLifecycleCallbacks)
 
         Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache, applicationScope))
 

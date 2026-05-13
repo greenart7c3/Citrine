@@ -187,6 +187,25 @@ object RelayAggregator {
     // prompts — returns the previously-signed event without re-invoking the signer.
     private val signedAuthCache: ConcurrentHashMap<String, Pair<String, RelayAuthEvent>> = ConcurrentHashMap()
 
+    // Activity-scoped Intent launcher set by MainActivity. Uses registerForActivityResult
+    // under the hood, which preserves the caller's identity on the intent — Amber relies
+    // on that callingPackage to identify which app is asking, and a plain Application-
+    // context startActivity() makes it null.
+    @Volatile private var activityLauncher: ((Intent) -> Unit)? = null
+
+    /**
+     * Called by [MainActivity] in onCreate to provide an ActivityResultLauncher-backed
+     * way to launch the signer intent. The aggregator's foreground signer path goes
+     * through this when invoked while the activity is alive.
+     */
+    fun registerActivityLauncher(launcher: (Intent) -> Unit) {
+        activityLauncher = launcher
+    }
+
+    fun unregisterActivityLauncher() {
+        activityLauncher = null
+    }
+
     // Debounced re-evaluation of network state. Cancelled and rescheduled by every
     // ConnectivityManager callback so a burst of changes only triggers one evaluation.
     @Volatile private var networkEvalJob: Job? = null
@@ -413,24 +432,23 @@ object RelayAggregator {
         // response Intent is delivered back via MainActivity.onNewIntent → relayAuthSigner
         // forwarding when the user finishes the Amber flow.
         signer.registerForegroundLauncher { intent ->
-            // Amber requires the caller's UID to be set on the intent so it can identify
-            // which app is asking and round-trip setResult back. FLAG_ACTIVITY_NEW_TASK
-            // (the obvious way to start an Activity from a Service) nulls that UID, so
-            // we must launch from a real foreground Activity. When Citrine has no Activity
-            // in front (background-only service), the foreground path can't run — the
-            // user has to open the app once so the Activity callback registers, then the
-            // next AUTH challenge will succeed (or rely on Amber's pre-approved
-            // ContentResolver path for fully background signing).
-            val activity = Citrine.instance.currentActivity
-            if (activity == null) {
-                Log.w(TAG, "No foreground Activity to launch signer intent; open Citrine once to authorize")
+            // Must go through the ActivityResultLauncher MainActivity registered with us —
+            // that's what populates Intent.callingPackage so Amber can authenticate the
+            // caller. A bare activity.startActivity() leaves callingPackage null and
+            // Amber rejects. When MainActivity isn't alive, the foreground path can't
+            // run; the user must open Citrine once so onCreate registers the launcher,
+            // and from then on the ContentResolver background path also works thanks to
+            // Amber's stored auto-approve.
+            val launcher = activityLauncher
+            if (launcher == null) {
+                Log.w(TAG, "No Activity launcher registered; open Citrine once to authorize the signer")
                 return@registerForegroundLauncher
             }
             try {
                 intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                activity.startActivity(intent)
+                launcher(intent)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to launch signer intent from Activity context", e)
+                Log.e(TAG, "Failed to launch signer intent via Activity launcher", e)
             }
         }
         relayAuthSigner = signer
