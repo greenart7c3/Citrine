@@ -75,8 +75,6 @@ import com.vitorpamplona.quartz.utils.Hex
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @Composable
@@ -108,6 +106,7 @@ fun SettingsScreen(
         var useTor by remember { mutableStateOf(Settings.useTor) }
         val torState = com.greenart7c3.citrine.service.TorManager.state.collectAsStateWithLifecycle()
         var autoBackup by remember { mutableStateOf(Settings.autoBackup) }
+        var autoBackupFolder by remember { mutableStateOf(Settings.autoBackupFolder) }
 
         var signedBy by remember { mutableStateOf(TextFieldValue("")) }
         var referredBy by remember { mutableStateOf(TextFieldValue("")) }
@@ -135,6 +134,13 @@ fun SettingsScreen(
         var aggregatorSignerPubkey by remember { mutableStateOf(Settings.aggregatorSignerPubkey) }
         var aggregatorSignerPackageName by remember { mutableStateOf(Settings.aggregatorSignerPackageName) }
 
+        var olderThanTypeIndex by remember {
+            mutableIntStateOf(
+                OlderThanType.entries.toTypedArray()
+                    .indexOfFirst { it.name == Settings.deleteEventsOlderThan.toString() },
+            )
+        }
+
         val aggregatorSignerLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult(),
         ) { result ->
@@ -158,18 +164,9 @@ fun SettingsScreen(
                             key
                         }
                         if (returnedKey.isBlank() || packageName.isBlank()) return@let
-                        // The pubkey field is the aggregator's identity — populate it
-                        // from the signer's reply so a fresh login is enough to start the
-                        // aggregator. Storing the packageName too lets RelayAggregator
-                        // reconstruct a NostrSignerExternal for AUTH challenges.
-                        Settings.aggregatorPubkey = returnedKey
-                        Settings.aggregatorSignerPubkey = returnedKey
-                        Settings.aggregatorSignerPackageName = packageName
                         aggregatorPubkey = TextFieldValue(returnedKey)
                         aggregatorSignerPubkey = returnedKey
                         aggregatorSignerPackageName = packageName
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                     } catch (e: Exception) {
                         android.util.Log.d(Citrine.TAG, e.message ?: "", e)
                     }
@@ -179,744 +176,139 @@ fun SettingsScreen(
 
         var shouldAddWebClient = false
         var webPath by remember { mutableStateOf(TextFieldValue("")) }
-        val webClients = MutableStateFlow(Settings.webClients.toMutableMap())
-        val clients = webClients.collectAsStateWithLifecycle()
+        var webClients by remember { mutableStateOf<Map<String, String>>(Settings.webClients.toMap()) }
 
         storageHelper.onFolderSelected = { _, folder ->
             if (shouldAddWebClient) {
                 val path = if (webPath.text.startsWith("/")) webPath.text else "/${webPath.text}"
-                webClients.update { old ->
-                    val updated = old.toMutableMap().apply { this[path] = folder.uri.toString() }
-                    Settings.webClients = updated
-                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    updated
-                }
-                onApplyChanges()
+                webClients = webClients + (path to folder.uri.toString())
                 webPath = TextFieldValue("")
             } else {
                 autoBackup = true
-                Settings.autoBackup = true
-                Settings.autoBackupFolder = folder.uri.toString()
-                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                autoBackupFolder = folder.uri.toString()
             }
         }
 
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            // ── Server ─────────────────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.server))
+        val resetToDefaults: () -> Unit = {
+            scope.launch(Dispatchers.IO) {
+                isLoading = true
+                Settings.defaultValues()
+                host = TextFieldValue(Settings.host)
+                port = TextFieldValue(Settings.port.toString())
+                relayName = TextFieldValue(Settings.name)
+                relayOwnerPubkey = TextFieldValue(Settings.ownerPubkey)
+                relayContact = TextFieldValue(Settings.contact)
+                relayDescription = TextFieldValue(Settings.description)
+                relayIconUrl = TextFieldValue(Settings.relayIcon)
+                startOnBoot = Settings.startOnBoot
+                useAuth = Settings.authEnabled
+                listenToPokeyBroadcasts = Settings.listenToPokeyBroadcasts
+                useProxy = Settings.useProxy
+                proxyAllUrls = Settings.proxyAllUrls
+                useTor = Settings.useTor
+                autoBackup = Settings.autoBackup
+                autoBackupFolder = Settings.autoBackupFolder
+                signedBy = TextFieldValue("")
+                referredBy = TextFieldValue("")
+                kind = TextFieldValue("")
+                deleteFrom = TextFieldValue("")
+                preservedKindInput = TextFieldValue("")
+                allowedPubKeys = Settings.allowedPubKeys
+                allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
+                allowedKinds = Settings.allowedKinds
+                neverDeleteFrom = Settings.neverDeleteFrom
+                preservedKindsFromDeletion = Settings.preservedKindsFromDeletion
+                relayAggregatorEnabled = Settings.relayAggregatorEnabled
+                aggregatorPubkey = TextFieldValue(Settings.aggregatorPubkey)
+                aggregatorKinds = Settings.relayAggregatorKinds
+                aggregatorKindInput = TextFieldValue("")
+                aggregatorRefreshMinutes = TextFieldValue(Settings.relayAggregatorRefreshMinutes.toString())
+                aggregatorIncludeTagged = Settings.relayAggregatorIncludeTagged
+                aggregatorWifiOnly = Settings.relayAggregatorWifiOnly
+                aggregatorExtraRelays = Settings.relayAggregatorExtraRelays
+                aggregatorExtraRelayInput = TextFieldValue("")
+                aggregatorSignerPubkey = Settings.aggregatorSignerPubkey
+                aggregatorSignerPackageName = Settings.aggregatorSignerPackageName
+                webClients = Settings.webClients.toMap()
+                olderThanTypeIndex = OlderThanType.entries.toTypedArray()
+                    .indexOfFirst { it.name == Settings.deleteEventsOlderThan.toString() }
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                if (Settings.listenToPokeyBroadcasts) {
+                    Citrine.instance.registerPokeyReceiver()
+                } else {
+                    Citrine.instance.unregisterPokeyReceiver()
+                }
+                onApplyChanges()
+                delay(1500)
+                isLoading = false
             }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = host,
-                    label = { Text(stringResource(R.string.host)) },
-                    onValueChange = { host = it },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = port,
-                    label = { Text(stringResource(R.string.port)) },
-                    onValueChange = { port = it },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = relayName,
-                    label = { Text(stringResource(R.string.relay_name)) },
-                    onValueChange = { relayName = it },
-                    singleLine = true,
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = relayOwnerPubkey,
-                    label = { Text(stringResource(R.string.relay_owner_pubkey)) },
-                    onValueChange = { relayOwnerPubkey = it },
-                    singleLine = true,
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = relayContact,
-                    label = { Text(stringResource(R.string.relay_contact)) },
-                    onValueChange = { relayContact = it },
-                    singleLine = true,
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = relayDescription,
-                    label = { Text(stringResource(R.string.relay_description)) },
-                    onValueChange = { relayDescription = it },
-                    minLines = 2,
-                    maxLines = 4,
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = relayIconUrl,
-                    label = { Text(stringResource(R.string.relay_icon_url)) },
-                    onValueChange = { relayIconUrl = it },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
-            }
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                ) {
-                    ElevatedButton(
-                        enabled = !isLoading,
-                        onClick = {
-                            if (isLoading) return@ElevatedButton
-                            scope.launch(Dispatchers.IO) {
-                                isLoading = true
-                                Settings.defaultValues()
-                                host = TextFieldValue(Settings.host)
-                                port = TextFieldValue(Settings.port.toString())
-                                relayName = TextFieldValue(Settings.name)
-                                relayOwnerPubkey = TextFieldValue(Settings.ownerPubkey)
-                                relayContact = TextFieldValue(Settings.contact)
-                                relayDescription = TextFieldValue(Settings.description)
-                                relayIconUrl = TextFieldValue(Settings.relayIcon)
-                                signedBy = TextFieldValue("")
-                                referredBy = TextFieldValue("")
-                                kind = TextFieldValue("")
-                                deleteFrom = TextFieldValue("")
-                                allowedPubKeys = Settings.allowedPubKeys
-                                allowedTaggedPubKeys = Settings.allowedTaggedPubKeys
-                                allowedKinds = Settings.allowedKinds
-                                neverDeleteFrom = Settings.neverDeleteFrom
-                                relayAggregatorEnabled = Settings.relayAggregatorEnabled
-                                aggregatorPubkey = TextFieldValue(Settings.aggregatorPubkey)
-                                aggregatorKinds = Settings.relayAggregatorKinds
-                                aggregatorRefreshMinutes = TextFieldValue(Settings.relayAggregatorRefreshMinutes.toString())
-                                aggregatorIncludeTagged = Settings.relayAggregatorIncludeTagged
-                                aggregatorWifiOnly = Settings.relayAggregatorWifiOnly
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                                onApplyChanges()
-                                delay(1500)
-                                isLoading = false
-                            }
-                        },
-                    ) {
-                        Text(stringResource(R.string.default_value))
-                    }
+            Unit
+        }
 
-                    ElevatedButton(
-                        enabled = !isLoading,
-                        onClick = {
-                            if (!isIpValid(host.text) || host.text.isBlank()) {
-                                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
-                                return@ElevatedButton
-                            }
-                            if (port.text.isBlank() || !port.text.isDigitsOnly()) {
-                                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
-                                return@ElevatedButton
-                            }
-                            if (relayOwnerPubkey.text.isNotBlank() && relayOwnerPubkey.text.toNostrKey() == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_owner_pubkey), Toast.LENGTH_SHORT).show()
-                                return@ElevatedButton
-                            }
-                            if (relayIconUrl.text.isNotBlank()) {
-                                try {
-                                    relayIconUrl.text.toUri()
-                                } catch (_: Exception) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_icon_url), Toast.LENGTH_SHORT).show()
-                                    return@ElevatedButton
-                                }
-                            }
-                            if (isLoading) return@ElevatedButton
-                            scope.launch(Dispatchers.IO) {
-                                isLoading = true
-                                Settings.port = port.text.toInt()
-                                Settings.host = host.text
-                                Settings.name = relayName.text
-                                Settings.ownerPubkey = relayOwnerPubkey.text.toNostrKey() ?: ""
-                                Settings.contact = relayContact.text
-                                Settings.description = relayDescription.text
-                                Settings.relayIcon = relayIconUrl.text
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                                onApplyChanges()
-                                delay(1500)
-                                isLoading = false
-                            }
-                        },
-                    ) {
-                        Text(stringResource(R.string.apply_changes))
-                    }
+        val applyChanges: () -> Unit = {
+            if (!isIpValid(host.text) || host.text.isBlank()) {
+                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
+            } else if (port.text.isBlank() || !port.text.isDigitsOnly()) {
+                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
+            } else if (relayOwnerPubkey.text.isNotBlank() && relayOwnerPubkey.text.toNostrKey() == null) {
+                Toast.makeText(context, context.getString(R.string.invalid_owner_pubkey), Toast.LENGTH_SHORT).show()
+            } else if (relayIconUrl.text.isNotBlank() && runCatching { relayIconUrl.text.toUri() }.isFailure) {
+                Toast.makeText(context, context.getString(R.string.invalid_icon_url), Toast.LENGTH_SHORT).show()
+            } else {
+                val refreshMinutes = aggregatorRefreshMinutes.text.toIntOrNull()?.takeIf { it >= 1 }
+                    ?: Settings.relayAggregatorRefreshMinutes
+                val aggregatorKeyTrimmed = aggregatorPubkey.text.trim()
+                val resolvedAggregatorKey = if (aggregatorKeyTrimmed.isBlank()) {
+                    ""
+                } else {
+                    aggregatorKeyTrimmed.toNostrKey() ?: aggregatorKeyTrimmed
                 }
-            }
+                val resolvedSignerPubkey: String
+                val resolvedSignerPackage: String
+                if (resolvedAggregatorKey.isBlank()) {
+                    resolvedSignerPubkey = ""
+                    resolvedSignerPackage = ""
+                } else if (resolvedAggregatorKey != aggregatorSignerPubkey) {
+                    resolvedSignerPubkey = ""
+                    resolvedSignerPackage = ""
+                } else {
+                    resolvedSignerPubkey = aggregatorSignerPubkey
+                    resolvedSignerPackage = aggregatorSignerPackageName
+                }
 
-            // ── Accept events signed by ────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.accept_events_signed_by))
-            }
-            item {
-                PubkeyInputRow(
-                    value = signedBy,
-                    onValueChange = { signedBy = it },
-                    onPaste = {
-                        scope.launch {
-                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                            signedBy = TextFieldValue(text)
-                            val key = text.toNostrKey()
-                            if (key == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val users = Settings.allowedPubKeys.toMutableSet().apply { add(key) }
-                            Settings.allowedPubKeys = users
-                            allowedPubKeys = users
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            signedBy = TextFieldValue("")
-                        }
-                    },
-                    onAdd = {
-                        val key = signedBy.text.toNostrKey()
-                        if (key == null) {
-                            Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
-                            return@PubkeyInputRow
-                        }
-                        val users = Settings.allowedPubKeys.toMutableSet().apply { add(key) }
-                        Settings.allowedPubKeys = users
-                        allowedPubKeys = users
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        signedBy = TextFieldValue("")
-                    },
-                )
-            }
-            if (allowedPubKeys.isEmpty()) {
-                item {
-                    EmptyListHint(stringResource(R.string.allow_all_pubkeys_hint))
-                }
-            }
-            items(allowedPubKeys.toList()) { pubkey ->
-                PubkeyListItem(
-                    text = pubkey.toShortenHex(),
-                    onDelete = {
-                        val users = Settings.allowedPubKeys.toMutableSet().apply { remove(pubkey) }
-                        Settings.allowedPubKeys = users
-                        allowedPubKeys = users
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-
-            // ── Accept events that refer to ────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.accept_events_that_refer_to))
-            }
-            item {
-                PubkeyInputRow(
-                    value = referredBy,
-                    onValueChange = { referredBy = it },
-                    onPaste = {
-                        scope.launch {
-                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                            referredBy = TextFieldValue(text)
-                            val key = text.toNostrKey()
-                            if (key == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val users = Settings.allowedTaggedPubKeys.toMutableSet().apply { add(key) }
-                            Settings.allowedTaggedPubKeys = users
-                            allowedTaggedPubKeys = users
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            referredBy = TextFieldValue("")
-                        }
-                    },
-                    onAdd = {
-                        val key = referredBy.text.toNostrKey()
-                        if (key == null) {
-                            Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
-                            return@PubkeyInputRow
-                        }
-                        val users = Settings.allowedTaggedPubKeys.toMutableSet().apply { add(key) }
-                        Settings.allowedTaggedPubKeys = users
-                        allowedTaggedPubKeys = users
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        referredBy = TextFieldValue("")
-                    },
-                )
-            }
-            if (allowedTaggedPubKeys.isEmpty()) {
-                item {
-                    EmptyListHint(stringResource(R.string.allow_all_tagged_pubkeys_hint))
-                }
-            }
-            items(allowedTaggedPubKeys.toList()) { pubkey ->
-                PubkeyListItem(
-                    text = pubkey.toShortenHex(),
-                    onDelete = {
-                        val users = Settings.allowedTaggedPubKeys.toMutableSet().apply { remove(pubkey) }
-                        Settings.allowedTaggedPubKeys = users
-                        allowedTaggedPubKeys = users
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-
-            // ── Allowed Kinds ──────────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.allowed_kinds))
-            }
-            item {
-                PubkeyInputRow(
-                    value = kind,
-                    onValueChange = { kind = it },
-                    onPaste = {
-                        scope.launch {
-                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                            kind = TextFieldValue(text)
-                            if (text.toIntOrNull() == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val kinds = Settings.allowedKinds.toMutableSet().apply { add(text.toInt()) }
-                            Settings.allowedKinds = kinds
-                            allowedKinds = kinds
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            kind = TextFieldValue("")
-                        }
-                    },
-                    onAdd = {
-                        if (kind.text.toIntOrNull() == null) {
-                            Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
-                            return@PubkeyInputRow
-                        }
-                        val kinds = Settings.allowedKinds.toMutableSet().apply { add(kind.text.toInt()) }
-                        Settings.allowedKinds = kinds
-                        allowedKinds = kinds
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        kind = TextFieldValue("")
-                    },
-                )
-            }
-            if (allowedKinds.isEmpty()) {
-                item {
-                    EmptyListHint(stringResource(R.string.allow_all_kinds_hint))
-                }
-            }
-            items(allowedKinds.toList()) { k ->
-                PubkeyListItem(
-                    text = k.toString(),
-                    onDelete = {
-                        val kinds = Settings.allowedKinds.toMutableSet().apply { remove(k) }
-                        Settings.allowedKinds = kinds
-                        allowedKinds = kinds
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-
-            // ── Relay Aggregator ───────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.relay_aggregator))
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.relay_aggregator),
-                    description = stringResource(R.string.relay_aggregator_description),
-                    checked = relayAggregatorEnabled,
-                    onCheckedChange = {
-                        if (it && Settings.aggregatorPubkey.isBlank() && Settings.relayAggregatorExtraRelays.isEmpty()) {
-                            Toast.makeText(context, context.getString(R.string.relay_aggregator_pubkey_or_relays_required), Toast.LENGTH_SHORT).show()
-                            return@SwitchSettingRow
-                        }
-                        relayAggregatorEnabled = it
-                        Settings.relayAggregatorEnabled = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                    },
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = aggregatorPubkey,
-                    label = { Text(stringResource(R.string.relay_aggregator_pubkey)) },
-                    onValueChange = { newValue ->
-                        aggregatorPubkey = newValue
-                        val text = newValue.text.trim()
-                        if (text.isBlank()) {
-                            Settings.aggregatorPubkey = ""
-                            // A manually cleared pubkey invalidates any previously-stored
-                            // signer identity — they were tied to the pubkey that was just
-                            // removed, and the packageName alone can't sign for a different
-                            // user.
-                            Settings.aggregatorSignerPubkey = ""
-                            Settings.aggregatorSignerPackageName = ""
-                            aggregatorSignerPubkey = ""
-                            aggregatorSignerPackageName = ""
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                            return@OutlinedTextField
-                        }
-                        val key = text.toNostrKey()
-                        if (key == null) {
-                            return@OutlinedTextField
-                        }
-                        Settings.aggregatorPubkey = key
-                        // Manually editing the pubkey to something other than the
-                        // signed-in identity clears the AUTH signer — Amber can only
-                        // sign for the pubkey it actually controls.
-                        if (key != Settings.aggregatorSignerPubkey) {
-                            Settings.aggregatorSignerPubkey = ""
-                            Settings.aggregatorSignerPackageName = ""
-                            aggregatorSignerPubkey = ""
-                            aggregatorSignerPackageName = ""
-                        }
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                    },
-                    singleLine = true,
-                    trailingIcon = {
-                        IconButton(
-                            onClick = {
-                                try {
-                                    val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
-                                    intent.putExtra("type", "get_public_key")
-                                    val permission = com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission(
-                                        com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType.SIGN_EVENT,
-                                        22242,
-                                    )
-                                    intent.putExtra("permissions", "[${permission.toJson()}]")
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                    aggregatorSignerLauncher.launch(intent)
-                                } catch (e: Exception) {
-                                    android.util.Log.d(Citrine.TAG, e.message ?: "", e)
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.no_external_signer_installed),
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                    val fallback = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
-                                    aggregatorSignerLauncher.launch(fallback)
-                                }
-                            },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Key,
-                                contentDescription = stringResource(R.string.relay_aggregator_signer_login),
-                            )
-                        }
-                    },
-                )
-            }
-            item {
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    value = aggregatorRefreshMinutes,
-                    label = { Text(stringResource(R.string.relay_aggregator_refresh_minutes)) },
-                    onValueChange = {
-                        aggregatorRefreshMinutes = it
-                        val n = it.text.toIntOrNull() ?: return@OutlinedTextField
-                        if (n < 1) return@OutlinedTextField
-                        Settings.relayAggregatorRefreshMinutes = n
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.relay_aggregator_include_tagged),
-                    description = stringResource(R.string.relay_aggregator_include_tagged_description),
-                    checked = aggregatorIncludeTagged,
-                    onCheckedChange = {
-                        aggregatorIncludeTagged = it
-                        Settings.relayAggregatorIncludeTagged = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.relay_aggregator_wifi_only),
-                    description = stringResource(R.string.relay_aggregator_wifi_only_description),
-                    checked = aggregatorWifiOnly,
-                    onCheckedChange = {
-                        aggregatorWifiOnly = it
-                        Settings.relayAggregatorWifiOnly = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                    },
-                )
-            }
-            item {
-                PubkeyInputRow(
-                    value = aggregatorKindInput,
-                    onValueChange = { aggregatorKindInput = it },
-                    onPaste = {
-                        scope.launch {
-                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                            aggregatorKindInput = TextFieldValue(text)
-                            val k = text.toIntOrNull()
-                            if (k == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val kinds = Settings.relayAggregatorKinds.toMutableSet().apply { add(k) }
-                            Settings.relayAggregatorKinds = kinds
-                            aggregatorKinds = kinds
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                            aggregatorKindInput = TextFieldValue("")
-                        }
-                    },
-                    onAdd = {
-                        val k = aggregatorKindInput.text.toIntOrNull()
-                        if (k == null) {
-                            Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
-                            return@PubkeyInputRow
-                        }
-                        val kinds = Settings.relayAggregatorKinds.toMutableSet().apply { add(k) }
-                        Settings.relayAggregatorKinds = kinds
-                        aggregatorKinds = kinds
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                        aggregatorKindInput = TextFieldValue("")
-                    },
-                )
-            }
-            if (aggregatorKinds.isEmpty()) {
-                item {
-                    EmptyListHint(stringResource(R.string.relay_aggregator_kinds_empty_hint))
-                }
-            }
-            items(aggregatorKinds.toList()) { k ->
-                PubkeyListItem(
-                    text = k.toString(),
-                    onDelete = {
-                        val kinds = Settings.relayAggregatorKinds.toMutableSet().apply { remove(k) }
-                        Settings.relayAggregatorKinds = kinds
-                        aggregatorKinds = kinds
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                    },
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.relay_aggregator_extra_relays),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.relay_aggregator_extra_relays_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
-            item {
-                PubkeyInputRow(
-                    value = aggregatorExtraRelayInput,
-                    onValueChange = { aggregatorExtraRelayInput = it },
-                    onPaste = {
-                        scope.launch {
-                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                            aggregatorExtraRelayInput = TextFieldValue(text)
-                        }
-                    },
-                    onAdd = {
-                        val normalized = normalizeRelayInput(aggregatorExtraRelayInput.text)
-                        if (normalized == null) {
-                            Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
-                            return@PubkeyInputRow
-                        }
-                        val relays = Settings.relayAggregatorExtraRelays.toMutableSet().apply { add(normalized) }
-                        Settings.relayAggregatorExtraRelays = relays
-                        aggregatorExtraRelays = relays
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                        aggregatorExtraRelayInput = TextFieldValue("")
-                    },
-                )
-            }
-            if (aggregatorExtraRelays.isEmpty()) {
-                item {
-                    EmptyListHint(stringResource(R.string.relay_aggregator_extra_relays_hint))
-                }
-            }
-            items(aggregatorExtraRelays.toList()) { relay ->
-                PubkeyListItem(
-                    text = relay,
-                    onDelete = {
-                        val relays = Settings.relayAggregatorExtraRelays.toMutableSet().apply { remove(relay) }
-                        Settings.relayAggregatorExtraRelays = relays
-                        aggregatorExtraRelays = relays
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
-                    },
-                )
-            }
-
-            // ── Others ─────────────────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.others))
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.start_on_boot),
-                    description = stringResource(R.string.start_on_boot_description),
-                    checked = startOnBoot,
-                    onCheckedChange = {
-                        startOnBoot = it
-                        Settings.startOnBoot = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.enable_disable_auth),
-                    description = stringResource(R.string.enable_disable_auth_description),
-                    checked = useAuth,
-                    onCheckedChange = {
-                        useAuth = it
-                        Settings.authEnabled = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.listen_to_pokey_broadcasts),
-                    description = stringResource(R.string.listen_to_pokey_broadcasts_description),
-                    checked = listenToPokeyBroadcasts,
-                    onCheckedChange = {
-                        listenToPokeyBroadcasts = it
-                        Settings.listenToPokeyBroadcasts = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        if (it) {
-                            Citrine.instance.registerPokeyReceiver()
-                        } else {
-                            Citrine.instance.unregisterPokeyReceiver()
-                        }
-                    },
-                )
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.use_proxy),
-                    description = stringResource(R.string.use_proxy_description),
-                    checked = useProxy,
-                    onCheckedChange = {
-                        useProxy = it
-                        Settings.useProxy = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-            if (useProxy) {
-                item {
-                    SwitchSettingRow(
-                        title = stringResource(R.string.proxy_all_urls),
-                        description = stringResource(R.string.proxy_all_urls_description),
-                        checked = proxyAllUrls,
-                        onCheckedChange = {
-                            proxyAllUrls = it
-                            Settings.proxyAllUrls = it
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        },
-                    )
-                }
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.use_tor),
-                    description = stringResource(R.string.use_tor_description),
-                    checked = useTor,
-                    onCheckedChange = {
-                        useTor = it
-                        Settings.useTor = it
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-            if (useTor) {
-                val displayHostname = when (val s = torState.value) {
-                    is com.greenart7c3.citrine.service.TorManager.State.Running -> s.hostname
-                    else -> Settings.onionHostname
-                }
-                if (displayHostname.isNotBlank()) {
-                    item {
-                        OutlinedTextField(
-                            value = TextFieldValue("ws://$displayHostname"),
-                            onValueChange = { },
-                            readOnly = true,
-                            label = { Text(stringResource(R.string.onion_address)) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            singleLine = true,
-                        )
-                    }
-                }
-            }
-            item {
-                val deleteItems = persistentListOf(
-                    TitleExplainer(stringResource(OlderThanType.NEVER.resourceId)),
-                    TitleExplainer(stringResource(OlderThanType.DAY.resourceId)),
-                    TitleExplainer(stringResource(OlderThanType.WEEK.resourceId)),
-                    TitleExplainer(stringResource(OlderThanType.MONTH.resourceId)),
-                    TitleExplainer(stringResource(OlderThanType.YEAR.resourceId)),
-                )
-                var olderThanTypeIndex by remember {
-                    mutableIntStateOf(
-                        OlderThanType.entries.toTypedArray()
-                            .indexOfFirst { it.name == Settings.deleteEventsOlderThan.toString() },
-                    )
-                }
-                SettingsRow(
-                    name = R.string.delete_events_older_than,
-                    description = R.string.delete_events_older_than_description,
-                    selectedItems = deleteItems,
-                    selectedIndex = olderThanTypeIndex,
-                ) {
-                    olderThanTypeIndex = it
-                    Settings.deleteEventsOlderThan = when (it) {
+                scope.launch(Dispatchers.IO) {
+                    isLoading = true
+                    Settings.host = host.text
+                    Settings.port = port.text.toInt()
+                    Settings.name = relayName.text
+                    Settings.ownerPubkey = relayOwnerPubkey.text.toNostrKey() ?: ""
+                    Settings.contact = relayContact.text
+                    Settings.description = relayDescription.text
+                    Settings.relayIcon = relayIconUrl.text
+                    Settings.startOnBoot = startOnBoot
+                    Settings.authEnabled = useAuth
+                    Settings.listenToPokeyBroadcasts = listenToPokeyBroadcasts
+                    Settings.useProxy = useProxy
+                    Settings.proxyAllUrls = proxyAllUrls
+                    Settings.useTor = useTor
+                    Settings.autoBackup = autoBackup
+                    Settings.autoBackupFolder = autoBackupFolder
+                    Settings.allowedPubKeys = allowedPubKeys
+                    Settings.allowedTaggedPubKeys = allowedTaggedPubKeys
+                    Settings.allowedKinds = allowedKinds
+                    Settings.neverDeleteFrom = neverDeleteFrom
+                    Settings.preservedKindsFromDeletion = preservedKindsFromDeletion
+                    Settings.relayAggregatorEnabled = relayAggregatorEnabled
+                    Settings.aggregatorPubkey = resolvedAggregatorKey
+                    Settings.aggregatorSignerPubkey = resolvedSignerPubkey
+                    Settings.aggregatorSignerPackageName = resolvedSignerPackage
+                    Settings.relayAggregatorKinds = aggregatorKinds
+                    Settings.relayAggregatorRefreshMinutes = refreshMinutes
+                    Settings.relayAggregatorIncludeTagged = aggregatorIncludeTagged
+                    Settings.relayAggregatorWifiOnly = aggregatorWifiOnly
+                    Settings.relayAggregatorExtraRelays = aggregatorExtraRelays
+                    Settings.deleteEventsOlderThan = when (olderThanTypeIndex) {
                         OlderThanType.NEVER.screenCode -> OlderThan.NEVER
                         OlderThanType.DAY.screenCode -> OlderThan.DAY
                         OlderThanType.WEEK.screenCode -> OlderThan.WEEK
@@ -924,176 +316,695 @@ fun SettingsScreen(
                         OlderThanType.YEAR.screenCode -> OlderThan.YEAR
                         else -> OlderThan.NEVER
                     }
+                    Settings.webClients = webClients.toMutableMap()
                     LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+
+                    aggregatorPubkey = TextFieldValue(resolvedAggregatorKey)
+                    aggregatorSignerPubkey = resolvedSignerPubkey
+                    aggregatorSignerPackageName = resolvedSignerPackage
+                    aggregatorRefreshMinutes = TextFieldValue(refreshMinutes.toString())
+
+                    if (listenToPokeyBroadcasts) {
+                        Citrine.instance.registerPokeyReceiver()
+                    } else {
+                        Citrine.instance.unregisterPokeyReceiver()
+                    }
+                    RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    onApplyChanges()
+                    delay(1500)
+                    isLoading = false
+                }
+                Unit
+            }
+        }
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                // ── Server ─────────────────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.server))
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = host,
+                        label = { Text(stringResource(R.string.host)) },
+                        onValueChange = { host = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = port,
+                        label = { Text(stringResource(R.string.port)) },
+                        onValueChange = { port = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = relayName,
+                        label = { Text(stringResource(R.string.relay_name)) },
+                        onValueChange = { relayName = it },
+                        singleLine = true,
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = relayOwnerPubkey,
+                        label = { Text(stringResource(R.string.relay_owner_pubkey)) },
+                        onValueChange = { relayOwnerPubkey = it },
+                        singleLine = true,
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = relayContact,
+                        label = { Text(stringResource(R.string.relay_contact)) },
+                        onValueChange = { relayContact = it },
+                        singleLine = true,
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = relayDescription,
+                        label = { Text(stringResource(R.string.relay_description)) },
+                        onValueChange = { relayDescription = it },
+                        minLines = 2,
+                        maxLines = 4,
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = relayIconUrl,
+                        label = { Text(stringResource(R.string.relay_icon_url)) },
+                        onValueChange = { relayIconUrl = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                }
+
+                // ── Accept events signed by ────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.accept_events_signed_by))
+                }
+                item {
+                    PubkeyInputRow(
+                        value = signedBy,
+                        onValueChange = { signedBy = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                signedBy = TextFieldValue(text)
+                                val key = text.toNostrKey()
+                                if (key == null) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                allowedPubKeys = allowedPubKeys + key
+                                signedBy = TextFieldValue("")
+                            }
+                        },
+                        onAdd = {
+                            val key = signedBy.text.toNostrKey()
+                            if (key == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            allowedPubKeys = allowedPubKeys + key
+                            signedBy = TextFieldValue("")
+                        },
+                    )
+                }
+                if (allowedPubKeys.isEmpty()) {
+                    item {
+                        EmptyListHint(stringResource(R.string.allow_all_pubkeys_hint))
+                    }
+                }
+                items(allowedPubKeys.toList()) { pubkey ->
+                    PubkeyListItem(
+                        text = pubkey.toShortenHex(),
+                        onDelete = {
+                            allowedPubKeys = allowedPubKeys - pubkey
+                        },
+                    )
+                }
+
+                // ── Accept events that refer to ────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.accept_events_that_refer_to))
+                }
+                item {
+                    PubkeyInputRow(
+                        value = referredBy,
+                        onValueChange = { referredBy = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                referredBy = TextFieldValue(text)
+                                val key = text.toNostrKey()
+                                if (key == null) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                allowedTaggedPubKeys = allowedTaggedPubKeys + key
+                                referredBy = TextFieldValue("")
+                            }
+                        },
+                        onAdd = {
+                            val key = referredBy.text.toNostrKey()
+                            if (key == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            allowedTaggedPubKeys = allowedTaggedPubKeys + key
+                            referredBy = TextFieldValue("")
+                        },
+                    )
+                }
+                if (allowedTaggedPubKeys.isEmpty()) {
+                    item {
+                        EmptyListHint(stringResource(R.string.allow_all_tagged_pubkeys_hint))
+                    }
+                }
+                items(allowedTaggedPubKeys.toList()) { pubkey ->
+                    PubkeyListItem(
+                        text = pubkey.toShortenHex(),
+                        onDelete = {
+                            allowedTaggedPubKeys = allowedTaggedPubKeys - pubkey
+                        },
+                    )
+                }
+
+                // ── Allowed Kinds ──────────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.allowed_kinds))
+                }
+                item {
+                    PubkeyInputRow(
+                        value = kind,
+                        onValueChange = { kind = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                kind = TextFieldValue(text)
+                                val k = text.toIntOrNull()
+                                if (k == null) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                allowedKinds = allowedKinds + k
+                                kind = TextFieldValue("")
+                            }
+                        },
+                        onAdd = {
+                            val k = kind.text.toIntOrNull()
+                            if (k == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            allowedKinds = allowedKinds + k
+                            kind = TextFieldValue("")
+                        },
+                    )
+                }
+                if (allowedKinds.isEmpty()) {
+                    item {
+                        EmptyListHint(stringResource(R.string.allow_all_kinds_hint))
+                    }
+                }
+                items(allowedKinds.toList()) { k ->
+                    PubkeyListItem(
+                        text = k.toString(),
+                        onDelete = {
+                            allowedKinds = allowedKinds - k
+                        },
+                    )
+                }
+
+                // ── Relay Aggregator ───────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.relay_aggregator))
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.relay_aggregator),
+                        description = stringResource(R.string.relay_aggregator_description),
+                        checked = relayAggregatorEnabled,
+                        onCheckedChange = {
+                            if (it && aggregatorPubkey.text.isBlank() && aggregatorExtraRelays.isEmpty()) {
+                                Toast.makeText(context, context.getString(R.string.relay_aggregator_pubkey_or_relays_required), Toast.LENGTH_SHORT).show()
+                                return@SwitchSettingRow
+                            }
+                            relayAggregatorEnabled = it
+                        },
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = aggregatorPubkey,
+                        label = { Text(stringResource(R.string.relay_aggregator_pubkey)) },
+                        onValueChange = { aggregatorPubkey = it },
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+                                        intent.putExtra("type", "get_public_key")
+                                        val permission = com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission(
+                                            com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType.SIGN_EVENT,
+                                            22242,
+                                        )
+                                        intent.putExtra("permissions", "[${permission.toJson()}]")
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                        aggregatorSignerLauncher.launch(intent)
+                                    } catch (e: Exception) {
+                                        android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.no_external_signer_installed),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                        val fallback = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
+                                        aggregatorSignerLauncher.launch(fallback)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Key,
+                                    contentDescription = stringResource(R.string.relay_aggregator_signer_login),
+                                )
+                            }
+                        },
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        value = aggregatorRefreshMinutes,
+                        label = { Text(stringResource(R.string.relay_aggregator_refresh_minutes)) },
+                        onValueChange = { aggregatorRefreshMinutes = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.relay_aggregator_include_tagged),
+                        description = stringResource(R.string.relay_aggregator_include_tagged_description),
+                        checked = aggregatorIncludeTagged,
+                        onCheckedChange = { aggregatorIncludeTagged = it },
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.relay_aggregator_wifi_only),
+                        description = stringResource(R.string.relay_aggregator_wifi_only_description),
+                        checked = aggregatorWifiOnly,
+                        onCheckedChange = { aggregatorWifiOnly = it },
+                    )
+                }
+                item {
+                    PubkeyInputRow(
+                        value = aggregatorKindInput,
+                        onValueChange = { aggregatorKindInput = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                aggregatorKindInput = TextFieldValue(text)
+                                val k = text.toIntOrNull()
+                                if (k == null) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                aggregatorKinds = aggregatorKinds + k
+                                aggregatorKindInput = TextFieldValue("")
+                            }
+                        },
+                        onAdd = {
+                            val k = aggregatorKindInput.text.toIntOrNull()
+                            if (k == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            aggregatorKinds = aggregatorKinds + k
+                            aggregatorKindInput = TextFieldValue("")
+                        },
+                    )
+                }
+                if (aggregatorKinds.isEmpty()) {
+                    item {
+                        EmptyListHint(stringResource(R.string.relay_aggregator_kinds_empty_hint))
+                    }
+                }
+                items(aggregatorKinds.toList()) { k ->
+                    PubkeyListItem(
+                        text = k.toString(),
+                        onDelete = {
+                            aggregatorKinds = aggregatorKinds - k
+                        },
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.relay_aggregator_extra_relays),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.relay_aggregator_extra_relays_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                item {
+                    PubkeyInputRow(
+                        value = aggregatorExtraRelayInput,
+                        onValueChange = { aggregatorExtraRelayInput = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                aggregatorExtraRelayInput = TextFieldValue(text)
+                            }
+                        },
+                        onAdd = {
+                            val normalized = normalizeRelayInput(aggregatorExtraRelayInput.text)
+                            if (normalized == null) {
+                                Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            aggregatorExtraRelays = aggregatorExtraRelays + normalized
+                            aggregatorExtraRelayInput = TextFieldValue("")
+                        },
+                    )
+                }
+                if (aggregatorExtraRelays.isEmpty()) {
+                    item {
+                        EmptyListHint(stringResource(R.string.relay_aggregator_extra_relays_hint))
+                    }
+                }
+                items(aggregatorExtraRelays.toList()) { relay ->
+                    PubkeyListItem(
+                        text = relay,
+                        onDelete = {
+                            aggregatorExtraRelays = aggregatorExtraRelays - relay
+                        },
+                    )
+                }
+
+                // ── Others ─────────────────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.others))
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.start_on_boot),
+                        description = stringResource(R.string.start_on_boot_description),
+                        checked = startOnBoot,
+                        onCheckedChange = { startOnBoot = it },
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.enable_disable_auth),
+                        description = stringResource(R.string.enable_disable_auth_description),
+                        checked = useAuth,
+                        onCheckedChange = { useAuth = it },
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.listen_to_pokey_broadcasts),
+                        description = stringResource(R.string.listen_to_pokey_broadcasts_description),
+                        checked = listenToPokeyBroadcasts,
+                        onCheckedChange = { listenToPokeyBroadcasts = it },
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.use_proxy),
+                        description = stringResource(R.string.use_proxy_description),
+                        checked = useProxy,
+                        onCheckedChange = { useProxy = it },
+                    )
+                }
+                if (useProxy) {
+                    item {
+                        SwitchSettingRow(
+                            title = stringResource(R.string.proxy_all_urls),
+                            description = stringResource(R.string.proxy_all_urls_description),
+                            checked = proxyAllUrls,
+                            onCheckedChange = { proxyAllUrls = it },
+                        )
+                    }
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.use_tor),
+                        description = stringResource(R.string.use_tor_description),
+                        checked = useTor,
+                        onCheckedChange = { useTor = it },
+                    )
+                }
+                if (useTor) {
+                    val displayHostname = when (val s = torState.value) {
+                        is com.greenart7c3.citrine.service.TorManager.State.Running -> s.hostname
+                        else -> Settings.onionHostname
+                    }
+                    if (displayHostname.isNotBlank()) {
+                        item {
+                            OutlinedTextField(
+                                value = TextFieldValue("ws://$displayHostname"),
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.onion_address)) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                singleLine = true,
+                            )
+                        }
+                    }
+                }
+                item {
+                    val deleteItems = persistentListOf(
+                        TitleExplainer(stringResource(OlderThanType.NEVER.resourceId)),
+                        TitleExplainer(stringResource(OlderThanType.DAY.resourceId)),
+                        TitleExplainer(stringResource(OlderThanType.WEEK.resourceId)),
+                        TitleExplainer(stringResource(OlderThanType.MONTH.resourceId)),
+                        TitleExplainer(stringResource(OlderThanType.YEAR.resourceId)),
+                    )
+                    SettingsRow(
+                        name = R.string.delete_events_older_than,
+                        description = R.string.delete_events_older_than_description,
+                        selectedItems = deleteItems,
+                        selectedIndex = olderThanTypeIndex,
+                    ) {
+                        olderThanTypeIndex = it
+                    }
+                }
+
+                // ── Never delete from ──────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.never_delete_from))
+                }
+                item {
+                    PubkeyInputRow(
+                        value = deleteFrom,
+                        onValueChange = { deleteFrom = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                deleteFrom = TextFieldValue(text)
+                                val key = text.toNostrKey()
+                                if (key == null) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                neverDeleteFrom = neverDeleteFrom + key
+                                deleteFrom = TextFieldValue("")
+                            }
+                        },
+                        onAdd = {
+                            val key = deleteFrom.text.toNostrKey()
+                            if (key == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            neverDeleteFrom = neverDeleteFrom + key
+                            deleteFrom = TextFieldValue("")
+                        },
+                    )
+                }
+                items(neverDeleteFrom.toList()) { pubkey ->
+                    PubkeyListItem(
+                        text = pubkey.toShortenHex(),
+                        onDelete = {
+                            neverDeleteFrom = neverDeleteFrom - pubkey
+                        },
+                    )
+                }
+
+                // ── Preserved kinds ────────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.preserved_kinds_from_deletion))
+                }
+                item {
+                    EmptyListHint(stringResource(R.string.preserved_kinds_from_deletion_description))
+                }
+                item {
+                    PubkeyInputRow(
+                        value = preservedKindInput,
+                        onValueChange = { preservedKindInput = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                preservedKindInput = TextFieldValue(text)
+                                val k = text.toIntOrNull()
+                                if (k == null) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                preservedKindsFromDeletion = preservedKindsFromDeletion + k
+                                preservedKindInput = TextFieldValue("")
+                            }
+                        },
+                        onAdd = {
+                            val k = preservedKindInput.text.toIntOrNull()
+                            if (k == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            preservedKindsFromDeletion = preservedKindsFromDeletion + k
+                            preservedKindInput = TextFieldValue("")
+                        },
+                    )
+                }
+                items(preservedKindsFromDeletion.toList()) { k ->
+                    PubkeyListItem(
+                        text = k.toString(),
+                        onDelete = {
+                            preservedKindsFromDeletion = preservedKindsFromDeletion - k
+                        },
+                    )
+                }
+
+                // ── Backup ─────────────────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.backup))
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.auto_backup),
+                        description = stringResource(R.string.auto_backup_description),
+                        checked = autoBackup,
+                        onCheckedChange = {
+                            if (!autoBackup) {
+                                shouldAddWebClient = false
+                                storageHelper.openFolderPicker()
+                            } else {
+                                autoBackup = false
+                            }
+                        },
+                    )
+                }
+
+                // ── Web Clients ────────────────────────────────────────────────────
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.web_clients))
+                }
+                item {
+                    val nameNotBlankResource = stringResource(R.string.name_cannot_be_blank)
+                    WebAppInput(
+                        value = webPath,
+                        onValueChange = { webPath = it },
+                        onAdd = {
+                            if (webPath.text.isBlank()) {
+                                Toast.makeText(context, nameNotBlankResource, Toast.LENGTH_SHORT).show()
+                                return@WebAppInput
+                            }
+                            shouldAddWebClient = true
+                            storageHelper.openFolderPicker()
+                        },
+                    )
+                }
+                items(webClients.keys.toList()) { item ->
+                    WebAppRow(
+                        onOpenWebApp = {
+                            val browserIntent = Intent(
+                                Intent.ACTION_VIEW,
+                                "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri(),
+                            )
+                            browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            Citrine.instance.startActivity(browserIntent)
+                        },
+                        onDelete = {
+                            webClients = webClients - item
+                        },
+                        item = item,
+                    )
+                }
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
 
-            // ── Never delete from ──────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.never_delete_from))
-            }
-            item {
-                PubkeyInputRow(
-                    value = deleteFrom,
-                    onValueChange = { deleteFrom = it },
-                    onPaste = {
-                        scope.launch {
-                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                            deleteFrom = TextFieldValue(text)
-                            val key = text.toNostrKey()
-                            if (key == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val users = Settings.neverDeleteFrom.toMutableSet().apply { add(key) }
-                            Settings.neverDeleteFrom = users
-                            neverDeleteFrom = users
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            deleteFrom = TextFieldValue("")
-                        }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            ) {
+                ElevatedButton(
+                    enabled = !isLoading,
+                    onClick = {
+                        if (isLoading) return@ElevatedButton
+                        resetToDefaults()
                     },
-                    onAdd = {
-                        val key = deleteFrom.text.toNostrKey()
-                        if (key == null) {
-                            Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
-                            return@PubkeyInputRow
-                        }
-                        val users = Settings.neverDeleteFrom.toMutableSet().apply { add(key) }
-                        Settings.neverDeleteFrom = users
-                        neverDeleteFrom = users
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        deleteFrom = TextFieldValue("")
-                    },
-                )
-            }
-            items(neverDeleteFrom.toList()) { pubkey ->
-                PubkeyListItem(
-                    text = pubkey.toShortenHex(),
-                    onDelete = {
-                        val users = Settings.neverDeleteFrom.toMutableSet().apply { remove(pubkey) }
-                        Settings.neverDeleteFrom = users
-                        neverDeleteFrom = users
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
+                ) {
+                    Text(stringResource(R.string.default_value))
+                }
 
-            // ── Preserved kinds ────────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.preserved_kinds_from_deletion))
-            }
-            item {
-                EmptyListHint(stringResource(R.string.preserved_kinds_from_deletion_description))
-            }
-            item {
-                PubkeyInputRow(
-                    value = preservedKindInput,
-                    onValueChange = { preservedKindInput = it },
-                    onPaste = {
-                        scope.launch {
-                            val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                            preservedKindInput = TextFieldValue(text)
-                            if (text.toIntOrNull() == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val kinds = Settings.preservedKindsFromDeletion.toMutableSet().apply { add(text.toInt()) }
-                            Settings.preservedKindsFromDeletion = kinds
-                            preservedKindsFromDeletion = kinds
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            preservedKindInput = TextFieldValue("")
-                        }
+                ElevatedButton(
+                    enabled = !isLoading,
+                    onClick = {
+                        if (isLoading) return@ElevatedButton
+                        applyChanges()
                     },
-                    onAdd = {
-                        if (preservedKindInput.text.toIntOrNull() == null) {
-                            Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
-                            return@PubkeyInputRow
-                        }
-                        val kinds = Settings.preservedKindsFromDeletion.toMutableSet().apply { add(preservedKindInput.text.toInt()) }
-                        Settings.preservedKindsFromDeletion = kinds
-                        preservedKindsFromDeletion = kinds
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        preservedKindInput = TextFieldValue("")
-                    },
-                )
-            }
-            items(preservedKindsFromDeletion.toList()) { k ->
-                PubkeyListItem(
-                    text = k.toString(),
-                    onDelete = {
-                        val kinds = Settings.preservedKindsFromDeletion.toMutableSet().apply { remove(k) }
-                        Settings.preservedKindsFromDeletion = kinds
-                        preservedKindsFromDeletion = kinds
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    },
-                )
-            }
-
-            // ── Backup ─────────────────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.backup))
-            }
-            item {
-                SwitchSettingRow(
-                    title = stringResource(R.string.auto_backup),
-                    description = stringResource(R.string.auto_backup_description),
-                    checked = autoBackup,
-                    onCheckedChange = {
-                        if (!autoBackup) {
-                            shouldAddWebClient = false
-                            storageHelper.openFolderPicker()
-                        } else {
-                            autoBackup = false
-                            Settings.autoBackup = false
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                        }
-                    },
-                )
-            }
-
-            // ── Web Clients ────────────────────────────────────────────────────
-            stickyHeader {
-                SectionHeader(stringResource(R.string.web_clients))
-            }
-            item {
-                val nameNotBlankResource = stringResource(R.string.name_cannot_be_blank)
-                WebAppInput(
-                    value = webPath,
-                    onValueChange = { webPath = it },
-                    onAdd = {
-                        if (webPath.text.isBlank()) {
-                            Toast.makeText(context, nameNotBlankResource, Toast.LENGTH_SHORT).show()
-                            return@WebAppInput
-                        }
-                        shouldAddWebClient = true
-                        storageHelper.openFolderPicker()
-                    },
-                )
-            }
-            items(clients.value.keys.toList()) { item ->
-                WebAppRow(
-                    onOpenWebApp = {
-                        val browserIntent = Intent(
-                            Intent.ACTION_VIEW,
-                            "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri(),
-                        )
-                        browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        Citrine.instance.startActivity(browserIntent)
-                    },
-                    onDelete = {
-                        webClients.update { old ->
-                            val updated = old.toMutableMap().apply { remove(item) }
-                            Settings.webClients = updated
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            updated
-                        }
-                        onApplyChanges()
-                    },
-                    item = item,
-                )
-            }
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
+                ) {
+                    Text(stringResource(R.string.apply_changes))
+                }
             }
         }
     }
