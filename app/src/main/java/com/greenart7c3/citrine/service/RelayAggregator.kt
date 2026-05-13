@@ -174,6 +174,13 @@ object RelayAggregator {
     // sign() call is awaiting it.
     @Volatile private var relayAuthSigner: NostrSignerExternal? = null
 
+    // Identity (pubkey + packageName) of the signer the currently-installed authenticator
+    // was built for. Used by installAuthenticatorIfNeeded to skip a rebuild when the
+    // signer hasn't changed — every onConfigChanged call would otherwise tear down and
+    // recreate the authenticator, briefly leaving zero listeners and discarding any
+    // in-flight AUTH state.
+    @Volatile private var installedAuthIdentity: Pair<String, String>? = null
+
     // Debounced re-evaluation of network state. Cancelled and rescheduled by every
     // ConnectivityManager callback so a burst of changes only triggers one evaluation.
     @Volatile private var networkEvalJob: Job? = null
@@ -316,11 +323,14 @@ object RelayAggregator {
         listener?.let { Citrine.instance.client.removeConnectionListener(it) }
         listener = null
 
-        // The RelayAuthenticator listens via the cancelled scope, so its coroutines die with
-        // the aggregator. Drop the reference here so a subsequent start() recreates it
-        // against the new scope rather than reusing the dead one.
+        // The authenticator's internal client listener stays registered with NostrClient
+        // until destroy() is called, so explicitly tear it down here in addition to
+        // dropping the references. A subsequent start() will install a fresh one against
+        // the new scope.
+        authenticator?.destroy()
         authenticator = null
         relayAuthSigner = null
+        installedAuthIdentity = null
 
         unregisterNetworkCallback()
 
@@ -371,10 +381,24 @@ object RelayAggregator {
     private fun installAuthenticatorIfNeeded(scope: CoroutineScope) {
         val pubkey = Settings.aggregatorSignerPubkey
         val pkg = Settings.aggregatorSignerPackageName
-        if (pubkey.isBlank() || pkg.isBlank()) {
-            authenticator = null
-            return
-        }
+
+        // Skip the tear-down/rebuild if the signer identity matches what we already have
+        // installed. onConfigChanged fires for every settings tweak (kind add, refresh
+        // interval, etc.); without this guard each one would briefly leave the relay
+        // unprotected and discard in-flight AUTH state.
+        val desired = if (pubkey.isBlank() || pkg.isBlank()) null else (pubkey to pkg)
+        if (authenticator != null && installedAuthIdentity == desired) return
+
+        // Always tear down the previous authenticator before installing a new one — its
+        // internal client listener stays registered with NostrClient until destroy() runs,
+        // and a second authenticator with the same listener would answer the same AUTH
+        // challenge twice.
+        authenticator?.destroy()
+        authenticator = null
+        relayAuthSigner = null
+        installedAuthIdentity = null
+
+        if (desired == null) return
         val signer = NostrSignerExternal(pubkey, pkg, Citrine.instance.contentResolver)
         // Allow the signer to fall back to Amber's UI when the background ContentResolver
         // path can't auto-approve. We're running in a Service, so the launched intent must
@@ -403,6 +427,7 @@ object RelayAggregator {
             }
         }
         relayAuthSigner = signer
+        installedAuthIdentity = desired
         Log.d(TAG, "Installing RelayAuthenticator for $pubkey via $pkg")
         authenticator = RelayAuthenticator(Citrine.instance.client, scope) { template ->
             try {
