@@ -151,4 +151,5 @@
     <string name="relay_aggregator_events_received">%1$d events received</string>
     <string name="relay_aggregator_last_refresh">Last refresh %1$s ago</string>
     <string name="relay_aggregator_never_refreshed">No refresh yet</string>
+    <string name="relay_aggregator_signer_login">Log in with external signer</string>
 </resources>

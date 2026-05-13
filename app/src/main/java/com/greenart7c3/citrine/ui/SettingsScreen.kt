@@ -7,6 +7,8 @@ import android.net.InetAddresses.isNumericAddress
 import android.os.Build
 import android.util.Patterns
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +22,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -126,6 +132,50 @@ fun SettingsScreen(
         var aggregatorWifiOnly by remember { mutableStateOf(Settings.relayAggregatorWifiOnly) }
         var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
         var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
+        var aggregatorSignerPubkey by remember { mutableStateOf(Settings.aggregatorSignerPubkey) }
+        var aggregatorSignerPackageName by remember { mutableStateOf(Settings.aggregatorSignerPackageName) }
+
+        val aggregatorSignerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            if (result.resultCode != android.app.Activity.RESULT_OK) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.sign_request_rejected),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                result.data?.let {
+                    try {
+                        val key = it.getStringExtra("signature") ?: ""
+                        val packageName = it.getStringExtra("package") ?: ""
+                        val returnedKey = if (key.startsWith("npub")) {
+                            when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+                                is NPub -> parsed.hex
+                                else -> ""
+                            }
+                        } else {
+                            key
+                        }
+                        if (returnedKey.isBlank() || packageName.isBlank()) return@let
+                        // The pubkey field is the aggregator's identity — populate it
+                        // from the signer's reply so a fresh login is enough to start the
+                        // aggregator. Storing the packageName too lets RelayAggregator
+                        // reconstruct a NostrSignerExternal for AUTH challenges.
+                        Settings.aggregatorPubkey = returnedKey
+                        Settings.aggregatorSignerPubkey = returnedKey
+                        Settings.aggregatorSignerPackageName = packageName
+                        aggregatorPubkey = TextFieldValue(returnedKey)
+                        aggregatorSignerPubkey = returnedKey
+                        aggregatorSignerPackageName = packageName
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                        RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                    } catch (e: Exception) {
+                        android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                    }
+                }
+            }
+        }
 
         var shouldAddWebClient = false
         var webPath by remember { mutableStateOf(TextFieldValue("")) }
@@ -524,6 +574,14 @@ fun SettingsScreen(
                         val text = newValue.text.trim()
                         if (text.isBlank()) {
                             Settings.aggregatorPubkey = ""
+                            // A manually cleared pubkey invalidates any previously-stored
+                            // signer identity — they were tied to the pubkey that was just
+                            // removed, and the packageName alone can't sign for a different
+                            // user.
+                            Settings.aggregatorSignerPubkey = ""
+                            Settings.aggregatorSignerPackageName = ""
+                            aggregatorSignerPubkey = ""
+                            aggregatorSignerPackageName = ""
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                             return@OutlinedTextField
@@ -533,10 +591,50 @@ fun SettingsScreen(
                             return@OutlinedTextField
                         }
                         Settings.aggregatorPubkey = key
+                        // Manually editing the pubkey to something other than the
+                        // signed-in identity clears the AUTH signer — Amber can only
+                        // sign for the pubkey it actually controls.
+                        if (key != Settings.aggregatorSignerPubkey) {
+                            Settings.aggregatorSignerPubkey = ""
+                            Settings.aggregatorSignerPackageName = ""
+                            aggregatorSignerPubkey = ""
+                            aggregatorSignerPackageName = ""
+                        }
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                         RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                     },
                     singleLine = true,
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+                                    intent.putExtra("type", "get_public_key")
+                                    val permission = com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission(
+                                        com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType.SIGN_EVENT,
+                                        22242,
+                                    )
+                                    intent.putExtra("permissions", "[${permission.toJson()}]")
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                    aggregatorSignerLauncher.launch(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.no_external_signer_installed),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                    val fallback = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
+                                    aggregatorSignerLauncher.launch(fallback)
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Key,
+                                contentDescription = stringResource(R.string.relay_aggregator_signer_login),
+                            )
+                        }
+                    },
                 )
             }
             item {
