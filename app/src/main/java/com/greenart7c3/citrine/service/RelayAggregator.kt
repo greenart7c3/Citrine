@@ -383,7 +383,7 @@ object RelayAggregator {
         // forwarding when the user finishes the Amber flow.
         signer.registerForegroundLauncher { intent ->
             try {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 Citrine.instance.startActivity(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to launch signer intent from application context", e)
