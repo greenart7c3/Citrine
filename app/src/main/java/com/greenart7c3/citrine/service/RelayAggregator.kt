@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.service
 
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -168,6 +169,11 @@ object RelayAggregator {
     // the authenticator's lifespan to the aggregator's scope; it stops listening on cancel.
     @Volatile private var authenticator: RelayAuthenticator? = null
 
+    // External signer used by the authenticator. Held so [deliverSignerResponse] can route
+    // an Intent result received by MainActivity into the same instance whose suspended
+    // sign() call is awaiting it.
+    @Volatile private var relayAuthSigner: NostrSignerExternal? = null
+
     // Debounced re-evaluation of network state. Cancelled and rescheduled by every
     // ConnectivityManager callback so a burst of changes only triggers one evaluation.
     @Volatile private var networkEvalJob: Job? = null
@@ -314,6 +320,7 @@ object RelayAggregator {
         // the aggregator. Drop the reference here so a subsequent start() recreates it
         // against the new scope rather than reusing the dead one.
         authenticator = null
+        relayAuthSigner = null
 
         unregisterNetworkCallback()
 
@@ -353,6 +360,13 @@ object RelayAggregator {
      * Re-entrant: drops a previously installed authenticator before installing a new one.
      * No-op when the signer pubkey/packageName is missing — relays that send AUTH challenges
      * will simply not get a response, which matches the prior behavior.
+     *
+     * The signer is configured with both the ContentResolver (background signing path, used
+     * when Amber has stored an auto-approve for kind 22242) and a foreground intent launcher
+     * (fallback that pops the Amber UI from the application context when no auto-approve is
+     * available). Without the foreground launcher, sign() throws
+     * `RunningOnBackgroundWithoutAutomaticPermissionException` the first time Amber needs
+     * manual approval.
      */
     private fun installAuthenticatorIfNeeded(scope: CoroutineScope) {
         val pubkey = Settings.aggregatorSignerPubkey
@@ -362,6 +376,20 @@ object RelayAggregator {
             return
         }
         val signer = NostrSignerExternal(pubkey, pkg, Citrine.instance.contentResolver)
+        // Allow the signer to fall back to Amber's UI when the background ContentResolver
+        // path can't auto-approve. We're running in a Service, so the launched intent must
+        // carry FLAG_ACTIVITY_NEW_TASK to start from the application context. The signer's
+        // response Intent is delivered back via MainActivity.onNewIntent → relayAuthSigner
+        // forwarding when the user finishes the Amber flow.
+        signer.registerForegroundLauncher { intent ->
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Citrine.instance.startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch signer intent from application context", e)
+            }
+        }
+        relayAuthSigner = signer
         Log.d(TAG, "Installing RelayAuthenticator for $pubkey via $pkg")
         authenticator = RelayAuthenticator(Citrine.instance.client, scope) { template ->
             try {
@@ -374,6 +402,15 @@ object RelayAggregator {
                 emptyList()
             }
         }
+    }
+
+    /**
+     * Forward a signer response Intent received by an Activity (e.g. MainActivity.onNewIntent)
+     * to the relay-auth signer so the suspended sign() call resumes. Safe to call when no
+     * signer is currently installed — the response is just dropped.
+     */
+    fun deliverSignerResponse(data: Intent) {
+        relayAuthSigner?.newResponse(data)
     }
 
     private fun connectivityManager(): ConnectivityManager? = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
