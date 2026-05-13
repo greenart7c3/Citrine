@@ -382,17 +382,24 @@ object RelayAggregator {
         // response Intent is delivered back via MainActivity.onNewIntent → relayAuthSigner
         // forwarding when the user finishes the Amber flow.
         signer.registerForegroundLauncher { intent ->
+            // Amber requires the caller's UID to be set on the intent so it can identify
+            // which app is asking and round-trip setResult back. FLAG_ACTIVITY_NEW_TASK
+            // (the obvious way to start an Activity from a Service) nulls that UID, so
+            // we must launch from a real foreground Activity. When Citrine has no Activity
+            // in front (background-only service), the foreground path can't run — the
+            // user has to open the app once so the Activity callback registers, then the
+            // next AUTH challenge will succeed (or rely on Amber's pre-approved
+            // ContentResolver path for fully background signing).
+            val activity = Citrine.instance.currentActivity
+            if (activity == null) {
+                Log.w(TAG, "No foreground Activity to launch signer intent; open Citrine once to authorize")
+                return@registerForegroundLauncher
+            }
             try {
-                // SINGLE_TOP|CLEAR_TOP are required by Amber; NEW_TASK is required to start
-                // an Activity from a non-Activity (Application) context.
-                intent.addFlags(
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_NEW_TASK,
-                )
-                Citrine.instance.startActivity(intent)
+                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                activity.startActivity(intent)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to launch signer intent from application context", e)
+                Log.e(TAG, "Failed to launch signer intent from Activity context", e)
             }
         }
         relayAuthSigner = signer
