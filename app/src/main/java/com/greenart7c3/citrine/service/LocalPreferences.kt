@@ -125,7 +125,7 @@ object LocalPreferences {
             ?.split(",")
             ?.mapNotNull { it.toIntOrNull() }
             ?.toSet()
-            ?: setOf(0, 3, 10002)
+            ?: setOf(0, 3, 10000, 10002)
         Settings.name = prefs.getString(PrefKeys.RELAY_NAME, "Citrine") ?: "Citrine"
         Settings.ownerPubkey = prefs.getString(PrefKeys.RELAY_OWNER_PUBKEY, "") ?: ""
         Settings.contact = prefs.getString(PrefKeys.RELAY_CONTACT, "") ?: ""

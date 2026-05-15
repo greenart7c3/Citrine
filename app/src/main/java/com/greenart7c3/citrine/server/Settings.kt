@@ -13,7 +13,7 @@ object Settings {
     var host: String = "127.0.0.1"
     var port: Int = 4869
     var neverDeleteFrom: Set<String> = emptySet()
-    var preservedKindsFromDeletion: Set<Int> = setOf(0, 3, 10002)
+    var preservedKindsFromDeletion: Set<Int> = setOf(0, 3, 10000, 10002)
     var name: String = "Citrine"
     var ownerPubkey: String = ""
     var contact: String = ""
@@ -64,7 +64,7 @@ object Settings {
         host = "127.0.0.1"
         port = 4869
         neverDeleteFrom = emptySet()
-        preservedKindsFromDeletion = setOf(0, 3, 10002)
+        preservedKindsFromDeletion = setOf(0, 3, 10000, 10002)
         name = "Citrine"
         ownerPubkey = ""
         contact = ""
