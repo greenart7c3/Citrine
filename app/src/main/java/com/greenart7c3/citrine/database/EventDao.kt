@@ -112,6 +112,10 @@ interface EventDao {
     @Transaction
     suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?
 
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10000 ORDER BY createdAt DESC, id ASC LIMIT 1")
+    @Transaction
+    suspend fun getMuteList(pubkey: String): EventWithTags?
+
     @Query(
         """
         SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
