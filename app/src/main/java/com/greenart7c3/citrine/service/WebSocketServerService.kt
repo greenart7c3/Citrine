@@ -27,6 +27,7 @@ import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
+import com.greenart7c3.citrine.utils.NetworkUtils
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.Timer
 import java.util.TimerTask
@@ -233,6 +234,27 @@ class WebSocketServerService : Service() {
                     }
                 }
         }
+
+        scope.launch {
+            // Refresh the notification when Tor finishes bootstrapping so the Copy Tor
+            // action appears with the resolved onion hostname.
+            TorManager.state.collect {
+                try {
+                    val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
+                    val status = RelayAggregator.status.value.takeIf { it.enabled }
+                    val notification = createNotification(status)
+                    if (ActivityCompat.checkSelfPermission(
+                            this@WebSocketServerService,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationManager.notify(1, notification)
+                    }
+                } catch (e: Exception) {
+                    Log.e(Citrine.TAG, "Error updating Tor notification", e)
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -265,16 +287,6 @@ class WebSocketServerService : Service() {
             .build()
         notificationManager.createNotificationChannel(channel)
 
-        val copyIntent = Intent(this, ClipboardReceiver::class.java)
-        copyIntent.putExtra("url", "ws://${Settings.host}:${Settings.port}")
-
-        val copyPendingIntent = PendingIntent.getBroadcast(
-            this,
-            0,
-            copyIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-        )
-
         val resultIntent = Intent(this, MainActivity::class.java)
 
         val resultPendingIntent = TaskStackBuilder.create(this).run {
@@ -288,9 +300,41 @@ class WebSocketServerService : Service() {
             .setContentTitle(getString(R.string.relay_running_at_ws, Settings.host, Settings.port.toString()))
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_launcher_background, getString(R.string.copy_address), copyPendingIntent)
             .setContentIntent(resultPendingIntent)
             .setGroup(groupId)
+
+        // requestCode is used to disambiguate each PendingIntent's extras, otherwise
+        // FLAG_UPDATE_CURRENT would have them all share the most recently set URL.
+        val localUrl = "ws://127.0.0.1:${Settings.port}"
+        notificationBuilder.addAction(
+            R.drawable.ic_launcher_background,
+            getString(R.string.copy_local),
+            copyPendingIntent(localUrl, requestCode = 1),
+        )
+
+        val wifiIp = NetworkUtils.getLocalIpAddress()
+        if (!wifiIp.isNullOrBlank()) {
+            val wifiUrl = "ws://$wifiIp:${Settings.port}"
+            notificationBuilder.addAction(
+                R.drawable.ic_launcher_background,
+                getString(R.string.copy_wifi),
+                copyPendingIntent(wifiUrl, requestCode = 2),
+            )
+        }
+
+        val torState = TorManager.state.value
+        val onionHost = when (torState) {
+            is TorManager.State.Running -> torState.hostname.takeIf { it.isNotBlank() }
+            else -> Settings.onionHostname.takeIf { it.isNotBlank() && Settings.useTor }
+        }
+        if (!onionHost.isNullOrBlank()) {
+            val torUrl = "ws://$onionHost"
+            notificationBuilder.addAction(
+                R.drawable.ic_launcher_background,
+                getString(R.string.copy_tor),
+                copyPendingIntent(torUrl, requestCode = 3),
+            )
+        }
 
         if (status != null && status.enabled) {
             val summary = buildAggregatorSummary(status)
@@ -304,6 +348,17 @@ class WebSocketServerService : Service() {
     }
 
     fun isStarted(): Boolean = CustomWebSocketService.server != null
+
+    private fun copyPendingIntent(url: String, requestCode: Int): PendingIntent {
+        val intent = Intent(this, ClipboardReceiver::class.java)
+        intent.putExtra("url", url)
+        return PendingIntent.getBroadcast(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+    }
 
     private fun buildAggregatorSummary(status: AggregatorStatus): String {
         val phase = when (status.phase) {
