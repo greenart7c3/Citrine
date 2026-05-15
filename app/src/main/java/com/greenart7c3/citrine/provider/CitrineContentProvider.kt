@@ -597,6 +597,12 @@ class CitrineContentProvider : ContentProvider() {
                         CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent -> {
                             QueryResult.error<Uri>("Authentication required for protected event")
                         }
+                        CustomWebSocketServer.VerificationResult.BannedPubkey -> {
+                            QueryResult.error<Uri>("Pubkey is banned")
+                        }
+                        CustomWebSocketServer.VerificationResult.BannedEvent -> {
+                            QueryResult.error<Uri>("Event is banned")
+                        }
                     }
                 } else {
                     // Server not available, do basic validation and insert
