@@ -31,6 +31,13 @@ object Settings {
     var onionHostname = ""
     var webClients = mutableMapOf<String, String>()
 
+    // NIP-86 (Relay Management API) state. Maps are kept as ConcurrentHashMap
+    // because they are mutated by the HTTP RPC route and read concurrently by
+    // verifyEvent() on the WebSocket dispatcher.
+    var bannedPubKeys: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+    var bannedEventIds: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+    var blockedIps: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+
     var relayAggregatorEnabled = false
     var aggregatorPubkey = ""
     var relayAggregatorKinds: Set<Int> = setOf(0, 1, 3, 5, 6, 7, 1111, 10000, 10002, 30023)
@@ -81,6 +88,9 @@ object Settings {
         useTor = false
         onionHostname = ""
         webClients = mutableMapOf()
+        bannedPubKeys = java.util.concurrent.ConcurrentHashMap()
+        bannedEventIds = java.util.concurrent.ConcurrentHashMap()
+        blockedIps = java.util.concurrent.ConcurrentHashMap()
         relayAggregatorEnabled = false
         aggregatorPubkey = ""
         relayAggregatorKinds = setOf(0, 1, 3, 5, 6, 7, 1111, 10000, 10002, 30023)
@@ -96,6 +106,17 @@ object Settings {
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)
 
     fun webClientsToJson(): String = JacksonMapper.mapper.writeValueAsString(webClients)
+
+    private fun concurrentMapFromJson(json: String): MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap(JacksonMapper.mapper.readValue<MutableMap<String, String>>(json))
+
+    fun bannedPubKeysToJson(): String = JacksonMapper.mapper.writeValueAsString(bannedPubKeys)
+    fun bannedPubKeysFromJson(json: String): MutableMap<String, String> = concurrentMapFromJson(json)
+
+    fun bannedEventIdsToJson(): String = JacksonMapper.mapper.writeValueAsString(bannedEventIds)
+    fun bannedEventIdsFromJson(json: String): MutableMap<String, String> = concurrentMapFromJson(json)
+
+    fun blockedIpsToJson(): String = JacksonMapper.mapper.writeValueAsString(blockedIps)
+    fun blockedIpsFromJson(json: String): MutableMap<String, String> = concurrentMapFromJson(json)
 }
 
 enum class OlderThan {
