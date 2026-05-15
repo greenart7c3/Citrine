@@ -278,7 +278,7 @@ object Nip86Handler {
 
         val uTag = event.tags.firstOrNull { it.size > 1 && it[0] == "u" }?.get(1)
         val mTag = event.tags.firstOrNull { it.size > 1 && it[0] == "method" }?.get(1)
-        if (uTag == null || !uTag.equals(fullUrl, ignoreCase = true)) {
+        if (uTag == null || !normalizeUrl(uTag).equals(normalizeUrl(fullUrl), ignoreCase = true)) {
             Log.d(Citrine.TAG, "NIP-98 u tag mismatch expected=$fullUrl got=$uTag")
             return null
         }
@@ -320,6 +320,16 @@ object Nip86Handler {
         val isDefaultPort = (scheme == "http" && port == 80) || (scheme == "https" && port == 443)
         val authority = if (isDefaultPort) hostNoPort else "$hostNoPort:$port"
         return "$scheme://$authority${call.request.uri}"
+    }
+
+    // Collapse trailing-slash differences (e.g. "http://h/" vs "http://h") so
+    // clients that omit the root slash in the NIP-98 `u` tag still match.
+    private fun normalizeUrl(url: String): String {
+        val q = url.indexOf('?')
+        val path = if (q >= 0) url.substring(0, q) else url
+        val rest = if (q >= 0) url.substring(q) else ""
+        val trimmed = if (path.length > 1 && path.endsWith("/")) path.dropLast(1) else path
+        return trimmed + rest
     }
 
     private fun stringParam(params: List<JsonNode>, index: Int, name: String): String {
