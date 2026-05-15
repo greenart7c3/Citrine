@@ -55,6 +55,58 @@ sealed class Route(
         icon = Icons.Outlined.Settings,
         selectedIcon = Icons.Default.Settings,
     )
+
+    data object RelayInfoSettings : Route(
+        route = "Settings/RelayInfo",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
+    data object AccessControlSettings : Route(
+        route = "Settings/AccessControl",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
+    data object NetworkSettings : Route(
+        route = "Settings/Network",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
+    data object AggregatorSettings : Route(
+        route = "Settings/Aggregator",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
+    data object RetentionSettings : Route(
+        route = "Settings/Retention",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
+    data object BackupSettings : Route(
+        route = "Settings/Backup",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
+    data object WebClientsSettings : Route(
+        route = "Settings/WebClients",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
 }
 
 val navigationItems = listOf(Route.Home, Route.Settings)
+
+val settingsSubRoutes = setOf(
+    Route.RelayInfoSettings.route,
+    Route.AccessControlSettings.route,
+    Route.NetworkSettings.route,
+    Route.AggregatorSettings.route,
+    Route.RetentionSettings.route,
+    Route.BackupSettings.route,
+    Route.WebClientsSettings.route,
+)

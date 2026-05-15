@@ -15,46 +15,54 @@ import androidx.navigation.NavController
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.navigation.navigationItems
+import com.greenart7c3.citrine.ui.navigation.settingsSubRoutes
 
 @Composable
 fun CitrineBottomBar(
     destinationRoute: String,
     navController: NavController,
 ) {
-    if (destinationRoute != Route.Logs.route && !destinationRoute.startsWith("Feed") && destinationRoute != Route.DatabaseInfo.route && !destinationRoute.startsWith("Contacts") && destinationRoute != Route.DownloadYourEventsUserScreen.route) {
-        NavigationBar(tonalElevation = 0.dp) {
-            navigationItems.forEach {
-                val selected = destinationRoute == it.route
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = {
-                        navController.navigate(it.route) {
-                            popUpTo(0)
-                        }
-                    },
-                    icon = {
-                        Icon(
-                            if (selected) it.selectedIcon else it.icon,
-                            it.route,
-                        )
-                    },
-                    label = {
-                        Text(it.route)
-                    },
+    val isBackBarRoute = destinationRoute.startsWith("Feed") ||
+        destinationRoute == Route.DatabaseInfo.route ||
+        destinationRoute.startsWith("Contacts") ||
+        destinationRoute == Route.DownloadYourEventsUserScreen.route ||
+        destinationRoute in settingsSubRoutes
+    val isHiddenRoute = destinationRoute == Route.Logs.route
+
+    when {
+        isBackBarRoute -> {
+            BottomAppBar {
+                IconRow(
+                    center = true,
+                    title = stringResource(R.string.go_back),
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    onClick = { navController.navigateUp() },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-    } else if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts") || destinationRoute == Route.DownloadYourEventsUserScreen.route) {
-        BottomAppBar {
-            IconRow(
-                center = true,
-                title = stringResource(R.string.go_back),
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                onClick = {
-                    navController.navigateUp()
-                },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        isHiddenRoute -> { /* no bottom bar */ }
+        else -> {
+            NavigationBar(tonalElevation = 0.dp) {
+                navigationItems.forEach {
+                    val selected = destinationRoute == it.route
+                    NavigationBarItem(
+                        selected = selected,
+                        onClick = {
+                            navController.navigate(it.route) {
+                                popUpTo(0)
+                            }
+                        },
+                        icon = {
+                            Icon(
+                                if (selected) it.selectedIcon else it.icon,
+                                it.route,
+                            )
+                        },
+                        label = { Text(it.route) },
+                    )
+                }
+            }
         }
     }
 }
