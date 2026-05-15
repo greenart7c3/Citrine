@@ -45,6 +45,12 @@
     <string name="show_events">Show events</string>
     <string name="copy_address">Copy Address</string>
     <string name="relay_running_at_ws">Relay running at ws://%1$s:%2$s</string>
+    <string name="address_local">Local</string>
+    <string name="address_wifi">Wi-Fi</string>
+    <string name="address_tor">Tor</string>
+    <string name="copy_local">Copy Local</string>
+    <string name="copy_wifi">Copy Wi-Fi</string>
+    <string name="copy_tor">Copy Tor</string>
     <string name="go_back">Go back</string>
     <string name="total">Total: %1$s</string>
     <string name="kind">Kind</string>

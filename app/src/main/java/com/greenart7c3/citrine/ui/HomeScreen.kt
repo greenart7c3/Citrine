@@ -1,7 +1,6 @@
 package com.greenart7c3.citrine.ui
 
 import android.app.Activity.RESULT_OK
-import android.content.ClipData
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
@@ -36,8 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -58,11 +55,13 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.RelayAggregator
+import com.greenart7c3.citrine.ui.components.AddressRow
 import com.greenart7c3.citrine.ui.components.AggregatorStatusCard
 import com.greenart7c3.citrine.ui.components.RelayInfo
 import com.greenart7c3.citrine.ui.dialogs.DeleteAllDialog
 import com.greenart7c3.citrine.ui.dialogs.ImportEventsDialog
 import com.greenart7c3.citrine.ui.navigation.Route
+import com.greenart7c3.citrine.utils.NetworkUtils
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
@@ -315,37 +314,28 @@ fun HomeScreen(
                 CircularProgressIndicator()
             } else {
                 val isStarted = homeViewModel.state.value.service?.isStarted() ?: false
-                val clipboardManager = LocalClipboard.current
                 if (isStarted) {
                     Text(stringResource(R.string.relay_started_at))
-                    Text(
-                        "ws://${Settings.host}:${Settings.port}",
-                        modifier = Modifier.clickable {
-                            coroutineScope.launch {
-                                clipboardManager.setClipEntry(
-                                    ClipEntry(
-                                        ClipData.newPlainText("", "ws://${Settings.host}:${Settings.port}"),
-                                    ),
-                                )
-                            }
-                        },
+                    AddressRow(
+                        label = stringResource(R.string.address_local),
+                        address = "ws://127.0.0.1:${Settings.port}",
                     )
+                    val wifiIp = remember(state.value) { NetworkUtils.getLocalIpAddress() }
+                    if (!wifiIp.isNullOrBlank()) {
+                        AddressRow(
+                            label = stringResource(R.string.address_wifi),
+                            address = "ws://$wifiIp:${Settings.port}",
+                        )
+                    }
                     if (Settings.useTor) {
                         val torState by com.greenart7c3.citrine.service.TorManager.state.collectAsStateWithLifecycle()
                         when (val s = torState) {
                             com.greenart7c3.citrine.service.TorManager.State.Off -> {
                                 if (Settings.onionHostname.isNotBlank()) {
-                                    val onionUrl = "ws://${Settings.onionHostname}"
-                                    Text(
-                                        onionUrl,
+                                    AddressRow(
+                                        label = stringResource(R.string.address_tor),
+                                        address = "ws://${Settings.onionHostname}",
                                         color = Color.Gray,
-                                        modifier = Modifier.clickable {
-                                            coroutineScope.launch {
-                                                clipboardManager.setClipEntry(
-                                                    ClipEntry(ClipData.newPlainText("", onionUrl)),
-                                                )
-                                            }
-                                        },
                                     )
                                 }
                             }
@@ -354,16 +344,9 @@ fun HomeScreen(
                             }
                             is com.greenart7c3.citrine.service.TorManager.State.Running -> {
                                 if (s.hostname.isNotBlank()) {
-                                    val onionUrl = "ws://${s.hostname}"
-                                    Text(
-                                        onionUrl,
-                                        modifier = Modifier.clickable {
-                                            coroutineScope.launch {
-                                                clipboardManager.setClipEntry(
-                                                    ClipEntry(ClipData.newPlainText("", onionUrl)),
-                                                )
-                                            }
-                                        },
+                                    AddressRow(
+                                        label = stringResource(R.string.address_tor),
+                                        address = "ws://${s.hostname}",
                                     )
                                 }
                             }
