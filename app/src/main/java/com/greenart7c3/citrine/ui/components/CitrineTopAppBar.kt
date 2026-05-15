@@ -13,21 +13,23 @@ import com.greenart7c3.citrine.ui.navigation.Route
 fun CitrineTopAppBar(
     destinationRoute: String,
 ) {
-    if (destinationRoute.startsWith("Feed") || destinationRoute == Route.DatabaseInfo.route || destinationRoute.startsWith("Contacts") || destinationRoute == Route.DownloadYourEventsUserScreen.route) {
-        CenterAlignedTopAppBar(
-            title = {
-                Text(
-                    text = if (destinationRoute.startsWith("Feed")) {
-                        stringResource(R.string.feed)
-                    } else if (destinationRoute == Route.DatabaseInfo.route) {
-                        stringResource(R.string.database)
-                    } else if (destinationRoute == Route.DownloadYourEventsUserScreen.route) {
-                        stringResource(R.string.download_your_events)
-                    } else {
-                        stringResource(R.string.restore_follows)
-                    },
-                )
-            },
-        )
-    }
+    val titleRes = titleResForRoute(destinationRoute) ?: return
+    CenterAlignedTopAppBar(
+        title = { Text(text = stringResource(titleRes)) },
+    )
+}
+
+private fun titleResForRoute(destinationRoute: String): Int? = when {
+    destinationRoute.startsWith("Feed") -> R.string.feed
+    destinationRoute == Route.DatabaseInfo.route -> R.string.database
+    destinationRoute.startsWith("Contacts") -> R.string.restore_follows
+    destinationRoute == Route.DownloadYourEventsUserScreen.route -> R.string.download_your_events
+    destinationRoute == Route.RelayInfoSettings.route -> R.string.settings_category_relay_info
+    destinationRoute == Route.AccessControlSettings.route -> R.string.settings_category_access_control
+    destinationRoute == Route.NetworkSettings.route -> R.string.settings_category_network
+    destinationRoute == Route.AggregatorSettings.route -> R.string.settings_category_aggregator
+    destinationRoute == Route.RetentionSettings.route -> R.string.settings_category_retention
+    destinationRoute == Route.BackupSettings.route -> R.string.settings_category_backup
+    destinationRoute == Route.WebClientsSettings.route -> R.string.settings_category_web_clients
+    else -> null
 }

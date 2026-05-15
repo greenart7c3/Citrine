@@ -52,6 +52,14 @@ import com.greenart7c3.citrine.ui.components.DatabaseInfoViewModelFactory
 import com.greenart7c3.citrine.ui.components.EventSection
 import com.greenart7c3.citrine.ui.components.TagsSection
 import com.greenart7c3.citrine.ui.navigation.Route
+import com.greenart7c3.citrine.ui.settings.AccessControlSettingsScreen
+import com.greenart7c3.citrine.ui.settings.AggregatorSettingsScreen
+import com.greenart7c3.citrine.ui.settings.BackupSettingsScreen
+import com.greenart7c3.citrine.ui.settings.NetworkSettingsScreen
+import com.greenart7c3.citrine.ui.settings.RelayInfoSettingsScreen
+import com.greenart7c3.citrine.ui.settings.RetentionSettingsScreen
+import com.greenart7c3.citrine.ui.settings.WebClientsSettingsScreen
+import com.greenart7c3.citrine.ui.settings.toShortenHex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -272,14 +280,14 @@ fun CitrineScaffold(
             )
 
             composable(Route.Settings.route) {
-                val context = LocalContext.current
                 SettingsScreen(
-                    Modifier
+                    modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
                         .padding(16.dp),
-                    storageHelper = storageHelper,
+                    navController = navController,
                     onApplyChanges = {
+                        val context = Citrine.instance
                         coroutineScope.launch(Dispatchers.IO) {
                             homeViewModel.stop(context)
                             delay(1000)
@@ -287,6 +295,42 @@ fun CitrineScaffold(
                         }
                     },
                 )
+            }
+
+            val restartRelay: () -> Unit = {
+                val context = Citrine.instance
+                coroutineScope.launch(Dispatchers.IO) {
+                    homeViewModel.stop(context)
+                    delay(1000)
+                    homeViewModel.start(context)
+                }
+                Unit
+            }
+            val subScreenModifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+
+            composable(Route.RelayInfoSettings.route) {
+                RelayInfoSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
+            }
+            composable(Route.AccessControlSettings.route) {
+                AccessControlSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
+            }
+            composable(Route.NetworkSettings.route) {
+                NetworkSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
+            }
+            composable(Route.AggregatorSettings.route) {
+                AggregatorSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
+            }
+            composable(Route.RetentionSettings.route) {
+                RetentionSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
+            }
+            composable(Route.BackupSettings.route) {
+                BackupSettingsScreen(modifier = subScreenModifier, storageHelper = storageHelper, onApplyChanges = restartRelay)
+            }
+            composable(Route.WebClientsSettings.route) {
+                WebClientsSettingsScreen(modifier = subScreenModifier, storageHelper = storageHelper, onApplyChanges = restartRelay)
             }
 
             composable(Route.DatabaseInfo.route) {
