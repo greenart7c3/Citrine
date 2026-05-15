@@ -40,6 +40,8 @@ import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.tags.aTag.taggedAddresses
 import com.vitorpamplona.quartz.nip01Core.tags.events.taggedEvents
 import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
+import com.vitorpamplona.quartz.nip18Reposts.GenericRepostEvent
+import com.vitorpamplona.quartz.nip18Reposts.RepostEvent
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.nip40Expiration.isExpired
 import com.vitorpamplona.quartz.nip42RelayAuth.RelayAuthEvent
@@ -349,6 +351,7 @@ class CustomWebSocketServer(
         TaggedPubKeyMismatch,
         NewestEventAlreadyInDatabase,
         AuthRequiredForProtectedEvent,
+        ProtectedEventEmbeddedInRepost,
     }
 
     suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean, fromAggregator: Boolean = false): VerificationResult {
@@ -392,6 +395,19 @@ class CustomWebSocketServer(
             if (!isLocalHost && !connection.users.contains(event.pubKey)) {
                 Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
                 return VerificationResult.AuthRequiredForProtectedEvent
+            }
+        }
+
+        // NIP-70: reposts of protected events MUST NOT embed the reposted event.
+        if (event.kind == RepostEvent.KIND || event.kind == GenericRepostEvent.KIND) {
+            val embedded = try {
+                Event.fromJson(event.content)
+            } catch (_: Exception) {
+                null
+            }
+            if (embedded != null && embedded.isProtected()) {
+                Log.d(Citrine.TAG, "rejecting repost ${event.id} that embeds protected event ${embedded.id}")
+                return VerificationResult.ProtectedEventEmbeddedInRepost
             }
         }
 
@@ -481,6 +497,9 @@ class CustomWebSocketServer(
             VerificationResult.AuthRequiredForProtectedEvent -> {
                 connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
                 connection?.trySend(CommandResult.required(event, "this event may only be published by its author").toJson())
+            }
+            VerificationResult.ProtectedEventEmbeddedInRepost -> {
+                connection?.trySend(CommandResult.invalid(event, "blocked: reposts of protected events must not embed the reposted event").toJson())
             }
             VerificationResult.InvalidId -> {
                 connection?.trySend(
