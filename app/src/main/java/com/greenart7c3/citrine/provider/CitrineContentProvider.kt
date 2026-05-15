@@ -601,6 +601,12 @@ class CitrineContentProvider : ContentProvider() {
                         CustomWebSocketServer.VerificationResult.RejectedByNip29 -> {
                             QueryResult.error<Uri>("Rejected by this relay's NIP-29 group rules")
                         }
+                        CustomWebSocketServer.VerificationResult.BannedPubkey -> {
+                            QueryResult.error<Uri>("Pubkey is banned")
+                        }
+                        CustomWebSocketServer.VerificationResult.BannedEvent -> {
+                            QueryResult.error<Uri>("Event is banned")
+                        }
                     }
                 } else {
                     // Server not available, do basic validation and insert

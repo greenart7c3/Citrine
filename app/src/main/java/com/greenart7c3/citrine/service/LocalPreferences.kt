@@ -38,6 +38,10 @@ object PrefKeys {
     const val LAST_NSITE_CHECK = "last_nsite_check"
     const val NSITE_RELAYS = "nsite_relays"
 
+    const val BANNED_PUBKEYS = "banned_pubkeys"
+    const val BANNED_EVENT_IDS = "banned_event_ids"
+    const val BLOCKED_IPS = "blocked_ips"
+
     const val RELAY_AGGREGATOR_ENABLED = "relay_aggregator_enabled"
     const val AGGREGATOR_PUBKEY = "aggregator_pubkey"
     const val RELAY_AGGREGATOR_KINDS = "relay_aggregator_kinds"
@@ -119,6 +123,22 @@ object LocalPreferences {
                 putLong(PrefKeys.LAST_NSITE_CHECK, settings.lastNsiteCheck)
                 putStringSet(PrefKeys.NSITE_RELAYS, settings.nsiteRelays)
 
+                if (settings.bannedPubKeys.isNotEmpty()) {
+                    putString(PrefKeys.BANNED_PUBKEYS, Settings.bannedPubKeysToJson())
+                } else {
+                    remove(PrefKeys.BANNED_PUBKEYS)
+                }
+                if (settings.bannedEventIds.isNotEmpty()) {
+                    putString(PrefKeys.BANNED_EVENT_IDS, Settings.bannedEventIdsToJson())
+                } else {
+                    remove(PrefKeys.BANNED_EVENT_IDS)
+                }
+                if (settings.blockedIps.isNotEmpty()) {
+                    putString(PrefKeys.BLOCKED_IPS, Settings.blockedIpsToJson())
+                } else {
+                    remove(PrefKeys.BLOCKED_IPS)
+                }
+
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, settings.relayAggregatorEnabled)
                 putString(PrefKeys.AGGREGATOR_PUBKEY, settings.aggregatorPubkey)
                 if (settings.relayAggregatorKinds.isEmpty()) {
@@ -186,6 +206,16 @@ object LocalPreferences {
         }
         Settings.lastNsiteCheck = prefs.getLong(PrefKeys.LAST_NSITE_CHECK, 0L)
         Settings.nsiteRelays = prefs.getStringSet(PrefKeys.NSITE_RELAYS, null) ?: Settings.DEFAULT_NSITE_RELAYS
+
+        Settings.bannedPubKeys = prefs.getString(PrefKeys.BANNED_PUBKEYS, null)
+            ?.let { runCatching { Settings.bannedPubKeysFromJson(it) }.getOrNull() }
+            ?: java.util.concurrent.ConcurrentHashMap()
+        Settings.bannedEventIds = prefs.getString(PrefKeys.BANNED_EVENT_IDS, null)
+            ?.let { runCatching { Settings.bannedEventIdsFromJson(it) }.getOrNull() }
+            ?: java.util.concurrent.ConcurrentHashMap()
+        Settings.blockedIps = prefs.getString(PrefKeys.BLOCKED_IPS, null)
+            ?.let { runCatching { Settings.blockedIpsFromJson(it) }.getOrNull() }
+            ?: java.util.concurrent.ConcurrentHashMap()
 
         Settings.relayAggregatorEnabled = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, false)
         Settings.aggregatorPubkey = prefs.getString(PrefKeys.AGGREGATOR_PUBKEY, "") ?: ""
