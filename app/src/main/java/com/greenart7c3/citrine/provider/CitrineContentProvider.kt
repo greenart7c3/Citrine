@@ -597,6 +597,9 @@ class CitrineContentProvider : ContentProvider() {
                         CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent -> {
                             QueryResult.error<Uri>("Authentication required for protected event")
                         }
+                        CustomWebSocketServer.VerificationResult.ProtectedEventEmbeddedInRepost -> {
+                            QueryResult.error<Uri>("Reposts of protected events must not embed the reposted event")
+                        }
                     }
                 } else {
                     // Server not available, do basic validation and insert
