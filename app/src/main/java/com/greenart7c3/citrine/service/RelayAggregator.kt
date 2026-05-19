@@ -79,13 +79,6 @@ private data class ChunkSubscription(
 object RelayAggregator {
     private const val TAG = "RelayAggregator"
 
-    private val INDEXER_RELAYS = listOf(
-        RelayUrlNormalizer.normalize("wss://purplepag.es/"),
-        RelayUrlNormalizer.normalize("wss://user.kindpag.es/"),
-        RelayUrlNormalizer.normalize("wss://profiles.nostr1.com/"),
-        RelayUrlNormalizer.normalize("wss://directory.yabu.me/"),
-    )
-
     private val FALLBACK_OUTBOX_RELAYS = listOf(
         RelayUrlNormalizer.normalize("wss://relay.damus.io/"),
         RelayUrlNormalizer.normalize("wss://nos.lol/"),
@@ -94,6 +87,13 @@ object RelayAggregator {
 
     // Keep well under the per-filter author cap that stricter relays enforce (often 100–200).
     private const val MAX_AUTHORS_PER_SUB = 100
+
+    // Per-author cap on how many of the author's NIP-65 write relays we'll actually
+    // subscribe to. Lower = fewer concurrent WebSockets and less battery drain; higher
+    // = better redundancy if any one relay drops events. The greedy picker (capRelaysPerAuthor)
+    // prefers relays that already cover other authors so the chosen set converges to a
+    // small number of well-shared relays even with a large follow list.
+    private const val MAX_RELAYS_PER_AUTHOR = 3
     private const val DEFAULT_COLD_START_WINDOW_SEC = 24L * 60L * 60L
     private const val OVERLAP_SEC = 5L * 60L
     private const val BATCH_FETCH_TIMEOUT_MS = 15_000L
@@ -765,6 +765,9 @@ object RelayAggregator {
                         "${follows.size} follows (+ self) for $aggPubkey (createdAt=${contactList?.createdAt ?: "none"})",
                 )
 
+                val indexers = indexerRelays()
+                val sources = aggregatorSourceRelays()
+
                 // Resolve NIP-65 for all authors in one batch instead of N sequential fetches.
                 val uncached = mutableSetOf<String>()
                 for (pk in authors) {
@@ -775,8 +778,8 @@ object RelayAggregator {
 
                 val fetchMs = System.currentTimeMillis()
                 fetched = if (uncached.isNotEmpty()) {
-                    Log.d(TAG, "Fetching ${uncached.size} NIP-65 records from ${INDEXER_RELAYS.size} indexers")
-                    batchFetchRelayLists(uncached, INDEXER_RELAYS, BATCH_FETCH_TIMEOUT_MS)
+                    Log.d(TAG, "Fetching ${uncached.size} NIP-65 records from ${indexers.size} indexers")
+                    batchFetchRelayLists(uncached, indexers, BATCH_FETCH_TIMEOUT_MS)
                 } else {
                     emptyMap()
                 }
@@ -788,10 +791,16 @@ object RelayAggregator {
                     )
                 }
 
+                // Build each author's candidate write-relay list (with the per-author
+                // fallback for missing NIP-65), then cap each author at MAX_RELAYS_PER_AUTHOR
+                // using a greedy popularity-based picker to converge on a small shared set
+                // of relays. Aggregator-source relays are then layered on top with the full
+                // author set, so they act as a backstop mirror for every followed pubkey.
+                val authorWriteRelays = mutableMapOf<String, List<NormalizedRelayUrl>>()
                 var fellBackCount = 0
                 for (pk in authors) {
                     val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
-                    val writeRelays = relayListEvent
+                    authorWriteRelays[pk] = relayListEvent
                         ?.writeRelays()
                         ?.mapNotNull { raw -> normalizeRemote(raw) }
                         ?.takeIf { it.isNotEmpty() }
@@ -799,34 +808,38 @@ object RelayAggregator {
                             fellBackCount++
                             FALLBACK_OUTBOX_RELAYS
                         }
-                    writeRelays.forEach { relay ->
-                        relayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
-                    }
+                }
+                val capped = capRelaysPerAuthor(authorWriteRelays, MAX_RELAYS_PER_AUTHOR)
+                relayToAuthors.putAll(capped)
+                sources.forEach { relay ->
+                    relayToAuthors.getOrPut(relay) { mutableSetOf() }.addAll(authors)
                 }
                 Log.d(
                     TAG,
                     "Outbox map built: ${relayToAuthors.size} relays for ${authors.size} authors " +
-                        "($fellBackCount author(s) had no NIP-65, fell back to ${FALLBACK_OUTBOX_RELAYS.size} relays)",
+                        "(cap=$MAX_RELAYS_PER_AUTHOR/author, ${sources.size} aggregator source(s), " +
+                        "$fellBackCount author(s) had no NIP-65, fell back to ${FALLBACK_OUTBOX_RELAYS.size} relays)",
                 )
 
-                // Route each author's kind-0 fetch to their NIP-65 write relays when known,
-                // falling back to the indexer relays for authors without a relay list. Reuses
-                // the cached + freshly fetched NIP-65 maps resolved above.
-                val metadataRelayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
+                // Same cap-then-overlay-sources strategy for kind-0 metadata fetches: take
+                // each author's NIP-65 write relays (indexers as the fallback for unknown
+                // authors), cap per-author, then add the aggregator-source relays.
+                val authorMetadataRelays = mutableMapOf<String, List<NormalizedRelayUrl>>()
                 var metadataIndexerFallback = 0
                 for (pk in authors) {
                     val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
-                    val targetRelays = relayListEvent
+                    authorMetadataRelays[pk] = relayListEvent
                         ?.writeRelays()
                         ?.mapNotNull { raw -> normalizeRemote(raw) }
                         ?.takeIf { it.isNotEmpty() }
                         ?: run {
                             metadataIndexerFallback++
-                            INDEXER_RELAYS
+                            indexers
                         }
-                    targetRelays.forEach { relay ->
-                        metadataRelayToAuthors.getOrPut(relay) { mutableSetOf() }.add(pk)
-                    }
+                }
+                val metadataRelayToAuthors = capRelaysPerAuthor(authorMetadataRelays, MAX_RELAYS_PER_AUTHOR)
+                sources.forEach { relay ->
+                    metadataRelayToAuthors.getOrPut(relay) { mutableSetOf() }.addAll(authors)
                 }
                 val metadataMs = System.currentTimeMillis()
                 val metadataFetched = batchFetchMetadata(metadataRelayToAuthors, BATCH_FETCH_TIMEOUT_MS)
@@ -834,7 +847,8 @@ object RelayAggregator {
                     TAG,
                     "Metadata batch fetch returned ${metadataFetched.size}/${authors.size} " +
                         "from ${metadataRelayToAuthors.size} relays " +
-                        "($metadataIndexerFallback author(s) had no NIP-65, fell back to indexers) " +
+                        "(cap=$MAX_RELAYS_PER_AUTHOR/author, ${sources.size} aggregator source(s), " +
+                        "$metadataIndexerFallback author(s) had no NIP-65, fell back to indexers) " +
                         "in ${System.currentTimeMillis() - metadataMs}ms",
                 )
             }
@@ -1166,6 +1180,46 @@ object RelayAggregator {
         return NormalizedRelayUrl(url = n.url)
     }
 
+    // Resolves the user-configured NIP-65 indexer relays. An empty user set falls back to
+    // the built-in defaults so NIP-65 / contact-list / mute-list bootstrap lookups never
+    // silently break when the user clears the list.
+    private fun indexerRelays(): List<NormalizedRelayUrl> {
+        val raw = Settings.relayAggregatorIndexerRelays
+            .takeIf { it.isNotEmpty() }
+            ?: Settings.DEFAULT_NIP65_INDEXER_RELAYS
+        return raw.mapNotNull { normalizeRemote(it) }
+    }
+
+    // Resolves the user-configured aggregator-source relays (e.g. wss://aggr.nostr.land).
+    // No default fallback: an empty user list means "no aggregator overlay", which is a
+    // legitimate configuration (rely entirely on per-author NIP-65 routing).
+    private fun aggregatorSourceRelays(): List<NormalizedRelayUrl> = Settings.relayAggregatorSourceRelays.mapNotNull { normalizeRemote(it) }
+
+    // Picks at most [cap] relays per author from each author's candidate write-relay list,
+    // greedily preferring relays that already cover many other authors. The popularity
+    // score is computed across all authors once, then each author independently picks its
+    // top-[cap] relays by that score with ties broken by candidate-list order. This keeps
+    // total open WebSocket count low while still spreading coverage across multiple relays
+    // per author.
+    private fun capRelaysPerAuthor(
+        authorWriteRelays: Map<String, List<NormalizedRelayUrl>>,
+        cap: Int,
+    ): MutableMap<NormalizedRelayUrl, MutableSet<String>> {
+        val relayPopularity = mutableMapOf<NormalizedRelayUrl, Int>()
+        for ((_, relays) in authorWriteRelays) {
+            for (r in relays.distinct()) relayPopularity.merge(r, 1) { a, b -> a + b }
+        }
+        val result = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
+        for ((pk, relays) in authorWriteRelays) {
+            val chosen = relays
+                .distinct()
+                .sortedByDescending { relayPopularity[it] ?: 0 }
+                .take(cap)
+            chosen.forEach { r -> result.getOrPut(r) { mutableSetOf() }.add(pk) }
+        }
+        return result
+    }
+
     /**
      * Fetches a single replaceable event of [kind] for [pubkey] from [relays] with no `since`
      * filter. Used both for the user's own kind 3 / kind 0 and for opportunistic backfill of
@@ -1219,19 +1273,20 @@ object RelayAggregator {
             "Backfilling unknown user $pubkey " +
                 "(metadata=$needsMetadata, contacts=$needsContactList, relayList=$needsRelayList)",
         )
+        val indexers = indexerRelays()
         if (needsRelayList) {
-            fetchSingleReplaceable(AdvertisedRelayListEvent.KIND, pubkey, INDEXER_RELAYS)?.let {
+            fetchSingleReplaceable(AdvertisedRelayListEvent.KIND, pubkey, indexers)?.let {
                 CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true)
             }
         }
         if (needsMetadata) {
-            val metadataRelays = userWriteRelays(dao, pubkey) ?: INDEXER_RELAYS
+            val metadataRelays = userWriteRelays(dao, pubkey) ?: indexers
             fetchSingleReplaceable(MetadataEvent.KIND, pubkey, metadataRelays)?.let {
                 CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true)
             }
         }
         if (needsContactList) {
-            fetchSingleReplaceable(ContactListEvent.KIND, pubkey, INDEXER_RELAYS)?.let {
+            fetchSingleReplaceable(ContactListEvent.KIND, pubkey, indexers)?.let {
                 CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true)
             }
         }
@@ -1266,7 +1321,7 @@ object RelayAggregator {
         if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
         val fetched = try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                Citrine.instance.client.fetchFirst(subId, INDEXER_RELAYS.associateWith { filters })
+                Citrine.instance.client.fetchFirst(subId, indexerRelays().associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e
@@ -1458,7 +1513,7 @@ object RelayAggregator {
         if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
         val fetched = try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                Citrine.instance.client.fetchFirst(subId, INDEXER_RELAYS.associateWith { filters })
+                Citrine.instance.client.fetchFirst(subId, indexerRelays().associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e

@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +74,10 @@ fun AggregatorSettingsScreen(
         var aggregatorWifiOnly by remember { mutableStateOf(Settings.relayAggregatorWifiOnly) }
         var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
         var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
+        var aggregatorSourceRelays by remember { mutableStateOf(Settings.relayAggregatorSourceRelays) }
+        var aggregatorSourceRelayInput by remember { mutableStateOf(TextFieldValue("")) }
+        var aggregatorIndexerRelays by remember { mutableStateOf(Settings.relayAggregatorIndexerRelays) }
+        var aggregatorIndexerRelayInput by remember { mutableStateOf(TextFieldValue("")) }
         var aggregatorSignerPubkey by remember { mutableStateOf(Settings.aggregatorSignerPubkey) }
         var aggregatorSignerPackageName by remember { mutableStateOf(Settings.aggregatorSignerPackageName) }
 
@@ -142,6 +147,8 @@ fun AggregatorSettingsScreen(
                 Settings.relayAggregatorIncludeTagged = aggregatorIncludeTagged
                 Settings.relayAggregatorWifiOnly = aggregatorWifiOnly
                 Settings.relayAggregatorExtraRelays = aggregatorExtraRelays
+                Settings.relayAggregatorSourceRelays = aggregatorSourceRelays
+                Settings.relayAggregatorIndexerRelays = aggregatorIndexerRelays
                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
 
                 aggregatorPubkey = TextFieldValue(resolvedAggregatorKey)
@@ -320,6 +327,104 @@ fun AggregatorSettingsScreen(
                     PubkeyListItem(
                         text = relay,
                         onDelete = { aggregatorExtraRelays = aggregatorExtraRelays - relay },
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.relay_aggregator_source_relays),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.relay_aggregator_source_relays_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                item {
+                    PubkeyInputRow(
+                        value = aggregatorSourceRelayInput,
+                        onValueChange = { aggregatorSourceRelayInput = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                aggregatorSourceRelayInput = TextFieldValue(text)
+                            }
+                        },
+                        onAdd = {
+                            val normalized = normalizeRelayInput(aggregatorSourceRelayInput.text)
+                            if (normalized == null) {
+                                Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            aggregatorSourceRelays = aggregatorSourceRelays + normalized
+                            aggregatorSourceRelayInput = TextFieldValue("")
+                        },
+                    )
+                }
+                item {
+                    TextButton(
+                        onClick = { aggregatorSourceRelays = Settings.DEFAULT_AGGREGATOR_SOURCE_RELAYS },
+                    ) {
+                        Text(stringResource(R.string.relay_aggregator_reset_defaults))
+                    }
+                }
+                items(aggregatorSourceRelays.toList()) { relay ->
+                    PubkeyListItem(
+                        text = relay,
+                        onDelete = { aggregatorSourceRelays = aggregatorSourceRelays - relay },
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.relay_aggregator_indexer_relays),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.relay_aggregator_indexer_relays_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                item {
+                    PubkeyInputRow(
+                        value = aggregatorIndexerRelayInput,
+                        onValueChange = { aggregatorIndexerRelayInput = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                aggregatorIndexerRelayInput = TextFieldValue(text)
+                            }
+                        },
+                        onAdd = {
+                            val normalized = normalizeRelayInput(aggregatorIndexerRelayInput.text)
+                            if (normalized == null) {
+                                Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            aggregatorIndexerRelays = aggregatorIndexerRelays + normalized
+                            aggregatorIndexerRelayInput = TextFieldValue("")
+                        },
+                    )
+                }
+                item {
+                    TextButton(
+                        onClick = { aggregatorIndexerRelays = Settings.DEFAULT_NIP65_INDEXER_RELAYS },
+                    ) {
+                        Text(stringResource(R.string.relay_aggregator_reset_defaults))
+                    }
+                }
+                items(aggregatorIndexerRelays.toList()) { relay ->
+                    PubkeyListItem(
+                        text = relay,
+                        onDelete = { aggregatorIndexerRelays = aggregatorIndexerRelays - relay },
                     )
                 }
             }
