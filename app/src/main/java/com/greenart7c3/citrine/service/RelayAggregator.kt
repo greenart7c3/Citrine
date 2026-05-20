@@ -168,7 +168,10 @@ object RelayAggregator {
 
     @Volatile private var authorCount: Int = 0
 
-    @Volatile private var taggedSubId: String? = null
+    // One subId per relay for the tagged sub so a single relay's tagged sub can be closed
+    // without disturbing the others. Keys mirror the relays in activeRelaySubs that carry
+    // a tagged entry.
+    private val taggedSubIds: ConcurrentHashMap<NormalizedRelayUrl, String> = ConcurrentHashMap()
 
     // Pubkey the currently-running aggregator was started for. Used by onConfigChanged
     // to detect identity changes and trigger a full restart.
@@ -409,6 +412,7 @@ object RelayAggregator {
             runCatching { Citrine.instance.client.unsubscribe(it) }
         }
         trackedSubIds.clear()
+        taggedSubIds.clear()
         activeRelaySubs.clear()
         subscribedRelays.clear()
         connectedRelays.clear()
@@ -423,7 +427,7 @@ object RelayAggregator {
         droppedEvents.set(0)
         statusDirty.set(false)
         authorCount = 0
-        taggedSubId = null
+        taggedSubIds.clear()
         currentPubkey = null
         pausedForMetered = false
         database = null
@@ -611,7 +615,7 @@ object RelayAggregator {
         activeRelaySubs.clear()
         subscribedRelays.clear()
         connectedRelays.clear()
-        taggedSubId = null
+        taggedSubIds.clear()
         publishStatus(phase = AggregatorPhase.PAUSED)
     }
 
@@ -964,8 +968,6 @@ object RelayAggregator {
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
                     ?: emptyList()
                 val taggedSubRelays = (readRelays + FALLBACK_OUTBOX_RELAYS).toSet()
-                val id = taggedSubId ?: newSubId().also { taggedSubId = it }
-                trackedSubIds.add(id)
                 val filters = listOf(
                     Filter(
                         tags = mapOf("p" to listOf(aggPubkey)),
@@ -973,41 +975,53 @@ object RelayAggregator {
                         since = bootstrapSince,
                     ),
                 )
-                if (taggedSubRelays.isNotEmpty()) {
-                    // Send ONE subscribe with the full relay set; Quartz overwrites the prior
-                    // desiredSubs[subId] entry on each call, so iterating would leave only the
-                    // last relay actually subscribed.
-                    Log.d(
-                        TAG,
-                        "Tagged sub: $id to ${taggedSubRelays.size} relays " +
-                            "(${readRelays.size} from inbox, ${FALLBACK_OUTBOX_RELAYS.size} fallback)",
-                    )
+                var freshTagged = 0
+                var reusedTagged = 0
+                for (relay in taggedSubRelays) {
+                    val existingId = taggedSubIds[relay]
+                    val id = existingId ?: newSubId().also { taggedSubIds[relay] = it }
+                    if (existingId != null) reusedTagged++ else freshTagged++
+                    trackedSubIds.add(id)
                     val taggedEntry = ChunkSubscription(
                         subId = id,
                         authors = emptySet(),
                         since = bootstrapSince,
                     )
-                    taggedSubRelays.forEach { relay ->
-                        newActiveSubs.getOrPut(relay) { mutableListOf() }.add(taggedEntry)
-                        // Publish into live state BEFORE the subscribe call, same race fix as
-                        // the main-sub loop above.
-                        activeRelaySubs.compute(relay) { _, current ->
-                            val list = current?.let { ArrayList(it) } ?: ArrayList()
-                            list.add(taggedEntry)
-                            list
-                        }
+                    newActiveSubs.getOrPut(relay) { mutableListOf() }.add(taggedEntry)
+                    // Publish into live state BEFORE the subscribe call, same race fix as
+                    // the main-sub loop above.
+                    activeRelaySubs.compute(relay) { _, current ->
+                        val list = current?.let { ArrayList(it) } ?: ArrayList()
+                        list.add(taggedEntry)
+                        list
                     }
                     runCatching {
-                        Citrine.instance.client.subscribe(id, taggedSubRelays.associateWith { filters })
-                    }.onFailure { Log.e(TAG, "tagged subscribe failed", it) }
+                        Citrine.instance.client.subscribe(id, mapOf(relay to filters))
+                    }.onFailure { Log.e(TAG, "tagged subscribe to ${relay.url} failed", it) }
                 }
+                // Drop tagged subs for relays no longer in the desired set so a single relay
+                // can be removed without tearing down the whole tagged sub.
+                val staleTaggedRelays = taggedSubIds.keys - taggedSubRelays
+                for (relay in staleTaggedRelays) {
+                    val oldId = taggedSubIds.remove(relay) ?: continue
+                    runCatching { Citrine.instance.client.unsubscribe(oldId) }
+                    trackedSubIds.remove(oldId)
+                }
+                Log.d(
+                    TAG,
+                    "Tagged subs: $freshTagged new, $reusedTagged reused across " +
+                        "${taggedSubRelays.size} relays (${readRelays.size} inbox, " +
+                        "${FALLBACK_OUTBOX_RELAYS.size} fallback); dropped ${staleTaggedRelays.size}",
+                )
             } else {
-                taggedSubId?.let {
-                    Log.d(TAG, "Tagged sub disabled, unsubscribing $it")
-                    runCatching { Citrine.instance.client.unsubscribe(it) }
-                    trackedSubIds.remove(it)
+                if (taggedSubIds.isNotEmpty()) {
+                    Log.d(TAG, "Tagged sub disabled, unsubscribing ${taggedSubIds.size} relay subs")
+                    taggedSubIds.forEach { (_, id) ->
+                        runCatching { Citrine.instance.client.unsubscribe(id) }
+                        trackedSubIds.remove(id)
+                    }
+                    taggedSubIds.clear()
                 }
-                taggedSubId = null
             }
 
             // activeRelaySubs has been populated incrementally during the main-sub and
@@ -1065,7 +1079,7 @@ object RelayAggregator {
             if (ev.pubKey !in entry.authors) {
                 return "pubkey ${ev.pubKey} not in requested authors (${entry.authors.size})"
             }
-        } else if (subId == taggedSubId) {
+        } else if (taggedSubIds.containsValue(subId)) {
             val aggPubkey = Settings.aggregatorPubkey
             if (aggPubkey.isBlank()) return "tagged sub active but aggregator pubkey is blank"
             val tagged = ev.tags.any { it.size > 1 && it[0] == "p" && it[1] == aggPubkey }
