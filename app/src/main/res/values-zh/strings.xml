@@ -137,6 +137,11 @@
     <string name="relay_aggregator_extra_relays">额外中继</string>
     <string name="relay_aggregator_extra_relays_description">单纯订阅事件类型和起始时间过滤器（而没有订阅特定作者）的中继。当没有配置公钥时用于完整中继集合。</string>
     <string name="relay_aggregator_extra_relays_hint">添加至少一个中继用于无公钥订阅</string>
+    <string name="relay_aggregator_source_relays">Aggregator relays</string>
+    <string name="relay_aggregator_source_relays_description">External aggregator-style relays (for example aggr.nostr.land) that mirror events from many upstreams. Subscribed for every configured kind with your full follow set.</string>
+    <string name="relay_aggregator_indexer_relays">NIP-65 indexer relays</string>
+    <string name="relay_aggregator_indexer_relays_description">Used only to look up authors\' NIP-65 relay lists, contact lists, and mute lists when not already cached. Leave empty to use the built-in defaults.</string>
+    <string name="relay_aggregator_reset_defaults">Reset to defaults</string>
     <string name="relay_aggregator_invalid_relay">无效的中继 URL（应该包含 wss:// 或 ws://）</string>
     <string name="relay_aggregator_pubkey_or_relays_required">先设置一个聚合器公钥或至少一个中继</string>
     <string name="relay_aggregator_phase_idle">待机</string>
