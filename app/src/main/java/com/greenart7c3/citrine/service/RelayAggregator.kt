@@ -146,6 +146,13 @@ object RelayAggregator {
 
     private val subscribedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
     private val connectedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
+
+    // .onion relays that returned "SOCKS: Connection refused" — either Tor isn't running
+    // or the hidden service is gone. Quartz would otherwise keep retrying on every refresh
+    // and on its own internal reconnect, burning battery against an address that won't
+    // resolve until the user restarts the aggregator or Tor comes back. Cleared in stop().
+    private val skippedOnionRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
+
     private val eventsReceived = AtomicLong(0)
 
     // NIP-51 (kind 10000) mute list — author pubkeys to drop and content words to drop.
@@ -412,6 +419,7 @@ object RelayAggregator {
         activeRelaySubs.clear()
         subscribedRelays.clear()
         connectedRelays.clear()
+        skippedOnionRelays.clear()
         lastEventByPubkey.clear()
         muteRefreshJob?.cancel()
         muteRefreshJob = null
@@ -855,6 +863,19 @@ object RelayAggregator {
 
             publishStatus(phase = AggregatorPhase.REFRESHING)
 
+            // Drop onion relays we've previously seen fail with "SOCKS: Connection refused".
+            // Either Tor isn't running or the hidden service is gone; retrying every refresh
+            // (and Quartz's own reconnect loop) burns battery for nothing. The skip persists
+            // until stop() so a restart clears it.
+            if (skippedOnionRelays.isNotEmpty()) {
+                val before = relayToAuthors.size
+                relayToAuthors.keys.removeAll(skippedOnionRelays)
+                val removed = before - relayToAuthors.size
+                if (removed > 0) {
+                    Log.d(TAG, "Excluding $removed skipped onion relay(s) from this refresh")
+                }
+            }
+
             // Kinds 0 (metadata) and 3 (contact list) are fetched via dedicated unfiltered
             // paths above (loadOrBootstrapContactList, batchFetchMetadata) — exclude them
             // here so they aren't also subscribed with a `since` ceiling on the main and
@@ -963,7 +984,7 @@ object RelayAggregator {
                 val readRelays = aggRelayList?.readRelays()
                     ?.mapNotNull { raw -> normalizeRemote(raw) }
                     ?: emptyList()
-                val taggedSubRelays = (readRelays + FALLBACK_OUTBOX_RELAYS).toSet()
+                val taggedSubRelays = (readRelays + FALLBACK_OUTBOX_RELAYS).toSet() - skippedOnionRelays
                 val id = taggedSubId ?: newSubId().also { taggedSubId = it }
                 trackedSubIds.add(id)
                 val filters = listOf(
@@ -1777,6 +1798,35 @@ object RelayAggregator {
             if (connectedRelays.remove(relay.url)) {
                 refreshStatusCounters()
             }
+            if (isOnionConnectionRefused(relay.url, errorMessage)) {
+                skipOnionRelay(relay.url, errorMessage)
+            }
         }
+    }
+
+    // OkHttp surfaces a Tor SOCKS failure as "WebSocket Failure: SOCKS: Connection refused"
+    // (with optional address suffixes). Match the substring rather than the full string so
+    // we don't miss variants from different OkHttp / SocketException versions.
+    private fun isOnionConnectionRefused(url: NormalizedRelayUrl, errorMessage: String): Boolean {
+        if (!Citrine.instance.isOnionUrl(url.url)) return false
+        return errorMessage.contains("SOCKS", ignoreCase = true) &&
+            errorMessage.contains("Connection refused", ignoreCase = true)
+    }
+
+    private fun skipOnionRelay(url: NormalizedRelayUrl, errorMessage: String) {
+        if (!skippedOnionRelays.add(url)) return
+        Log.d(TAG, "Skipping onion relay ${url.url} after connection refused: $errorMessage")
+        val entries = activeRelaySubs.remove(url) ?: return
+        // The tagged sub uses one subId across many relays; unsubscribing it here would
+        // tear it down on every other relay too. The main subs allocate a fresh subId per
+        // relay, so those are safe to drop.
+        val sharedTaggedId = taggedSubId
+        entries.forEach { entry ->
+            if (entry.subId == sharedTaggedId) return@forEach
+            runCatching { Citrine.instance.client.unsubscribe(entry.subId) }
+            trackedSubIds.remove(entry.subId)
+        }
+        subscribedRelays.remove(url)
+        refreshStatusCounters()
     }
 }
