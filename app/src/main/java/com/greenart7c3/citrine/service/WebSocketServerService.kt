@@ -45,6 +45,14 @@ class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val binder = LocalBinder()
     private var timer: Timer? = null
+
+    // Signature of the last notification we posted to id 1, used to skip re-posting
+    // identical content. Re-posting an unchanged notification can still wake the
+    // device and refresh the system UI, even with setOnlyAlertOnce.
+    @Volatile private var lastForegroundSignature: String? = null
+
+    // Signature of the last backup-progress notification we posted to id 2.
+    @Volatile private var lastBackupProgressText: String? = null
     inner class LocalBinder : Binder() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
     }
@@ -69,6 +77,7 @@ class WebSocketServerService : Service() {
                 override fun run() {
                     if ((Citrine.job == null || Citrine.job?.isCompleted == true) && !Citrine.isImportingEvents) {
                         NotificationManagerCompat.from(Citrine.instance).cancel(2)
+                        lastBackupProgressText = null
                     }
 
                     if (!Citrine.isImportingEvents) {
@@ -100,7 +109,8 @@ class WebSocketServerService : Service() {
                                                 val notificationManager = NotificationManagerCompat.from(Citrine.instance)
                                                 if (it.isBlank()) {
                                                     notificationManager.cancel(2)
-                                                } else {
+                                                    lastBackupProgressText = null
+                                                } else if (it != lastBackupProgressText) {
                                                     val channel = NotificationChannelCompat.Builder(
                                                         "citrine",
                                                         NotificationManagerCompat.IMPORTANCE_DEFAULT,
@@ -130,6 +140,7 @@ class WebSocketServerService : Service() {
 
                                                     if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                                                         notificationManager.notify(2, notification)
+                                                        lastBackupProgressText = it
                                                     }
                                                 }
                                             },
@@ -201,7 +212,9 @@ class WebSocketServerService : Service() {
         var attempts = 0
         while (error && attempts < 5) {
             try {
-                startForeground(1, createNotification(RelayAggregator.status.value.takeIf { it.enabled }))
+                val initial = buildForegroundNotification(RelayAggregator.status.value.takeIf { it.enabled })
+                startForeground(1, initial.notification)
+                lastForegroundSignature = initial.signature
                 error = false
             } catch (e: Exception) {
                 Log.e(Citrine.TAG, "Error starting foreground service attempt $attempts", e)
@@ -220,15 +233,7 @@ class WebSocketServerService : Service() {
                 .sample(NOTIFICATION_THROTTLE_MS)
                 .collect { status ->
                     try {
-                        val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
-                        val notification = createNotification(status.takeIf { it.enabled })
-                        if (ActivityCompat.checkSelfPermission(
-                                this@WebSocketServerService,
-                                Manifest.permission.POST_NOTIFICATIONS,
-                            ) == PackageManager.PERMISSION_GRANTED
-                        ) {
-                            notificationManager.notify(1, notification)
-                        }
+                        postForegroundNotificationIfChanged(status.takeIf { it.enabled })
                     } catch (e: Exception) {
                         Log.e(Citrine.TAG, "Error updating aggregator notification", e)
                     }
@@ -240,16 +245,7 @@ class WebSocketServerService : Service() {
             // action appears with the resolved onion hostname.
             TorManager.state.collect {
                 try {
-                    val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
-                    val status = RelayAggregator.status.value.takeIf { it.enabled }
-                    val notification = createNotification(status)
-                    if (ActivityCompat.checkSelfPermission(
-                            this@WebSocketServerService,
-                            Manifest.permission.POST_NOTIFICATIONS,
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notificationManager.notify(1, notification)
-                    }
+                    postForegroundNotificationIfChanged(RelayAggregator.status.value.takeIf { it.enabled })
                 } catch (e: Exception) {
                     Log.e(Citrine.TAG, "Error updating Tor notification", e)
                 }
@@ -271,7 +267,11 @@ class WebSocketServerService : Service() {
 
     override fun onBind(intent: Intent?): IBinder = binder
 
-    private fun createNotification(status: AggregatorStatus? = null): Notification {
+    private data class ForegroundNotification(val notification: Notification, val signature: String)
+
+    private fun createNotification(status: AggregatorStatus? = null): Notification = buildForegroundNotification(status).notification
+
+    private fun buildForegroundNotification(status: AggregatorStatus? = null): ForegroundNotification {
         val notificationManager = NotificationManagerCompat.from(this)
         val channelId = "WebSocketServerServiceChannel"
         val groupId = "WebSocketServerServiceGroup"
@@ -296,10 +296,12 @@ class WebSocketServerService : Service() {
             getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
 
+        val title = getString(R.string.relay_running_at_ws, Settings.host, Settings.port.toString())
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")
-            .setContentTitle(getString(R.string.relay_running_at_ws, Settings.host, Settings.port.toString()))
+            .setContentTitle(title)
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setOnlyAlertOnce(true)
             .setContentIntent(resultPendingIntent)
             .setGroup(groupId)
 
@@ -313,8 +315,8 @@ class WebSocketServerService : Service() {
         )
 
         val wifiIp = NetworkUtils.getLocalIpAddress()
-        if (!wifiIp.isNullOrBlank()) {
-            val wifiUrl = "ws://$wifiIp:${Settings.port}"
+        val wifiUrl = if (!wifiIp.isNullOrBlank()) "ws://$wifiIp:${Settings.port}" else null
+        if (wifiUrl != null) {
             notificationBuilder.addAction(
                 R.drawable.ic_launcher_background,
                 getString(R.string.copy_wifi),
@@ -327,8 +329,8 @@ class WebSocketServerService : Service() {
             is TorManager.State.Running -> torState.hostname.takeIf { it.isNotBlank() }
             else -> Settings.onionHostname.takeIf { it.isNotBlank() && Settings.useTor }
         }
-        if (!onionHost.isNullOrBlank()) {
-            val torUrl = "ws://$onionHost"
+        val torUrl = if (!onionHost.isNullOrBlank()) "ws://$onionHost" else null
+        if (torUrl != null) {
             notificationBuilder.addAction(
                 R.drawable.ic_launcher_background,
                 getString(R.string.copy_tor),
@@ -336,15 +338,36 @@ class WebSocketServerService : Service() {
             )
         }
 
+        val summary: String
+        val details: String
         if (status != null && status.enabled) {
-            val summary = buildAggregatorSummary(status)
-            val details = buildAggregatorDetails(status)
+            summary = buildAggregatorSummary(status)
+            details = buildAggregatorDetails(status)
             notificationBuilder
                 .setContentText(summary)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(details))
+        } else {
+            summary = ""
+            details = ""
         }
 
-        return notificationBuilder.build()
+        val signature = listOf(title, summary, details, localUrl, wifiUrl.orEmpty(), torUrl.orEmpty())
+            .joinToString("")
+        return ForegroundNotification(notificationBuilder.build(), signature)
+    }
+
+    private fun postForegroundNotificationIfChanged(status: AggregatorStatus?) {
+        val built = buildForegroundNotification(status)
+        if (built.signature == lastForegroundSignature) return
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        NotificationManagerCompat.from(this).notify(1, built.notification)
+        lastForegroundSignature = built.signature
     }
 
     fun isStarted(): Boolean = CustomWebSocketService.server != null
