@@ -20,10 +20,15 @@
  */
 package com.greenart7c3.citrine.okhttp
 
+import android.util.Log
+import com.greenart7c3.citrine.Citrine
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.sockets.WebSocket
 import com.vitorpamplona.quartz.nip01Core.relay.sockets.WebSocketListener
 import com.vitorpamplona.quartz.nip01Core.relay.sockets.WebsocketBuilder
+import java.io.IOException
+import java.net.ConnectException
+import java.util.concurrent.ConcurrentHashMap.newKeySet
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -62,6 +67,11 @@ class OkHttpWebSocket(
     }
 
     override fun connect() {
+        if (isRefusedOnion(url.url)) {
+            Log.d(Citrine.TAG, "Skipping connect to refused onion url ${url.url}")
+            out.onFailure(IOException("Skipped: onion url previously refused connection"), null, null)
+            return
+        }
         usingOkHttp = httpClient(url)
         socket = usingOkHttp?.newWebSocket(buildRequest(), listener)
     }
@@ -95,6 +105,11 @@ class OkHttpWebSocket(
             response: Response?,
         ) {
             socket = null
+            if (isConnectionRefused(t) && Citrine.instance.isOnionUrl(url.url)) {
+                if (refusedOnions.add(url.url)) {
+                    Log.d(Citrine.TAG, "Onion url refused connection, will not retry: ${url.url}")
+                }
+            }
             out.onFailure(t, response?.code, response?.message)
         }
     }
@@ -116,4 +131,20 @@ class OkHttpWebSocket(
     }
 
     override fun send(msg: String): Boolean = socket?.send(msg) ?: false
+
+    companion object {
+        private val refusedOnions: MutableSet<String> = newKeySet()
+
+        fun isRefusedOnion(url: String): Boolean = refusedOnions.contains(url)
+
+        fun clearRefusedOnions() {
+            refusedOnions.clear()
+        }
+
+        private fun isConnectionRefused(t: Throwable): Boolean {
+            if (t is ConnectException) return true
+            val msg = t.message?.lowercase().orEmpty()
+            return msg.contains("connection refused") || msg.contains("econnrefused")
+        }
+    }
 }
