@@ -5,6 +5,17 @@ import com.greenart7c3.citrine.R
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 
 object Settings {
+    val DEFAULT_AGGREGATOR_SOURCE_RELAYS = setOf(
+        "wss://aggr.nostr.land/",
+    )
+
+    val DEFAULT_NIP65_INDEXER_RELAYS = setOf(
+        "wss://purplepag.es/",
+        "wss://user.kindpag.es/",
+        "wss://profiles.nostr1.com/",
+        "wss://directory.yabu.me/",
+    )
+
     var allowedKinds: Set<Int> = emptySet()
     var allowedPubKeys: Set<String> = emptySet()
     var allowedTaggedPubKeys: Set<String> = emptySet()
@@ -41,6 +52,17 @@ object Settings {
     // Relays the aggregator listens to when no pubkey is configured — plain kinds+since
     // subscription, no author filter. Also usable as an explicit extra relay set.
     var relayAggregatorExtraRelays: Set<String> = emptySet()
+
+    // External aggregator-style relays (e.g. wss://aggr.nostr.land) that mirror events
+    // from many upstreams. Subscribed for the full author set on every refresh, in
+    // addition to each author's per-relay NIP-65 routing.
+    var relayAggregatorSourceRelays: Set<String> = DEFAULT_AGGREGATOR_SOURCE_RELAYS
+
+    // Relays consulted only to look up NIP-65 (kind 10002), contact-list (kind 3), and
+    // mute-list (kind 10000) records when not already cached locally. An empty user
+    // value falls back to DEFAULT_NIP65_INDEXER_RELAYS at read time so NIP-65 lookups
+    // never silently break.
+    var relayAggregatorIndexerRelays: Set<String> = DEFAULT_NIP65_INDEXER_RELAYS
 
     // When true, the aggregator suspends subscriptions whenever the active network is
     // metered (mobile data or metered Wi-Fi) and resumes once an unmetered network is
@@ -88,6 +110,8 @@ object Settings {
         relayAggregatorIncludeTagged = true
         relayAggregatorLastSync = 0L
         relayAggregatorExtraRelays = emptySet()
+        relayAggregatorSourceRelays = DEFAULT_AGGREGATOR_SOURCE_RELAYS
+        relayAggregatorIndexerRelays = DEFAULT_NIP65_INDEXER_RELAYS
         relayAggregatorWifiOnly = true
         aggregatorSignerPubkey = ""
         aggregatorSignerPackageName = ""
