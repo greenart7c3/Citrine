@@ -70,6 +70,12 @@ object Settings {
     // is the dominant battery cost on cellular.
     var relayAggregatorWifiOnly: Boolean = true
 
+    // When true, the aggregator suspends subscriptions whenever the active network lacks
+    // NET_CAPABILITY_NOT_RESTRICTED — i.e., a "limited"/restricted network such as a
+    // captive-portal hotspot or an enterprise network that blocks general internet
+    // traffic. Resumes automatically once an unrestricted network is available.
+    var relayAggregatorPauseOnLimitedNetwork: Boolean = true
+
     // External signer used by the aggregator to answer NIP-42 AUTH challenges from upstream
     // relays. Populated by the "Log in with external signer" flow in settings. When both
     // fields are set, the aggregator installs a RelayAuthenticator and signs kind-22242
@@ -113,6 +119,7 @@ object Settings {
         relayAggregatorSourceRelays = DEFAULT_AGGREGATOR_SOURCE_RELAYS
         relayAggregatorIndexerRelays = DEFAULT_NIP65_INDEXER_RELAYS
         relayAggregatorWifiOnly = true
+        relayAggregatorPauseOnLimitedNetwork = true
         aggregatorSignerPubkey = ""
         aggregatorSignerPackageName = ""
     }

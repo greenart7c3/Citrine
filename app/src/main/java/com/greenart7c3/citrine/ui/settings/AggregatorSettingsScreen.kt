@@ -72,6 +72,7 @@ fun AggregatorSettingsScreen(
         }
         var aggregatorIncludeTagged by remember { mutableStateOf(Settings.relayAggregatorIncludeTagged) }
         var aggregatorWifiOnly by remember { mutableStateOf(Settings.relayAggregatorWifiOnly) }
+        var aggregatorPauseOnLimitedNetwork by remember { mutableStateOf(Settings.relayAggregatorPauseOnLimitedNetwork) }
         var aggregatorExtraRelays by remember { mutableStateOf(Settings.relayAggregatorExtraRelays) }
         var aggregatorExtraRelayInput by remember { mutableStateOf(TextFieldValue("")) }
         var aggregatorSourceRelays by remember { mutableStateOf(Settings.relayAggregatorSourceRelays) }
@@ -146,6 +147,7 @@ fun AggregatorSettingsScreen(
                 Settings.relayAggregatorRefreshMinutes = refreshMinutes
                 Settings.relayAggregatorIncludeTagged = aggregatorIncludeTagged
                 Settings.relayAggregatorWifiOnly = aggregatorWifiOnly
+                Settings.relayAggregatorPauseOnLimitedNetwork = aggregatorPauseOnLimitedNetwork
                 Settings.relayAggregatorExtraRelays = aggregatorExtraRelays
                 Settings.relayAggregatorSourceRelays = aggregatorSourceRelays
                 Settings.relayAggregatorIndexerRelays = aggregatorIndexerRelays
@@ -241,6 +243,14 @@ fun AggregatorSettingsScreen(
                         description = stringResource(R.string.relay_aggregator_wifi_only_description),
                         checked = aggregatorWifiOnly,
                         onCheckedChange = { aggregatorWifiOnly = it },
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.relay_aggregator_pause_on_limited_network),
+                        description = stringResource(R.string.relay_aggregator_pause_on_limited_network_description),
+                        checked = aggregatorPauseOnLimitedNetwork,
+                        onCheckedChange = { aggregatorPauseOnLimitedNetwork = it },
                     )
                 }
                 item {
