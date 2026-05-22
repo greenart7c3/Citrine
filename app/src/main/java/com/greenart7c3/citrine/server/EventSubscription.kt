@@ -14,7 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 private val ENVELOPE_MAPPER = JacksonMapper.mapper
@@ -74,7 +74,7 @@ object EventSubscription {
         subscriptions.snapshot().entries.forEach { (key, manager) ->
             if (manager.subscription.connection.name == connectionName) {
                 Log.d(Citrine.TAG, "closing subscription $key")
-                manager.subscription.scope.coroutineContext.cancelChildren()
+                manager.subscription.scope.cancel()
                 subscriptions.remove(key)
             }
         }
@@ -87,7 +87,7 @@ object EventSubscription {
     }
 
     fun close(subscriptionId: String) {
-        subscriptions.get(subscriptionId)?.subscription?.scope?.coroutineContext?.cancelChildren()
+        subscriptions.get(subscriptionId)?.subscription?.scope?.cancel()
         subscriptions.remove(subscriptionId)
     }
 

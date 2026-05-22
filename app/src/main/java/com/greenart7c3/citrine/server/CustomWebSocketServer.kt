@@ -83,7 +83,6 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
 import java.net.ServerSocket
-import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
@@ -94,16 +93,19 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class CustomWebSocketServer(
     private val host: String,
     private val port: Int,
     private val appDatabase: AppDatabase,
 ) {
-    val connections = MutableStateFlow(Collections.synchronizedList<Connection>(mutableListOf()))
+    val connections = MutableStateFlow<List<Connection>>(emptyList())
     lateinit var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>
     private val webClientServers = ConcurrentHashMap<String, WebClientServer>()
     private val objectMapper = jacksonObjectMapper()
@@ -142,6 +144,19 @@ class CustomWebSocketServer(
     fun stop() {
         Log.d(Citrine.TAG, "Stopping server")
         if (::server.isInitialized) {
+            val snapshot = connections.value.toList()
+            runBlocking {
+                withTimeoutOrNull(5_000) {
+                    snapshot.forEach { conn ->
+                        try {
+                            removeConnection(conn)
+                        } catch (e: Throwable) {
+                            Log.w(Citrine.TAG, "Error removing ${conn.name} during stop", e)
+                        }
+                    }
+                }
+            }
+            EventSubscription.closeAll()
             server.stop()
             webClientServers.forEach {
                 it.value.server.stop()
@@ -1225,7 +1240,7 @@ class CustomWebSocketServer(
                 // WebSocket endpoint
                 webSocket("/") {
                     val thisConnection = Connection(this)
-                    connections.emit(connections.value + thisConnection)
+                    connections.update { it + thisConnection }
 
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
 
@@ -1262,10 +1277,14 @@ class CustomWebSocketServer(
     }
 
     suspend fun removeConnection(connection: Connection) {
+        if (!connection.closed.compareAndSet(false, true)) return
         Log.d(Citrine.TAG, "Removing ${connection.name}!")
-        connection.session.cancel()
         connection.finalize()
-        connections.emit(connections.value.filterNot { it === connection })
+        try {
+            connection.session.cancel()
+        } catch (_: Throwable) {
+        }
+        connections.update { list -> list.filterNot { it === connection } }
     }
 }
 
