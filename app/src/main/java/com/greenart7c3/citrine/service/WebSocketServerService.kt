@@ -36,8 +36,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val NOTIFICATION_THROTTLE_MS = 5_000L
 
@@ -254,14 +257,21 @@ class WebSocketServerService : Service() {
     }
 
     override fun onDestroy() {
-        scope.launch(Dispatchers.IO) {
-            timer?.cancel()
-            timer = null
-            RelayAggregator.stop()
-            EventSubscription.closeAll()
-            CustomWebSocketService.server?.stop()
-            TorManager.stop()
+        runBlocking {
+            withTimeoutOrNull(5_000) {
+                try {
+                    timer?.cancel()
+                    timer = null
+                    RelayAggregator.stop()
+                    EventSubscription.closeAll()
+                    CustomWebSocketService.server?.stop()
+                    TorManager.stop()
+                } catch (e: Throwable) {
+                    Log.e(Citrine.TAG, "Error during service onDestroy cleanup", e)
+                }
+            }
         }
+        scope.cancel()
         super.onDestroy()
     }
 

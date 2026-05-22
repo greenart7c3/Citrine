@@ -2,16 +2,17 @@ package com.greenart7c3.citrine.server
 
 import android.util.Log
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.vitorpamplona.negentropy.Negentropy
 import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.onClosed
 import kotlinx.coroutines.delay
@@ -30,17 +31,27 @@ class Connection(
 
     val negentropySessions: MutableMap<String, Negentropy> = ConcurrentHashMap()
 
+    val closed = AtomicBoolean(false)
+
     val since = System.currentTimeMillis()
-    private val inactivityJob: Job = Citrine.instance.applicationScope.launch {
-        while (isActive) {
-            delay(60_000)
-            val hasTenMinutesPassed = System.currentTimeMillis() - since > 10 * 60 * 1000
-            if (hasTenMinutesPassed && !EventSubscription.containsConnection(this@Connection)) {
-                Log.d(Citrine.TAG, "Closing session due to inactivity")
-                finalize()
-                session.cancel()
-                CustomWebSocketService.server?.removeConnection(this@Connection)
-                break
+
+    private val connectionScope = CoroutineScope(
+        Citrine.instance.applicationScope.coroutineContext + SupervisorJob(),
+    )
+
+    init {
+        connectionScope.launch {
+            while (isActive) {
+                delay(60_000)
+                val hasTenMinutesPassed = System.currentTimeMillis() - since > 10 * 60 * 1000
+                if (hasTenMinutesPassed && !EventSubscription.containsConnection(this@Connection)) {
+                    Log.d(Citrine.TAG, "Closing session due to inactivity for $name")
+                    try {
+                        session.cancel()
+                    } catch (_: Throwable) {
+                    }
+                    break
+                }
             }
         }
     }
@@ -58,7 +69,7 @@ class Connection(
     }
 
     fun finalize() {
-        inactivityJob.cancel()
+        connectionScope.cancel()
         EventSubscription.closeAll(name)
         negentropySessions.clear()
     }
@@ -66,13 +77,8 @@ class Connection(
     fun trySend(data: String) {
         try {
             session.outgoing.trySend(Frame.Text(data)).onClosed {
-                val connection = EventSubscription.getConnection(session)
-                connection?.let {
-                    Log.d(Citrine.TAG, "Session is closed for connection ${connection.name} ${connection.remoteAddress}")
-                    Citrine.instance.applicationScope.launch {
-                        CustomWebSocketService.server?.removeConnection(connection)
-                    }
-                }
+                Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
+                // Do not call removeConnection here — the webSocket finally block owns removal.
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
