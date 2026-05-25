@@ -132,6 +132,8 @@
     <string name="relay_aggregator_include_tagged_description">从公钥的读中继订阅任何通过 p 标签提及到这些公钥的事件</string>
     <string name="relay_aggregator_wifi_only">使用移动数据时暂停</string>
     <string name="relay_aggregator_wifi_only_description">当处于移动数据或者计费的 Wi-Fi 网络下时停止获取。当处于不计量的 Wi-Fi 网络下时恢复。</string>
+    <string name="relay_aggregator_pause_on_limited_network">Pause on limited networks</string>
+    <string name="relay_aggregator_pause_on_limited_network_description">Stop fetching events while the device is on a network with restricted connectivity (for example a captive portal or an enterprise network that blocks general internet traffic). Resumes automatically when full connectivity returns.</string>
     <string name="relay_aggregator_phase_paused">已暂停（计费网络）</string>
     <string name="relay_aggregator_kinds_empty_hint">清空列表将禁用聚合器订阅</string>
     <string name="relay_aggregator_extra_relays">额外中继</string>

@@ -132,6 +132,8 @@
     <string name="relay_aggregator_include_tagged_description">Subscribe for any event that p-tags the aggregator pubkey on its read relays</string>
     <string name="relay_aggregator_wifi_only">Pause on mobile data</string>
     <string name="relay_aggregator_wifi_only_description">Stop fetching events while the device is on mobile data or a metered Wi-Fi network. Resumes automatically on unmetered Wi-Fi.</string>
+    <string name="relay_aggregator_pause_on_limited_network">Pause on limited networks</string>
+    <string name="relay_aggregator_pause_on_limited_network_description">Stop fetching events while the device is on a network with restricted connectivity (for example a captive portal or an enterprise network that blocks general internet traffic). Resumes automatically when full connectivity returns.</string>
     <string name="relay_aggregator_phase_paused">Paused (metered network)</string>
     <string name="relay_aggregator_kinds_empty_hint">Empty list disables the aggregator subscription</string>
     <string name="relay_aggregator_extra_relays">Extra relays</string>
