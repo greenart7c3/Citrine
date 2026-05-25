@@ -177,10 +177,12 @@ object RelayAggregator {
     // to detect identity changes and trigger a full restart.
     @Volatile private var currentPubkey: String? = null
 
-    // True while subscriptions are torn down because the active network is metered and
-    // [Settings.relayAggregatorWifiOnly] is enabled. The refresh loop checks this flag and
-    // skips its body until [resumeFromMetered] resets it.
-    @Volatile private var pausedForMetered: Boolean = false
+    // True while subscriptions are torn down because the active network triggered a pause
+    // condition — either it is metered with [Settings.relayAggregatorWifiOnly] enabled, or
+    // it is restricted/limited with [Settings.relayAggregatorPauseOnLimitedNetwork] enabled.
+    // The refresh loop checks this flag and skips its body until [resumeFromNetwork] resets
+    // it.
+    @Volatile private var pausedForNetwork: Boolean = false
 
     // The database the aggregator was started with — saved so the network callback can
     // trigger a refresh on resume without the caller threading it through.
@@ -338,7 +340,7 @@ object RelayAggregator {
         // wifi-only, start in the paused state instead of opening subs.
         evaluateNetworkState()
 
-        if (!pausedForMetered) {
+        if (!pausedForNetwork) {
             publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
         }
 
@@ -359,7 +361,7 @@ object RelayAggregator {
 
         newScope.launch {
             while (isActive) {
-                if (!pausedForMetered) {
+                if (!pausedForNetwork) {
                     try {
                         refreshAndSubscribe(database)
                         consecutiveFailures = 0
@@ -429,7 +431,7 @@ object RelayAggregator {
         authorCount = 0
         taggedSubIds.clear()
         currentPubkey = null
-        pausedForMetered = false
+        pausedForNetwork = false
         database = null
         lastRefreshFinishedAt = 0L
         consecutiveFailures = 0
@@ -556,6 +558,16 @@ object RelayAggregator {
         return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
+    private fun isOnLimitedNetwork(): Boolean {
+        val cm = connectivityManager() ?: return false
+        val net = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(net) ?: return false
+        // Same rationale as above: when there's no internet capability at all, don't claim
+        // the network is "limited" — let other failure paths handle it.
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
+        return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+    }
+
     private fun registerNetworkCallback() {
         if (networkCallback != null) return
         val cm = connectivityManager() ?: return
@@ -589,24 +601,25 @@ object RelayAggregator {
     }
 
     /**
-     * Reconciles the current network state against the wifi-only setting and pauses or
-     * resumes the aggregator accordingly. Cheap to call repeatedly; only acts when the
-     * desired state diverges from the actual one.
+     * Reconciles the current network state against the wifi-only and pause-on-limited
+     * settings, pausing or resuming the aggregator accordingly. Cheap to call repeatedly;
+     * only acts when the desired state diverges from the actual one.
      */
     @Synchronized
     private fun evaluateNetworkState() {
         if (scope == null) return
-        val shouldPause = Settings.relayAggregatorWifiOnly && isOnMeteredNetwork()
-        if (shouldPause && !pausedForMetered) {
-            pauseForMetered()
-        } else if (!shouldPause && pausedForMetered) {
-            resumeFromMetered()
+        val shouldPause = (Settings.relayAggregatorWifiOnly && isOnMeteredNetwork()) ||
+            (Settings.relayAggregatorPauseOnLimitedNetwork && isOnLimitedNetwork())
+        if (shouldPause && !pausedForNetwork) {
+            pauseForNetwork()
+        } else if (!shouldPause && pausedForNetwork) {
+            resumeFromNetwork()
         }
     }
 
-    private fun pauseForMetered() {
-        Log.d(TAG, "Pausing aggregator: metered network detected and wifi-only enabled")
-        pausedForMetered = true
+    private fun pauseForNetwork() {
+        Log.d(TAG, "Pausing aggregator: network pause condition triggered")
+        pausedForNetwork = true
         // Tear down active subscriptions so we stop receiving events. Keep
         // [lastEventByPubkey] and [currentPubkey] in place — when we resume, the next
         // refresh uses them to compute tight per-chunk `since` values.
@@ -619,9 +632,9 @@ object RelayAggregator {
         publishStatus(phase = AggregatorPhase.PAUSED)
     }
 
-    private fun resumeFromMetered() {
-        Log.d(TAG, "Resuming aggregator: unmetered network available")
-        pausedForMetered = false
+    private fun resumeFromNetwork() {
+        Log.d(TAG, "Resuming aggregator: network pause condition cleared")
+        pausedForNetwork = false
         publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
         val db = database ?: return
         scope?.launch {
@@ -667,10 +680,10 @@ object RelayAggregator {
                 // without a full restart.
                 scope?.let { installAuthenticatorIfNeeded(it) }
                 // The wifi-only toggle may have just changed; re-evaluate before
-                // dispatching a refresh so a flip to "pause on metered" doesn't kick
-                // off a doomed refresh that we'd immediately tear down.
+                // dispatching a refresh so a flip to any network-based pause condition
+                // doesn't kick off a doomed refresh that we'd immediately tear down.
                 evaluateNetworkState()
-                if (!pausedForMetered) {
+                if (!pausedForNetwork) {
                     scope?.launch {
                         Log.d(TAG, "Config change: triggering refresh for running aggregator")
                         try {
@@ -691,8 +704,8 @@ object RelayAggregator {
             Log.d(TAG, "Import in progress; skipping refresh")
             return
         }
-        if (pausedForMetered) {
-            Log.d(TAG, "Paused for metered network; skipping refresh")
+        if (pausedForNetwork) {
+            Log.d(TAG, "Paused for network condition; skipping refresh")
             return
         }
         if (!refreshing.compareAndSet(false, true)) {

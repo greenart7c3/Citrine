@@ -44,6 +44,7 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_SOURCE_RELAYS = "relay_aggregator_source_relays"
     const val RELAY_AGGREGATOR_INDEXER_RELAYS = "relay_aggregator_indexer_relays"
     const val RELAY_AGGREGATOR_WIFI_ONLY = "relay_aggregator_wifi_only"
+    const val RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK = "relay_aggregator_pause_on_limited_network"
     const val AGGREGATOR_SIGNER_PUBKEY = "aggregator_signer_pubkey"
     const val AGGREGATOR_SIGNER_PACKAGE_NAME = "aggregator_signer_package_name"
 }
@@ -109,6 +110,7 @@ object LocalPreferences {
                 putStringSet(PrefKeys.RELAY_AGGREGATOR_SOURCE_RELAYS, settings.relayAggregatorSourceRelays)
                 putStringSet(PrefKeys.RELAY_AGGREGATOR_INDEXER_RELAYS, settings.relayAggregatorIndexerRelays)
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
+                putBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, settings.relayAggregatorPauseOnLimitedNetwork)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, settings.aggregatorSignerPubkey)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, settings.aggregatorSignerPackageName)
             }
@@ -167,6 +169,7 @@ object LocalPreferences {
         Settings.relayAggregatorIndexerRelays = prefs.getStringSet(PrefKeys.RELAY_AGGREGATOR_INDEXER_RELAYS, null)
             ?: Settings.DEFAULT_NIP65_INDEXER_RELAYS
         Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, true)
+        Settings.relayAggregatorPauseOnLimitedNetwork = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, true)
         Settings.aggregatorSignerPubkey = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, "") ?: ""
         Settings.aggregatorSignerPackageName = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, "") ?: ""
     }
