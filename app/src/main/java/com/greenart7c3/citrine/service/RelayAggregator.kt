@@ -1204,6 +1204,7 @@ object RelayAggregator {
     private fun normalizeRemote(raw: String): NormalizedRelayUrl? {
         val n = RelayUrlNormalizer.normalizeOrNull(raw) ?: return null
         if (Citrine.instance.isPrivateIp(n.url)) return null
+        if (!Settings.useProxy && Citrine.instance.isOnionUrl(n.url)) return null
         return NormalizedRelayUrl(url = n.url)
     }
 
