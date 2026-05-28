@@ -14,7 +14,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.onClosed
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -35,6 +34,12 @@ class Connection(
 
     val since = System.currentTimeMillis()
 
+    // When the peer stops draining its socket the outgoing channel fills up and
+    // trySend starts failing. We record when that started so the watchdog can
+    // reap a stuck connection. 0 means the channel is currently healthy.
+    @Volatile
+    private var outgoingStalledSince: Long = 0L
+
     private val connectionScope = CoroutineScope(
         Citrine.instance.applicationScope.coroutineContext + SupervisorJob(),
     )
@@ -42,10 +47,28 @@ class Connection(
     init {
         connectionScope.launch {
             while (isActive) {
-                delay(60_000)
-                val hasTenMinutesPassed = System.currentTimeMillis() - since > 10 * 60 * 1000
-                if (hasTenMinutesPassed && !EventSubscription.containsConnection(this@Connection)) {
-                    Log.d(Citrine.TAG, "Closing session due to inactivity for $name")
+                delay(30_000)
+                val now = System.currentTimeMillis()
+
+                // The session is already gone but the read loop hasn't reaped it yet.
+                val sessionDead = session.outgoing.isClosedForSend
+
+                // The peer hasn't drained the outgoing buffer for a while. This also
+                // wedges Ktor's pinger (it sends pings with a suspending send), so the
+                // pong timeout never fires and the connection would otherwise live
+                // forever. Reap it regardless of whether it has open subscriptions.
+                val stalledFor = outgoingStalledSince
+                val outgoingStalled = stalledFor != 0L && now - stalledFor > 60_000
+
+                // Idle connection with no open subscription: nothing keeps it useful.
+                val idleWithoutSubscription = now - since > 10 * 60 * 1000 &&
+                    !EventSubscription.containsConnection(this@Connection)
+
+                if (sessionDead || outgoingStalled || idleWithoutSubscription) {
+                    Log.d(
+                        Citrine.TAG,
+                        "Closing session for $name (sessionDead=$sessionDead stalled=$outgoingStalled idle=$idleWithoutSubscription)",
+                    )
                     try {
                         session.cancel()
                     } catch (_: Throwable) {
@@ -76,9 +99,20 @@ class Connection(
 
     fun trySend(data: String) {
         try {
-            session.outgoing.trySend(Frame.Text(data)).onClosed {
-                Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
-                // Do not call removeConnection here — the webSocket finally block owns removal.
+            val result = session.outgoing.trySend(Frame.Text(data))
+            when {
+                result.isSuccess -> outgoingStalledSince = 0L
+                result.isClosed -> {
+                    Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
+                    // Do not call removeConnection here — the webSocket finally block owns removal.
+                }
+                else -> {
+                    // Channel is full: the peer isn't draining. Remember when this
+                    // started so the watchdog can reap the connection if it persists.
+                    if (outgoingStalledSince == 0L) {
+                        outgoingStalledSince = System.currentTimeMillis()
+                    }
+                }
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
