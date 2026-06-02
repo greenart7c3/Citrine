@@ -764,15 +764,38 @@ object RelayAggregator {
                     relayToAuthors[relay] = mutableSetOf()
                 }
             } else {
+                // When a successful refresh happened recently (within one refresh interval),
+                // treat the DB cache as authoritative for the rarely-changing owner data
+                // (contact list, mute list, metadata) and skip the proactive network fetches.
+                // This is what makes an app restart or a network change cheap: subscriptions
+                // are rebuilt from cache instead of re-pulling everything from indexer relays.
+                // NIP-65 (below) is intentionally left cache-first-but-fetch-misses since it
+                // feeds relay routing. The periodic loop fires after the interval elapses, so
+                // it sees cacheFresh == false and still does a full network refresh that picks
+                // up new follows.
+                val nowSec = TimeUtils.now()
+                val refreshIntervalSec = Settings.relayAggregatorRefreshMinutes.coerceAtLeast(1) * 60L
+                val cacheFresh = Settings.relayAggregatorLastSync > 0L &&
+                    (nowSec - Settings.relayAggregatorLastSync) < refreshIntervalSec
+                Log.d(
+                    TAG,
+                    if (cacheFresh) {
+                        "Cache fresh (last sync ${nowSec - Settings.relayAggregatorLastSync}s ago < " +
+                            "${refreshIntervalSec}s); reusing cached contact/mute/metadata"
+                    } else {
+                        "Cache stale; performing full network refresh"
+                    },
+                )
+
                 // Refresh the owner's NIP-51 mute list before opening the main subscriptions.
                 // The public portion is applied synchronously; the (optional) private portion
                 // resolves on its own coroutine via the signer so a slow Amber prompt does not
                 // hold up the rest of the refresh.
-                runCatching { refreshMuteList(dao, aggPubkey) }
+                runCatching { refreshMuteList(dao, aggPubkey, skipNetworkIfCached = cacheFresh) }
                     .onFailure { Log.e(TAG, "refreshMuteList failed", it) }
 
                 val contactListMs = System.currentTimeMillis()
-                val contactList = loadOrBootstrapContactList(dao, aggPubkey)
+                val contactList = loadOrBootstrapContactList(dao, aggPubkey, skipNetworkIfCached = cacheFresh)
                 val follows = contactList?.verifiedFollowKeySet() ?: emptySet()
                 val authors = (follows + aggPubkey).toSet()
                 authorCount = authors.size
@@ -838,36 +861,42 @@ object RelayAggregator {
                         "$fellBackCount author(s) had no NIP-65, fell back to ${FALLBACK_OUTBOX_RELAYS.size} relays)",
                 )
 
-                // Same cap-then-overlay-sources strategy for kind-0 metadata fetches: take
-                // each author's NIP-65 write relays (indexers as the fallback for unknown
-                // authors), cap per-author, then add the aggregator-source relays.
-                val authorMetadataRelays = mutableMapOf<String, List<NormalizedRelayUrl>>()
-                var metadataIndexerFallback = 0
-                for (pk in authors) {
-                    val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
-                    authorMetadataRelays[pk] = relayListEvent
-                        ?.writeRelays()
-                        ?.mapNotNull { raw -> normalizeRemote(raw) }
-                        ?.takeIf { it.isNotEmpty() }
-                        ?: run {
-                            metadataIndexerFallback++
-                            indexers
-                        }
+                // Metadata (kind 0) is only stored, never used to build subscriptions, so
+                // skip both the relay-map construction and the network fetch when the cache is
+                // fresh. Newly-seen authors on the live stream still get their metadata via
+                // backfillUserIfMissing().
+                if (!cacheFresh) {
+                    // Same cap-then-overlay-sources strategy for kind-0 metadata fetches: take
+                    // each author's NIP-65 write relays (indexers as the fallback for unknown
+                    // authors), cap per-author, then add the aggregator-source relays.
+                    val authorMetadataRelays = mutableMapOf<String, List<NormalizedRelayUrl>>()
+                    var metadataIndexerFallback = 0
+                    for (pk in authors) {
+                        val relayListEvent = cachedRelayLists[pk] ?: fetched[pk]
+                        authorMetadataRelays[pk] = relayListEvent
+                            ?.writeRelays()
+                            ?.mapNotNull { raw -> normalizeRemote(raw) }
+                            ?.takeIf { it.isNotEmpty() }
+                            ?: run {
+                                metadataIndexerFallback++
+                                indexers
+                            }
+                    }
+                    val metadataRelayToAuthors = capRelaysPerAuthor(authorMetadataRelays, MAX_RELAYS_PER_AUTHOR)
+                    sources.forEach { relay ->
+                        metadataRelayToAuthors.getOrPut(relay) { mutableSetOf() }.addAll(authors)
+                    }
+                    val metadataMs = System.currentTimeMillis()
+                    val metadataFetched = batchFetchMetadata(metadataRelayToAuthors, BATCH_FETCH_TIMEOUT_MS)
+                    Log.d(
+                        TAG,
+                        "Metadata batch fetch returned ${metadataFetched.size}/${authors.size} " +
+                            "from ${metadataRelayToAuthors.size} relays " +
+                            "(cap=$MAX_RELAYS_PER_AUTHOR/author, ${sources.size} aggregator source(s), " +
+                            "$metadataIndexerFallback author(s) had no NIP-65, fell back to indexers) " +
+                            "in ${System.currentTimeMillis() - metadataMs}ms",
+                    )
                 }
-                val metadataRelayToAuthors = capRelaysPerAuthor(authorMetadataRelays, MAX_RELAYS_PER_AUTHOR)
-                sources.forEach { relay ->
-                    metadataRelayToAuthors.getOrPut(relay) { mutableSetOf() }.addAll(authors)
-                }
-                val metadataMs = System.currentTimeMillis()
-                val metadataFetched = batchFetchMetadata(metadataRelayToAuthors, BATCH_FETCH_TIMEOUT_MS)
-                Log.d(
-                    TAG,
-                    "Metadata batch fetch returned ${metadataFetched.size}/${authors.size} " +
-                        "from ${metadataRelayToAuthors.size} relays " +
-                        "(cap=$MAX_RELAYS_PER_AUTHOR/author, ${sources.size} aggregator source(s), " +
-                        "$metadataIndexerFallback author(s) had no NIP-65, fell back to indexers) " +
-                        "in ${System.currentTimeMillis() - metadataMs}ms",
-                )
             }
 
             publishStatus(phase = AggregatorPhase.REFRESHING)
@@ -1336,8 +1365,15 @@ object RelayAggregator {
     private suspend fun loadOrBootstrapContactList(
         dao: EventDao,
         pubkey: String,
+        skipNetworkIfCached: Boolean = false,
     ): ContactListEvent? {
         val cached = dao.getContactList(pubkey)?.toEvent() as? ContactListEvent
+        // When the cache is fresh and we already have a copy, skip the indexer round-trip and
+        // reuse it. A null cache (e.g. a wiped DB) always falls through to the network fetch.
+        if (skipNetworkIfCached && cached != null) {
+            Log.d(TAG, "Contact list: using cached copy for $pubkey (createdAt=${cached.createdAt})")
+            return cached
+        }
         val filters = listOf(
             Filter(
                 kinds = listOf(ContactListEvent.KIND),
@@ -1409,8 +1445,14 @@ object RelayAggregator {
      * public portion synchronously. If a signer is configured and the event has encrypted
      * content, kick off an off-main job to decrypt the private portion and merge the result.
      */
-    private suspend fun refreshMuteList(dao: EventDao, pubkey: String) {
+    private suspend fun refreshMuteList(dao: EventDao, pubkey: String, skipNetworkIfCached: Boolean = false) {
         if (pubkey.isBlank()) return
+        // When the cache is fresh and a mute list is already stored, keep the in-memory sets
+        // (warm-loaded on start() or applied by a prior refresh) and skip the network fetch.
+        if (skipNetworkIfCached && dao.getMuteList(pubkey) != null) {
+            Log.d(TAG, "Mute list: reusing cached copy for $pubkey")
+            return
+        }
         val ev = loadOrBootstrapMuteList(dao, pubkey) ?: run {
             // Owner has no published mute list yet — clear any stale state from a previous pubkey.
             mutedPubkeys = emptySet()
