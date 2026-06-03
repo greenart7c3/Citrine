@@ -58,7 +58,7 @@ object EventSubscription {
                 }
             }
             if (event.isEphemeral()) {
-                if (!sentEvent) {
+                if (!sentEvent && Settings.sendMuteResponse) {
                     connection?.trySend(
                         CommandResult.mute(event).toJson(),
                     )

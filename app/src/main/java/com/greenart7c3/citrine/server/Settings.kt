@@ -33,6 +33,11 @@ object Settings {
     var autoBackup = false
     var autoBackupFolder = ""
     var authEnabled = false
+
+    // When true, ephemeral events that no open subscription was listening to receive a
+    // NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so
+    // unhandled ephemeral events are simply acknowledged with a plain OK.
+    var sendMuteResponse = false
     var listenToPokeyBroadcasts = true
     var startOnBoot = true
     var lastBackup: Long = 0L
@@ -101,6 +106,7 @@ object Settings {
         autoBackup = false
         autoBackupFolder = ""
         authEnabled = false
+        sendMuteResponse = false
         listenToPokeyBroadcasts = true
         startOnBoot = true
         lastBackup = 0L
