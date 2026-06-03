@@ -229,7 +229,14 @@ fun HomeScreen(
                         database.clearAllTables()
                         homeViewModel.setProgress("")
                         Citrine.isImportingEvents = false
-                        if (resumeAggregator) RelayAggregator.start(database)
+                        // The cache the aggregator reuses on restart lives in the DB we just
+                        // wiped. Reset the sync marker so the next refresh does a full
+                        // cold-start network fetch instead of reusing a now-empty cache.
+                        if (resumeAggregator) {
+                            Settings.relayAggregatorLastSync = 0L
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+                            RelayAggregator.start(database)
+                        }
                     }
                 },
             )
