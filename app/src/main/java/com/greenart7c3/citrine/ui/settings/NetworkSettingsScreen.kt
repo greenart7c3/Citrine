@@ -42,6 +42,7 @@ fun NetworkSettingsScreen(
     Surface(modifier) {
         var startOnBoot by remember { mutableStateOf(Settings.startOnBoot) }
         var listenToPokeyBroadcasts by remember { mutableStateOf(Settings.listenToPokeyBroadcasts) }
+        var sendMuteResponse by remember { mutableStateOf(Settings.sendMuteResponse) }
         var useProxy by remember { mutableStateOf(Settings.useProxy) }
         var proxyAllUrls by remember { mutableStateOf(Settings.proxyAllUrls) }
         var useTor by remember { mutableStateOf(Settings.useTor) }
@@ -52,6 +53,7 @@ fun NetworkSettingsScreen(
                 isLoading = true
                 Settings.startOnBoot = startOnBoot
                 Settings.listenToPokeyBroadcasts = listenToPokeyBroadcasts
+                Settings.sendMuteResponse = sendMuteResponse
                 Settings.useProxy = useProxy
                 Settings.proxyAllUrls = proxyAllUrls
                 Settings.useTor = useTor
@@ -84,6 +86,14 @@ fun NetworkSettingsScreen(
                         description = stringResource(R.string.listen_to_pokey_broadcasts_description),
                         checked = listenToPokeyBroadcasts,
                         onCheckedChange = { listenToPokeyBroadcasts = it },
+                    )
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.send_mute_response),
+                        description = stringResource(R.string.send_mute_response_description),
+                        checked = sendMuteResponse,
+                        onCheckedChange = { sendMuteResponse = it },
                     )
                 }
                 item {
