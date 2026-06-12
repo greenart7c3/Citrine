@@ -29,7 +29,7 @@ object Settings {
     var ownerPubkey: String = ""
     var contact: String = ""
     var description: String = "A Nostr relay in your phone"
-    var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+    var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
     var autoBackup = false
     var autoBackupFolder = ""
     var authEnabled = false
@@ -102,7 +102,7 @@ object Settings {
         ownerPubkey = ""
         contact = ""
         description = "A Nostr relay in your phone"
-        relayIcon = "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+        relayIcon = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
         autoBackup = false
         autoBackupFolder = ""
         authEnabled = false
