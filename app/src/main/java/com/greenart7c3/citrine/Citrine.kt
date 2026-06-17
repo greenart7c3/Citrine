@@ -62,6 +62,7 @@ class Citrine : Application() {
     val client: NostrClient = NostrClient(factory, applicationScope)
 
     private val pokeyReceiver = PokeyReceiver()
+    private var isPokeyReceiverRegistered = false
 
     fun isPrivateIp(url: String): Boolean = url.contains("127.0.0.1") ||
         url.contains("localhost") ||
@@ -84,7 +85,10 @@ class Citrine : Application() {
         url.contains("172.31.")
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    @Synchronized
     fun registerPokeyReceiver() {
+        if (isPokeyReceiverRegistered) return
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(
                 pokeyReceiver,
@@ -97,10 +101,19 @@ class Citrine : Application() {
                 IntentFilter(PokeyReceiver.POKEY_ACTION),
             )
         }
+        isPokeyReceiverRegistered = true
     }
 
+    @Synchronized
     fun unregisterPokeyReceiver() {
-        unregisterReceiver(pokeyReceiver)
+        if (!isPokeyReceiverRegistered) return
+
+        try {
+            unregisterReceiver(pokeyReceiver)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "PokeyReceiver was not registered", e)
+        }
+        isPokeyReceiverRegistered = false
     }
 
     override fun onCreate() {
