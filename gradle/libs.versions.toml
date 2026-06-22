@@ -28,6 +28,7 @@ pagingCommon = "3.5.0"
 kmpTor = "2.6.0"
 kmpTorResource = "409.5.0"
 negentropy = "1.0.1"
+coil = "3.1.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -72,6 +73,8 @@ kmp-tor-runtime-service = { module = "io.matthewnelson.kmp-tor:runtime-service",
 kmp-tor-runtime-service-ui = { module = "io.matthewnelson.kmp-tor:runtime-service-ui", version.ref = "kmpTor" }
 kmp-tor-resource-exec = { module = "io.matthewnelson.kmp-tor:resource-exec-tor", version.ref = "kmpTorResource" }
 negentropy = { module = "com.vitorpamplona.negentropy:kmp-negentropy-android", version.ref = "negentropy" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 
 [plugins]
 jetbrainsComposeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

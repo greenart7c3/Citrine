@@ -16,6 +16,14 @@ object Settings {
         "wss://directory.yabu.me/",
     )
 
+    // Suggested relays for discovering nsites (NIP-5A). Used by the "reset to default" action
+    // in the nsite relay editor; an empty user list falls back to the aggregator relays.
+    val DEFAULT_NSITE_RELAYS = setOf(
+        "wss://relay.damus.io/",
+        "wss://nos.lol/",
+        "wss://relay.primal.net/",
+    )
+
     var allowedKinds: Set<Int> = emptySet()
     var allowedPubKeys: Set<String> = emptySet()
     var allowedTaggedPubKeys: Set<String> = emptySet()
@@ -46,6 +54,17 @@ object Settings {
     var useTor = false
     var onionHostname = ""
     var webClients = mutableMapOf<String, String>()
+
+    // Installed nsites (NIP-5A static websites). Downloaded to filesDir/nsites/<folderName>
+    // and served through the same localhost web-client mechanism as [webClients].
+    var nsites: MutableList<NsiteInfo> = mutableListOf()
+
+    // Epoch seconds of the last daily nsite update check. Gated like [lastBackup] so the
+    // 100s service timer only runs the check roughly once per day.
+    var lastNsiteCheck: Long = 0L
+
+    // Relays queried to discover nsites. Empty = fall back to the aggregator relays.
+    var nsiteRelays: Set<String> = emptySet()
 
     var relayAggregatorEnabled = false
     var aggregatorPubkey = ""
@@ -115,6 +134,9 @@ object Settings {
         useTor = false
         onionHostname = ""
         webClients = mutableMapOf()
+        nsites = mutableListOf()
+        lastNsiteCheck = 0L
+        nsiteRelays = emptySet()
         relayAggregatorEnabled = false
         aggregatorPubkey = ""
         relayAggregatorKinds = setOf(0, 1, 3, 5, 6, 7, 1111, 10000, 10002, 30023)
@@ -133,7 +155,33 @@ object Settings {
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)
 
     fun webClientsToJson(): String = JacksonMapper.mapper.writeValueAsString(webClients)
+
+    fun nsitesFromJson(json: String): MutableList<NsiteInfo> = JacksonMapper.mapper.readValue<MutableList<NsiteInfo>>(json)
+
+    fun nsitesToJson(): String = JacksonMapper.mapper.writeValueAsString(nsites)
 }
+
+/**
+ * An installed nsite (NIP-5A static website).
+ *
+ * [address] is the canonical identifier: "15128:<pubkey>" for a root site or
+ * "35128:<pubkey>:<dTag>" for a named site. [folderName] is a filesystem-safe slug
+ * (prefixed with "nsite_") used both as the on-disk directory under filesDir/nsites and
+ * as the "<folderName>.localhost" subdomain the relay serves it from. [aggregateHash] is
+ * the last-applied ["x", <hash>, "aggregate"] value, compared against a freshly fetched
+ * manifest to detect updates.
+ */
+data class NsiteInfo(
+    val address: String = "",
+    val pubkey: String = "",
+    val kind: Int = 0,
+    val dTag: String = "",
+    val displayName: String = "",
+    val folderName: String = "",
+    val aggregateHash: String = "",
+    val autoUpdate: Boolean = false,
+    val lastChecked: Long = 0L,
+)
 
 enum class OlderThan {
     DAY,

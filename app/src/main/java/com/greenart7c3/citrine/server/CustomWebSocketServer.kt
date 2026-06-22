@@ -82,6 +82,7 @@ import io.ktor.utils.io.copyTo
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
+import java.io.File
 import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.Deflater
@@ -910,6 +911,94 @@ class CustomWebSocketServer(
         )
     }
 
+    /**
+     * Serves a file from an app-internal [rootDir] (used by installed nsites). Mirrors
+     * [serveIndex] but reads from a plain [File] tree instead of a SAF DocumentFile. Paths
+     * are canonicalized and rejected if they escape [rootDir] (path-traversal guard). Falls
+     * back to index.html for extension-less routes and to 404.html (with a 404 status) when
+     * nothing matches, per NIP-5A.
+     */
+    private suspend fun serveFromDir(
+        call: ApplicationCall,
+        rootDir: File,
+    ) {
+        val requestedPath = call.request.uri.substringBefore('?').trimStart('/')
+        val rootCanonical = rootDir.canonicalFile
+
+        fun resolveSafe(path: String): File? {
+            if (path.isEmpty()) return null
+            val candidate = File(rootCanonical, path).canonicalFile
+            return if (candidate.path == rootCanonical.path || candidate.path.startsWith(rootCanonical.path + File.separator)) {
+                candidate
+            } else {
+                null
+            }
+        }
+
+        var target = resolveSafe(requestedPath)?.takeIf { it.isFile }
+        // SPA/index fallback for the root or extension-less routes.
+        if (target == null && (requestedPath.isEmpty() || !requestedPath.substringAfterLast('/').contains('.'))) {
+            target = resolveSafe("index.html")?.takeIf { it.isFile }
+        }
+        // 404 fallback.
+        if (target == null) {
+            target = resolveSafe("404.html")?.takeIf { it.isFile }
+        }
+
+        if (target == null) {
+            return call.respond(HttpStatusCode.NotFound, null)
+        }
+
+        val status = if (target.name == "404.html") HttpStatusCode.NotFound else HttpStatusCode.OK
+        call.respondOutputStream(
+            contentType = ContentType.defaultForFilePath(target.name),
+            status = status,
+        ) {
+            target.inputStream().use { it.copyTo(this) }
+        }
+    }
+
+    fun startNsiteServerFor(
+        clientName: String,
+        rootDir: File,
+    ): WebClientServer {
+        val port = randomFreePort()
+
+        val server = embeddedServer(
+            CIO,
+            host = "127.0.0.1",
+            port = port,
+        ) {
+            routing {
+                get("{...}") {
+                    serveFromDir(call, rootDir)
+                }
+            }
+        }.start(wait = false)
+
+        return WebClientServer(
+            name = clientName,
+            rootUri = rootDir.toURI().toString().toUri(),
+            port = port,
+            server = server,
+        )
+    }
+
+    /** Hot-adds (or replaces) a running server for an installed nsite without restarting the relay. */
+    fun startNsiteServer(nsite: NsiteInfo) {
+        val dir = File(Citrine.instance.filesDir, "nsites/${nsite.folderName}")
+        if (!dir.isDirectory) return
+        val key = "/${nsite.folderName}"
+        webClientServers.remove(key)?.server?.stop()
+        webClientServers[key] = startNsiteServerFor(nsite.folderName, dir)
+        Log.d(Citrine.TAG, "Started nsite '${nsite.folderName}'")
+    }
+
+    /** Stops and removes a running nsite server (used on delete). */
+    fun stopNsiteServer(folderName: String) {
+        webClientServers.remove("/$folderName")?.server?.stop()
+    }
+
     val proxyClient = HttpClient(io.ktor.client.engine.cio.CIO) {
         expectSuccess = false
     }
@@ -991,6 +1080,20 @@ class CustomWebSocketServer(
                 Citrine.TAG,
                 "Started web client '$name' on port ${clientServer.port}",
             )
+        }
+
+        Settings.nsites.forEach { nsite ->
+            val dir = File(Citrine.instance.filesDir, "nsites/${nsite.folderName}")
+            if (dir.isDirectory) {
+                val key = "/${nsite.folderName}"
+                val clientServer = startNsiteServerFor(nsite.folderName, dir)
+                webClientServers[key] = clientServer
+
+                Log.d(
+                    Citrine.TAG,
+                    "Started nsite '${nsite.folderName}' on port ${clientServer.port}",
+                )
+            }
         }
     }
 
