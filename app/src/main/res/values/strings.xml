@@ -185,6 +185,10 @@
     <string name="nsite_already_installed">Already installed</string>
     <string name="nsite_by_author">by %1$s</string>
     <string name="nsite_update_available_notification">Update available for %1$s</string>
+    <string name="nsite_relays">Nsite relays</string>
+    <string name="nsite_relays_description">Relays queried to discover nsites. Leave empty to use the aggregator relays.</string>
+    <string name="nsite_relays_hint">No relays added — using the aggregator relays.</string>
+    <string name="reset_to_default">Reset to default</string>
     <string name="reset_all_settings">Reset all settings</string>
     <string name="reset_all_settings_warning">All settings will be restored to their default values. This action cannot be undone.</string>
     <string name="settings_reset_complete">Settings reset to defaults</string>

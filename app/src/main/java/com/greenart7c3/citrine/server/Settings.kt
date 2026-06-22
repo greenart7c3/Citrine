@@ -16,6 +16,14 @@ object Settings {
         "wss://directory.yabu.me/",
     )
 
+    // Suggested relays for discovering nsites (NIP-5A). Used by the "reset to default" action
+    // in the nsite relay editor; an empty user list falls back to the aggregator relays.
+    val DEFAULT_NSITE_RELAYS = setOf(
+        "wss://relay.damus.io/",
+        "wss://nos.lol/",
+        "wss://relay.primal.net/",
+    )
+
     var allowedKinds: Set<Int> = emptySet()
     var allowedPubKeys: Set<String> = emptySet()
     var allowedTaggedPubKeys: Set<String> = emptySet()
@@ -54,6 +62,9 @@ object Settings {
     // Epoch seconds of the last daily nsite update check. Gated like [lastBackup] so the
     // 100s service timer only runs the check roughly once per day.
     var lastNsiteCheck: Long = 0L
+
+    // Relays queried to discover nsites. Empty = fall back to the aggregator relays.
+    var nsiteRelays: Set<String> = emptySet()
 
     var relayAggregatorEnabled = false
     var aggregatorPubkey = ""
@@ -125,6 +136,7 @@ object Settings {
         webClients = mutableMapOf()
         nsites = mutableListOf()
         lastNsiteCheck = 0L
+        nsiteRelays = emptySet()
         relayAggregatorEnabled = false
         aggregatorPubkey = ""
         relayAggregatorKinds = setOf(0, 1, 3, 5, 6, 7, 1111, 10000, 10002, 30023)

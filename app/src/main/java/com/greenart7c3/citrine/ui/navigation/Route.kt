@@ -103,6 +103,12 @@ sealed class Route(
         icon = Icons.Outlined.Settings,
         selectedIcon = Icons.Default.Settings,
     )
+
+    data object NsiteRelaysSettings : Route(
+        route = "Settings/NsiteRelays",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
 }
 
 val navigationItems = listOf(Route.Home, Route.Settings)
@@ -116,4 +122,5 @@ val settingsSubRoutes = setOf(
     Route.BackupSettings.route,
     Route.WebClientsSettings.route,
     Route.BrowseNsites.route,
+    Route.NsiteRelaysSettings.route,
 )

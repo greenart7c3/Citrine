@@ -15,6 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ fun WebClientsSettingsScreen(
     storageHelper: SimpleStorageHelper,
     onApplyChanges: () -> Unit,
     onBrowseNsites: () -> Unit,
+    onNsiteRelays: () -> Unit,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -113,14 +115,14 @@ fun WebClientsSettingsScreen(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
+                    Button(onClick = onBrowseNsites) {
+                        Text(stringResource(R.string.browse_nsites))
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Button(onClick = onBrowseNsites) {
-                            Text(stringResource(R.string.browse_nsites))
-                        }
-                        Button(
+                        TextButton(
                             onClick = {
                                 scope.launch(Dispatchers.IO) {
                                     val updates = NsiteManager.checkForUpdates()
@@ -130,6 +132,9 @@ fun WebClientsSettingsScreen(
                             },
                         ) {
                             Text(stringResource(R.string.check_for_updates))
+                        }
+                        TextButton(onClick = onNsiteRelays) {
+                            Text(stringResource(R.string.nsite_relays))
                         }
                     }
                 }

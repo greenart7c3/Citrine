@@ -115,12 +115,15 @@ object NsiteManager {
     }
 
     private fun discoveryRelays(): List<NormalizedRelayUrl> {
-        val configured = (
-            Settings.relayAggregatorSourceRelays +
-                Settings.relayAggregatorIndexerRelays +
-                Settings.relayAggregatorExtraRelays
-            )
-        val raw = configured.takeIf { it.isNotEmpty() } ?: FALLBACK_RELAYS
+        val raw = when {
+            // User-chosen nsite relays take precedence.
+            Settings.nsiteRelays.isNotEmpty() -> Settings.nsiteRelays
+            else -> (
+                Settings.relayAggregatorSourceRelays +
+                    Settings.relayAggregatorIndexerRelays +
+                    Settings.relayAggregatorExtraRelays
+                ).takeIf { it.isNotEmpty() } ?: FALLBACK_RELAYS
+        }
         return raw.mapNotNull { normalizeRemote(it) }.ifEmpty { FALLBACK_RELAYS.mapNotNull { normalizeRemote(it) } }
     }
 
