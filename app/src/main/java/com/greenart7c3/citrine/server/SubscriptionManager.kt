@@ -1,7 +1,7 @@
 package com.greenart7c3.citrine.server
 
-import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.logs.Log
 import kotlin.time.measureTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi

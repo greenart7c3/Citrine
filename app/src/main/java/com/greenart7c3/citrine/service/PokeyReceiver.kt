@@ -23,8 +23,8 @@ package com.greenart7c3.citrine.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import kotlinx.coroutines.CoroutineScope

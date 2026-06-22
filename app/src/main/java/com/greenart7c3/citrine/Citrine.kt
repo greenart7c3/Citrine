@@ -7,8 +7,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
-import android.util.Log
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.server.OlderThan
@@ -120,6 +120,8 @@ class Citrine : Application() {
         super.onCreate()
 
         instance = this
+
+        Log.init(this)
 
         Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache, applicationScope))
 

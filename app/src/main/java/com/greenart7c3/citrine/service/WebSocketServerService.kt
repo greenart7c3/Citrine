@@ -11,7 +11,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.IBinder
-import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationChannelGroupCompat
@@ -23,6 +22,8 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.logs.Log
+import com.greenart7c3.citrine.logs.LogDatabase
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.Settings
@@ -43,6 +44,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val NOTIFICATION_THROTTLE_MS = 5_000L
+private const val ONE_WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000
 
 class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -86,6 +88,17 @@ class WebSocketServerService : Service() {
                     if (!Citrine.isImportingEvents) {
                         Citrine.instance.applicationScope.launch {
                             Citrine.instance.eventsToDelete(database)
+                        }
+                    }
+
+                    Citrine.instance.applicationScope.launch {
+                        try {
+                            LogDatabase.getDatabase(this@WebSocketServerService)
+                                .logDao()
+                                .deleteOlderThan(System.currentTimeMillis() - ONE_WEEK_MILLIS)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Log.e(Citrine.TAG, "Error deleting old logs", e)
                         }
                     }
 

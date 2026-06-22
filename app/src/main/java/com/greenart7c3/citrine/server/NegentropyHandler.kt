@@ -1,10 +1,10 @@
 package com.greenart7c3.citrine.server
 
-import android.util.Log
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.negentropy.Negentropy
 import com.vitorpamplona.negentropy.storage.StorageVector
 

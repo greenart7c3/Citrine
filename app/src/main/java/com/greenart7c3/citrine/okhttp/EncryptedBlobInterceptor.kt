@@ -20,7 +20,7 @@
  */
 package com.greenart7c3.citrine.okhttp
 
-import android.util.Log
+import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.quartz.utils.ciphers.AESGCM
 import com.vitorpamplona.quartz.utils.ciphers.NostrCipher
 import okhttp3.Interceptor

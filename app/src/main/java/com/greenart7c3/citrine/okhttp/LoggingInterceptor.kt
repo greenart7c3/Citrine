@@ -20,8 +20,8 @@
  */
 package com.greenart7c3.citrine.okhttp
 
-import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.logs.Log
 import java.net.InetSocketAddress
 import okhttp3.Interceptor
 import okhttp3.Request

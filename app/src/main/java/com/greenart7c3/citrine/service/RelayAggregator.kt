@@ -5,13 +5,13 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.util.Log
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.PubkeyTimestamp
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper

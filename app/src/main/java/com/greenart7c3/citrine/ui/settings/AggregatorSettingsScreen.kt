@@ -38,6 +38,7 @@ import androidx.core.net.toUri
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.RelayAggregator
@@ -109,7 +110,7 @@ fun AggregatorSettingsScreen(
                         aggregatorSignerPubkey = returnedKey
                         aggregatorSignerPackageName = packageName
                     } catch (e: Exception) {
-                        android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                        Log.d(Citrine.TAG, e.message ?: "", e)
                     }
                 }
             }
@@ -200,7 +201,7 @@ fun AggregatorSettingsScreen(
                                         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                         aggregatorSignerLauncher.launch(intent)
                                     } catch (e: Exception) {
-                                        android.util.Log.d(Citrine.TAG, e.message ?: "", e)
+                                        Log.d(Citrine.TAG, e.message ?: "", e)
                                         Toast.makeText(
                                             context,
                                             context.getString(R.string.no_external_signer_installed),

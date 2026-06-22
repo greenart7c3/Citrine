@@ -1,6 +1,5 @@
 package com.greenart7c3.citrine.database
 
-import android.util.Log
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import androidx.room.Dao
@@ -11,6 +10,7 @@ import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Connection
 import com.greenart7c3.citrine.server.EventSubscription
 import kotlinx.coroutines.flow.Flow

@@ -1,6 +1,5 @@
 package com.greenart7c3.citrine.server
 
-import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.Citrine
@@ -8,6 +7,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.IdAndCreatedAt
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import com.vitorpamplona.quartz.utils.TimeUtils

@@ -2,7 +2,6 @@ package com.greenart7c3.citrine.ui
 
 import android.app.Activity.RESULT_OK
 import android.content.Intent
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,6 +50,7 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.AppDatabase.Companion.isDatabaseUpgrading
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.LocalPreferences

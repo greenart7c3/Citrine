@@ -1,7 +1,7 @@
 package com.greenart7c3.citrine.utils
 
-import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.logs.Log
 import java.net.Inet4Address
 import java.net.NetworkInterface
 

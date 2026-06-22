@@ -1,7 +1,6 @@
 package com.greenart7c3.citrine.ui
 
 import android.app.Activity
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +36,7 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.publishAndConfirm

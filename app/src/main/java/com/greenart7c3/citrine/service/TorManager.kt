@@ -1,8 +1,8 @@
 package com.greenart7c3.citrine.service
 
-import android.util.Log
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.server.Settings
 import io.matthewnelson.kmp.file.readUtf8
