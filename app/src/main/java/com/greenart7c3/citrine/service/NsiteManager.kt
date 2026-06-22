@@ -413,14 +413,17 @@ object NsiteManager {
     // region install / update
 
     /** Installs an nsite discovered via [discover]. Returns the stored [NsiteInfo] or a failure. */
-    suspend fun install(discovered: DiscoveredNsite): Result<NsiteInfo> = withContext(Dispatchers.IO) {
+    suspend fun install(
+        discovered: DiscoveredNsite,
+        onProgress: ((downloaded: Int, total: Int) -> Unit)? = null,
+    ): Result<NsiteInfo> = withContext(Dispatchers.IO) {
         if (Citrine.isImportingEvents) return@withContext Result.failure(IllegalStateException("Busy importing events"))
         if (!installing.compareAndSet(false, true)) return@withContext Result.failure(IllegalStateException("Another nsite operation is running"))
         try {
             val relays = discoveryRelays()
             val manifest = fetchManifest(discovered.pubkey, discovered.kind, discovered.dTag, relays)
                 ?: return@withContext Result.failure(IllegalStateException("Could not fetch manifest"))
-            downloadAndStore(discovered.address, discovered.pubkey, discovered.kind, discovered.dTag, discovered.displayName, manifest, relays)
+            downloadAndStore(discovered.address, discovered.pubkey, discovered.kind, discovered.dTag, discovered.displayName, manifest, relays, onProgress = onProgress)
         } finally {
             installing.set(false)
         }
@@ -457,6 +460,7 @@ object NsiteManager {
         manifest: Event,
         relays: List<NormalizedRelayUrl>,
         autoUpdate: Boolean = false,
+        onProgress: ((downloaded: Int, total: Int) -> Unit)? = null,
     ): Result<NsiteInfo> {
         val paths = pathTagsOf(manifest)
         if (paths.isEmpty()) return Result.failure(IllegalStateException("Manifest has no files"))
@@ -472,7 +476,8 @@ object NsiteManager {
 
         try {
             val tmpCanonical = tmpDir.canonicalFile
-            for ((urlPath, sha256) in paths) {
+            onProgress?.invoke(0, paths.size)
+            paths.forEachIndexed { index, (urlPath, sha256) ->
                 val outFile = File(tmpCanonical, urlPath.trimStart('/')).canonicalFile
                 if (outFile.path != tmpCanonical.path && !outFile.path.startsWith(tmpCanonical.path + File.separator)) {
                     return Result.failure(IllegalStateException("Illegal path in manifest: $urlPath"))
@@ -481,6 +486,7 @@ object NsiteManager {
                     ?: return Result.failure(IllegalStateException("Failed to download $urlPath"))
                 outFile.parentFile?.mkdirs()
                 outFile.writeBytes(bytes)
+                onProgress?.invoke(index + 1, paths.size)
             }
         } catch (e: Exception) {
             tmpDir.deleteRecursively()

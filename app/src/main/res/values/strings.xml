@@ -179,6 +179,7 @@
     <string name="no_nsites_found">No nsites found</string>
     <string name="search_nsites">Search nsites</string>
     <string name="installing_nsite">Installing %1$s…</string>
+    <string name="nsite_installing_progress">Installing… %1$d/%2$d files</string>
     <string name="nsite_installed">Installed %1$s</string>
     <string name="nsite_install_failed">Failed to install %1$s</string>
     <string name="nsite_already_installed">Already installed</string>

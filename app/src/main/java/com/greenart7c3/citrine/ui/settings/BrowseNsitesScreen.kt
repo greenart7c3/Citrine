@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -41,6 +42,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private data class InstallUiState(
+    val address: String,
+    val downloaded: Int,
+    val total: Int,
+)
+
 @Composable
 fun BrowseNsitesScreen(
     modifier: Modifier = Modifier,
@@ -49,6 +56,7 @@ fun BrowseNsitesScreen(
     val context = LocalContext.current
     val state by NsiteManager.discoveryState.collectAsState()
     var searchQuery by remember { mutableStateOf(TextFieldValue("")) }
+    var installing by remember { mutableStateOf<InstallUiState?>(null) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -108,14 +116,18 @@ fun BrowseNsitesScreen(
                         } else {
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
                                 items(filtered) { nsite ->
+                                    val rowInstalling = installing?.takeIf { it.address == nsite.address }
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable(enabled = !nsite.alreadyInstalled) {
-                                                Toast.makeText(context, context.getString(R.string.installing_nsite, nsite.displayName), Toast.LENGTH_SHORT).show()
+                                            .clickable(enabled = !nsite.alreadyInstalled && installing == null) {
+                                                installing = InstallUiState(nsite.address, 0, 0)
                                                 scope.launch(Dispatchers.IO) {
-                                                    val result = NsiteManager.install(nsite)
+                                                    val result = NsiteManager.install(nsite) { downloaded, total ->
+                                                        installing = InstallUiState(nsite.address, downloaded, total)
+                                                    }
                                                     withContext(Dispatchers.Main) {
+                                                        installing = null
                                                         val message = if (result.isSuccess) {
                                                             context.getString(R.string.nsite_installed, nsite.displayName)
                                                         } else {
@@ -130,7 +142,20 @@ fun BrowseNsitesScreen(
                                             .padding(horizontal = 16.dp, vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        NsiteIcon(model = nsite.iconUrl)
+                                        if (rowInstalling != null) {
+                                            Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                                if (rowInstalling.total > 0) {
+                                                    CircularProgressIndicator(
+                                                        progress = { rowInstalling.downloaded.toFloat() / rowInstalling.total },
+                                                        modifier = Modifier.size(28.dp),
+                                                    )
+                                                } else {
+                                                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                                }
+                                            }
+                                        } else {
+                                            NsiteIcon(model = nsite.iconUrl)
+                                        }
                                         Column(modifier = Modifier.padding(start = 12.dp)) {
                                             Text(
                                                 nsite.displayName,
@@ -140,6 +165,9 @@ fun BrowseNsitesScreen(
                                             )
                                             Text(
                                                 when {
+                                                    rowInstalling != null && rowInstalling.total > 0 ->
+                                                        stringResource(R.string.nsite_installing_progress, rowInstalling.downloaded, rowInstalling.total)
+                                                    rowInstalling != null -> stringResource(R.string.installing_nsite, nsite.displayName)
                                                     nsite.alreadyInstalled -> stringResource(R.string.nsite_already_installed)
                                                     nsite.authorName.isNotBlank() -> stringResource(R.string.nsite_by_author, nsite.authorName)
                                                     else -> nsite.address
