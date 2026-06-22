@@ -99,10 +99,10 @@ fun BrowseNsitesScreen(
                                     style = MaterialTheme.typography.bodyLarge,
                                 )
                                 Text(
-                                    if (nsite.alreadyInstalled) {
-                                        stringResource(R.string.nsite_already_installed)
-                                    } else {
-                                        nsite.address
+                                    when {
+                                        nsite.alreadyInstalled -> stringResource(R.string.nsite_already_installed)
+                                        nsite.authorName.isNotBlank() -> stringResource(R.string.nsite_by_author, nsite.authorName)
+                                        else -> nsite.address
                                     },
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,

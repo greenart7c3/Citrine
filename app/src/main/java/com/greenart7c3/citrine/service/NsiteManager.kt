@@ -76,6 +76,7 @@ object NsiteManager {
         val kind: Int,
         val dTag: String,
         val displayName: String,
+        val authorName: String,
         val aggregateHash: String,
         val serverHints: List<String>,
         val alreadyInstalled: Boolean,
@@ -122,6 +123,9 @@ object NsiteManager {
     }
 
     private fun aggregateHashOf(ev: Event): String = ev.tags.firstOrNull { it.size >= 3 && it[0] == "x" && it[2] == "aggregate" }?.get(1) ?: ""
+
+    /** The nsite's own human-readable name from the manifest `title` tag, if present. */
+    private fun titleOf(ev: Event): String = ev.tags.firstOrNull { it.size >= 2 && it[0] == "title" }?.get(1)?.takeIf { it.isNotBlank() } ?: ""
 
     /** Returns (urlPath, sha256) for every `path` tag. */
     private fun pathTagsOf(ev: Event): List<Pair<String, String>> = ev.tags.filter { it.size >= 3 && it[0] == "path" }.map { it[1] to it[2] }
@@ -172,13 +176,17 @@ object NsiteManager {
             val result = byAddress.values.map { ev ->
                 val addr = addressOf(ev)
                 val dTag = if (ev.kind == KIND_NAMED_SITE) dTagOf(ev) else ""
-                val fallback = dTag.takeIf { it.isNotBlank() } ?: shortPubkey(ev.pubKey)
+                val authorName = displayNameOf(names[ev.pubKey], "")
+                // Prefer the nsite's own title; fall back to the d tag, then the author's
+                // profile name, then a short pubkey.
+                val name = titleOf(ev).ifBlank { dTag.ifBlank { authorName.ifBlank { shortPubkey(ev.pubKey) } } }
                 DiscoveredNsite(
                     address = addr,
                     pubkey = ev.pubKey,
                     kind = ev.kind,
                     dTag = dTag,
-                    displayName = displayNameOf(names[ev.pubKey], fallback),
+                    displayName = name,
+                    authorName = authorName,
                     aggregateHash = aggregateHashOf(ev),
                     serverHints = serverHintsOf(ev),
                     alreadyInstalled = installedAddresses.contains(addr),
