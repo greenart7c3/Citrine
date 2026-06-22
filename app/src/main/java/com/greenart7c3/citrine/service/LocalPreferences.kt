@@ -34,6 +34,8 @@ object PrefKeys {
     const val ONION_HOSTNAME = "onion_hostname"
 
     const val WEB_CLIENTS = "web_clients"
+    const val NSITES = "nsites"
+    const val LAST_NSITE_CHECK = "last_nsite_check"
 
     const val RELAY_AGGREGATOR_ENABLED = "relay_aggregator_enabled"
     const val AGGREGATOR_PUBKEY = "aggregator_pubkey"
@@ -97,6 +99,12 @@ object LocalPreferences {
                 } else {
                     remove(PrefKeys.WEB_CLIENTS)
                 }
+                if (settings.nsites.isNotEmpty()) {
+                    putString(PrefKeys.NSITES, Settings.nsitesToJson())
+                } else {
+                    remove(PrefKeys.NSITES)
+                }
+                putLong(PrefKeys.LAST_NSITE_CHECK, settings.lastNsiteCheck)
 
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, settings.relayAggregatorEnabled)
                 putString(PrefKeys.AGGREGATOR_PUBKEY, settings.aggregatorPubkey)
@@ -155,6 +163,10 @@ object LocalPreferences {
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }
+        prefs.getString(PrefKeys.NSITES, null)?.let {
+            Settings.nsites = Settings.nsitesFromJson(it)
+        }
+        Settings.lastNsiteCheck = prefs.getLong(PrefKeys.LAST_NSITE_CHECK, 0L)
 
         Settings.relayAggregatorEnabled = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, false)
         Settings.aggregatorPubkey = prefs.getString(PrefKeys.AGGREGATOR_PUBKEY, "") ?: ""

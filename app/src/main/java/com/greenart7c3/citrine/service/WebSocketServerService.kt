@@ -45,6 +45,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val NOTIFICATION_THROTTLE_MS = 5_000L
 private const val ONE_WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000
+private const val ONE_DAY_SECONDS = 24L * 60 * 60
+
+// Notification id for "nsite update available" prompts. Ids 1/2/3 are already used by the
+// foreground service, backup/download progress, and database-upgrade notifications.
+const val NSITE_UPDATE_NOTIFICATION_ID = 4
 
 class WebSocketServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -169,6 +174,32 @@ class WebSocketServerService : Service() {
                             Citrine.isImportingEvents = false
                             if (e is CancellationException) throw e
                             Log.e(Citrine.TAG, "Error backing up database", e)
+                        }
+                    }
+
+                    // Daily nsite update check. Gated by lastNsiteCheck like the weekly backup,
+                    // and persisted before the async work so the next 100s tick doesn't re-trigger.
+                    if (!Citrine.isImportingEvents && Settings.nsites.isNotEmpty()) {
+                        val oneDayAgo = TimeUtils.now() - ONE_DAY_SECONDS
+                        if (Settings.lastNsiteCheck < oneDayAgo) {
+                            Settings.lastNsiteCheck = TimeUtils.now()
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+                            Citrine.instance.applicationScope.launch {
+                                try {
+                                    val updates = NsiteManager.checkForUpdates()
+                                    updates.forEach { update ->
+                                        if (update.nsite.autoUpdate) {
+                                            NsiteManager.applyUpdate(update)
+                                        } else {
+                                            postNsiteUpdateNotification(update.nsite.address, update.nsite.displayName)
+                                        }
+                                    }
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Log.e(Citrine.TAG, "Error checking nsite updates", e)
+                                }
+                            }
                         }
                     }
                 }
@@ -404,6 +435,42 @@ class WebSocketServerService : Service() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
+    }
+
+    private fun postNsiteUpdateNotification(address: String, displayName: String) {
+        val notificationManager = NotificationManagerCompat.from(Citrine.instance)
+        if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
+        val channel = NotificationChannelCompat.Builder(
+            "citrine",
+            NotificationManagerCompat.IMPORTANCE_DEFAULT,
+        )
+            .setName("Citrine")
+            .build()
+        notificationManager.createNotificationChannel(channel)
+
+        val updateIntent = Intent(this, ClipboardReceiver::class.java)
+        updateIntent.putExtra("nsite_update", address)
+        val updatePendingIntent = PendingIntent.getBroadcast(
+            this,
+            // Unique requestCode per address so concurrent nsite notifications don't collide.
+            address.hashCode(),
+            updateIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
+            .setContentTitle(getString(R.string.app_name_release))
+            .setContentText(getString(R.string.nsite_update_available_notification, displayName))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .addAction(R.drawable.ic_launcher_background, getString(R.string.update_now), updatePendingIntent)
+            .build()
+
+        notificationManager.notify(NSITE_UPDATE_NOTIFICATION_ID, notification)
     }
 
     private fun buildAggregatorSummary(status: AggregatorStatus): String {
