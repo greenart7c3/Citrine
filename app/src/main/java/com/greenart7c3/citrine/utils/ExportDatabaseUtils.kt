@@ -1,7 +1,6 @@
 package com.greenart7c3.citrine.utils
 
 import android.content.Context
-import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.anggrayudi.storage.file.CreateMode
 import com.anggrayudi.storage.file.makeFile
@@ -9,6 +8,7 @@ import com.anggrayudi.storage.file.openOutputStream
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.logs.Log
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

@@ -6,7 +6,6 @@ import android.database.Cursor
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
-import android.util.Log
 import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
@@ -24,6 +23,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.provider.CitrineContract
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.EventBroadcastWorker

@@ -2,7 +2,6 @@ package com.greenart7c3.citrine.database
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -11,6 +10,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.logs.Log
 import java.util.concurrent.Executors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -1,7 +1,7 @@
 package com.greenart7c3.citrine.server
 
-import android.util.Log
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.negentropy.Negentropy
 import com.vitorpamplona.quartz.nip01Core.core.HexKey
 import io.ktor.server.websocket.DefaultWebSocketServerSession
