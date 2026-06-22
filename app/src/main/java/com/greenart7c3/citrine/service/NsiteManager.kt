@@ -92,6 +92,7 @@ object NsiteManager {
         val aggregateHash: String,
         val serverHints: List<String>,
         val iconUrl: String?,
+        val lastUpdated: Long,
         val alreadyInstalled: Boolean,
     )
 
@@ -231,9 +232,10 @@ object NsiteManager {
                     aggregateHash = aggregateHashOf(ev),
                     serverHints = serverHintsOf(ev),
                     iconUrl = iconUrlOf(ev),
+                    lastUpdated = ev.createdAt,
                     alreadyInstalled = installedAddresses.contains(addr),
                 )
-            }.sortedBy { it.displayName.lowercase() }
+            }.sortedByDescending { it.lastUpdated }
 
             _discoveryState.value = DiscoveryState.Loaded(result)
             result

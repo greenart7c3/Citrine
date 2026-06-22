@@ -177,6 +177,7 @@
     <string name="update_now">Update now</string>
     <string name="discovering_nsites">Discovering nsites…</string>
     <string name="no_nsites_found">No nsites found</string>
+    <string name="search_nsites">Search nsites</string>
     <string name="installing_nsite">Installing %1$s…</string>
     <string name="nsite_installed">Installed %1$s</string>
     <string name="nsite_install_failed">Failed to install %1$s</string>

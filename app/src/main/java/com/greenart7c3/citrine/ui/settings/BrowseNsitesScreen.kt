@@ -10,20 +10,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.greenart7c3.citrine.R
@@ -40,6 +48,7 @@ fun BrowseNsitesScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val state by NsiteManager.discoveryState.collectAsState()
+    var searchQuery by remember { mutableStateOf(TextFieldValue("")) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -71,51 +80,79 @@ fun BrowseNsitesScreen(
                         Text(stringResource(R.string.no_nsites_found))
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(current.nsites) { nsite ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(enabled = !nsite.alreadyInstalled) {
-                                        Toast.makeText(context, context.getString(R.string.installing_nsite, nsite.displayName), Toast.LENGTH_SHORT).show()
-                                        scope.launch(Dispatchers.IO) {
-                                            val result = NsiteManager.install(nsite)
-                                            withContext(Dispatchers.Main) {
-                                                val message = if (result.isSuccess) {
-                                                    context.getString(R.string.nsite_installed, nsite.displayName)
-                                                } else {
-                                                    context.getString(R.string.nsite_install_failed, nsite.displayName)
+                    val query = searchQuery.text.trim()
+                    val filtered = if (query.isEmpty()) {
+                        current.nsites
+                    } else {
+                        current.nsites.filter {
+                            it.displayName.contains(query, ignoreCase = true) ||
+                                it.authorName.contains(query, ignoreCase = true) ||
+                                it.address.contains(query, ignoreCase = true)
+                        }
+                    }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            placeholder = { Text(stringResource(R.string.search_nsites)) },
+                        )
+                        if (filtered.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(stringResource(R.string.no_nsites_found))
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(filtered) { nsite ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = !nsite.alreadyInstalled) {
+                                                Toast.makeText(context, context.getString(R.string.installing_nsite, nsite.displayName), Toast.LENGTH_SHORT).show()
+                                                scope.launch(Dispatchers.IO) {
+                                                    val result = NsiteManager.install(nsite)
+                                                    withContext(Dispatchers.Main) {
+                                                        val message = if (result.isSuccess) {
+                                                            context.getString(R.string.nsite_installed, nsite.displayName)
+                                                        } else {
+                                                            context.getString(R.string.nsite_install_failed, nsite.displayName)
+                                                        }
+                                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    // Refresh the list so the installed item is now flagged.
+                                                    NsiteManager.discover()
                                                 }
-                                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                             }
-                                            // Refresh the list so the installed item is now flagged.
-                                            NsiteManager.discover()
+                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        NsiteIcon(model = nsite.iconUrl)
+                                        Column(modifier = Modifier.padding(start = 12.dp)) {
+                                            Text(
+                                                nsite.displayName,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                            )
+                                            Text(
+                                                when {
+                                                    nsite.alreadyInstalled -> stringResource(R.string.nsite_already_installed)
+                                                    nsite.authorName.isNotBlank() -> stringResource(R.string.nsite_by_author, nsite.authorName)
+                                                    else -> nsite.address
+                                                },
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
                                         }
                                     }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                NsiteIcon(model = nsite.iconUrl)
-                                Column(modifier = Modifier.padding(start = 12.dp)) {
-                                    Text(
-                                        nsite.displayName,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                    )
-                                    Text(
-                                        when {
-                                            nsite.alreadyInstalled -> stringResource(R.string.nsite_already_installed)
-                                            nsite.authorName.isNotBlank() -> stringResource(R.string.nsite_by_author, nsite.authorName)
-                                            else -> nsite.address
-                                        },
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
+                                    HorizontalDivider()
                                 }
                             }
-                            HorizontalDivider()
                         }
                     }
                 }
