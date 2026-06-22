@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.service.NsiteManager
+import com.greenart7c3.citrine.ui.components.NsiteIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -71,7 +73,7 @@ fun BrowseNsitesScreen(
                 } else {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(current.nsites) { nsite ->
-                            Column(
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable(enabled = !nsite.alreadyInstalled) {
@@ -91,23 +93,27 @@ fun BrowseNsitesScreen(
                                         }
                                     }
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(
-                                    nsite.displayName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                Text(
-                                    when {
-                                        nsite.alreadyInstalled -> stringResource(R.string.nsite_already_installed)
-                                        nsite.authorName.isNotBlank() -> stringResource(R.string.nsite_by_author, nsite.authorName)
-                                        else -> nsite.address
-                                    },
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+                                NsiteIcon(model = nsite.iconUrl)
+                                Column(modifier = Modifier.padding(start = 12.dp)) {
+                                    Text(
+                                        nsite.displayName,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                    Text(
+                                        when {
+                                            nsite.alreadyInstalled -> stringResource(R.string.nsite_already_installed)
+                                            nsite.authorName.isNotBlank() -> stringResource(R.string.nsite_by_author, nsite.authorName)
+                                            else -> nsite.address
+                                        },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
                             }
                             HorizontalDivider()
                         }

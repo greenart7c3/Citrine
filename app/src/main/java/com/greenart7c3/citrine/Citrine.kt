@@ -7,6 +7,10 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
@@ -31,8 +35,22 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-class Citrine : Application() {
+class Citrine :
+    Application(),
+    SingletonImageLoader.Factory {
     val crashReportCache: CrashReportCache by lazy { CrashReportCache(this.applicationContext) }
+
+    // Coil image loader whose network fetches route through the app's OkHttp client so nsite
+    // icon downloads honor the relay's Tor/proxy fail-closed policy instead of going direct.
+    override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)
+        .components {
+            add(
+                OkHttpNetworkFetcherFactory(
+                    callFactory = { HttpClientManager.getHttpClient(Settings.proxyAllUrls) },
+                ),
+            )
+        }
+        .build()
     val exceptionHandler =
         CoroutineExceptionHandler { _, throwable ->
             Log.e("AmberCoroutine", "Caught exception: ${throwable.message}", throwable)

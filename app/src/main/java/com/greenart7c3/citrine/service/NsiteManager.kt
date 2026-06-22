@@ -61,6 +61,18 @@ object NsiteManager {
 
     private val DEFAULT_BLOSSOM_SERVERS = listOf("https://blossom.primal.net")
 
+    // Common raster icon filenames, in priority order. Coil can't decode .ico/.svg, so those
+    // are intentionally excluded — a site with only those simply shows the placeholder.
+    private val ICON_NAMES = listOf(
+        "favicon.png",
+        "icon.png",
+        "apple-touch-icon.png",
+        "logo.png",
+        "icon-192.png",
+        "icon-512.png",
+        "favicon-32x32.png",
+    )
+
     private val installing = AtomicBoolean(false)
 
     sealed interface DiscoveryState {
@@ -79,6 +91,7 @@ object NsiteManager {
         val authorName: String,
         val aggregateHash: String,
         val serverHints: List<String>,
+        val iconUrl: String?,
         val alreadyInstalled: Boolean,
     )
 
@@ -131,6 +144,34 @@ object NsiteManager {
     private fun pathTagsOf(ev: Event): List<Pair<String, String>> = ev.tags.filter { it.size >= 3 && it[0] == "path" }.map { it[1] to it[2] }
 
     private fun serverHintsOf(ev: Event): List<String> = ev.tags.filter { it.size >= 2 && it[0] == "server" }.map { it[1] }
+
+    /** sha256 of the highest-priority decodable icon file mapped by a `path` tag, if any. */
+    private fun iconHashOf(ev: Event): String? {
+        val paths = pathTagsOf(ev)
+        for (name in ICON_NAMES) {
+            val match = paths.firstOrNull { (urlPath, _) -> urlPath.substringAfterLast('/').lowercase() == name }
+            if (match != null) return match.second
+        }
+        return null
+    }
+
+    /** Builds a Blossom URL for an icon, or null when there's no icon hash. */
+    private fun iconUrlOf(ev: Event): String? {
+        val hash = iconHashOf(ev) ?: return null
+        val server = serverHintsOf(ev).mapNotNull { normalizeServerUrl(it) }.firstOrNull()
+            ?: DEFAULT_BLOSSOM_SERVERS.first()
+        return "$server/$hash"
+    }
+
+    /** The on-disk icon file for an installed nsite, scanning the known icon filenames. */
+    fun localIconFile(folderName: String): File? {
+        val dir = File(Citrine.instance.filesDir, "nsites/$folderName")
+        for (name in ICON_NAMES) {
+            val file = File(dir, name)
+            if (file.isFile) return file
+        }
+        return null
+    }
 
     private fun displayNameOf(metadata: Event?, fallback: String): String {
         if (metadata == null) return fallback
@@ -189,6 +230,7 @@ object NsiteManager {
                     authorName = authorName,
                     aggregateHash = aggregateHashOf(ev),
                     serverHints = serverHintsOf(ev),
+                    iconUrl = iconUrlOf(ev),
                     alreadyInstalled = installedAddresses.contains(addr),
                 )
             }.sortedBy { it.displayName.lowercase() }

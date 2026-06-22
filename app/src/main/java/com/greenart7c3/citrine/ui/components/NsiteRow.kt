@@ -15,6 +15,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.NsiteInfo
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.NsiteManager
 
 @Composable
 fun NsiteRow(
@@ -41,7 +43,8 @@ fun NsiteRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(0.9f)) {
+            NsiteIcon(model = remember(nsite.folderName) { NsiteManager.localIconFile(nsite.folderName) })
+            Column(modifier = Modifier.weight(0.9f).padding(start = 12.dp)) {
                 Text(
                     nsite.displayName,
                     maxLines = 1,
