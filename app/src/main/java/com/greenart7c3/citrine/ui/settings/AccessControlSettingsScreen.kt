@@ -45,10 +45,12 @@ fun AccessControlSettingsScreen(
         var allowedPubKeys by remember { mutableStateOf(Settings.allowedPubKeys) }
         var allowedTaggedPubKeys by remember { mutableStateOf(Settings.allowedTaggedPubKeys) }
         var allowedKinds by remember { mutableStateOf(Settings.allowedKinds) }
+        var rejectedKinds by remember { mutableStateOf(Settings.rejectedKinds) }
 
         var signedBy by remember { mutableStateOf(TextFieldValue("")) }
         var referredBy by remember { mutableStateOf(TextFieldValue("")) }
         var kind by remember { mutableStateOf(TextFieldValue("")) }
+        var rejectedKind by remember { mutableStateOf(TextFieldValue("")) }
 
         val applyChanges = {
             scope.launch(Dispatchers.IO) {
@@ -57,6 +59,7 @@ fun AccessControlSettingsScreen(
                 Settings.allowedPubKeys = allowedPubKeys
                 Settings.allowedTaggedPubKeys = allowedTaggedPubKeys
                 Settings.allowedKinds = allowedKinds
+                Settings.rejectedKinds = rejectedKinds
                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                 onApplyChanges()
                 delay(1500)
@@ -202,6 +205,49 @@ fun AccessControlSettingsScreen(
                     PubkeyListItem(
                         text = k.toString(),
                         onDelete = { allowedKinds = allowedKinds - k },
+                    )
+                }
+
+                stickyHeader {
+                    SectionHeader(stringResource(R.string.rejected_kinds))
+                }
+                item {
+                    PubkeyInputRow(
+                        value = rejectedKind,
+                        onValueChange = { rejectedKind = it },
+                        onPaste = {
+                            scope.launch {
+                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
+                                rejectedKind = TextFieldValue(text)
+                                val k = text.toIntOrNull()
+                                if (k == null) {
+                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                rejectedKinds = rejectedKinds + k
+                                rejectedKind = TextFieldValue("")
+                            }
+                        },
+                        onAdd = {
+                            val k = rejectedKind.text.toIntOrNull()
+                            if (k == null) {
+                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                return@PubkeyInputRow
+                            }
+                            rejectedKinds = rejectedKinds + k
+                            rejectedKind = TextFieldValue("")
+                        },
+                    )
+                }
+                if (rejectedKinds.isEmpty()) {
+                    item {
+                        EmptyListHint(stringResource(R.string.reject_no_kinds_hint))
+                    }
+                }
+                items(rejectedKinds.toList()) { k ->
+                    PubkeyListItem(
+                        text = k.toString(),
+                        onDelete = { rejectedKinds = rejectedKinds - k },
                     )
                 }
             }

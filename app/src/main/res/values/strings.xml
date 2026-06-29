@@ -87,6 +87,7 @@
     <string name="accept_events_that_refer_to">Accept events that refer to</string>
     <string name="add">Add</string>
     <string name="allowed_kinds">Allowed kinds</string>
+    <string name="rejected_kinds">Rejected kinds</string>
     <string name="invalid_kind">Invalid kind</string>
     <string name="others">Others</string>
     <string name="never_delete_from">Never delete from</string>
@@ -109,6 +110,7 @@
     <string name="allow_all_pubkeys_hint">Empty list allows events from all pubkeys</string>
     <string name="allow_all_tagged_pubkeys_hint">Empty list allows events referencing any pubkey</string>
     <string name="allow_all_kinds_hint">Empty list allows all event kinds</string>
+    <string name="reject_no_kinds_hint">Empty list rejects no kinds. Listed kinds are rejected at ingestion and never stored — defaults block signed artifacts that aren\'t meant to be published (seals, zap requests, auth events).</string>
     <string name="start_on_boot_description">Automatically start the relay when the device boots</string>
     <string name="enable_disable_auth_description">Require NIP-42 authentication for private event kinds</string>
     <string name="listen_to_pokey_broadcasts_description">Receive events broadcast by the Pokey app</string>
