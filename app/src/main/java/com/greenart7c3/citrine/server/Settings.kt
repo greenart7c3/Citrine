@@ -19,9 +19,9 @@ object Settings {
     // Suggested relays for discovering nsites (NIP-5A). Used by the "reset to default" action
     // in the nsite relay editor; an empty user list falls back to the aggregator relays.
     val DEFAULT_NSITE_RELAYS = setOf(
-        "wss://relay.damus.io/",
+        "wss://nsite.run/",
         "wss://nos.lol/",
-        "wss://relay.primal.net/",
+        "wss://nostr.land/",
     )
 
     var allowedKinds: Set<Int> = emptySet()
