@@ -55,7 +55,9 @@ import com.greenart7c3.citrine.ui.navigation.Route
 import com.greenart7c3.citrine.ui.settings.AccessControlSettingsScreen
 import com.greenart7c3.citrine.ui.settings.AggregatorSettingsScreen
 import com.greenart7c3.citrine.ui.settings.BackupSettingsScreen
+import com.greenart7c3.citrine.ui.settings.BrowseNsitesScreen
 import com.greenart7c3.citrine.ui.settings.NetworkSettingsScreen
+import com.greenart7c3.citrine.ui.settings.NsiteRelaysSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RelayInfoSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RetentionSettingsScreen
 import com.greenart7c3.citrine.ui.settings.WebClientsSettingsScreen
@@ -330,7 +332,19 @@ fun CitrineScaffold(
                 BackupSettingsScreen(modifier = subScreenModifier, storageHelper = storageHelper, onApplyChanges = restartRelay)
             }
             composable(Route.WebClientsSettings.route) {
-                WebClientsSettingsScreen(modifier = subScreenModifier, storageHelper = storageHelper, onApplyChanges = restartRelay)
+                WebClientsSettingsScreen(
+                    modifier = subScreenModifier,
+                    storageHelper = storageHelper,
+                    onApplyChanges = restartRelay,
+                    onBrowseNsites = { navController.navigate(Route.BrowseNsites.route) },
+                    onNsiteRelays = { navController.navigate(Route.NsiteRelaysSettings.route) },
+                )
+            }
+            composable(Route.BrowseNsites.route) {
+                BrowseNsitesScreen(modifier = subScreenModifier)
+            }
+            composable(Route.NsiteRelaysSettings.route) {
+                NsiteRelaysSettingsScreen(modifier = subScreenModifier)
             }
 
             composable(Route.DatabaseInfo.route) {

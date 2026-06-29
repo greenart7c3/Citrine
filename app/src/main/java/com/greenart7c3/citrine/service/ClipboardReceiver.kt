@@ -28,6 +28,12 @@ class ClipboardReceiver : BroadcastReceiver() {
             Citrine.instance.applicationScope.launch {
                 Citrine.instance.client.disconnect()
             }
+        } else if (intent != null && intent.hasExtra("nsite_update")) {
+            val address = intent.getStringExtra("nsite_update") ?: return
+            NotificationManagerCompat.from(context).cancel(NSITE_UPDATE_NOTIFICATION_ID)
+            Citrine.instance.applicationScope.launch {
+                NsiteManager.applyUpdateByAddress(address)
+            }
         }
     }
 }
