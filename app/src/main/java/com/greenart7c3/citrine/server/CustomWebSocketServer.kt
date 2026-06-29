@@ -360,6 +360,7 @@ class CustomWebSocketServer(
         Expired,
         Valid,
         KindNotAllowed,
+        KindRejected,
         PubkeyNotAllowed,
         TaggedPubkeyNotAllowed,
         Deleted,
@@ -378,6 +379,11 @@ class CustomWebSocketServer(
         if (event.isExpired() && connection != null) {
             Log.d(Citrine.TAG, "event expired ${event.id} ${event.expiration()}")
             return VerificationResult.Expired
+        }
+
+        if (event.kind in Settings.rejectedKinds) {
+            Log.d(Citrine.TAG, "kind rejected ${event.kind}")
+            return VerificationResult.KindRejected
         }
 
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
@@ -539,6 +545,9 @@ class CustomWebSocketServer(
             VerificationResult.KindNotAllowed -> {
                 connection?.trySend(CommandResult.invalid(event, "kind not allowed").toJson())
             }
+            VerificationResult.KindRejected -> {
+                connection?.trySend(CommandResult.blocked(event, "kind ${event.kind} is not accepted by this relay").toJson())
+            }
             VerificationResult.PubkeyNotAllowed -> {
                 connection?.trySend(CommandResult.invalid(event, "pubkey not allowed").toJson())
             }
@@ -589,6 +598,9 @@ class CustomWebSocketServer(
     private fun dTagOrEmpty(event: Event): String = event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: ""
 
     private fun policyAllows(event: Event): Boolean {
+        if (event.kind in Settings.rejectedKinds) {
+            return false
+        }
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
             return false
         }

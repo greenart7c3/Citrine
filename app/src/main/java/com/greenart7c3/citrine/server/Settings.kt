@@ -5,6 +5,16 @@ import com.greenart7c3.citrine.R
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 
 object Settings {
+    // Event kinds that are signed artifacts never meant to be published to a relay as
+    // standalone events. They are rejected at ingestion with an OK false "blocked:" response
+    // and never stored:
+    //   - 13    NIP-59 seal (inner layer, only valid wrapped in a gift wrap)
+    //   - 9734  NIP-57 zap request (sent to the LNURL callback, not relays)
+    //   - 22242 NIP-42 client auth (carried only in ["AUTH", ...] frames)
+    //   - 24242 Blossom (NIP-B7) blob auth (HTTP Authorization header artifact)
+    //   - 27235 NIP-98 HTTP auth (HTTP Authorization header artifact)
+    val DEFAULT_REJECTED_KINDS = setOf(13, 9734, 22242, 24242, 27235)
+
     val DEFAULT_AGGREGATOR_SOURCE_RELAYS = setOf(
         "wss://aggr.nostr.land/",
     )
@@ -25,6 +35,10 @@ object Settings {
     )
 
     var allowedKinds: Set<Int> = emptySet()
+
+    // Signed artifacts that must never be stored as standalone events (see DEFAULT_REJECTED_KINDS).
+    // Events whose kind is in this set are rejected at ingestion before any storage.
+    var rejectedKinds: Set<Int> = DEFAULT_REJECTED_KINDS
     var allowedPubKeys: Set<String> = emptySet()
     var allowedTaggedPubKeys: Set<String> = emptySet()
     var deleteEventsOlderThan: OlderThan = OlderThan.NEVER
@@ -110,6 +124,7 @@ object Settings {
 
     fun defaultValues() {
         allowedKinds = emptySet()
+        rejectedKinds = DEFAULT_REJECTED_KINDS
         allowedPubKeys = emptySet()
         allowedTaggedPubKeys = emptySet()
         deleteEventsOlderThan = OlderThan.NEVER

@@ -8,6 +8,7 @@ import com.greenart7c3.citrine.server.Settings
 
 object PrefKeys {
     const val ALLOWED_KINDS = "allowed_kinds"
+    const val REJECTED_KINDS = "rejected_kinds"
     const val ALLOWED_PUB_KEYS = "allowed_pub_keys"
     const val ALLOWED_TAGGED_PUB_KEYS = "allowed_tagged_pub_keys"
     const val DELETE_EVENTS_OLDER_THAN = "delete_events_older_than"
@@ -68,6 +69,9 @@ object LocalPreferences {
                 } else {
                     putString(PrefKeys.ALLOWED_KINDS, settings.allowedKinds.joinToString(","))
                 }
+                // Persisted even when empty so a user who clears the defaults keeps an empty
+                // set on reload instead of having DEFAULT_REJECTED_KINDS restored.
+                putString(PrefKeys.REJECTED_KINDS, settings.rejectedKinds.joinToString(","))
                 putStringSet(PrefKeys.ALLOWED_PUB_KEYS, settings.allowedPubKeys)
                 putStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, settings.allowedTaggedPubKeys)
                 putString(PrefKeys.DELETE_EVENTS_OLDER_THAN, settings.deleteEventsOlderThan.toString())
@@ -132,6 +136,11 @@ object LocalPreferences {
     fun loadSettingsFromEncryptedStorage(context: Context) {
         val prefs = encryptedPreferences(context)
         Settings.allowedKinds = prefs.getString(PrefKeys.ALLOWED_KINDS, null)?.split(",")?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet()
+        Settings.rejectedKinds = prefs.getString(PrefKeys.REJECTED_KINDS, null)
+            ?.split(",")
+            ?.mapNotNull { it.toIntOrNull() }
+            ?.toSet()
+            ?: Settings.DEFAULT_REJECTED_KINDS
         Settings.allowedPubKeys = prefs.getStringSet(PrefKeys.ALLOWED_PUB_KEYS, emptySet()) ?: emptySet()
         Settings.allowedTaggedPubKeys = prefs.getStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, emptySet()) ?: emptySet()
         Settings.deleteEventsOlderThan = OlderThan.valueOf(prefs.getString(PrefKeys.DELETE_EVENTS_OLDER_THAN, OlderThan.NEVER.toString()) ?: OlderThan.NEVER.toString())

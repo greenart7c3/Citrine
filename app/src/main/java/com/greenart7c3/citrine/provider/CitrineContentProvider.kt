@@ -575,6 +575,9 @@ class CitrineContentProvider : ContentProvider() {
                         CustomWebSocketServer.VerificationResult.KindNotAllowed -> {
                             QueryResult.error<Uri>("Kind not allowed")
                         }
+                        CustomWebSocketServer.VerificationResult.KindRejected -> {
+                            QueryResult.error<Uri>("Kind ${event.kind} is not accepted by this relay")
+                        }
                         CustomWebSocketServer.VerificationResult.PubkeyNotAllowed -> {
                             QueryResult.error<Uri>("Pubkey not allowed")
                         }
