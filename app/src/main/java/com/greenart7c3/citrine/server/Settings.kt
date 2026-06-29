@@ -63,8 +63,9 @@ object Settings {
     // 100s service timer only runs the check roughly once per day.
     var lastNsiteCheck: Long = 0L
 
-    // Relays queried to discover nsites. Empty = fall back to the aggregator relays.
-    var nsiteRelays: Set<String> = emptySet()
+    // Relays queried to discover nsites. nsites use only this set (never the aggregator
+    // relays); an empty list falls back to [DEFAULT_NSITE_RELAYS].
+    var nsiteRelays: Set<String> = DEFAULT_NSITE_RELAYS
 
     var relayAggregatorEnabled = false
     var aggregatorPubkey = ""
@@ -136,7 +137,7 @@ object Settings {
         webClients = mutableMapOf()
         nsites = mutableListOf()
         lastNsiteCheck = 0L
-        nsiteRelays = emptySet()
+        nsiteRelays = DEFAULT_NSITE_RELAYS
         relayAggregatorEnabled = false
         aggregatorPubkey = ""
         relayAggregatorKinds = setOf(0, 1, 3, 5, 6, 7, 1111, 10000, 10002, 30023)

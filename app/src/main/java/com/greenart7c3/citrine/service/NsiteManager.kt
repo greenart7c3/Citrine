@@ -53,12 +53,6 @@ object NsiteManager {
     private const val DISCOVERY_TIMEOUT_MS = 20_000L
     private const val DISCOVERY_LIMIT = 500
 
-    private val FALLBACK_RELAYS = setOf(
-        "wss://relay.damus.io/",
-        "wss://nos.lol/",
-        "wss://relay.primal.net/",
-    )
-
     private val DEFAULT_BLOSSOM_SERVERS = listOf("https://blossom.primal.net")
 
     // Common raster icon filenames, in priority order. Coil can't decode .ico/.svg, so those
@@ -115,16 +109,10 @@ object NsiteManager {
     }
 
     private fun discoveryRelays(): List<NormalizedRelayUrl> {
-        val raw = when {
-            // User-chosen nsite relays take precedence.
-            Settings.nsiteRelays.isNotEmpty() -> Settings.nsiteRelays
-            else -> (
-                Settings.relayAggregatorSourceRelays +
-                    Settings.relayAggregatorIndexerRelays +
-                    Settings.relayAggregatorExtraRelays
-                ).takeIf { it.isNotEmpty() } ?: FALLBACK_RELAYS
-        }
-        return raw.mapNotNull { normalizeRemote(it) }.ifEmpty { FALLBACK_RELAYS.mapNotNull { normalizeRemote(it) } }
+        // nsites use their own relay set only — never the aggregator relays. An empty user
+        // list falls back to the built-in defaults.
+        val raw = Settings.nsiteRelays.ifEmpty { Settings.DEFAULT_NSITE_RELAYS }
+        return raw.mapNotNull { normalizeRemote(it) }.ifEmpty { Settings.DEFAULT_NSITE_RELAYS.mapNotNull { normalizeRemote(it) } }
     }
 
     // endregion

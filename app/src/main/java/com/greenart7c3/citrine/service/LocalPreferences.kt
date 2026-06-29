@@ -169,7 +169,7 @@ object LocalPreferences {
             Settings.nsites = Settings.nsitesFromJson(it)
         }
         Settings.lastNsiteCheck = prefs.getLong(PrefKeys.LAST_NSITE_CHECK, 0L)
-        Settings.nsiteRelays = prefs.getStringSet(PrefKeys.NSITE_RELAYS, emptySet()) ?: emptySet()
+        Settings.nsiteRelays = prefs.getStringSet(PrefKeys.NSITE_RELAYS, null) ?: Settings.DEFAULT_NSITE_RELAYS
 
         Settings.relayAggregatorEnabled = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, false)
         Settings.aggregatorPubkey = prefs.getString(PrefKeys.AGGREGATOR_PUBKEY, "") ?: ""
