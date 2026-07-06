@@ -249,6 +249,10 @@ class WebSocketServerService : Service() {
         if (Settings.useTor || Settings.useProxy) {
             Log.d(Citrine.TAG, "Starting embedded Tor (hiddenService=${Settings.useTor}, socks=${Settings.useProxy})")
             TorManager.start(Settings.port, enableHiddenService = Settings.useTor)
+        } else {
+            // Tor may still be running from before a settings change if onDestroy's
+            // timed cleanup was cut short.
+            TorManager.stop()
         }
 
         if (Settings.relayAggregatorEnabled) {
