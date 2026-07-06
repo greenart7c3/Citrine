@@ -170,7 +170,6 @@ dependencies {
     implementation(libs.room.paging)
     implementation(libs.kmp.tor.runtime)
     implementation(libs.kmp.tor.runtime.service)
-    implementation(libs.kmp.tor.runtime.service.ui)
     implementation(libs.kmp.tor.resource.exec)
     implementation(libs.negentropy)
     implementation(libs.coil.compose)

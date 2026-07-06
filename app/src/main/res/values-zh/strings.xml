@@ -126,8 +126,6 @@
     <string name="tor_starting">正在启动 Tor…</string>
     <string name="tor_error">Tor 错误：%1$s</string>
     <string name="tor_retry">重试 Tor</string>
-    <string name="tor_channel_name">Citrine Tor</string>
-    <string name="tor_channel_description">Citrine 中继的洋葱 Tor 服务</string>
     <string name="relay_aggregator">中继聚合器</string>
     <string name="relay_aggregator_description">持续镜像聚合器中公钥的关注公钥的事件到这个中继</string>
     <string name="relay_aggregator_pubkey">聚合公钥（十六进制或 npub）</string>

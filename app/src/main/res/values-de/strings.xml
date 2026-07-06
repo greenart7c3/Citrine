@@ -126,8 +126,6 @@
     <string name="tor_starting">Starting Tor…</string>
     <string name="tor_error">Tor error: %1$s</string>
     <string name="tor_retry">Retry Tor</string>
-    <string name="tor_channel_name">Citrine Tor</string>
-    <string name="tor_channel_description">Tor onion service for the Citrine relay</string>
     <string name="relay_aggregator">Relay Aggregator</string>
     <string name="relay_aggregator_description">Continuously mirror events from the aggregator pubkey\'s follows into this relay</string>
     <string name="relay_aggregator_pubkey">Aggregator pubkey (hex or npub)</string>
