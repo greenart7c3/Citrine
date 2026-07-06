@@ -70,6 +70,7 @@ paging-compose = { group = "androidx.paging", name = "paging-compose", version.r
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "pagingCommon" }
 kmp-tor-runtime = { module = "io.matthewnelson.kmp-tor:runtime", version.ref = "kmpTor" }
 kmp-tor-runtime-service = { module = "io.matthewnelson.kmp-tor:runtime-service", version.ref = "kmpTor" }
+kmp-tor-runtime-service-ui = { module = "io.matthewnelson.kmp-tor:runtime-service-ui", version.ref = "kmpTor" }
 kmp-tor-resource-exec = { module = "io.matthewnelson.kmp-tor:resource-exec-tor", version.ref = "kmpTorResource" }
 negentropy = { module = "com.vitorpamplona.negentropy:kmp-negentropy-android", version.ref = "negentropy" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }

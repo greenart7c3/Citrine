@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.service
 
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.server.Settings
@@ -17,6 +18,8 @@ import io.matthewnelson.kmp.tor.runtime.core.OnEvent
 import io.matthewnelson.kmp.tor.runtime.core.config.TorOption
 import io.matthewnelson.kmp.tor.runtime.core.net.Port.Companion.toPort
 import io.matthewnelson.kmp.tor.runtime.service.TorServiceConfig
+import io.matthewnelson.kmp.tor.runtime.service.TorServiceUI
+import io.matthewnelson.kmp.tor.runtime.service.ui.KmpTorServiceUI
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +31,7 @@ object TorManager {
     const val ONION_VIRTUAL_PORT: Int = 80
 
     private const val HS_DIR_NAME = "citrine_hs"
+    private const val NOTIFICATION_ID: Short = 615
 
     sealed interface State {
         data object Off : State
@@ -64,12 +68,21 @@ object TorManager {
     // volatile fields above. Config callbacks re-run on every daemon (re)start,
     // which is what lets the single cached runtime pick up settings changes.
     private fun buildRuntime(): TorRuntime {
-        // Run TorService as a background service (no notification of its own). The
-        // relay's own foreground service keeps the process alive, so Tor must not
-        // self-destroy on task removal — its lifecycle is driven by start()/stop().
-        val serviceConfig = TorServiceConfig.Builder {
-            stopServiceOnTaskRemoved = false
-        }
+        val uiFactory = KmpTorServiceUI.Factory(
+            iconReady = R.drawable.ic_notification,
+            iconNotReady = R.drawable.ic_notification,
+            info = TorServiceUI.NotificationInfo(
+                notificationId = NOTIFICATION_ID,
+                channelId = "citrine_tor",
+                channelName = R.string.tor_channel_name,
+                channelDescription = R.string.tor_channel_description,
+                channelShowBadge = false,
+                channelImportanceLow = true,
+            ),
+            block = { defaultConfig { enableActionStop = true } },
+        )
+
+        val serviceConfig = TorServiceConfig.Foreground.Builder(uiFactory) { /* defaults */ }
         val env = serviceConfig.newEnvironment(ResourceLoaderTorExec::getOrCreate)
 
         return TorRuntime.Builder(env) {
