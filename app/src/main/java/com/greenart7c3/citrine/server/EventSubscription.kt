@@ -59,11 +59,11 @@ object EventSubscription {
             }
             if (event.isEphemeral()) {
                 if (!sentEvent && Settings.sendMuteResponse) {
-                    connection?.trySend(
+                    connection?.send(
                         CommandResult.mute(event).toJson(),
                     )
                 } else {
-                    connection?.trySend(CommandResult.ok(event).toJson())
+                    connection?.send(CommandResult.ok(event).toJson())
                 }
             }
         }

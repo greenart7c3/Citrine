@@ -90,11 +90,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -275,13 +278,13 @@ class CustomWebSocketServer(
                     val exception = validateAuthEvent(event, connection?.authChallenge ?: "").exceptionOrNull()
                     if (exception != null) {
                         Log.d(Citrine.TAG, exception.message!!)
-                        connection?.trySend(CommandResult.invalid(event, exception.message!!).toJson())
+                        connection?.send(CommandResult.invalid(event, exception.message!!).toJson())
                         return
                     }
 
                     Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
                     connection?.users?.add(event.pubKey)
-                    connection?.trySend(CommandResult.ok(event).toJson())
+                    connection?.send(CommandResult.ok(event).toJson())
                 }
 
                 "EVENT" -> {
@@ -325,7 +328,7 @@ class CustomWebSocketServer(
 
                 "PING" -> {
                     try {
-                        connection?.trySend(NoticeResult("PONG").toJson())
+                        connection?.send(NoticeResult("PONG").toJson())
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         Log.d(Citrine.TAG, "Failed to send pong response", e)
@@ -336,7 +339,7 @@ class CustomWebSocketServer(
                     try {
                         val errorMessage = NoticeResult.invalid("unknown message type $type").toJson()
                         Log.d(Citrine.TAG, errorMessage)
-                        connection?.trySend(errorMessage)
+                        connection?.send(errorMessage)
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         Log.d(Citrine.TAG, "Failed to send response", e)
@@ -347,7 +350,7 @@ class CustomWebSocketServer(
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, e.toString(), e)
             try {
-                connection?.trySend(NoticeResult.invalid("Error processing message").toJson())
+                connection?.send(NoticeResult.invalid("Error processing message").toJson())
             } catch (e: Exception) {
                 Log.d(Citrine.TAG, e.toString(), e)
             }
@@ -394,8 +397,9 @@ class CustomWebSocketServer(
         // Aggregator-fetched events bypass the author/tagged-pubkey allowlists
         // because the aggregator already validated them against the user's
         // requested subscription filter before handing them off here.
-        if (!fromAggregator) {
-            if (Settings.allowedTaggedPubKeys.isNotEmpty() && event.taggedUsers().isNotEmpty() && event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
+        if (!fromAggregator && (Settings.allowedTaggedPubKeys.isNotEmpty() || Settings.allowedPubKeys.isNotEmpty())) {
+            val taggedUsers = event.taggedUsers()
+            if (Settings.allowedTaggedPubKeys.isNotEmpty() && taggedUsers.isNotEmpty() && taggedUsers.none { it.pubKey in Settings.allowedTaggedPubKeys }) {
                 if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
                     Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.id}")
                     return VerificationResult.TaggedPubkeyNotAllowed
@@ -403,7 +407,7 @@ class CustomWebSocketServer(
             }
 
             if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
-                if (Settings.allowedTaggedPubKeys.isEmpty() || event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }) {
+                if (Settings.allowedTaggedPubKeys.isEmpty() || taggedUsers.none { it.pubKey in Settings.allowedTaggedPubKeys }) {
                     Log.d(Citrine.TAG, "pubkey not allowed ${event.id}")
                     return VerificationResult.PubkeyNotAllowed
                 }
@@ -517,14 +521,14 @@ class CustomWebSocketServer(
         val result = verifyEvent(event, connection, shouldVerify, fromAggregator)
         when (result) {
             VerificationResult.AuthRequiredForProtectedEvent -> {
-                connection?.trySend(AuthResult.challenge(connection.authChallenge).toJson())
-                connection?.trySend(CommandResult.required(event, "this event may only be published by its author").toJson())
+                connection?.send(AuthResult.challenge(connection.authChallenge).toJson())
+                connection?.send(CommandResult.required(event, "this event may only be published by its author").toJson())
             }
             VerificationResult.ProtectedEventEmbeddedInRepost -> {
-                connection?.trySend(CommandResult.invalid(event, "blocked: reposts of protected events must not embed the reposted event").toJson())
+                connection?.send(CommandResult.invalid(event, "blocked: reposts of protected events must not embed the reposted event").toJson())
             }
             VerificationResult.InvalidId -> {
-                connection?.trySend(
+                connection?.send(
                     CommandResult.invalid(
                         event,
                         "event id hash verification failed",
@@ -532,7 +536,7 @@ class CustomWebSocketServer(
                 )
             }
             VerificationResult.InvalidSignature -> {
-                connection?.trySend(
+                connection?.send(
                     CommandResult.invalid(
                         event,
                         "event signature verification failed",
@@ -540,31 +544,31 @@ class CustomWebSocketServer(
                 )
             }
             VerificationResult.Expired -> {
-                connection?.trySend(CommandResult.invalid(event, "event expired").toJson())
+                connection?.send(CommandResult.invalid(event, "event expired").toJson())
             }
             VerificationResult.KindNotAllowed -> {
-                connection?.trySend(CommandResult.invalid(event, "kind not allowed").toJson())
+                connection?.send(CommandResult.invalid(event, "kind not allowed").toJson())
             }
             VerificationResult.KindRejected -> {
-                connection?.trySend(CommandResult.blocked(event, "kind ${event.kind} is not accepted by this relay").toJson())
+                connection?.send(CommandResult.blocked(event, "kind ${event.kind} is not accepted by this relay").toJson())
             }
             VerificationResult.PubkeyNotAllowed -> {
-                connection?.trySend(CommandResult.invalid(event, "pubkey not allowed").toJson())
+                connection?.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
             }
             VerificationResult.TaggedPubkeyNotAllowed -> {
-                connection?.trySend(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
+                connection?.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
             }
             VerificationResult.Deleted -> {
-                connection?.trySend(CommandResult.invalid(event, "Event deleted").toJson())
+                connection?.send(CommandResult.invalid(event, "Event deleted").toJson())
             }
             VerificationResult.AlreadyInDatabase -> {
-                connection?.trySend(CommandResult.duplicated(event).toJson())
+                connection?.send(CommandResult.duplicated(event).toJson())
             }
             VerificationResult.TaggedPubKeyMismatch -> {
-                connection?.trySend(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
+                connection?.send(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
             }
             VerificationResult.NewestEventAlreadyInDatabase -> {
-                connection?.trySend(CommandResult.invalid(event, "newest event already in database").toJson())
+                connection?.send(CommandResult.invalid(event, "newest event already in database").toJson())
             }
             VerificationResult.Valid -> {
                 when {
@@ -584,7 +588,7 @@ class CustomWebSocketServer(
 
                 // if the event is ephemeral the response will be sent after the event is sent to subscriptions
                 if (!event.isEphemeral()) {
-                    connection?.trySend(CommandResult.ok(event).toJson())
+                    connection?.send(CommandResult.ok(event).toJson())
                 }
             }
         }
@@ -604,9 +608,13 @@ class CustomWebSocketServer(
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
             return false
         }
+        if (Settings.allowedTaggedPubKeys.isEmpty() && Settings.allowedPubKeys.isEmpty()) {
+            return true
+        }
+        val taggedUsers = event.taggedUsers()
         if (Settings.allowedTaggedPubKeys.isNotEmpty() &&
-            event.taggedUsers().isNotEmpty() &&
-            event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }
+            taggedUsers.isNotEmpty() &&
+            taggedUsers.none { it.pubKey in Settings.allowedTaggedPubKeys }
         ) {
             if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
                 return false
@@ -614,7 +622,7 @@ class CustomWebSocketServer(
         }
         if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
             if (Settings.allowedTaggedPubKeys.isEmpty() ||
-                event.taggedUsers().none { it.pubKey in Settings.allowedTaggedPubKeys }
+                taggedUsers.none { it.pubKey in Settings.allowedTaggedPubKeys }
             ) {
                 return false
             }
@@ -1124,14 +1132,16 @@ class CustomWebSocketServer(
                 extensions {
                     install(WebSocketDeflateExtension) {
                         /**
-                         * Compression level to use for [Deflater].
+                         * Favor CPU over ratio: most clients are on localhost/LAN, so
+                         * deflate mainly costs battery rather than saving bandwidth.
                          */
-                        compressionLevel = Deflater.DEFAULT_COMPRESSION
+                        compressionLevel = Deflater.BEST_SPEED
 
                         /**
-                         * Prevent compressing small outgoing frames.
+                         * Skip compressing small frames (OK/EOSE/NOTICE/AUTH and most
+                         * events); deflate overhead outweighs the savings for them.
                          */
-                        compressIfBiggerThan(bytes = 0)
+                        compressIfBiggerThan(bytes = 1024)
                     }
                 }
             }
@@ -1363,27 +1373,44 @@ class CustomWebSocketServer(
                         thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
                     }
 
-                    try {
-                        for (message in incoming) {
-                            if (message !is Frame.Text) continue
+                    // Decouple socket reads from message processing: parsing, signature
+                    // verification, and DB checks are CPU/IO heavy and would otherwise run
+                    // on the network engine's threads, stalling reads for this and other
+                    // connections. A bounded channel keeps per-connection ordering while
+                    // letting reads continue during processing bursts.
+                    val messageChannel = Channel<String>(capacity = 256)
+                    val processor = launch(Dispatchers.Default) {
+                        for (newMessage in messageChannel) {
                             try {
-                                processNewRelayMessage(message.readText(), thisConnection)
+                                processNewRelayMessage(newMessage, thisConnection)
                             } catch (e: Exception) {
-                                if (e !is CancellationException) {
-                                    Log.d(Citrine.TAG, "Error processing message: $e", e)
-                                    try {
-                                        thisConnection.trySend(
-                                            NoticeResult.invalid("Error processing message").toJson(),
-                                        )
-                                    } catch (sendEx: Exception) {
-                                        Log.d(Citrine.TAG, sendEx.toString(), sendEx)
-                                    }
+                                if (e is CancellationException) throw e
+                                Log.d(Citrine.TAG, "Error processing message: $e", e)
+                                try {
+                                    thisConnection.trySend(
+                                        NoticeResult.invalid("Error processing message").toJson(),
+                                    )
+                                } catch (sendEx: Exception) {
+                                    Log.d(Citrine.TAG, sendEx.toString(), sendEx)
                                 }
                             }
                         }
+                    }
+
+                    try {
+                        for (message in incoming) {
+                            if (message !is Frame.Text) continue
+                            messageChannel.send(message.readText())
+                        }
                     } finally {
                         // Always clean up, even on cancellation
-                        removeConnection(thisConnection)
+                        messageChannel.close()
+                        withContext(NonCancellable) {
+                            // Let already-received messages finish (stores events, sends OKs)
+                            // before tearing the connection down.
+                            withTimeoutOrNull(10_000) { processor.join() }
+                            removeConnection(thisConnection)
+                        }
                         Log.d(Citrine.TAG, "Connection closed from ${thisConnection.name}")
                     }
                 }

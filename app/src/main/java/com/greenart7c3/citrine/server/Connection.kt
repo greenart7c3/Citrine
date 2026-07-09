@@ -14,7 +14,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.onClosed
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -39,7 +39,23 @@ class Connection(
         Citrine.instance.applicationScope.coroutineContext + SupervisorJob(),
     )
 
+    // Outbound frames are staged here and drained by a single writer coroutine using the
+    // suspending session.send(). Ktor's session.outgoing only buffers a handful of frames,
+    // so writing to it with trySend() silently dropped frames whenever a REQ streamed more
+    // events than the buffer could hold.
+    private val outgoingQueue = Channel<String>(capacity = OUTGOING_QUEUE_CAPACITY)
+
     init {
+        connectionScope.launch {
+            try {
+                for (message in outgoingQueue) {
+                    session.send(Frame.Text(message))
+                }
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                Log.d(Citrine.TAG, "Writer stopped for connection $name", e)
+            }
+        }
         connectionScope.launch {
             while (isActive) {
                 delay(60_000)
@@ -58,6 +74,12 @@ class Connection(
 
     companion object {
         val lastId = AtomicInteger(0)
+
+        // Deep enough to absorb bursts (large REQ results, fanout floods) without
+        // unbounded memory growth. Suspending producers use send() for backpressure;
+        // non-suspending producers use trySend(), which disconnects a consumer that
+        // has fallen this far behind instead of silently corrupting its stream.
+        private const val OUTGOING_QUEUE_CAPACITY = 1024
     }
     val name = "user${lastId.getAndIncrement()}"
 
@@ -69,20 +91,42 @@ class Connection(
     }
 
     fun finalize() {
+        outgoingQueue.close()
         connectionScope.cancel()
         EventSubscription.closeAll(name)
         negentropySessions.clear()
     }
 
-    fun trySend(data: String) {
+    /**
+     * Enqueues a frame, suspending when the outbound queue is full so slow clients apply
+     * backpressure to the producer instead of dropping frames. Use on high-volume paths
+     * (REQ result streaming, per-EVENT command results).
+     */
+    suspend fun send(data: String) {
+        if (closed.get()) return
         try {
-            session.outgoing.trySend(Frame.Text(data)).onClosed {
-                Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
-                // Do not call removeConnection here — the webSocket finally block owns removal.
-            }
+            outgoingQueue.send(data)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Log.d(Citrine.TAG, "Error sending data to client $data", e)
+            Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
+            // Do not call removeConnection here — the webSocket finally block owns removal.
+        }
+    }
+
+    fun trySend(data: String) {
+        if (closed.get()) return
+        val result = outgoingQueue.trySend(data)
+        if (result.isClosed) {
+            Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
+            // Do not call removeConnection here — the webSocket finally block owns removal.
+        } else if (result.isFailure) {
+            // The client is not reading fast enough to keep up. Disconnect it rather than
+            // silently dropping frames mid-stream, which corrupts REQ/OK semantics.
+            Log.w(Citrine.TAG, "Outgoing queue full for connection $name $remoteAddress, closing slow consumer")
+            try {
+                session.cancel()
+            } catch (_: Throwable) {
+            }
         }
     }
 }

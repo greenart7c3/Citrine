@@ -16,6 +16,12 @@ data class EventFilter(
     val searchKeywords: Set<String> = search?.let { tokenizeSearchString(it) } ?: emptySet()
 
     override fun test(event: Event): Boolean {
+        // Cheapest checks first: this runs against every active subscription
+        // for every event inserted into the database.
+        if (kinds.isNotEmpty() && event.kind !in kinds) {
+            return false
+        }
+
         if (since != null && event.createdAt < since!!) {
             return false
         }
@@ -24,15 +30,12 @@ data class EventFilter(
             return false
         }
 
-        if (ids.isNotEmpty() && ids.none { event.id.startsWith(it) }) {
+        // O(1) exact match first; fall back to the O(n) prefix scan only on miss.
+        if (ids.isNotEmpty() && event.id !in ids && ids.none { event.id.startsWith(it) }) {
             return false
         }
 
-        if (authors.isNotEmpty() && authors.none { event.pubKey.startsWith(it) }) {
-            return false
-        }
-
-        if (kinds.isNotEmpty() && event.kind !in kinds) {
+        if (authors.isNotEmpty() && event.pubKey !in authors && authors.none { event.pubKey.startsWith(it) }) {
             return false
         }
 
@@ -47,14 +50,7 @@ data class EventFilter(
         return true
     }
 
-    private fun testTag(tag: Map.Entry<String, Set<String>>, event: Event): Boolean {
-        val eventTags: Set<String> = event.tags.asSequence()
-            .filter { it.size > 1 && it[0] == tag.key }
-            .map { it[1] }
-            .toSet()
-
-        return tag.value.any { it in eventTags }
-    }
+    private fun testTag(tag: Map.Entry<String, Set<String>>, event: Event): Boolean = event.tags.any { it.size > 1 && it[0] == tag.key && it[1] in tag.value }
 
     private fun testSearch(event: Event): Boolean {
         val eventTokens = tokenizeString(event.content)

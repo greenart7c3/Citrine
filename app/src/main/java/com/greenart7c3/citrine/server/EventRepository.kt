@@ -181,37 +181,25 @@ object EventRepository {
         return database.eventDao().getIdsAndCreatedAt(rawSql)
     }
 
-    fun subscribe(
+    suspend fun subscribe(
         subscription: Subscription,
         filter: EventFilter,
     ) {
         if (subscription.count) {
             val count = countQuery(subscription.appDatabase, filter)
-            subscription.connection.trySend(
-                subscription.objectMapper.writeValueAsString(
-                    listOf(
-                        "COUNT",
-                        subscription.id,
-                        CountResult(count).toJson(),
-                    ),
-                ),
+            subscription.connection.send(
+                "[\"COUNT\",${subscription.escapedId},{\"count\":$count}]",
             )
             return
         }
 
         val events = query(subscription.appDatabase, filter)
-        events.forEach {
-            val event = it.toEvent()
-            Log.d(Citrine.TAG, "sending event ${event.id} subscription ${subscription.id} filter $filter")
-            subscription.connection.trySend(
-                subscription.objectMapper.writeValueAsString(
-                    listOf(
-                        "EVENT",
-                        subscription.id,
-                        event.toJsonObject(),
-                    ),
-                ),
-            )
+        for (dbEvent in events) {
+            val json = JacksonMapper.mapper.writeValueAsString(dbEvent.toEvent().toJsonObject())
+            subscription.connection.send("[\"EVENT\",${subscription.escapedId},$json]")
+        }
+        if (events.isNotEmpty() && Log.isLoggable(Citrine.TAG, Log.DEBUG)) {
+            Log.d(Citrine.TAG, "sent ${events.size} events for subscription ${subscription.id} filter $filter")
         }
     }
 }

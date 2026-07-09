@@ -24,12 +24,12 @@ class SubscriptionManager(
                 when (AuthGate.check(filter, subscription.connection)) {
                     AuthGate.Denial.AUTH_REQUIRED -> {
                         Log.d(Citrine.TAG, "cancelling subscription auth-required: ${subscription.id}")
-                        subscription.connection.trySend(ClosedResult.required(subscription.id).toJson())
+                        subscription.connection.send(ClosedResult.required(subscription.id).toJson())
                         return@launch
                     }
                     AuthGate.Denial.RESTRICTED -> {
                         Log.d(Citrine.TAG, "cancelling subscription restricted: ${subscription.id} filter: $filter authed users: ${subscription.connection.users}")
-                        subscription.connection.trySend(ClosedResult.restricted(subscription.id).toJson())
+                        subscription.connection.send(ClosedResult.restricted(subscription.id).toJson())
                         return@launch
                     }
                     null -> Unit
@@ -47,13 +47,13 @@ class SubscriptionManager(
                     if (e is CancellationException) throw e
 
                     Log.d(Citrine.TAG, "Error reading data from database $filter", e)
-                    subscription.connection.trySend(
+                    subscription.connection.send(
                         NoticeResult.invalid("Error reading data from database").toJson(),
                     )
                 }
             }
 
-            subscription.connection.trySend(EOSE(subscription.id).toJson())
+            subscription.connection.send(EOSE(subscription.id).toJson())
         }
     }
 }
