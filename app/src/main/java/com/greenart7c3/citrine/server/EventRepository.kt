@@ -6,11 +6,11 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.IdAndCreatedAt
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import com.vitorpamplona.quartz.utils.TimeUtils
+import java.io.StringWriter
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 
@@ -81,12 +81,11 @@ object EventRepository {
             params.addAll(filter.kinds)
         }
 
-        // --- Single JOIN (just for connecting EventEntity with TagEntity if needed) ---
-        if (filter.tags.isNotEmpty()) {
-            joinClause.append(" INNER JOIN TagEntity t ON t.pkEvent = EventEntity.id")
-        }
-
         // --- Add each tag as an AND EXISTS in WHERE ---
+        // Note: no JOIN against TagEntity. The EXISTS predicates below do all the tag
+        // filtering; a join would multiply each event row by its tag count and force a
+        // DISTINCT over full-width rows (including content) to dedupe them again, which
+        // is dramatically slower.
         filter.tags.forEach { tag ->
             val safeTagKey = tag.key.takeIf { it.matches(TAG_KEY_REGEX) }
                 ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
@@ -119,25 +118,23 @@ object EventRepository {
             "EventEntity.createdAt DESC, EventEntity.id ASC"
         }
 
+        // The FTS join is 1:1 (rowid = rowid) and the tag filters use EXISTS, so no row
+        // in the result is ever duplicated and no DISTINCT is needed in any mode.
         val query = StringBuilder()
         when (mode) {
             SelectMode.COUNT -> {
-                query.append("SELECT COUNT(DISTINCT EventEntity.id) FROM EventEntity EventEntity")
+                query.append("SELECT COUNT(*) FROM EventEntity EventEntity")
                 query.append(joinClause)
                 query.append(whereClause)
             }
             SelectMode.FULL_EVENTS -> {
-                query.append("SELECT ")
-                if (filter.tags.isNotEmpty()) query.append("DISTINCT ")
-                query.append("EventEntity.* FROM EventEntity EventEntity")
+                query.append("SELECT EventEntity.* FROM EventEntity EventEntity")
                 query.append(joinClause)
                 query.append(whereClause)
                 query.append(" ORDER BY ").append(orderBy)
             }
             SelectMode.IDS_AND_CREATED_AT -> {
-                query.append("SELECT ")
-                if (filter.tags.isNotEmpty()) query.append("DISTINCT ")
-                query.append("EventEntity.id AS id, EventEntity.createdAt AS createdAt FROM EventEntity EventEntity")
+                query.append("SELECT EventEntity.id AS id, EventEntity.createdAt AS createdAt FROM EventEntity EventEntity")
                 query.append(joinClause)
                 query.append(whereClause)
                 query.append(" ORDER BY ").append(orderBy)
@@ -195,12 +192,43 @@ object EventRepository {
 
         val events = query(subscription.appDatabase, filter)
         for (dbEvent in events) {
-            val json = JacksonMapper.mapper.writeValueAsString(dbEvent.toEvent().toJsonObject())
-            subscription.connection.send("[\"EVENT\",${subscription.escapedId},$json]")
+            subscription.connection.send("[\"EVENT\",${subscription.escapedId},${dbEvent.toEventJson()}]")
         }
         if (events.isNotEmpty() && Log.isLoggable(Citrine.TAG, Log.DEBUG)) {
             Log.d(Citrine.TAG, "sent ${events.size} events for subscription ${subscription.id} filter $filter")
         }
+    }
+
+    /**
+     * Serializes a stored event straight from its database row, skipping the construction
+     * of a kind-specific quartz [Event] and an intermediate Jackson tree. Produces the same
+     * JSON as `toEvent().toJsonObject()`: tags are flattened the same way as
+     * [com.greenart7c3.citrine.database.toTags] (non-null col0..col3, then col4Plus).
+     */
+    private fun EventWithTags.toEventJson(): String {
+        val writer = StringWriter(256 + event.content.length)
+        JacksonMapper.mapper.factory.createGenerator(writer).use { gen ->
+            gen.writeStartObject()
+            gen.writeStringField("id", event.id)
+            gen.writeStringField("pubkey", event.pubkey)
+            gen.writeNumberField("created_at", event.createdAt)
+            gen.writeNumberField("kind", event.kind)
+            gen.writeArrayFieldStart("tags")
+            for (tag in tags) {
+                gen.writeStartArray()
+                tag.col0Name?.let { gen.writeString(it) }
+                tag.col1Value?.let { gen.writeString(it) }
+                tag.col2Differentiator?.let { gen.writeString(it) }
+                tag.col3Amount?.let { gen.writeString(it) }
+                tag.col4Plus.forEach { gen.writeString(it) }
+                gen.writeEndArray()
+            }
+            gen.writeEndArray()
+            gen.writeStringField("content", event.content)
+            gen.writeStringField("sig", event.sig)
+            gen.writeEndObject()
+        }
+        return writer.toString()
     }
 }
 
