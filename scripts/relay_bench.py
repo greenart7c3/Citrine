@@ -223,6 +223,8 @@ async def publisher(url: str, events: list, kwargs: dict, stats: dict):
                         stats["rejected"] += 1
                         if stats["rejected"] <= 3:
                             print(f"  REJECTED: {msg[3] if len(msg) > 3 else ''}")
+                    elif len(msg) > 3 and str(msg[3]).startswith("duplicate"):
+                        stats["duplicate"] += 1
                     else:
                         stats["published"] += 1
                     break
@@ -233,23 +235,33 @@ async def publish_phase(url, events, concurrency, content_size, kwargs):
     # cannot skew the measured relay publish rate.
     signer_kind = "coincurve" if _CoincurvePrivateKey else "pure-python"
     print(f"  Signing {events} events ({signer_kind})...")
-    content = "x" * content_size
+    run_id = secrets.token_hex(4)
     batches = []
     per = events // concurrency
     extra = events % concurrency
     for i in range(concurrency):
         signer = Signer()
-        batches.append([signer.sign_event(1, content) for _ in range(per + (1 if i < extra else 0))])
+        batch = []
+        for j in range(per + (1 if i < extra else 0)):
+            # Unique content per event — same-second events with identical
+            # content/kind/pubkey would share an id and be deduplicated by the
+            # relay, silently shrinking the query workload.
+            prefix = f"{run_id}:{i}:{j}:"
+            content = prefix + "x" * max(0, content_size - len(prefix))
+            batch.append(signer.sign_event(1, content))
+        batches.append(batch)
 
-    stats = {"published": 0, "rejected": 0}
+    stats = {"published": 0, "rejected": 0, "duplicate": 0}
     start = time.monotonic()
     await asyncio.gather(*(publisher(url, batch, kwargs, stats) for batch in batches))
     dur = time.monotonic() - start
     print(f"  Published: {stats['published']}")
     if stats["rejected"]:
         print(f"  Rejected: {stats['rejected']}  <-- relay refused events, results are not comparable")
+    if stats["duplicate"]:
+        print(f"  Duplicates: {stats['duplicate']}  <-- already in DB, not newly stored")
     print(f"  Duration: {dur:.2f}s")
-    print(f"  Rate: {stats['published'] / dur:.2f} events/s")
+    print(f"  Rate: {(stats['published'] + stats['duplicate']) / dur:.2f} events/s")
 
 
 def query_filter(i: int) -> dict:
