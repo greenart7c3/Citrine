@@ -8,7 +8,10 @@ EOSE latency, largest inter-frame gap, and a forensic report for every query
 that times out.
 
 Requirements:
-    pip install websockets coincurve
+    pip install websockets
+    # optional, for much faster signing: pip install coincurve
+    # (events are pre-signed before the publish timer starts, so the pure-Python
+    #  fallback does not skew the measured publish rate)
 
 Usage:
     # Against the phone over USB:
@@ -38,18 +41,134 @@ import statistics
 import time
 
 import websockets
-from coincurve import PrivateKey
 from websockets.extensions import permessage_deflate
+
+try:
+    from coincurve import PrivateKey as _CoincurvePrivateKey
+except ImportError:
+    _CoincurvePrivateKey = None
 
 
 def now() -> int:
     return int(time.time())
 
 
+# ---------------------------------------------------------------------------
+# BIP-340 Schnorr signing. Uses coincurve when available; otherwise a
+# pure-Python implementation (a few ms per signature — fine for a benchmark,
+# and events are pre-signed outside the timed publish window anyway).
+# ---------------------------------------------------------------------------
+
+_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+_GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+_GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+
+
+# Point arithmetic in Jacobian coordinates (single modular inversion per
+# multiplication instead of one per addition).
+
+def _jac_double(p):
+    x1, y1, z1 = p
+    if y1 == 0:
+        return (0, 0, 0)
+    a = x1 * x1 % _P
+    b = y1 * y1 % _P
+    c = b * b % _P
+    d = 2 * ((x1 + b) * (x1 + b) - a - c) % _P
+    e = 3 * a % _P
+    f = e * e % _P
+    x3 = (f - 2 * d) % _P
+    y3 = (e * (d - x3) - 8 * c) % _P
+    z3 = 2 * y1 * z1 % _P
+    return (x3, y3, z3)
+
+
+def _jac_add(p, q):
+    if p[2] == 0:
+        return q
+    if q[2] == 0:
+        return p
+    x1, y1, z1 = p
+    x2, y2, z2 = q
+    z1z1 = z1 * z1 % _P
+    z2z2 = z2 * z2 % _P
+    u1 = x1 * z2z2 % _P
+    u2 = x2 * z1z1 % _P
+    s1 = y1 * z2 * z2z2 % _P
+    s2 = y2 * z1 * z1z1 % _P
+    if u1 == u2:
+        if s1 != s2:
+            return (0, 0, 0)
+        return _jac_double(p)
+    h = (u2 - u1) % _P
+    r = (s2 - s1) % _P
+    h2 = h * h % _P
+    h3 = h * h2 % _P
+    u1h2 = u1 * h2 % _P
+    x3 = (r * r - h3 - 2 * u1h2) % _P
+    y3 = (r * (u1h2 - x3) - s1 * h3) % _P
+    z3 = h * z1 * z2 % _P
+    return (x3, y3, z3)
+
+
+def _point_mul(point, k):
+    result = (0, 0, 0)
+    acc = (point[0], point[1], 1)
+    while k:
+        if k & 1:
+            result = _jac_add(result, acc)
+        acc = _jac_double(acc)
+        k >>= 1
+    if result[2] == 0:
+        return None
+    zinv = pow(result[2], _P - 2, _P)
+    zinv2 = zinv * zinv % _P
+    return (result[0] * zinv2 % _P, result[1] * zinv2 * zinv % _P)
+
+
+def _tagged_hash(tag: str, data: bytes) -> bytes:
+    tag_hash = hashlib.sha256(tag.encode()).digest()
+    return hashlib.sha256(tag_hash + tag_hash + data).digest()
+
+
+class _PurePySigner:
+    def __init__(self):
+        self.d0 = int.from_bytes(secrets.token_bytes(32), "big") % (_N - 1) + 1
+        pub = _point_mul((_GX, _GY), self.d0)
+        self.point = pub
+        self.pubkey_bytes = pub[0].to_bytes(32, "big")
+        self.pubkey = self.pubkey_bytes.hex()
+
+    def sign(self, msg32: bytes) -> bytes:
+        d = self.d0 if self.point[1] % 2 == 0 else _N - self.d0
+        aux = secrets.token_bytes(32)
+        t = (d ^ int.from_bytes(_tagged_hash("BIP0340/aux", aux), "big")).to_bytes(32, "big")
+        k0 = int.from_bytes(
+            _tagged_hash("BIP0340/nonce", t + self.pubkey_bytes + msg32), "big"
+        ) % _N
+        if k0 == 0:
+            raise RuntimeError("nonce is zero")
+        r_point = _point_mul((_GX, _GY), k0)
+        k = k0 if r_point[1] % 2 == 0 else _N - k0
+        rx = r_point[0].to_bytes(32, "big")
+        e = int.from_bytes(_tagged_hash("BIP0340/challenge", rx + self.pubkey_bytes + msg32), "big") % _N
+        return rx + ((k + e * d) % _N).to_bytes(32, "big")
+
+
+class _CoincurveSigner:
+    def __init__(self):
+        self.sk = _CoincurvePrivateKey(secrets.token_bytes(32))
+        self.pubkey = self.sk.public_key.format(compressed=True)[1:].hex()
+
+    def sign(self, msg32: bytes) -> bytes:
+        return self.sk.sign_schnorr(msg32, secrets.token_bytes(32))
+
+
 class Signer:
     def __init__(self):
-        self.sk = PrivateKey(secrets.token_bytes(32))
-        self.pubkey = self.sk.public_key.format(compressed=True)[1:].hex()
+        self._impl = _CoincurveSigner() if _CoincurvePrivateKey else _PurePySigner()
+        self.pubkey = self._impl.pubkey
 
     def sign_event(self, kind: int, content: str, tags=None) -> dict:
         tags = tags or []
@@ -60,7 +179,7 @@ class Signer:
             ensure_ascii=False,
         ).encode()
         event_id = hashlib.sha256(serialized).digest()
-        sig = self.sk.sign_schnorr(event_id, secrets.token_bytes(32))
+        sig = self._impl.sign(event_id)
         return {
             "id": event_id.hex(),
             "pubkey": self.pubkey,
@@ -93,12 +212,9 @@ def make_connect_kwargs(compression: str) -> dict:
     return {"max_size": None}  # "default": library default (context takeover)
 
 
-async def publisher(pid: int, url: str, count: int, content_size: int, kwargs: dict, stats: dict):
-    signer = Signer()
-    content = "x" * content_size
+async def publisher(url: str, events: list, kwargs: dict, stats: dict):
     async with websockets.connect(url, **kwargs) as ws:
-        for _ in range(count):
-            ev = signer.sign_event(1, content)
+        for ev in events:
             await ws.send(dumps(["EVENT", ev]))
             while True:  # wait for OK, like go-nostr Publish
                 msg = json.loads(await ws.recv())
@@ -113,14 +229,21 @@ async def publisher(pid: int, url: str, count: int, content_size: int, kwargs: d
 
 
 async def publish_phase(url, events, concurrency, content_size, kwargs):
-    stats = {"published": 0, "rejected": 0}
+    # Pre-sign everything so signing speed (pure-Python fallback is slow)
+    # cannot skew the measured relay publish rate.
+    signer_kind = "coincurve" if _CoincurvePrivateKey else "pure-python"
+    print(f"  Signing {events} events ({signer_kind})...")
+    content = "x" * content_size
+    batches = []
     per = events // concurrency
     extra = events % concurrency
+    for i in range(concurrency):
+        signer = Signer()
+        batches.append([signer.sign_event(1, content) for _ in range(per + (1 if i < extra else 0))])
+
+    stats = {"published": 0, "rejected": 0}
     start = time.monotonic()
-    await asyncio.gather(
-        *(publisher(i, url, per + (1 if i < extra else 0), content_size, kwargs, stats)
-          for i in range(concurrency))
-    )
+    await asyncio.gather(*(publisher(url, batch, kwargs, stats) for batch in batches))
     dur = time.monotonic() - start
     print(f"  Published: {stats['published']}")
     if stats["rejected"]:
