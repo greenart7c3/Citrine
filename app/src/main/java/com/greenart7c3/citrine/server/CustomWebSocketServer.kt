@@ -80,12 +80,10 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.copyTo
 import io.ktor.websocket.Frame
-import io.ktor.websocket.WebSocketDeflateExtension
 import io.ktor.websocket.readText
 import java.io.File
 import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
-import java.util.zip.Deflater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -1129,21 +1127,12 @@ class CustomWebSocketServer(
             install(WebSockets) {
                 pingPeriodMillis = 5000L
                 timeoutMillis = 300000L
-                extensions {
-                    install(WebSocketDeflateExtension) {
-                        /**
-                         * Favor CPU over ratio: most clients are on localhost/LAN, so
-                         * deflate mainly costs battery rather than saving bandwidth.
-                         */
-                        compressionLevel = Deflater.BEST_SPEED
-
-                        /**
-                         * Skip compressing small frames (OK/EOSE/NOTICE/AUTH and most
-                         * events); deflate overhead outweighs the savings for them.
-                         */
-                        compressIfBiggerThan(bytes = 1024)
-                    }
-                }
+                // permessage-deflate is intentionally NOT installed. Nearly all clients
+                // connect over localhost/LAN where compression only burns CPU/battery,
+                // and some client deflate implementations (e.g. gorilla/websocket's
+                // flate reader) have a history of blocking mid-stream, which stalls
+                // event delivery. Clients that don't negotiate the extension simply
+                // receive uncompressed frames either way.
             }
 
             routing {
