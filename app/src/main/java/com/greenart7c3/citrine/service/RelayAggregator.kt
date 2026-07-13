@@ -80,7 +80,6 @@ object RelayAggregator {
     private const val TAG = "RelayAggregator"
 
     private val FALLBACK_OUTBOX_RELAYS = listOf(
-        RelayUrlNormalizer.normalize("wss://relay.damus.io/"),
         RelayUrlNormalizer.normalize("wss://nos.lol/"),
         RelayUrlNormalizer.normalize("wss://relay.primal.net/"),
     )
