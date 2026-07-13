@@ -2,10 +2,15 @@
 """Citrine relay benchmark with stall diagnostics.
 
 Mirrors the go-nostr benchmark (publish N signed events, then run M queries
-cycling through 5 filter shapes with QuerySync's 7s timeout), but adds the
-diagnostics needed to localize slow queries: per-query first-event latency,
-EOSE latency, largest inter-frame gap, and a forensic report for every query
+with QuerySync's 7s timeout), but adds the diagnostics needed to localize slow
+queries: per-query first-event latency, EOSE latency, largest inter-frame gap,
+a per-filter-shape latency breakdown, and a forensic report for every query
 that times out.
+
+Published events carry e/p/t tags drawn from fixed pools (stable across runs,
+so query-only runs still match), and the query cycle covers 8 filter shapes:
+the 5 from the go-nostr benchmark plus #t, #p, and #e tag queries, exercising
+both the tag-insert path and the tag-filter SQL.
 
 Requirements:
     pip install websockets
@@ -51,6 +56,13 @@ except ImportError:
 
 def now() -> int:
     return int(time.time())
+
+
+# Tag value pools. Deterministic and stable across runs so tag queries match
+# previously published events too (including query-only runs with --events 0).
+TOPICS = [f"bench-topic-{i}" for i in range(5)]
+E_POOL = [hashlib.sha256(f"citrine-bench-e-{i}".encode()).hexdigest() for i in range(20)]
+P_POOL = [hashlib.sha256(f"citrine-bench-p-{i}".encode()).hexdigest() for i in range(20)]
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +251,7 @@ async def publish_phase(url, events, concurrency, content_size, kwargs):
     batches = []
     per = events // concurrency
     extra = events % concurrency
+    seq = 0
     for i in range(concurrency):
         signer = Signer()
         batch = []
@@ -248,7 +261,15 @@ async def publish_phase(url, events, concurrency, content_size, kwargs):
             # relay, silently shrinking the query workload.
             prefix = f"{run_id}:{i}:{j}:"
             content = prefix + "x" * max(0, content_size - len(prefix))
-            batch.append(signer.sign_event(1, content))
+            # Realistic tag mix from the fixed pools so the #e/#p/#t query
+            # cases have events to find.
+            tags = [
+                ["e", E_POOL[seq % len(E_POOL)]],
+                ["p", P_POOL[seq % len(P_POOL)]],
+                ["t", TOPICS[seq % len(TOPICS)]],
+            ]
+            batch.append(signer.sign_event(1, content, tags))
+            seq += 1
         batches.append(batch)
 
     stats = {"published": 0, "rejected": 0, "duplicate": 0}
@@ -264,19 +285,27 @@ async def publish_phase(url, events, concurrency, content_size, kwargs):
     print(f"  Rate: {(stats['published'] + stats['duplicate']) / dur:.2f} events/s")
 
 
-def query_filter(i: int) -> dict:
+def query_filter(i: int):
+    """Returns (label, filter). Cases 0-4 match the go-nostr benchmark;
+    cases 5-7 add tag-filter coverage."""
     limit = 100
     t = now()
-    case = i % 5
+    case = i % 8
     if case == 0:
-        return {"kinds": [1], "limit": limit}
+        return "kinds=[1]", {"kinds": [1], "limit": limit}
     if case == 1:
-        return {"since": t - 3600, "until": t, "limit": limit}
+        return "since/until recent", {"since": t - 3600, "until": t, "limit": limit}
     if case == 2:
-        return {"limit": limit}
+        return "no filter", {"limit": limit}
     if case == 3:
-        return {"kinds": [1, 6, 7], "limit": limit}
-    return {"since": t - 7200, "until": t - 1800, "limit": limit}
+        return "kinds=[1,6,7]", {"kinds": [1, 6, 7], "limit": limit}
+    if case == 4:
+        return "since/until older", {"since": t - 7200, "until": t - 1800, "limit": limit}
+    if case == 5:
+        return "#t + kinds", {"kinds": [1], "#t": [TOPICS[i % len(TOPICS)]], "limit": limit}
+    if case == 6:
+        return "#p", {"#p": [P_POOL[i % len(P_POOL)], P_POOL[(i + 1) % len(P_POOL)]], "limit": limit}
+    return "#e", {"#e": [E_POOL[i % len(E_POOL)], E_POOL[(i + 1) % len(E_POOL)], E_POOL[(i + 2) % len(E_POOL)]], "limit": limit}
 
 
 async def query_phase(url, queries, timeout, kwargs):
@@ -284,11 +313,13 @@ async def query_phase(url, queries, timeout, kwargs):
     timeouts = []
     latencies = []
     worst_gap = (0.0, -1)  # (gap seconds, query index)
+    per_shape = {}  # label -> {"lat": [...], "events": int, "timeouts": int}
 
     async with websockets.connect(url, **kwargs) as ws:
         for i in range(queries):
             sub = f"bench{i}"
-            f = query_filter(i)
+            label, f = query_filter(i)
+            shape = per_shape.setdefault(label, {"lat": [], "events": 0, "timeouts": 0})
             q0 = time.monotonic()
             deadline = q0 + timeout
             await ws.send(dumps(["REQ", sub, f]))
@@ -326,12 +357,15 @@ async def query_phase(url, queries, timeout, kwargs):
             if eose:
                 total_events += got
                 latencies.append(qdur)
+                shape["lat"].append(qdur)
+                shape["events"] += got
                 if max_gap > worst_gap[0]:
                     worst_gap = (max_gap, i)
                 if max_gap > 1.0:
                     print(f"  MID-STREAM FREEZE query {i}: gap={max_gap:.2f}s dur={qdur:.2f}s events={got} filter={dumps(f)}")
             else:
                 timeouts.append((i, qdur, got, first_event_at and (first_event_at - q0), f))
+                shape["timeouts"] += 1
                 print(
                     f"  TIMEOUT query {i}: waited {qdur:.2f}s, events_received={got}, "
                     f"first_event={'%.3fs' % (first_event_at - q0) if first_event_at else 'never'}, "
@@ -351,6 +385,18 @@ async def query_phase(url, queries, timeout, kwargs):
             f"max={lat_sorted[-1] * 1000:.0f}ms"
         )
         print(f"  Largest mid-stream gap: {worst_gap[0] * 1000:.0f}ms (query {worst_gap[1]})")
+        print("  Per-filter breakdown:")
+        for label, s in per_shape.items():
+            if s["lat"]:
+                med = statistics.median(s["lat"]) * 1000
+                mx = max(s["lat"]) * 1000
+                avg_ev = s["events"] / len(s["lat"])
+                line = f"    {label:<20} n={len(s['lat']):<3} p50={med:5.0f}ms max={mx:5.0f}ms avg_events={avg_ev:.0f}"
+            else:
+                line = f"    {label:<20} n=0"
+            if s["timeouts"]:
+                line += f"  TIMEOUTS={s['timeouts']}"
+            print(line)
     print(f"  Timeouts: {len(timeouts)}")
     if timeouts:
         lost = sum(t[2] for t in timeouts)
