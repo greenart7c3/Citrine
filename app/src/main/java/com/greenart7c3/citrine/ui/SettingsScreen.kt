@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoDelete
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Storefront
@@ -85,6 +86,12 @@ private val settingsCategories = listOf(
         titleRes = R.string.settings_category_network,
         descriptionRes = R.string.settings_category_network_description,
         icon = Icons.Filled.Wifi,
+    ),
+    SettingsCategory(
+        route = Route.GroupsSettings.route,
+        titleRes = R.string.settings_category_groups,
+        descriptionRes = R.string.settings_category_groups_description,
+        icon = Icons.Filled.Groups,
     ),
     SettingsCategory(
         route = Route.AggregatorSettings.route,

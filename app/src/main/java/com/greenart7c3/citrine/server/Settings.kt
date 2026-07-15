@@ -56,6 +56,12 @@ object Settings {
     var autoBackupFolder = ""
     var authEnabled = false
 
+    // NIP-29 relay-based groups. Off by default so Citrine keeps acting as a plain
+    // cache/backup relay: when off, h-tagged and 39xxx events flow unmanaged. When on,
+    // groups created here via kind 9007 are managed by the relay (membership,
+    // moderation, relay-signed metadata); foreign group ids still pass through.
+    var nip29Enabled = false
+
     // When true, ephemeral events that no open subscription was listening to receive a
     // NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so
     // unhandled ephemeral events are simply acknowledged with a plain OK.
@@ -141,6 +147,7 @@ object Settings {
         autoBackup = false
         autoBackupFolder = ""
         authEnabled = false
+        nip29Enabled = false
         sendMuteResponse = false
         listenToPokeyBroadcasts = true
         startOnBoot = true

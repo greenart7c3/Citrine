@@ -194,4 +194,12 @@
     <string name="reset_all_settings">Reset all settings</string>
     <string name="reset_all_settings_warning">All settings will be restored to their default values. This action cannot be undone.</string>
     <string name="settings_reset_complete">Settings reset to defaults</string>
+    <string name="settings_category_groups">Groups (NIP-29)</string>
+    <string name="settings_category_groups_description">Host relay-based groups on this relay</string>
+    <string name="enable_nip29_groups">Enable NIP-29 groups</string>
+    <string name="enable_nip29_groups_description">Manage relay-based groups: membership, moderation and relay-signed group metadata</string>
+    <string name="nip29_groups_explanation">When enabled, groups created on this relay (kind 9007) become managed: the relay enforces membership, processes moderation events, answers join/leave requests and signs the group metadata with its own key. Group events mirrored from other relays keep flowing unchanged. Private groups require clients to authenticate with NIP-42.</string>
+    <string name="nip29_relay_identity">Relay group identity</string>
+    <string name="nip29_relay_identity_description">The public key this relay uses to sign group metadata events. Tap to copy.</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
 </resources>

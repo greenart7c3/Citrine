@@ -317,6 +317,38 @@ interface EventDao {
     @Transaction
     suspend fun getDeletedEventsByATag(aTagValue: String): List<Long>
 
+    // NIP-29: group ids whose admins deleted the given event id via a stored kind-9005
+    // moderation event. Only ids of groups managed by this relay count as deletions.
+    @Query(
+        """
+        SELECT DISTINCT HTag.col1Value
+          FROM EventEntity EventEntity
+         INNER JOIN TagEntity ETag ON EventEntity.id = ETag.pkEvent
+         INNER JOIN TagEntity HTag ON EventEntity.id = HTag.pkEvent
+         WHERE EventEntity.kind = 9005
+           AND ETag.col0Name = 'e'
+           AND ETag.col1Value = :eTagValue
+           AND HTag.col0Name = 'h'
+           AND HTag.col1Value IS NOT NULL
+        """,
+    )
+    @Transaction
+    suspend fun getModerationDeletedGroups(eTagValue: String): List<String>
+
+    // NIP-29: every event carrying an `h` tag for the given group id (used by kind 9008
+    // delete-group to purge the group's content).
+    @Query(
+        """
+        SELECT DISTINCT TagEntity.pkEvent
+          FROM TagEntity
+         WHERE TagEntity.col0Name = 'h'
+           AND TagEntity.col1Value = :groupId
+           AND TagEntity.pkEvent IS NOT NULL
+        """,
+    )
+    @Transaction
+    suspend fun getEventIdsByGroupId(groupId: String): List<String>
+
     // Optimized queries for ContentProvider
     // Using sentinel values: Long.MIN_VALUE/MAX_VALUE means "no filter"
     @Query(

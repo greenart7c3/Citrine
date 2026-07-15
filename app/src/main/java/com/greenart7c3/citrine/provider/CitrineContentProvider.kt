@@ -603,6 +603,9 @@ class CitrineContentProvider : ContentProvider() {
                         CustomWebSocketServer.VerificationResult.ProtectedEventEmbeddedInRepost -> {
                             QueryResult.error<Uri>("Reposts of protected events must not embed the reposted event")
                         }
+                        CustomWebSocketServer.VerificationResult.RejectedByNip29 -> {
+                            QueryResult.error<Uri>("Rejected by this relay's NIP-29 group rules")
+                        }
                     }
                 } else {
                     // Server not available, do basic validation and insert

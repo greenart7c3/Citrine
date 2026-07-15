@@ -27,6 +27,7 @@ private fun titleResForRoute(destinationRoute: String): Int? = when {
     destinationRoute == Route.RelayInfoSettings.route -> R.string.settings_category_relay_info
     destinationRoute == Route.AccessControlSettings.route -> R.string.settings_category_access_control
     destinationRoute == Route.NetworkSettings.route -> R.string.settings_category_network
+    destinationRoute == Route.GroupsSettings.route -> R.string.settings_category_groups
     destinationRoute == Route.AggregatorSettings.route -> R.string.settings_category_aggregator
     destinationRoute == Route.RetentionSettings.route -> R.string.settings_category_retention
     destinationRoute == Route.BackupSettings.route -> R.string.settings_category_backup

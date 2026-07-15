@@ -52,6 +52,12 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK = "relay_aggregator_pause_on_limited_network"
     const val AGGREGATOR_SIGNER_PUBKEY = "aggregator_signer_pubkey"
     const val AGGREGATOR_SIGNER_PACKAGE_NAME = "aggregator_signer_package_name"
+
+    const val NIP29_ENABLED = "nip29_enabled"
+
+    // Hex private key of the relay's own NIP-29 signing identity. Read/written only by
+    // RelayIdentity, never mirrored into Settings.
+    const val RELAY_PRIVATE_KEY = "relay_private_key"
 }
 
 object LocalPreferences {
@@ -91,6 +97,7 @@ object LocalPreferences {
                 putBoolean(PrefKeys.AUTO_BACKUP, settings.autoBackup)
                 putString(PrefKeys.AUTO_BACKUP_FOLDER, settings.autoBackupFolder)
                 putBoolean(PrefKeys.AUTH_ENABLED, settings.authEnabled)
+                putBoolean(PrefKeys.NIP29_ENABLED, settings.nip29Enabled)
                 putBoolean(PrefKeys.SEND_MUTE_RESPONSE, settings.sendMuteResponse)
                 putBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, settings.listenToPokeyBroadcasts)
                 putBoolean(PrefKeys.START_ON_BOOT, settings.startOnBoot)
@@ -161,6 +168,7 @@ object LocalPreferences {
         Settings.autoBackup = prefs.getBoolean(PrefKeys.AUTO_BACKUP, false)
         Settings.autoBackupFolder = prefs.getString(PrefKeys.AUTO_BACKUP_FOLDER, "") ?: ""
         Settings.authEnabled = prefs.getBoolean(PrefKeys.AUTH_ENABLED, false)
+        Settings.nip29Enabled = prefs.getBoolean(PrefKeys.NIP29_ENABLED, false)
         Settings.sendMuteResponse = prefs.getBoolean(PrefKeys.SEND_MUTE_RESPONSE, false)
         Settings.listenToPokeyBroadcasts = prefs.getBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, true)
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
