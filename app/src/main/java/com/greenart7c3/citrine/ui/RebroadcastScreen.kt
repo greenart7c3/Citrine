@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
@@ -38,19 +41,28 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.toEvent
+import com.greenart7c3.citrine.logs.Log
+import com.greenart7c3.citrine.service.EventDownloader
 import com.greenart7c3.citrine.service.EventRebroadcaster
 import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
+import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.displayUrl
+import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
+import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
+import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.Hex
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeParseException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class RebroadcastRequest(
     val relays: List<NormalizedRelayUrl>,
@@ -77,9 +89,19 @@ fun RebroadcastScreen(
     var relayText by remember { mutableStateOf(TextFieldValue()) }
     val relays = remember { listOf<NormalizedRelayUrl>().toMutableStateList() }
     var pendingRequest by remember { mutableStateOf<RebroadcastRequest?>(null) }
+    var loadingUserRelays by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     fun toast(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
+    fun addRelays(found: List<NormalizedRelayUrl>) {
+        found.forEach { url ->
+            if (!Citrine.instance.isPrivateIp(url.url) && relays.none { it.displayUrl() == url.displayUrl() }) {
+                relays.add(url)
+            }
+        }
     }
 
     fun addRelay() {
@@ -109,6 +131,60 @@ fun RebroadcastScreen(
             if (Hex.decode(text).size == 32) text.lowercase() else null
         } catch (_: Exception) {
             null
+        }
+    }
+
+    fun loadAuthorRelays() {
+        val author = parseAuthorOrNull()
+        if (author == null) {
+            toast(context.getString(R.string.rebroadcast_invalid_account))
+            return
+        }
+        if (author.isBlank()) {
+            toast(context.getString(R.string.rebroadcast_account_required))
+            return
+        }
+        loadingUserRelays = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val database = AppDatabase.getDatabase(context)
+                val signer = NostrSignerInternal(KeyPair(pubKey = Hex.decode(author)))
+
+                var advertised = database.eventDao().getAdvertisedRelayList(author)?.toEvent() as? AdvertisedRelayListEvent
+                if (advertised == null) {
+                    advertised = EventDownloader.fetchAdvertisedRelayList(signer)
+                }
+                val found = mutableListOf<NormalizedRelayUrl>()
+                advertised?.writeRelays()?.forEach { url ->
+                    RelayUrlNormalizer.normalizeOrNull(url)?.let { found.add(it) }
+                }
+
+                if (found.isEmpty()) {
+                    var contactList = database.eventDao().getContactList(author)?.toEvent() as? ContactListEvent
+                    if (contactList == null) {
+                        contactList = EventDownloader.fetchContactList(signer)
+                    }
+                    contactList?.relays()?.forEach { relay ->
+                        RelayUrlNormalizer.normalizeOrNull(relay.key.url)?.let { found.add(it) }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (found.isEmpty()) {
+                        toast(context.getString(R.string.no_relays_found))
+                    } else {
+                        addRelays(found)
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.d(Citrine.TAG, e.message ?: "", e)
+                withContext(Dispatchers.Main) {
+                    toast(context.getString(R.string.no_relays_found))
+                }
+            } finally {
+                loadingUserRelays = false
+            }
         }
     }
 
@@ -225,6 +301,17 @@ fun RebroadcastScreen(
                 label = { Text(stringResource(R.string.rebroadcast_account)) },
                 supportingText = { Text(stringResource(R.string.rebroadcast_account_hint)) },
             )
+            ElevatedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !loadingUserRelays && account.text.isNotBlank(),
+                onClick = { loadAuthorRelays() },
+            ) {
+                if (loadingUserRelays) {
+                    CircularProgressIndicator(Modifier.size(20.dp))
+                } else {
+                    Text(stringResource(R.string.rebroadcast_use_author_relays))
+                }
+            }
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = kindsText,

@@ -214,6 +214,8 @@
     <string name="rebroadcast_include_private">Include private event kinds</string>
     <string name="rebroadcast_include_private_description">Private or sensitive event kinds (%1$s) are excluded by default. Enable this only if the destination relay should also receive them.</string>
     <string name="rebroadcast_relays_hint">Press done to add the relay to the destination list</string>
+    <string name="rebroadcast_use_author_relays">Add author\'s relays</string>
+    <string name="rebroadcast_account_required">Enter an author (npub or hex) first</string>
     <string name="rebroadcast_start">Start rebroadcast</string>
     <string name="rebroadcast_warning">Some relays may reject old, replaceable, deleted, private, or unsupported events. Rejections are normal and nothing is changed in your local database. Continue?</string>
     <string name="rebroadcast_no_relays">Add at least one destination relay</string>
