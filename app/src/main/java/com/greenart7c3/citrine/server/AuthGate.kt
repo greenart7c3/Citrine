@@ -12,8 +12,6 @@ object AuthGate {
             nip29Check(filter, connection)?.let { return it }
         }
 
-        if (!Settings.authEnabled) return null
-
         for (kind in filter.kinds) {
             if (KINDS_PRIVATE_EVENTS.contains(kind)) {
                 if (connection.users.isEmpty()) return Denial.AUTH_REQUIRED

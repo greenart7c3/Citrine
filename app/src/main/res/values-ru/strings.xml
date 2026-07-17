@@ -64,7 +64,6 @@
     <string name="delete">Удалить</string>
     <string name="are_you_sure_you_want_to_delete_all_events_of_kind">Вы уверены, что хотите удалить все события вида %1$d?</string>
     <string name="listen_to_pokey_broadcasts">Слушать трансляции покера</string>
-    <string name="enable_disable_auth">Вкл./Выкл. авторизацию</string>
     <string name="start_on_boot">Запуск при загрузке</string>
     <string name="backup">Резервное копирование</string>
     <string name="web_clients">Веб-клиенты</string>
@@ -110,7 +109,6 @@
     <string name="allow_all_tagged_pubkeys_hint">Empty list allows events referencing any pubkey</string>
     <string name="allow_all_kinds_hint">Empty list allows all event kinds</string>
     <string name="start_on_boot_description">Automatically start the relay when the device boots</string>
-    <string name="enable_disable_auth_description">Require NIP-42 authentication for private event kinds</string>
     <string name="listen_to_pokey_broadcasts_description">Receive events broadcast by the Pokey app</string>
     <string name="use_proxy_description">Route outbound connections through a SOCKS5 proxy</string>
     <string name="proxy_all_urls">Use Tor for all URLs</string>

@@ -2,6 +2,7 @@ package com.greenart7c3.citrine.server.nip29
 
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Connection
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.service.RelayIdentity
@@ -173,7 +174,11 @@ object Nip29Handler {
      * applies the membership change and regenerates the 39xxx metadata.
      */
     private suspend fun issueMembershipEvent(server: CustomWebSocketServer, groupId: String, pubkey: String, add: Boolean) {
-        val signer = RelayIdentity.signer(Citrine.instance)
+        val signer = RelayIdentity.signer()
+        if (signer == null) {
+            Log.w(Citrine.TAG, "No relay signer configured; skipping relay-issued membership event for group $groupId")
+            return
+        }
         val kind = if (add) Nip29.KIND_PUT_USER else Nip29.KIND_REMOVE_USER
         val tags = if (add) {
             arrayOf(arrayOf("h", groupId), arrayOf("p", pubkey, Nip29.ROLE_MEMBER))

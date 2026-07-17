@@ -14,7 +14,6 @@ import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.CustomWebSocketServer
-import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -72,15 +71,11 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     /**
-     * Filters events based on authentication when auth is enabled.
+     * Filters events based on authentication.
      * Returns true if the event should be included in results, false otherwise.
      * Matches the logic from SubscriptionManager.execute() lines 25-58.
      */
     private fun shouldIncludeEvent(eventWithTags: EventWithTags, authPubkey: String?): Boolean {
-        if (!Settings.authEnabled) {
-            return true
-        }
-
         // If no auth pubkey provided, exclude private events and events with p tags/authors
         val authenticatedPubkey = authPubkey ?: return false
 
@@ -663,17 +658,15 @@ class CitrineContentProvider : ContentProvider() {
                 return@runBlocking 0
             }
 
-            // Validate that auth pubkey matches event author when auth is enabled
-            if (Settings.authEnabled) {
-                if (authPubkey == null) {
-                    Log.d(TAG, "Delete denied: no auth pubkey provided")
-                    throw SecurityException("Authentication required to delete events")
-                }
+            // Validate that the auth pubkey matches the event author
+            if (authPubkey == null) {
+                Log.d(TAG, "Delete denied: no auth pubkey provided")
+                throw SecurityException("Authentication required to delete events")
+            }
 
-                if (authPubkey != eventWithTags.event.pubkey) {
-                    Log.d(TAG, "Delete denied: auth pubkey $authPubkey does not match event author ${eventWithTags.event.pubkey}")
-                    throw SecurityException("Only the event author can delete this event")
-                }
+            if (authPubkey != eventWithTags.event.pubkey) {
+                Log.d(TAG, "Delete denied: auth pubkey $authPubkey does not match event author ${eventWithTags.event.pubkey}")
+                throw SecurityException("Only the event author can delete this event")
             }
 
             // If server is available, validate using server logic

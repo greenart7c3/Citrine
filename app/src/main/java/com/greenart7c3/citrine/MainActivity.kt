@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.service.RelayAggregator
+import com.greenart7c3.citrine.service.RelayIdentity
 import com.greenart7c3.citrine.ui.CitrineScaffold
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 
@@ -21,11 +22,22 @@ class MainActivity : ComponentActivity() {
         result.data?.let { RelayAggregator.deliverSignerResponse(it) }
     }
 
+    // Same mechanism for the relay identity signer (NIP-29 group metadata signing).
+    private val relaySignerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        result.data?.let { RelayIdentity.deliverSignerResponse(it) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         RelayAggregator.registerActivityLauncher { intent ->
             aggregatorSignerLauncher.launch(intent)
+        }
+
+        RelayIdentity.registerActivityLauncher { intent ->
+            relaySignerLauncher.launch(intent)
         }
 
         setContent {
@@ -38,6 +50,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        RelayIdentity.unregisterActivityLauncher()
         RelayAggregator.unregisterActivityLauncher()
         super.onDestroy()
     }

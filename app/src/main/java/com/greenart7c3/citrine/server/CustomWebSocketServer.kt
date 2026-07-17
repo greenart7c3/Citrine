@@ -31,7 +31,6 @@ import com.greenart7c3.citrine.server.nip29.Nip29Result
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.EventBroadcastWorker
 import com.greenart7c3.citrine.service.LocalPreferences
-import com.greenart7c3.citrine.service.RelayIdentity
 import com.greenart7c3.citrine.utils.isEphemeral
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
@@ -1224,21 +1223,19 @@ class CustomWebSocketServer(
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
-                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70, 77)
+                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 42, 45, 50, 59, 65, 70, 77)
                         if (Settings.nip29Enabled) supportedNips.add(29)
-                        if (Settings.authEnabled) supportedNips.add(42)
 
                         // NIP-29 clients discover the relay's group-signing key via the
-                        // "self" field; it also backfills "pubkey" when no owner is set.
-                        val relayPubkey = if (Settings.nip29Enabled) RelayIdentity.pubKeyHex(Citrine.instance) else ""
-                        val selfEntry = if (relayPubkey.isNotBlank()) "\"self\": \"$relayPubkey\"," else ""
+                        // "self" field — the owner's key, which is the relay identity.
+                        val selfEntry = if (Settings.nip29Enabled) "\"self\": \"${Settings.ownerPubkey}\"," else ""
 
                         call.respondText(
                             """
                             {
                               "name": "${Settings.name}",
                               "description": "${Settings.description}",
-                              "pubkey": "${Settings.ownerPubkey.ifBlank { relayPubkey }}",
+                              "pubkey": "${Settings.ownerPubkey}",
                               "contact": "${Settings.contact}",
                               $selfEntry
                               "supported_nips": $supportedNips,
@@ -1422,11 +1419,7 @@ class CustomWebSocketServer(
 
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
 
-                    // NIP-29 private-group reads rely on NIP-42 auth even when the global
-                    // auth toggle is off, so the challenge is offered in both modes.
-                    if (Settings.authEnabled || Settings.nip29Enabled) {
-                        thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
-                    }
+                    thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
 
                     // Decouple socket reads from message processing: parsing, signature
                     // verification, and DB checks are CPU/IO heavy and would otherwise run

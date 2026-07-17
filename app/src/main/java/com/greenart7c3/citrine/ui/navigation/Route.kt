@@ -74,12 +74,6 @@ sealed class Route(
         selectedIcon = Icons.Default.Settings,
     )
 
-    data object GroupsSettings : Route(
-        route = "Settings/Groups",
-        icon = Icons.Outlined.Settings,
-        selectedIcon = Icons.Default.Settings,
-    )
-
     data object AggregatorSettings : Route(
         route = "Settings/Aggregator",
         icon = Icons.Outlined.Settings,
@@ -123,7 +117,6 @@ val settingsSubRoutes = setOf(
     Route.RelayInfoSettings.route,
     Route.AccessControlSettings.route,
     Route.NetworkSettings.route,
-    Route.GroupsSettings.route,
     Route.AggregatorSettings.route,
     Route.RetentionSettings.route,
     Route.BackupSettings.route,

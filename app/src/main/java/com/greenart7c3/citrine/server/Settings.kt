@@ -54,13 +54,18 @@ object Settings {
     var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
     var autoBackup = false
     var autoBackupFolder = ""
-    var authEnabled = false
 
-    // NIP-29 relay-based groups. Off by default so Citrine keeps acting as a plain
-    // cache/backup relay: when off, h-tagged and 39xxx events flow unmanaged. When on,
-    // groups created here via kind 9007 are managed by the relay (membership,
-    // moderation, relay-signed metadata); foreign group ids still pass through.
-    var nip29Enabled = false
+    // Amber (NIP-55) signer package that holds the relay owner's key. Set together with
+    // [ownerPubkey] by the "login with Amber" flow in relay info settings — the owner
+    // pubkey can only be configured through that login, never typed manually.
+    var relaySignerPackageName = ""
+
+    // NIP-29 relay-based groups are active whenever a relay owner is configured. The
+    // owner's key (via the Amber signer) is the relay identity that signs group
+    // metadata. With no owner, h-tagged and 39xxx events flow unmanaged so Citrine
+    // keeps acting as a plain cache/backup relay; foreign group ids always pass through.
+    val nip29Enabled: Boolean
+        get() = ownerPubkey.isNotBlank() && relaySignerPackageName.isNotBlank()
 
     // When true, ephemeral events that no open subscription was listening to receive a
     // NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so
@@ -146,8 +151,7 @@ object Settings {
         relayIcon = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
         autoBackup = false
         autoBackupFolder = ""
-        authEnabled = false
-        nip29Enabled = false
+        relaySignerPackageName = ""
         sendMuteResponse = false
         listenToPokeyBroadcasts = true
         startOnBoot = true

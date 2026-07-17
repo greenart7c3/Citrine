@@ -37,9 +37,9 @@ object GroupManager {
     // replaces the previous version even when several regens land in the same second.
     private val lastMetadataStamp = AtomicLong(0)
 
-    @Volatile
-    var relayPubKey: String = ""
-        private set
+    // The relay identity is the owner's key (signed via the Amber external signer).
+    val relayPubKey: String
+        get() = Settings.ownerPubkey
 
     fun hasGroups(): Boolean = groups.isNotEmpty()
 
@@ -47,7 +47,6 @@ object GroupManager {
     fun hasPrivateGroups(): Boolean = groups.values.any { !it.isDeleted && (it.isPrivate || it.isHidden) }
 
     suspend fun load(db: AppDatabase) {
-        relayPubKey = RelayIdentity.pubKeyHex(Citrine.instance)
         val dao = db.groupDao()
         val membersByGroup = dao.getAllMembers().groupBy { it.groupId }
         val invitesByGroup = dao.getAllInvites().groupBy { it.groupId }
@@ -230,7 +229,11 @@ object GroupManager {
         val group = groups[groupId] ?: return
         if (group.isDeleted) return
 
-        val signer = RelayIdentity.signer(Citrine.instance)
+        val signer = RelayIdentity.signer()
+        if (signer == null) {
+            Log.w(Citrine.TAG, "No relay signer configured; skipping NIP-29 metadata regeneration for group $groupId")
+            return
+        }
         val createdAt = lastMetadataStamp.updateAndGet { previous -> maxOf(TimeUtils.now(), previous + 1) }
 
         val metadataTags = mutableListOf(arrayOf("d", group.id))

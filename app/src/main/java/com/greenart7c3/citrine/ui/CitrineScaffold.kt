@@ -56,7 +56,6 @@ import com.greenart7c3.citrine.ui.settings.AccessControlSettingsScreen
 import com.greenart7c3.citrine.ui.settings.AggregatorSettingsScreen
 import com.greenart7c3.citrine.ui.settings.BackupSettingsScreen
 import com.greenart7c3.citrine.ui.settings.BrowseNsitesScreen
-import com.greenart7c3.citrine.ui.settings.GroupsSettingsScreen
 import com.greenart7c3.citrine.ui.settings.NetworkSettingsScreen
 import com.greenart7c3.citrine.ui.settings.NsiteRelaysSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RelayInfoSettingsScreen
@@ -322,9 +321,6 @@ fun CitrineScaffold(
             }
             composable(Route.NetworkSettings.route) {
                 NetworkSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
-            }
-            composable(Route.GroupsSettings.route) {
-                GroupsSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
             }
             composable(Route.AggregatorSettings.route) {
                 AggregatorSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)

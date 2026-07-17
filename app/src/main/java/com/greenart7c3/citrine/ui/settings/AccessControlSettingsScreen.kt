@@ -25,7 +25,6 @@ import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.PubkeyInputRow
 import com.greenart7c3.citrine.ui.components.PubkeyListItem
-import com.greenart7c3.citrine.ui.components.SwitchSettingRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -41,7 +40,6 @@ fun AccessControlSettingsScreen(
     val clipboardManager = LocalClipboard.current
 
     Surface(modifier) {
-        var useAuth by remember { mutableStateOf(Settings.authEnabled) }
         var allowedPubKeys by remember { mutableStateOf(Settings.allowedPubKeys) }
         var allowedTaggedPubKeys by remember { mutableStateOf(Settings.allowedTaggedPubKeys) }
         var allowedKinds by remember { mutableStateOf(Settings.allowedKinds) }
@@ -55,7 +53,6 @@ fun AccessControlSettingsScreen(
         val applyChanges = {
             scope.launch(Dispatchers.IO) {
                 isLoading = true
-                Settings.authEnabled = useAuth
                 Settings.allowedPubKeys = allowedPubKeys
                 Settings.allowedTaggedPubKeys = allowedTaggedPubKeys
                 Settings.allowedKinds = allowedKinds
@@ -70,15 +67,6 @@ fun AccessControlSettingsScreen(
 
         Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                item {
-                    SwitchSettingRow(
-                        title = stringResource(R.string.enable_disable_auth),
-                        description = stringResource(R.string.enable_disable_auth_description),
-                        checked = useAuth,
-                        onCheckedChange = { useAuth = it },
-                    )
-                }
-
                 stickyHeader {
                     SectionHeader(stringResource(R.string.accept_events_signed_by))
                 }
