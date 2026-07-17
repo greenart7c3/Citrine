@@ -3,8 +3,11 @@ package com.greenart7c3.citrine.server
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.vitorpamplona.quartz.nip01Core.core.Event
 
+// Creating an ObjectMapper is expensive; share one instance for all responses.
+private val RESULT_MAPPER = jacksonObjectMapper()
+
 data class CommandResult(val eventId: String, val result: Boolean, val description: String = "") {
-    fun toJson(): String = jacksonObjectMapper().writeValueAsString(
+    fun toJson(): String = RESULT_MAPPER.writeValueAsString(
         listOf("OK", eventId, result, description),
     )
 
@@ -20,7 +23,7 @@ data class CommandResult(val eventId: String, val result: Boolean, val descripti
 }
 
 data class ClosedResult(val subId: String, val message: String) {
-    fun toJson(): String = jacksonObjectMapper().writeValueAsString(
+    fun toJson(): String = RESULT_MAPPER.writeValueAsString(
         listOf("CLOSED", subId, message),
     )
 
