@@ -1,5 +1,8 @@
 package com.greenart7c3.citrine.ui.settings
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.FipsManager
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.TorManager
 import com.greenart7c3.citrine.ui.components.SwitchSettingRow
@@ -47,6 +51,14 @@ fun NetworkSettingsScreen(
         var proxyAllUrls by remember { mutableStateOf(Settings.proxyAllUrls) }
         var useTor by remember { mutableStateOf(Settings.useTor) }
         val torState = TorManager.state.collectAsStateWithLifecycle()
+        var listenOnFips by remember { mutableStateOf(Settings.listenOnFips) }
+        var fipsEmbeddedNode by remember { mutableStateOf(Settings.fipsEmbeddedNode) }
+        val fipsState = FipsManager.state.collectAsStateWithLifecycle()
+        val vpnConsentLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            fipsEmbeddedNode = result.resultCode == Activity.RESULT_OK
+        }
 
         val applyChanges = {
             scope.launch(Dispatchers.IO) {
@@ -57,7 +69,12 @@ fun NetworkSettingsScreen(
                 Settings.useProxy = useProxy
                 Settings.proxyAllUrls = proxyAllUrls
                 Settings.useTor = useTor
+                Settings.listenOnFips = listenOnFips
+                Settings.fipsEmbeddedNode = fipsEmbeddedNode
                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                if (!fipsEmbeddedNode || !listenOnFips) {
+                    FipsManager.stopEmbedded(context)
+                }
                 if (listenToPokeyBroadcasts) {
                     Citrine.instance.registerPokeyReceiver()
                 } else {
@@ -138,6 +155,60 @@ fun NetworkSettingsScreen(
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp),
                                 singleLine = true,
+                            )
+                        }
+                    }
+                }
+                item {
+                    SwitchSettingRow(
+                        title = stringResource(R.string.listen_on_fips),
+                        description = stringResource(R.string.listen_on_fips_description),
+                        checked = listenOnFips,
+                        onCheckedChange = { listenOnFips = it },
+                    )
+                }
+                if (listenOnFips) {
+                    item {
+                        SwitchSettingRow(
+                            title = stringResource(R.string.fips_embedded_node),
+                            description = if (FipsManager.embeddedNodeAvailable) {
+                                stringResource(R.string.fips_embedded_node_description)
+                            } else {
+                                stringResource(R.string.fips_embedded_node_unavailable)
+                            },
+                            checked = fipsEmbeddedNode,
+                            onCheckedChange = { checked ->
+                                if (checked && FipsManager.embeddedNodeAvailable) {
+                                    val consent = FipsManager.prepareEmbedded(context)
+                                    if (consent != null) {
+                                        vpnConsentLauncher.launch(consent)
+                                    } else {
+                                        fipsEmbeddedNode = true
+                                    }
+                                } else {
+                                    fipsEmbeddedNode = false
+                                }
+                            },
+                        )
+                    }
+                    item {
+                        val fipsAddress = (fipsState.value as? FipsManager.State.Running)?.address
+                            ?: remember(listenOnFips, fipsEmbeddedNode) { FipsManager.detectAddress() }
+                        if (fipsAddress != null) {
+                            OutlinedTextField(
+                                value = TextFieldValue("ws://[$fipsAddress]:${Settings.port}"),
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.fips_address)) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                singleLine = true,
+                            )
+                        } else if (!fipsEmbeddedNode) {
+                            Text(
+                                stringResource(R.string.fips_not_found),
+                                modifier = Modifier.padding(vertical = 4.dp),
                             )
                         }
                     }

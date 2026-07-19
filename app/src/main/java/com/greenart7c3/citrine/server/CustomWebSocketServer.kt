@@ -65,6 +65,7 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.host
 import io.ktor.server.request.httpMethod
@@ -106,6 +107,9 @@ class CustomWebSocketServer(
     private val host: String,
     private val port: Int,
     private val appDatabase: AppDatabase,
+    // fd00::/8 address of the local FIPS mesh interface; when set the server binds it
+    // as a second connector alongside [host].
+    private val fipsHost: String? = null,
 ) {
     val connections = MutableStateFlow<List<Connection>>(emptyList())
     lateinit var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>
@@ -1119,10 +1123,22 @@ class CustomWebSocketServer(
     private fun startKtorHttpServer(host: String, port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
         startWebClients()
 
+        val bindHost = host
+        val bindPort = port
         return embeddedServer(
             CIO,
-            port = port,
-            host = host,
+            configure = {
+                connector {
+                    this.host = bindHost
+                    this.port = bindPort
+                }
+                fipsHost?.let { fips ->
+                    connector {
+                        this.host = fips
+                        this.port = bindPort
+                    }
+                }
+            },
         ) {
             install(WebSockets) {
                 pingPeriodMillis = 5000L

@@ -9,6 +9,22 @@ plugins {
     alias(libs.plugins.jetbrainsComposeCompiler)
 }
 
+// Optional embedded FIPS node (rust/fips-bridge). Opt in with
+// `./gradlew assembleDebug -PbuildFipsBridge` — requires rustup Android
+// targets, cargo-ndk, and an NDK. Without it, gradle packages whatever is
+// already in app/src/main/jniLibs (possibly nothing; the app then falls back
+// to external FIPS interface detection at runtime).
+val fipsBridgeRequested = providers.gradleProperty("buildFipsBridge").isPresent
+val buildFipsBridge = tasks.register<Exec>("buildFipsBridge") {
+    workingDir = rootProject.file("rust/fips-bridge")
+    commandLine("bash", "build-android.sh")
+    onlyIf { fipsBridgeRequested }
+}
+
+tasks.named("preBuild") {
+    dependsOn(buildFipsBridge)
+}
+
 android {
     namespace = "com.greenart7c3.citrine"
     compileSdk = 37

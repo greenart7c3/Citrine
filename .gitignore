@@ -133,3 +133,7 @@ lint/tmp/
 # lint/reports/
 quartz/
 __pycache__/
+
+# Embedded FIPS node native library (built by rust/fips-bridge/build-android.sh)
+app/src/main/jniLibs/
+rust/fips-bridge/target/

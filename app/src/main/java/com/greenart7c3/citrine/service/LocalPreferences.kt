@@ -33,6 +33,9 @@ object PrefKeys {
     const val PROXY_ALL_URLS = "proxy_all_urls"
     const val USE_TOR = "use_tor"
     const val ONION_HOSTNAME = "onion_hostname"
+    const val LISTEN_ON_FIPS = "listen_on_fips"
+    const val FIPS_EMBEDDED_NODE = "fips_embedded_node"
+    const val FIPS_SECRET_KEY = "fips_secret_key"
 
     const val WEB_CLIENTS = "web_clients"
     const val NSITES = "nsites"
@@ -99,6 +102,9 @@ object LocalPreferences {
                 putBoolean(PrefKeys.PROXY_ALL_URLS, settings.proxyAllUrls)
                 putBoolean(PrefKeys.USE_TOR, settings.useTor)
                 putString(PrefKeys.ONION_HOSTNAME, settings.onionHostname)
+                putBoolean(PrefKeys.LISTEN_ON_FIPS, settings.listenOnFips)
+                putBoolean(PrefKeys.FIPS_EMBEDDED_NODE, settings.fipsEmbeddedNode)
+                putString(PrefKeys.FIPS_SECRET_KEY, settings.fipsSecretKey)
                 if (Settings.webClients.isNotEmpty()) {
                     putString(PrefKeys.WEB_CLIENTS, Settings.webClientsToJson())
                 } else {
@@ -171,6 +177,9 @@ object LocalPreferences {
         Settings.proxyAllUrls = prefs.getBoolean(PrefKeys.PROXY_ALL_URLS, Settings.useProxy)
         Settings.useTor = prefs.getBoolean(PrefKeys.USE_TOR, false)
         Settings.onionHostname = prefs.getString(PrefKeys.ONION_HOSTNAME, "") ?: ""
+        Settings.listenOnFips = prefs.getBoolean(PrefKeys.LISTEN_ON_FIPS, false)
+        Settings.fipsEmbeddedNode = prefs.getBoolean(PrefKeys.FIPS_EMBEDDED_NODE, false)
+        Settings.fipsSecretKey = prefs.getString(PrefKeys.FIPS_SECRET_KEY, "") ?: ""
         prefs.getString(PrefKeys.WEB_CLIENTS, null)?.let {
             Settings.webClients = Settings.webClientFromJson(it)
         }

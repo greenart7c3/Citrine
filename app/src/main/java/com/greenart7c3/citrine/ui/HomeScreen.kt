@@ -374,6 +374,33 @@ fun HomeScreen(
                             }
                         }
                     }
+                    if (Settings.listenOnFips) {
+                        val fipsState by com.greenart7c3.citrine.service.FipsManager.state.collectAsStateWithLifecycle()
+                        when (val s = fipsState) {
+                            is com.greenart7c3.citrine.service.FipsManager.State.Running -> {
+                                AddressRow(
+                                    label = stringResource(R.string.address_fips),
+                                    address = "ws://[${s.address}]:${Settings.port}",
+                                )
+                            }
+                            com.greenart7c3.citrine.service.FipsManager.State.Starting -> {
+                                Text(stringResource(R.string.fips_starting))
+                            }
+                            com.greenart7c3.citrine.service.FipsManager.State.NotFound -> {
+                                Text(
+                                    stringResource(R.string.fips_not_found),
+                                    color = Color.Gray,
+                                )
+                            }
+                            is com.greenart7c3.citrine.service.FipsManager.State.Error -> {
+                                Text(
+                                    stringResource(R.string.fips_error, s.message),
+                                    color = Color.Red,
+                                )
+                            }
+                            com.greenart7c3.citrine.service.FipsManager.State.Off -> {}
+                        }
+                    }
                     ElevatedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {

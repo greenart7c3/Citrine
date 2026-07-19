@@ -67,6 +67,20 @@ object Settings {
     var proxyAllUrls = false
     var useTor = false
     var onionHostname = ""
+
+    // When true, the relay also binds to the local FIPS mesh interface's fd00::/8 IPv6
+    // address (fips.network), making the relay reachable from other mesh peers. Loopback
+    // stays bound either way. The interface comes from the embedded node when
+    // [fipsEmbeddedNode] is on, otherwise from a FIPS node hosted by another app.
+    var listenOnFips = false
+
+    // Run a FIPS node inside Citrine (Rust bridge + VpnService TUN), Tor-style. Requires
+    // the optional libcitrine_fips.so and the user's VPN consent.
+    var fipsEmbeddedNode = false
+
+    // Hex secret key of the embedded FIPS node's Nostr identity. Generated on first
+    // start and kept so the relay's mesh address stays stable.
+    var fipsSecretKey = ""
     var webClients = mutableMapOf<String, String>()
 
     // Installed nsites (NIP-5A static websites). Downloaded to filesDir/nsites/<folderName>
@@ -149,6 +163,9 @@ object Settings {
         proxyAllUrls = false
         useTor = false
         onionHostname = ""
+        listenOnFips = false
+        fipsEmbeddedNode = false
+        fipsSecretKey = ""
         webClients = mutableMapOf()
         nsites = mutableListOf()
         lastNsiteCheck = 0L

@@ -72,6 +72,15 @@
                 android:value="Embedded Tor onion service for the local Nostr relay" />
         </service>
 
+        <service
+            android:name=".service.FipsVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".service.PokeyReceiver"
             android:exported="true"

@@ -48,9 +48,11 @@
     <string name="address_local">Local</string>
     <string name="address_wifi">Wi-Fi</string>
     <string name="address_tor">Tor</string>
+    <string name="address_fips">FIPS</string>
     <string name="copy_local">Copy Local</string>
     <string name="copy_wifi">Copy Wi-Fi</string>
     <string name="copy_tor">Copy Tor</string>
+    <string name="copy_fips">Copy FIPS</string>
     <string name="go_back">Go back</string>
     <string name="total">Total: %1$s</string>
     <string name="kind">Kind</string>
@@ -125,6 +127,15 @@
     <string name="tor_starting">Starting Tor…</string>
     <string name="tor_error">Tor error: %1$s</string>
     <string name="tor_retry">Retry Tor</string>
+    <string name="listen_on_fips">Expose relay over FIPS</string>
+    <string name="listen_on_fips_description">Also listen on the FIPS mesh interface (fips.network) so other mesh peers can reach this relay</string>
+    <string name="fips_address">FIPS address</string>
+    <string name="fips_not_found">FIPS interface not found. Is a FIPS node running on this device?</string>
+    <string name="fips_embedded_node">Run embedded FIPS node</string>
+    <string name="fips_embedded_node_description">Run a FIPS mesh node inside Citrine (uses Android\'s VPN service for the mesh interface). Turn off to use a FIPS node from another app instead</string>
+    <string name="fips_embedded_node_unavailable">Embedded FIPS node is not available in this build. A FIPS node from another app can still provide the mesh interface</string>
+    <string name="fips_starting">Starting FIPS node…</string>
+    <string name="fips_error">FIPS error: %1$s</string>
     <string name="tor_channel_name">Citrine Tor</string>
     <string name="tor_channel_description">Tor onion service for the Citrine relay</string>
     <string name="relay_aggregator">Relay Aggregator</string>

@@ -63,6 +63,9 @@ class WebSocketServerService : Service() {
 
     // Signature of the last backup-progress notification we posted to id 2.
     @Volatile private var lastBackupProgressText: String? = null
+
+    // FIPS address the relay currently binds as its second connector, if any.
+    @Volatile private var boundFipsHost: String? = null
     inner class LocalBinder : Binder() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
     }
@@ -238,13 +241,52 @@ class WebSocketServerService : Service() {
         }
 
         Log.d(Citrine.TAG, "Starting WebSocket server")
+        val fipsHost = if (Settings.listenOnFips) {
+            if (Settings.fipsEmbeddedNode) {
+                // The embedded node binds asynchronously; the FIPS connector is
+                // added by the state collector below once the address is known.
+                FipsManager.startEmbedded(this)
+                null
+            } else {
+                FipsManager.refresh().also {
+                    if (it == null) {
+                        Log.w(Citrine.TAG, "listenOnFips enabled but no FIPS interface found; binding loopback only")
+                    }
+                }
+            }
+        } else {
+            FipsManager.clear()
+            null
+        }
+        boundFipsHost = fipsHost
         // Start the WebSocket server
         CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
             port = Settings.port,
             appDatabase = database,
+            fipsHost = fipsHost,
         )
         CustomWebSocketService.server?.start()
+
+        if (Settings.listenOnFips) {
+            scope.launch {
+                FipsManager.state.collect { fipsState ->
+                    val address = (fipsState as? FipsManager.State.Running)?.address
+                    if (address != null && address != boundFipsHost) {
+                        Log.d(Citrine.TAG, "Rebinding relay with FIPS address $address")
+                        boundFipsHost = address
+                        CustomWebSocketService.server?.stop()
+                        CustomWebSocketService.server = CustomWebSocketServer(
+                            host = Settings.host,
+                            port = Settings.port,
+                            appDatabase = database,
+                            fipsHost = address,
+                        )
+                        CustomWebSocketService.server?.start()
+                    }
+                }
+            }
+        }
 
         if (Settings.useTor || Settings.useProxy) {
             Log.d(Citrine.TAG, "Starting embedded Tor (hiddenService=${Settings.useTor}, socks=${Settings.useProxy})")
@@ -310,6 +352,7 @@ class WebSocketServerService : Service() {
                     EventSubscription.closeAll()
                     CustomWebSocketService.server?.stop()
                     TorManager.stop()
+                    FipsManager.stopEmbedded(this@WebSocketServerService)
                 } catch (e: Throwable) {
                     Log.e(Citrine.TAG, "Error during service onDestroy cleanup", e)
                 }
@@ -392,6 +435,16 @@ class WebSocketServerService : Service() {
             )
         }
 
+        val fipsAddress = (FipsManager.state.value as? FipsManager.State.Running)?.address
+        val fipsUrl = if (fipsAddress != null) "ws://[$fipsAddress]:${Settings.port}" else null
+        if (fipsUrl != null) {
+            notificationBuilder.addAction(
+                R.drawable.ic_launcher_background,
+                getString(R.string.copy_fips),
+                copyPendingIntent(fipsUrl, requestCode = 4),
+            )
+        }
+
         val summary: String
         val details: String
         if (status != null && status.enabled) {
@@ -405,7 +458,7 @@ class WebSocketServerService : Service() {
             details = ""
         }
 
-        val signature = listOf(title, summary, details, localUrl, wifiUrl.orEmpty(), torUrl.orEmpty())
+        val signature = listOf(title, summary, details, localUrl, wifiUrl.orEmpty(), torUrl.orEmpty(), fipsUrl.orEmpty())
             .joinToString("")
         return ForegroundNotification(notificationBuilder.build(), signature)
     }
