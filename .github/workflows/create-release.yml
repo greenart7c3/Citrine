@@ -29,27 +29,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # The embedded FIPS node's native library is compiled from source on
-      # every Gradle build (:app:buildFipsBridge, via preBuild), so the Rust
-      # toolchain must be set up before the release build.
-      - name: Add Rust Android targets
-        run: rustup target add aarch64-linux-android x86_64-linux-android
-
-      - name: Cache cargo + FIPS build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust/fips-bridge/target
-          key: ${{ runner.os }}-fips-${{ hashFiles('rust/fips-bridge/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-fips-
-
-      - name: Install cargo-ndk
-        run: command -v cargo-ndk >/dev/null 2>&1 || cargo install cargo-ndk --locked
-
       - name: Build APK
         run: ./gradlew assembleRelease --stacktrace
 

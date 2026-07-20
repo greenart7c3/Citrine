@@ -134,6 +134,7 @@ lint/tmp/
 quartz/
 __pycache__/
 
-# Embedded FIPS node native library (built by rust/fips-bridge/build-android.sh)
-app/src/main/jniLibs/
+# Embedded FIPS node build cache. The compiled library itself
+# (app/src/main/jniLibs) is prebuilt and committed; only cargo's target dir is
+# ignored.
 rust/fips-bridge/target/

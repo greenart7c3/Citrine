@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Builds the citrine-fips JNI library for Android into app/src/main/jniLibs.
+# Regenerates the committed citrine-fips JNI library for Android under
+# app/src/main/jniLibs.
 #
-# Invoked automatically by the Gradle build (the :app:buildFipsBridge task runs
-# on every build), so the app always ships with the embedded FIPS node.
+# The compiled .so is prebuilt and committed to the repo, so ordinary Gradle
+# builds do NOT run this — it is a manual tool. Run it after changing anything
+# in rust/fips-bridge, then commit the updated .so files.
 #
-# Prerequisites (the build fails with these exact commands if any are missing):
+# Prerequisites (the script fails with these exact commands if any are missing):
 #   rustup target add aarch64-linux-android x86_64-linux-android
 #   cargo install cargo-ndk
 #   an Android NDK (ANDROID_NDK_HOME / ANDROID_NDK_ROOT, or auto-detected from
