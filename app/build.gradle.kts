@@ -9,16 +9,23 @@ plugins {
     alias(libs.plugins.jetbrainsComposeCompiler)
 }
 
-// Optional embedded FIPS node (rust/fips-bridge). Opt in with
-// `./gradlew assembleDebug -PbuildFipsBridge` — requires rustup Android
-// targets, cargo-ndk, and an NDK. Without it, gradle packages whatever is
-// already in app/src/main/jniLibs (possibly nothing; the app then falls back
-// to external FIPS interface detection at runtime).
-val fipsBridgeRequested = providers.gradleProperty("buildFipsBridge").isPresent
+// Embedded FIPS node (rust/fips-bridge). Its native library is compiled from
+// source on every build, so the app always ships with FIPS support. This
+// requires the Rust toolchain on PATH — rustup with the aarch64-linux-android
+// and x86_64-linux-android targets, cargo-ndk, and an Android NDK; the build
+// fails with instructions if any are missing (see build-android.sh). The
+// inputs/outputs below let Gradle skip the ~3-minute cargo build when the Rust
+// source is unchanged. 32-bit ABIs ship without the lib (fips-core does not
+// build for them) and fall back to external FIPS interface detection.
 val buildFipsBridge = tasks.register<Exec>("buildFipsBridge") {
     workingDir = rootProject.file("rust/fips-bridge")
     commandLine("bash", "build-android.sh")
-    onlyIf { fipsBridgeRequested }
+    inputs.dir(rootProject.file("rust/fips-bridge/src"))
+    inputs.files(
+        rootProject.file("rust/fips-bridge/Cargo.toml"),
+        rootProject.file("rust/fips-bridge/build-android.sh"),
+    )
+    outputs.dir(rootProject.file("app/src/main/jniLibs"))
 }
 
 tasks.named("preBuild") {
