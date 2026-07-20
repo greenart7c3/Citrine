@@ -1,8 +1,5 @@
 package com.greenart7c3.citrine.ui.settings
 
-import android.app.Activity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,11 +51,6 @@ fun NetworkSettingsScreen(
         var listenOnFips by remember { mutableStateOf(Settings.listenOnFips) }
         var fipsEmbeddedNode by remember { mutableStateOf(Settings.fipsEmbeddedNode) }
         val fipsState = FipsManager.state.collectAsStateWithLifecycle()
-        val vpnConsentLauncher = rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult(),
-        ) { result ->
-            fipsEmbeddedNode = result.resultCode == Activity.RESULT_OK
-        }
 
         val applyChanges = {
             scope.launch(Dispatchers.IO) {
@@ -73,7 +65,7 @@ fun NetworkSettingsScreen(
                 Settings.fipsEmbeddedNode = fipsEmbeddedNode
                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                 if (!fipsEmbeddedNode || !listenOnFips) {
-                    FipsManager.stopEmbedded(context)
+                    FipsManager.stopEmbedded()
                 }
                 if (listenToPokeyBroadcasts) {
                     Citrine.instance.registerPokeyReceiver()
@@ -178,16 +170,7 @@ fun NetworkSettingsScreen(
                             },
                             checked = fipsEmbeddedNode,
                             onCheckedChange = { checked ->
-                                if (checked && FipsManager.embeddedNodeAvailable) {
-                                    val consent = FipsManager.prepareEmbedded(context)
-                                    if (consent != null) {
-                                        vpnConsentLauncher.launch(consent)
-                                    } else {
-                                        fipsEmbeddedNode = true
-                                    }
-                                } else {
-                                    fipsEmbeddedNode = false
-                                }
+                                fipsEmbeddedNode = checked && FipsManager.embeddedNodeAvailable
                             },
                         )
                     }

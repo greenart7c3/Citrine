@@ -1,27 +1,27 @@
 //! JNI bridge running an embedded FIPS (fips.network) node inside Citrine.
 //!
-//! The Kotlin side (`com.greenart7c3.citrine.service.FipsNative`) owns the TUN
-//! device through a `VpnService`; this crate owns the FIPS endpoint and pumps
-//! IPv6 packets between the TUN fd and the mesh. One node per process.
+//! Tor-style, no VPN: the FIPS endpoint delivers raw IPv6 packets, a smoltcp
+//! stack ([`proxy`]) terminates TCP at the node's fd00::/8 address in
+//! userspace, and accepted connections are proxied to the relay's loopback
+//! port. The Kotlin side (`com.greenart7c3.citrine.service.FipsNative`) only
+//! starts and stops the node. One node per process.
 
-use std::os::fd::RawFd;
-use std::sync::atomic::{AtomicBool, Ordering};
+mod proxy;
+
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 
 use fips_endpoint::{Config, FipsEndpoint, NostrDiscoveryPolicy, TransportInstances, UdpConfig};
 use jni::objects::{JClass, JString};
-use jni::sys::{jboolean, jint, jstring, JNI_FALSE, JNI_TRUE};
+use jni::sys::{jint, jstring};
 use jni::JNIEnv;
+use tokio::sync::mpsc;
 
 struct EmbeddedNode {
     runtime: tokio::runtime::Runtime,
     endpoint: Arc<FipsEndpoint>,
     npub: String,
     address: String,
-    tun_fd: Option<RawFd>,
-    stop: Arc<AtomicBool>,
-    pumps: Vec<JoinHandle<()>>,
+    tasks: Vec<tokio::task::JoinHandle<()>>,
 }
 
 static NODE: Mutex<Option<EmbeddedNode>> = Mutex::new(None);
@@ -48,7 +48,7 @@ fn mesh_config() -> Config {
     config
 }
 
-fn start_node(nsec: &str) -> Result<(), String> {
+fn start_node(nsec: &str, port: u16) -> Result<(), String> {
     let mut guard = NODE.lock().map_err(|_| "node lock poisoned".to_string())?;
     if guard.is_some() {
         return Err("FIPS node already running".to_string());
@@ -68,102 +68,61 @@ fn start_node(nsec: &str) -> Result<(), String> {
         )
         .map_err(|e| format!("failed to bind FIPS endpoint: {e}"))?;
     let npub = endpoint.npub().to_string();
-    let address = endpoint.address().to_ipv6().to_string();
+    let ipv6 = endpoint.address().to_ipv6();
+    let endpoint = Arc::new(endpoint);
+
+    // Mesh packets → smoltcp stack → mesh packets, with the stack terminating
+    // TCP for the relay in userspace.
+    let (packet_in_tx, packet_in_rx) = mpsc::channel::<Vec<u8>>(64);
+    let (packet_out_tx, mut packet_out_rx) = mpsc::channel::<Vec<u8>>(64);
+
+    let mut tasks = Vec::with_capacity(3);
+    let rx_endpoint = Arc::clone(&endpoint);
+    tasks.push(runtime.spawn(async move {
+        while let Some(delivered) = rx_endpoint.recv_ip_packet().await {
+            let packet = delivered.packet;
+            if packet.first().map(|b| b >> 4) != Some(6) {
+                continue;
+            }
+            if packet_in_tx.send(packet).await.is_err() {
+                break;
+            }
+        }
+    }));
+    let tx_endpoint = Arc::clone(&endpoint);
+    tasks.push(runtime.spawn(async move {
+        while let Some(packet) = packet_out_rx.recv().await {
+            if tx_endpoint.send_ip_packet(packet).await.is_err() {
+                break;
+            }
+        }
+    }));
+    tasks.push(proxy::spawn_proxy(
+        runtime.handle(),
+        packet_in_rx,
+        packet_out_tx,
+        ipv6,
+        port,
+    ));
+
     *guard = Some(EmbeddedNode {
         runtime,
-        endpoint: Arc::new(endpoint),
+        endpoint,
         npub,
-        address,
-        tun_fd: None,
-        stop: Arc::new(AtomicBool::new(false)),
-        pumps: Vec::new(),
+        address: ipv6.to_string(),
+        tasks,
     });
-    Ok(())
-}
-
-/// Owns `fd`. Spawns the two packet pumps: TUN reads feed the mesh, mesh
-/// deliveries are written back to the TUN.
-fn attach_tun_fd(fd: RawFd) -> Result<(), String> {
-    if fd < 0 {
-        return Err("invalid tun fd".to_string());
-    }
-    let mut guard = NODE.lock().map_err(|_| "node lock poisoned".to_string())?;
-    let node = guard.as_mut().ok_or("FIPS node not running")?;
-    if node.tun_fd.is_some() {
-        return Err("tun fd already attached".to_string());
-    }
-
-    let stop = Arc::clone(&node.stop);
-    let endpoint = Arc::clone(&node.endpoint);
-    let outbound = std::thread::Builder::new()
-        .name("fips-tun-read".into())
-        .spawn(move || {
-            // IPv6 minimum-MTU links still allow 65535-byte payloads after
-            // reassembly; the TUN hands us whole packets, so size for the max.
-            let mut buf = vec![0u8; 65535];
-            loop {
-                let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
-                if n <= 0 {
-                    // 0 = TUN torn down; <0 = read error (EBADF after stop()
-                    // closes the fd). Either way the pump is done.
-                    break;
-                }
-                if stop.load(Ordering::Relaxed) {
-                    break;
-                }
-                let packet = &buf[..n as usize];
-                // The TUN routes only fd00::/8, but Android still emits
-                // occasional non-IPv6 noise (e.g. IPv4 link probes).
-                if packet.first().map(|b| b >> 4) != Some(6) {
-                    continue;
-                }
-                if endpoint.blocking_send_ip_packet(packet.to_vec()).is_err() {
-                    break;
-                }
-            }
-        })
-        .map_err(|e| format!("failed to spawn tun read pump: {e}"))?;
-
-    let stop = Arc::clone(&node.stop);
-    let endpoint = Arc::clone(&node.endpoint);
-    let handle = node.runtime.handle().clone();
-    let inbound = std::thread::Builder::new()
-        .name("fips-tun-write".into())
-        .spawn(move || {
-            loop {
-                let Some(delivered) = handle.block_on(endpoint.recv_ip_packet()) else {
-                    break;
-                };
-                if stop.load(Ordering::Relaxed) {
-                    break;
-                }
-                let packet = delivered.packet;
-                let n = unsafe { libc::write(fd, packet.as_ptr().cast(), packet.len()) };
-                if n < 0 {
-                    break;
-                }
-            }
-        })
-        .map_err(|e| format!("failed to spawn tun write pump: {e}"))?;
-
-    node.tun_fd = Some(fd);
-    node.pumps.push(outbound);
-    node.pumps.push(inbound);
     Ok(())
 }
 
 fn stop_node() {
     let Ok(mut guard) = NODE.lock() else { return };
     let Some(node) = guard.take() else { return };
-    node.stop.store(true, Ordering::Relaxed);
     // Shutting down the endpoint closes the delivered-packets channel, which
-    // ends the write pump; closing the fd unblocks the read pump.
+    // unwinds the pumps and the proxy through the packet channels.
     let _ = node.runtime.block_on(node.endpoint.shutdown());
-    if let Some(fd) = node.tun_fd {
-        unsafe { libc::close(fd) };
-    }
-    for pump in node.pumps {
-        let _ = pump.join();
+    for task in node.tasks {
+        task.abort();
     }
     node.runtime.shutdown_background();
 }
@@ -199,36 +158,29 @@ fn to_jstring(env: &JNIEnv, value: &str) -> jstring {
         .unwrap_or(std::ptr::null_mut())
 }
 
-/// Starts the embedded node. Returns `{"npub":"...","address":"fd..."}` on
-/// success or `{"error":"..."}`.
+/// Starts the embedded node, terminating mesh TCP for `port` in userspace and
+/// proxying to `127.0.0.1:port`. Returns
+/// `{"running":true,"npub":"...","address":"fd..","peerCount":0}` or
+/// `{"error":"..."}`.
 #[no_mangle]
 pub extern "system" fn Java_com_greenart7c3_citrine_service_FipsNative_nativeStart(
     mut env: JNIEnv,
     _class: JClass,
     nsec: JString,
+    port: jint,
 ) -> jstring {
     let nsec: String = match env.get_string(&nsec) {
         Ok(value) => value.into(),
         Err(_) => return to_jstring(&env, &json_error("invalid nsec argument")),
     };
-    let result = match start_node(&nsec) {
+    if !(1..=65535).contains(&port) {
+        return to_jstring(&env, &json_error("invalid port argument"));
+    }
+    let result = match start_node(&nsec, port as u16) {
         Ok(()) => state_json(),
         Err(message) => json_error(&message),
     };
     to_jstring(&env, &result)
-}
-
-/// Attaches the VpnService TUN fd (ownership transfers to the bridge).
-#[no_mangle]
-pub extern "system" fn Java_com_greenart7c3_citrine_service_FipsNative_nativeAttachTunFd(
-    _env: JNIEnv,
-    _class: JClass,
-    fd: jint,
-) -> jboolean {
-    match attach_tun_fd(fd as RawFd) {
-        Ok(()) => JNI_TRUE,
-        Err(_) => JNI_FALSE,
-    }
 }
 
 /// Returns `{"running":bool,"npub":...,"address":...,"peerCount":n}`.
@@ -240,7 +192,7 @@ pub extern "system" fn Java_com_greenart7c3_citrine_service_FipsNative_nativeSta
     to_jstring(&env, &state_json())
 }
 
-/// Stops the node, closes the TUN fd, and joins the pumps.
+/// Stops the node and all its tasks.
 #[no_mangle]
 pub extern "system" fn Java_com_greenart7c3_citrine_service_FipsNative_nativeStop(
     _env: JNIEnv,

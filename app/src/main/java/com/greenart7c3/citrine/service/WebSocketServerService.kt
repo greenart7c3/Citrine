@@ -63,9 +63,6 @@ class WebSocketServerService : Service() {
 
     // Signature of the last backup-progress notification we posted to id 2.
     @Volatile private var lastBackupProgressText: String? = null
-
-    // FIPS address the relay currently binds as its second connector, if any.
-    @Volatile private var boundFipsHost: String? = null
     inner class LocalBinder : Binder() {
         fun getService(): WebSocketServerService = this@WebSocketServerService
     }
@@ -243,8 +240,9 @@ class WebSocketServerService : Service() {
         Log.d(Citrine.TAG, "Starting WebSocket server")
         val fipsHost = if (Settings.listenOnFips) {
             if (Settings.fipsEmbeddedNode) {
-                // The embedded node binds asynchronously; the FIPS connector is
-                // added by the state collector below once the address is known.
+                // The embedded node terminates mesh TCP in userspace and
+                // proxies to the relay's loopback port, so the relay itself
+                // stays bound to loopback only — no second connector needed.
                 FipsManager.startEmbedded(this)
                 null
             } else {
@@ -258,7 +256,6 @@ class WebSocketServerService : Service() {
             FipsManager.clear()
             null
         }
-        boundFipsHost = fipsHost
         // Start the WebSocket server
         CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
@@ -267,26 +264,6 @@ class WebSocketServerService : Service() {
             fipsHost = fipsHost,
         )
         CustomWebSocketService.server?.start()
-
-        if (Settings.listenOnFips) {
-            scope.launch {
-                FipsManager.state.collect { fipsState ->
-                    val address = (fipsState as? FipsManager.State.Running)?.address
-                    if (address != null && address != boundFipsHost) {
-                        Log.d(Citrine.TAG, "Rebinding relay with FIPS address $address")
-                        boundFipsHost = address
-                        CustomWebSocketService.server?.stop()
-                        CustomWebSocketService.server = CustomWebSocketServer(
-                            host = Settings.host,
-                            port = Settings.port,
-                            appDatabase = database,
-                            fipsHost = address,
-                        )
-                        CustomWebSocketService.server?.start()
-                    }
-                }
-            }
-        }
 
         if (Settings.useTor || Settings.useProxy) {
             Log.d(Citrine.TAG, "Starting embedded Tor (hiddenService=${Settings.useTor}, socks=${Settings.useProxy})")
@@ -352,7 +329,7 @@ class WebSocketServerService : Service() {
                     EventSubscription.closeAll()
                     CustomWebSocketService.server?.stop()
                     TorManager.stop()
-                    FipsManager.stopEmbedded(this@WebSocketServerService)
+                    FipsManager.stopEmbedded()
                 } catch (e: Throwable) {
                     Log.e(Citrine.TAG, "Error during service onDestroy cleanup", e)
                 }

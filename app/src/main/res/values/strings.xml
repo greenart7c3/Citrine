@@ -132,7 +132,7 @@
     <string name="fips_address">FIPS address</string>
     <string name="fips_not_found">FIPS interface not found. Is a FIPS node running on this device?</string>
     <string name="fips_embedded_node">Run embedded FIPS node</string>
-    <string name="fips_embedded_node_description">Run a FIPS mesh node inside Citrine (uses Android\'s VPN service for the mesh interface). Turn off to use a FIPS node from another app instead</string>
+    <string name="fips_embedded_node_description">Run a FIPS mesh node inside Citrine (no VPN needed). Turn off to use a FIPS node from another app instead</string>
     <string name="fips_embedded_node_unavailable">Embedded FIPS node is not available in this build. A FIPS node from another app can still provide the mesh interface</string>
     <string name="fips_starting">Starting FIPS node…</string>
     <string name="fips_error">FIPS error: %1$s</string>

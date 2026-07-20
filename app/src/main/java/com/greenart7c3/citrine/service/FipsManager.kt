@@ -1,15 +1,19 @@
 package com.greenart7c3.citrine.service
 
 import android.content.Context
-import android.content.Intent
-import android.net.VpnService
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.logs.Log
+import com.greenart7c3.citrine.server.Settings
+import com.vitorpamplona.quartz.nip01Core.core.toHexKey
+import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.NetworkInterface
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * Exposes the relay over the FIPS (fips.network) mesh.
@@ -19,14 +23,12 @@ import kotlinx.coroutines.flow.StateFlow
  * Two modes, chosen by [com.greenart7c3.citrine.server.Settings]:
  *
  * - Embedded node ([startEmbedded]): runs a FIPS node inside Citrine via the
- *   Rust bridge ([FipsNative]) with [FipsVpnService] owning the TUN — the
- *   Tor-style integration, no other apps needed.
+ *   Rust bridge ([FipsNative]), Tor-style — mesh TCP is terminated in
+ *   userspace by the bridge and proxied to the relay's loopback port. No VPN,
+ *   no TUN, no other apps needed.
  * - External interface ([refresh]): a FIPS node hosted by another app (e.g.
- *   Nostr VPN) already provides a TUN; Citrine just finds its fd00::/8
- *   address and binds the relay to it.
- *
- * The relay watches [state] and (re)binds a connector whenever a Running
- * address appears.
+ *   Nostr VPN) provides a TUN; Citrine finds its fd00::/8 address and binds
+ *   the relay to it directly.
  */
 object FipsManager {
     sealed class State {
@@ -43,57 +45,95 @@ object FipsManager {
     @Volatile
     private var embeddedActive = false
 
+    // Serializes nativeStart/nativeStop across the relay service's overlapping
+    // stop (onDestroy) and start (fresh onCreate) coroutines.
+    private val nativeLock = Any()
+
     /** Whether this build bundles the native embedded-node library. */
     val embeddedNodeAvailable: Boolean
         get() = FipsNative.isAvailable
 
     /**
-     * The consent intent the user must approve before [startEmbedded] can
-     * establish the TUN, or null when consent was already granted.
-     */
-    fun prepareEmbedded(context: Context): Intent? = VpnService.prepare(context)
-
-    /**
-     * Starts the embedded FIPS node. The node binds asynchronously; the
-     * resulting address is published as [State.Running] by [FipsVpnService].
+     * Starts the embedded FIPS node for the current [Settings.port]. Runs on a
+     * background dispatcher; the resulting address is published as
+     * [State.Running].
      */
     fun startEmbedded(context: Context) {
         if (!FipsNative.isAvailable) {
-            _state.value = State.Error(
-                "embedded FIPS node not available in this build",
-            )
-            return
-        }
-        if (VpnService.prepare(context) != null) {
-            _state.value = State.Error("VPN permission required for the embedded FIPS node")
+            _state.value = State.Error("embedded FIPS node not available in this build")
             return
         }
         if (embeddedActive) return
         embeddedActive = true
         _state.value = State.Starting
-        context.startService(
-            Intent(context, FipsVpnService::class.java).setAction(FipsVpnService.ACTION_CONNECT),
-        )
+        val appContext = context.applicationContext
+        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            synchronized(nativeLock) {
+                // Idempotent; guarantees a clean slate if a previous node is
+                // still winding down from a service restart.
+                FipsNative.nativeStop()
+
+                val secret = Settings.fipsSecretKey.ifBlank {
+                    val generated = KeyPair().privKey?.toHexKey()
+                    if (generated == null) {
+                        publishError("failed to generate FIPS identity key")
+                        return@launch
+                    }
+                    Settings.fipsSecretKey = generated
+                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, appContext)
+                    generated
+                }
+
+                val result = try {
+                    JSONObject(FipsNative.nativeStart(secret, Settings.port))
+                } catch (e: Exception) {
+                    publishError("FIPS node returned invalid state: ${e.message}")
+                    return@launch
+                }
+                val error = result.optString("error")
+                if (error.isNotBlank()) {
+                    publishError(error)
+                    return@launch
+                }
+                val address = result.optString("address")
+                val npub = result.optString("npub")
+                if (address.isBlank()) {
+                    FipsNative.nativeStop()
+                    publishError("FIPS node reported no address")
+                    return@launch
+                }
+                Log.d(Citrine.TAG, "Embedded FIPS node running at $address ($npub)")
+                publishRunning(address, npub.takeIf { it.isNotBlank() })
+            }
+        }
     }
 
-    fun stopEmbedded(context: Context) {
+    fun stopEmbedded() {
         if (!embeddedActive) return
         embeddedActive = false
-        context.startService(
-            Intent(context, FipsVpnService::class.java).setAction(FipsVpnService.ACTION_DISCONNECT),
-        )
+        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            synchronized(nativeLock) {
+                try {
+                    FipsNative.nativeStop()
+                } catch (e: Exception) {
+                    Log.e(Citrine.TAG, "Error stopping FIPS node", e)
+                }
+            }
+            publishOff()
+        }
     }
 
-    internal fun publishRunning(address: String, npub: String?) {
+    private fun publishRunning(address: String, npub: String?) {
         _state.value = State.Running(address, npub)
     }
 
-    internal fun publishError(message: String) {
+    private fun publishError(message: String) {
+        Log.e(Citrine.TAG, "Embedded FIPS node failed to start: $message")
         embeddedActive = false
         _state.value = State.Error(message)
     }
 
-    internal fun publishOff() {
+    private fun publishOff() {
         embeddedActive = false
         _state.value = State.Off
     }
