@@ -161,6 +161,10 @@ interface EventDao {
     @Transaction
     suspend fun deleteByKind(kind: Int)
 
+    @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey")
+    @Transaction
+    suspend fun deleteByPubkey(pubkey: String)
+
     @Query("SELECT id FROM EventEntity WHERE kind >= 20000 AND kind < 30000 AND createdAt < :oneMinuteAgo")
     @Transaction
     suspend fun getEphemeralEvents(oneMinuteAgo: Long): List<String>

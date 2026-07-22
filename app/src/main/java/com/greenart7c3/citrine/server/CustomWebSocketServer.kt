@@ -63,8 +63,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.defaultForFilePath
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.ApplicationStarted
 import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
@@ -79,6 +81,7 @@ import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
@@ -384,6 +387,8 @@ class CustomWebSocketServer(
         AuthRequiredForProtectedEvent,
         ProtectedEventEmbeddedInRepost,
         RejectedByNip29,
+        BannedPubkey,
+        BannedEvent,
     }
 
     suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean, fromAggregator: Boolean = false): VerificationResult {
@@ -404,6 +409,17 @@ class CustomWebSocketServer(
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
             Log.d(Citrine.TAG, "kind not allowed ${event.kind}")
             return VerificationResult.KindNotAllowed
+        }
+
+        // NIP-86 ban lists — apply unconditionally (even to aggregator-fetched events),
+        // so a banned author can't sneak in via the relay aggregator.
+        if (Settings.bannedPubKeys.containsKey(event.pubKey)) {
+            Log.d(Citrine.TAG, "pubkey banned ${event.pubKey}")
+            return VerificationResult.BannedPubkey
+        }
+        if (Settings.bannedEventIds.containsKey(event.id)) {
+            Log.d(Citrine.TAG, "event id banned ${event.id}")
+            return VerificationResult.BannedEvent
         }
 
         // Aggregator-fetched events bypass the author/tagged-pubkey allowlists
@@ -581,6 +597,12 @@ class CustomWebSocketServer(
             VerificationResult.TaggedPubkeyNotAllowed -> {
                 connection?.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
             }
+            VerificationResult.BannedPubkey -> {
+                connection?.send(CommandResult.invalid(event, "blocked: pubkey is banned").toJson())
+            }
+            VerificationResult.BannedEvent -> {
+                connection?.send(CommandResult.invalid(event, "blocked: event is banned").toJson())
+            }
             VerificationResult.Deleted -> {
                 connection?.send(CommandResult.invalid(event, "Event deleted").toJson())
             }
@@ -654,6 +676,8 @@ class CustomWebSocketServer(
         if (event.kind in Settings.rejectedKinds) {
             return false
         }
+        if (Settings.bannedPubKeys.containsKey(event.pubKey)) return false
+        if (Settings.bannedEventIds.containsKey(event.id)) return false
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
             return false
         }
@@ -1175,6 +1199,16 @@ class CustomWebSocketServer(
             port = port,
             host = host,
         ) {
+            // NIP-86 IP block enforcement — a single chokepoint that covers every
+            // HTTP route and the WebSocket upgrade handshake.
+            intercept(ApplicationCallPipeline.Plugins) {
+                val ip = call.request.local.remoteHost
+                if (Settings.blockedIps.containsKey(ip)) {
+                    call.respondText("ip blocked", status = HttpStatusCode.Forbidden)
+                    finish()
+                }
+            }
+
             install(WebSockets) {
                 pingPeriodMillis = 5000L
                 timeoutMillis = 300000L
@@ -1219,6 +1253,7 @@ class CustomWebSocketServer(
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
                         val supportedNips = mutableListOf(1, 2, 4, 9, 11, 29, 40, 42, 45, 50, 59, 65, 70, 77)
+                        if (Settings.ownerPubkey.isNotBlank()) supportedNips.add(86)
 
                         // NIP-29 clients discover the relay's group-signing key via the
                         // "self" field: the owner's key when configured, otherwise the
@@ -1405,6 +1440,11 @@ class CustomWebSocketServer(
                     val uri = "content://${CitrineContract.AUTHORITY}/events/invalid_event_id".toUri()
                     val cursor = resolver.query(uri, null, null, null, null)
                     call.respondText(cursorToJson(cursor), ContentType.Application.Json)
+                }
+
+                // NIP-86 Relay Management API
+                post("/") {
+                    Nip86Handler.handle(call, appDatabase, Citrine.instance)
                 }
 
                 // WebSocket endpoint
