@@ -1,6 +1,10 @@
 package com.greenart7c3.citrine.ui
 
+import android.app.Activity.RESULT_OK
+import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,6 +41,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
@@ -54,6 +59,7 @@ import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
+import com.vitorpamplona.quartz.nip19Bech32.toNpub
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.Hex
 import java.time.LocalDate
@@ -250,6 +256,48 @@ fun RebroadcastScreen(
         )
     }
 
+    val launcherLogin = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            if (result.resultCode != RESULT_OK) {
+                toast(context.getString(R.string.sign_request_rejected))
+            } else {
+                result.data?.let {
+                    try {
+                        val key = it.getStringExtra("signature") ?: ""
+                        val returnedKey = if (key.startsWith("npub")) {
+                            when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+                                is NPub -> parsed.hex
+                                else -> ""
+                            }
+                        } else {
+                            key
+                        }
+                        if (returnedKey.isNotBlank()) {
+                            account = TextFieldValue(Hex.decode(returnedKey).toNpub())
+                        }
+                    } catch (e: Exception) {
+                        Log.d(Citrine.TAG, e.message ?: "", e)
+                    }
+                }
+            }
+        },
+    )
+
+    fun loginWithExternalSigner() {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+            intent.putExtra("type", "get_public_key")
+            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            launcherLogin.launch(intent)
+        } catch (e: Exception) {
+            Log.d(Citrine.TAG, e.message ?: "", e)
+            toast(context.getString(R.string.no_external_signer_installed))
+            val intent = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
+            launcherLogin.launch(intent)
+        }
+    }
+
     pendingRequest?.let { request ->
         AlertDialog(
             onDismissRequest = { pendingRequest = null },
@@ -301,6 +349,12 @@ fun RebroadcastScreen(
                 label = { Text(stringResource(R.string.rebroadcast_account)) },
                 supportingText = { Text(stringResource(R.string.rebroadcast_account_hint)) },
             )
+            ElevatedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { loginWithExternalSigner() },
+            ) {
+                Text(stringResource(R.string.login_with_external_signer))
+            }
             ElevatedButton(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !loadingUserRelays && account.text.isNotBlank(),
