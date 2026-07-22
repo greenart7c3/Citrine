@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.AutoDelete
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CloudSync
@@ -109,6 +110,12 @@ private val settingsCategories = listOf(
         titleRes = R.string.settings_category_web_clients,
         descriptionRes = R.string.settings_category_web_clients_description,
         icon = Icons.Filled.Web,
+    ),
+    SettingsCategory(
+        route = Route.Nip86Settings.route,
+        titleRes = R.string.settings_category_nip86,
+        descriptionRes = R.string.settings_category_nip86_description,
+        icon = Icons.Filled.AdminPanelSettings,
     ),
 )
 

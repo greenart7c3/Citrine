@@ -57,6 +57,7 @@ import com.greenart7c3.citrine.ui.settings.AggregatorSettingsScreen
 import com.greenart7c3.citrine.ui.settings.BackupSettingsScreen
 import com.greenart7c3.citrine.ui.settings.BrowseNsitesScreen
 import com.greenart7c3.citrine.ui.settings.NetworkSettingsScreen
+import com.greenart7c3.citrine.ui.settings.Nip86SettingsScreen
 import com.greenart7c3.citrine.ui.settings.NsiteRelaysSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RelayInfoSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RetentionSettingsScreen
@@ -339,6 +340,9 @@ fun CitrineScaffold(
                     onBrowseNsites = { navController.navigate(Route.BrowseNsites.route) },
                     onNsiteRelays = { navController.navigate(Route.NsiteRelaysSettings.route) },
                 )
+            }
+            composable(Route.Nip86Settings.route) {
+                Nip86SettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
             }
             composable(Route.BrowseNsites.route) {
                 BrowseNsitesScreen(modifier = subScreenModifier)

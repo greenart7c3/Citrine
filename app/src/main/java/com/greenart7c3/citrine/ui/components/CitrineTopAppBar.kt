@@ -31,5 +31,6 @@ private fun titleResForRoute(destinationRoute: String): Int? = when {
     destinationRoute == Route.RetentionSettings.route -> R.string.settings_category_retention
     destinationRoute == Route.BackupSettings.route -> R.string.settings_category_backup
     destinationRoute == Route.WebClientsSettings.route -> R.string.settings_category_web_clients
+    destinationRoute == Route.Nip86Settings.route -> R.string.settings_category_nip86
     else -> null
 }
