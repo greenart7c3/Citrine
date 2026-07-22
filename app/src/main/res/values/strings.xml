@@ -64,7 +64,6 @@
     <string name="are_you_sure_you_want_to_delete_all_events_of_kind">Are you sure you want to delete all events of kind %1$d?</string>
     <string name="listen_to_pokey_broadcasts">Listen to pokey broadcasts</string>
     <string name="send_mute_response">Send mute response</string>
-    <string name="enable_disable_auth">Enable/Disable Auth</string>
     <string name="start_on_boot">Start on boot</string>
     <string name="backup">Backup</string>
     <string name="web_clients">Web Clients</string>
@@ -112,7 +111,6 @@
     <string name="allow_all_kinds_hint">Empty list allows all event kinds</string>
     <string name="reject_no_kinds_hint">Empty list rejects no kinds. Listed kinds are rejected at ingestion and never stored — defaults block signed artifacts that aren\'t meant to be published (seals, zap requests, auth events).</string>
     <string name="start_on_boot_description">Automatically start the relay when the device boots</string>
-    <string name="enable_disable_auth_description">Require NIP-42 authentication for private event kinds</string>
     <string name="listen_to_pokey_broadcasts_description">Receive events broadcast by the Pokey app</string>
     <string name="send_mute_response_description">Reply with a NIP-01 \"mute:\" OK when an ephemeral event is not delivered to any subscription</string>
     <string name="use_proxy_description">Route outbound connections through the embedded Tor daemon. By default only .onion URLs are routed through Tor.</string>
@@ -161,7 +159,7 @@
     <string name="settings_category_relay_info">Relay info</string>
     <string name="settings_category_relay_info_description">Host, port, name, contact and description</string>
     <string name="settings_category_access_control">Access control</string>
-    <string name="settings_category_access_control_description">Authentication and pubkey/kind allowlists</string>
+    <string name="settings_category_access_control_description">Pubkey and kind allowlists</string>
     <string name="settings_category_network">Network</string>
     <string name="settings_category_network_description">Boot, Pokey, proxy and Tor</string>
     <string name="settings_category_aggregator">Relay aggregator</string>
@@ -194,4 +192,7 @@
     <string name="reset_all_settings">Reset all settings</string>
     <string name="reset_all_settings_warning">All settings will be restored to their default values. This action cannot be undone.</string>
     <string name="settings_reset_complete">Settings reset to defaults</string>
+    <string name="logout">Logout</string>
+    <string name="relay_owner_not_configured">No relay owner configured</string>
+    <string name="relay_owner_login_description">Login with an external signer to set the relay owner. The owner\'s key becomes the relay identity that signs NIP-29 group metadata; without an owner, the relay signs with its own generated key.</string>
 </resources>

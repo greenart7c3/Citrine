@@ -7,6 +7,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.logs.Log
+import com.greenart7c3.citrine.server.nip29.GroupManager
 import com.greenart7c3.citrine.utils.isEphemeral
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import io.ktor.server.websocket.WebSocketServerSession
@@ -51,7 +52,10 @@ object EventSubscription {
                     close(sub.id)
                     continue
                 }
-                if (sub.filters.any { it.test(event) }) {
+                // NIP-29: never live-push private-group events to connections that are
+                // not authenticated as a member (stored-query reads are gated the same
+                // way in EventRepository.subscribe).
+                if (sub.filters.any { it.test(event) } && GroupManager.canRead(event, sub.connection)) {
                     val json = eventJsonStr ?: ENVELOPE_MAPPER.writeValueAsString(event.toJsonObject()).also { eventJsonStr = it }
                     sub.connection.trySend("[\"EVENT\",${sub.escapedId},$json]")
                     sentEvent = true

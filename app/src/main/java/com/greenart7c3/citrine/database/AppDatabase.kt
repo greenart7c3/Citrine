@@ -16,12 +16,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 @Database(
-    entities = [EventEntity::class, TagEntity::class, EventFTS::class],
-    version = 12,
+    entities = [EventEntity::class, TagEntity::class, EventFTS::class, GroupEntity::class, GroupMemberEntity::class, GroupInviteEntity::class],
+    version = 13,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
+
+    abstract fun groupDao(): GroupDao
 
     companion object {
         @Volatile
@@ -30,7 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
         private val _isDatabaseUpgrading = MutableStateFlow(false)
         val isDatabaseUpgrading: StateFlow<Boolean> = _isDatabaseUpgrading
 
-        private const val TARGET_VERSION = 12
+        private const val TARGET_VERSION = 13
 
         private fun checkNeedsMigration(context: Context): Boolean {
             val dbFile = context.getDatabasePath("citrine_database")
@@ -75,6 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_9_10)
                 .addMigrations(MIGRATION_10_11)
                 .addMigrations(MIGRATION_11_12)
+                .addMigrations(MIGRATION_12_13)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -94,7 +97,7 @@ abstract class AppDatabase : RoomDatabase() {
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
-    version = 12,
+    version = 13,
 )
 @TypeConverters(Converters::class)
 abstract class HistoryDatabase : RoomDatabase() {
@@ -123,6 +126,7 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_9_10)
                 .addMigrations(MIGRATION_10_11)
                 .addMigrations(MIGRATION_11_12)
+                .addMigrations(MIGRATION_12_13)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -214,6 +218,29 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         db.execSQL("DROP TABLE IF EXISTS `event_fts` ")
         db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS `event_fts` USING FTS4(content, content=`EventEntity`)")
         db.execSQL("INSERT INTO `event_fts` (`event_fts`) VALUES ('rebuild')")
+    }
+}
+
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `GroupEntity` (" +
+                "`id` TEXT NOT NULL, `name` TEXT NOT NULL, `about` TEXT NOT NULL, `picture` TEXT NOT NULL, " +
+                "`isPrivate` INTEGER NOT NULL, `isClosed` INTEGER NOT NULL, `isRestricted` INTEGER NOT NULL, " +
+                "`isHidden` INTEGER NOT NULL, `isDeleted` INTEGER NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `GroupMemberEntity` (" +
+                "`groupId` TEXT NOT NULL, `pubkey` TEXT NOT NULL, `roles` TEXT NOT NULL, " +
+                "PRIMARY KEY(`groupId`, `pubkey`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_GroupMemberEntity_groupId` ON `GroupMemberEntity` (`groupId`)")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `GroupInviteEntity` (" +
+                "`code` TEXT NOT NULL, `groupId` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`code`))",
+        )
     }
 }
 

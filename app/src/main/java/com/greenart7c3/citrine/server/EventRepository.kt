@@ -7,6 +7,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.IdAndCreatedAt
 import com.greenart7c3.citrine.logs.Log
+import com.greenart7c3.citrine.server.nip29.GroupManager
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -182,8 +183,21 @@ object EventRepository {
         subscription: Subscription,
         filter: EventFilter,
     ) {
+        // NIP-29 private groups: events the connection may not read are filtered per
+        // event, because a filter (e.g. {"kinds":[9]}) can match group content without
+        // ever naming the group id. The per-event check works on the raw rows, so the
+        // no-quartz-Event fast path below is preserved, and it only runs at all while a
+        // private/hidden managed group exists.
+        val applyNip29Gate = GroupManager.hasPrivateGroups()
+
         if (subscription.count) {
-            val count = countQuery(subscription.appDatabase, filter)
+            val count = if (applyNip29Gate) {
+                query(subscription.appDatabase, filter).count {
+                    GroupManager.canRead(it, subscription.connection)
+                }
+            } else {
+                countQuery(subscription.appDatabase, filter)
+            }
             subscription.connection.send(
                 "[\"COUNT\",${subscription.escapedId},{\"count\":$count}]",
             )
@@ -191,11 +205,16 @@ object EventRepository {
         }
 
         val events = query(subscription.appDatabase, filter)
+        var sent = 0
         for (dbEvent in events) {
+            if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
+                continue
+            }
             subscription.connection.send("[\"EVENT\",${subscription.escapedId},${dbEvent.toEventJson()}]")
+            sent++
         }
-        if (events.isNotEmpty() && Log.isLoggable(Citrine.TAG, Log.DEBUG)) {
-            Log.d(Citrine.TAG, "sent ${events.size} events for subscription ${subscription.id} filter $filter")
+        if (sent > 0 && Log.isLoggable(Citrine.TAG, Log.DEBUG)) {
+            Log.d(Citrine.TAG, "sent $sent events for subscription ${subscription.id} filter $filter")
         }
     }
 

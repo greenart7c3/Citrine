@@ -24,7 +24,6 @@ object PrefKeys {
     const val RELAY_ICON = "relay_icon"
     const val AUTO_BACKUP = "auto_backup"
     const val AUTO_BACKUP_FOLDER = "auto_backup_folder"
-    const val AUTH_ENABLED = "auth_enabled"
     const val SEND_MUTE_RESPONSE = "send_mute_response"
     const val LISTEN_TO_POKEY_BROADCASTS = "listen_to_pokey_broadcasts"
     const val START_ON_BOOT = "start_on_boot"
@@ -52,6 +51,14 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK = "relay_aggregator_pause_on_limited_network"
     const val AGGREGATOR_SIGNER_PUBKEY = "aggregator_signer_pubkey"
     const val AGGREGATOR_SIGNER_PACKAGE_NAME = "aggregator_signer_package_name"
+
+    // Amber (NIP-55) signer package holding the relay owner's key; set together with
+    // RELAY_OWNER_PUBKEY by the Amber login in relay info settings.
+    const val RELAY_SIGNER_PACKAGE_NAME = "relay_signer_package_name"
+
+    // Hex private key of the relay's generated fallback identity, used to sign NIP-29
+    // group metadata when no owner is configured. Read/written only by RelayIdentity.
+    const val RELAY_PRIVATE_KEY = "relay_private_key"
 }
 
 object LocalPreferences {
@@ -90,7 +97,7 @@ object LocalPreferences {
                 putString(PrefKeys.RELAY_ICON, settings.relayIcon)
                 putBoolean(PrefKeys.AUTO_BACKUP, settings.autoBackup)
                 putString(PrefKeys.AUTO_BACKUP_FOLDER, settings.autoBackupFolder)
-                putBoolean(PrefKeys.AUTH_ENABLED, settings.authEnabled)
+                putString(PrefKeys.RELAY_SIGNER_PACKAGE_NAME, settings.relaySignerPackageName)
                 putBoolean(PrefKeys.SEND_MUTE_RESPONSE, settings.sendMuteResponse)
                 putBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, settings.listenToPokeyBroadcasts)
                 putBoolean(PrefKeys.START_ON_BOOT, settings.startOnBoot)
@@ -160,7 +167,7 @@ object LocalPreferences {
         Settings.relayIcon = prefs.getString(PrefKeys.RELAY_ICON, "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true") ?: "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
         Settings.autoBackup = prefs.getBoolean(PrefKeys.AUTO_BACKUP, false)
         Settings.autoBackupFolder = prefs.getString(PrefKeys.AUTO_BACKUP_FOLDER, "") ?: ""
-        Settings.authEnabled = prefs.getBoolean(PrefKeys.AUTH_ENABLED, false)
+        Settings.relaySignerPackageName = prefs.getString(PrefKeys.RELAY_SIGNER_PACKAGE_NAME, "") ?: ""
         Settings.sendMuteResponse = prefs.getBoolean(PrefKeys.SEND_MUTE_RESPONSE, false)
         Settings.listenToPokeyBroadcasts = prefs.getBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, true)
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)

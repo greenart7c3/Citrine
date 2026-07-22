@@ -25,9 +25,13 @@ import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.provider.CitrineContract
+import com.greenart7c3.citrine.server.nip29.GroupManager
+import com.greenart7c3.citrine.server.nip29.Nip29Handler
+import com.greenart7c3.citrine.server.nip29.Nip29Result
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.EventBroadcastWorker
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.service.RelayIdentity
 import com.greenart7c3.citrine.utils.isEphemeral
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
@@ -123,6 +127,15 @@ class CustomWebSocketServer(
         }
         if (serverSocket == null) return
         serverSocket.close()
+
+        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            try {
+                GroupManager.load(appDatabase)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.e(Citrine.TAG, "Failed to load NIP-29 groups", e)
+            }
+        }
 
         Log.d(Citrine.TAG, "Starting server on $host:$port isInitialized: ${::server.isInitialized}")
         if (!::server.isInitialized) {
@@ -370,6 +383,7 @@ class CustomWebSocketServer(
         NewestEventAlreadyInDatabase,
         AuthRequiredForProtectedEvent,
         ProtectedEventEmbeddedInRepost,
+        RejectedByNip29,
     }
 
     suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean, fromAggregator: Boolean = false): VerificationResult {
@@ -446,6 +460,17 @@ class CustomWebSocketServer(
         if (deletedEvents.isNotEmpty()) {
             Log.d(Citrine.TAG, "Event deleted ${event.id}")
             return VerificationResult.Deleted
+        }
+
+        // NIP-29: ids removed by a group admin's kind-9005 moderation event stay deleted,
+        // but only for groups this relay manages — mirrored 9005s from foreign groups
+        // must not block re-imports.
+        if (GroupManager.hasGroups()) {
+            val moderationDeleted = appDatabase.eventDao().getModerationDeletedGroups(event.id)
+            if (moderationDeleted.any { GroupManager.get(it) != null }) {
+                Log.d(Citrine.TAG, "Event deleted by group moderation ${event.id}")
+                return VerificationResult.Deleted
+            }
         }
 
         if (event is AddressableEvent) {
@@ -568,7 +593,20 @@ class CustomWebSocketServer(
             VerificationResult.NewestEventAlreadyInDatabase -> {
                 connection?.send(CommandResult.invalid(event, "newest event already in database").toJson())
             }
+            VerificationResult.RejectedByNip29 -> {
+                // verifyEvent never returns this; NIP-29 rejection happens below.
+            }
             VerificationResult.Valid -> {
+                var nip29PostSave: (suspend () -> Unit)? = null
+                when (val nip29Result = Nip29Handler.process(event, connection, this, appDatabase)) {
+                    is Nip29Result.Reject -> {
+                        connection?.trySend(CommandResult(event.id, false, nip29Result.message).toJson())
+                        return VerificationResult.RejectedByNip29
+                    }
+                    is Nip29Result.Accept -> nip29PostSave = nip29Result.postSave
+                    Nip29Result.NotApplicable -> Unit
+                }
+
                 when {
                     event.shouldDelete() -> {
                         deleteEvent(event, connection)
@@ -587,6 +625,19 @@ class CustomWebSocketServer(
                 // if the event is ephemeral the response will be sent after the event is sent to subscriptions
                 if (!event.isEphemeral()) {
                     connection?.send(CommandResult.ok(event).toJson())
+                }
+
+                // Membership changes and metadata regeneration run after the event is
+                // stored and acknowledged.
+                nip29PostSave?.let { callback ->
+                    Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                        try {
+                            callback()
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Log.e(Citrine.TAG, "NIP-29 post-save action failed for ${event.id}", e)
+                        }
+                    }
                 }
             }
         }
@@ -1167,16 +1218,21 @@ class CustomWebSocketServer(
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
-                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 45, 50, 59, 65, 70, 77)
-                        if (Settings.authEnabled) supportedNips.add(42)
+                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 29, 40, 42, 45, 50, 59, 65, 70, 77)
+
+                        // NIP-29 clients discover the relay's group-signing key via the
+                        // "self" field: the owner's key when configured, otherwise the
+                        // relay's generated identity.
+                        val relayPubkey = RelayIdentity.pubKeyHex()
 
                         call.respondText(
                             """
                             {
                               "name": "${Settings.name}",
                               "description": "${Settings.description}",
-                              "pubkey": "${Settings.ownerPubkey}",
+                              "pubkey": "${Settings.ownerPubkey.ifBlank { relayPubkey }}",
                               "contact": "${Settings.contact}",
+                              "self": "$relayPubkey",
                               "supported_nips": $supportedNips,
                               "software": "https://github.com/greenart7c3/Citrine",
                               "version": "${BuildConfig.VERSION_NAME}",
@@ -1358,9 +1414,7 @@ class CustomWebSocketServer(
 
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")
 
-                    if (Settings.authEnabled) {
-                        thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
-                    }
+                    thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
 
                     // Decouple socket reads from message processing: parsing, signature
                     // verification, and DB checks are CPU/IO heavy and would otherwise run

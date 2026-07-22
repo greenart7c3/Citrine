@@ -54,7 +54,14 @@ object Settings {
     var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
     var autoBackup = false
     var autoBackupFolder = ""
-    var authEnabled = false
+
+    // Amber (NIP-55) signer package that holds the relay owner's key. Set together with
+    // [ownerPubkey] by the "login with Amber" flow in relay info settings — the owner
+    // pubkey can only be configured through that login, never typed manually. NIP-29
+    // groups are always managed: when an owner is configured their key is the relay
+    // identity, otherwise a locally generated key signs the group metadata
+    // (see RelayIdentity). Foreign group ids always pass through unmanaged.
+    var relaySignerPackageName = ""
 
     // When true, ephemeral events that no open subscription was listening to receive a
     // NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so
@@ -140,7 +147,7 @@ object Settings {
         relayIcon = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
         autoBackup = false
         autoBackupFolder = ""
-        authEnabled = false
+        relaySignerPackageName = ""
         sendMuteResponse = false
         listenToPokeyBroadcasts = true
         startOnBoot = true
