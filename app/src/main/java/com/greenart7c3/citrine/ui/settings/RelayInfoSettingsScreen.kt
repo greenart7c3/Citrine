@@ -79,7 +79,14 @@ fun RelayInfoSettingsScreen(
         var relayIconUrl by remember { mutableStateOf(TextFieldValue(Settings.relayIcon)) }
 
         val ownerNpub = remember(relayOwnerPubkey) {
-            runCatching { Hex.decode(relayOwnerPubkey).toNpub() }.getOrDefault("")
+            // Hex.decode("") yields an empty array rather than throwing, and bech32
+            // happily encodes zero bytes into a stub like "npub106246s" — so an
+            // unconfigured owner must be caught before decoding.
+            if (relayOwnerPubkey.isBlank()) {
+                ""
+            } else {
+                runCatching { Hex.decode(relayOwnerPubkey).toNpub() }.getOrDefault("")
+            }
         }
 
         val relaySignerLauncher = rememberLauncherForActivityResult(
