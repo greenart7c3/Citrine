@@ -56,6 +56,12 @@ sealed class Route(
         selectedIcon = Icons.Default.Settings,
     )
 
+    data object Rebroadcast : Route(
+        route = "Rebroadcast",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
     data object RelayInfoSettings : Route(
         route = "Settings/RelayInfo",
         icon = Icons.Outlined.Settings,

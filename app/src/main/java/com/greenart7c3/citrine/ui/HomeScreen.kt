@@ -468,6 +468,16 @@ fun HomeScreen(
                 ElevatedButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
+                        navController.navigate(Route.Rebroadcast.route)
+                    },
+                    content = {
+                        Text(stringResource(R.string.rebroadcast_events))
+                    },
+                )
+
+                ElevatedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
                         navController.navigate(Route.Logs.route)
                     },
                 ) {

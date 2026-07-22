@@ -24,6 +24,7 @@ private fun titleResForRoute(destinationRoute: String): Int? = when {
     destinationRoute == Route.DatabaseInfo.route -> R.string.database
     destinationRoute.startsWith("Contacts") -> R.string.restore_follows
     destinationRoute == Route.DownloadYourEventsUserScreen.route -> R.string.download_your_events
+    destinationRoute == Route.Rebroadcast.route -> R.string.rebroadcast_events
     destinationRoute == Route.RelayInfoSettings.route -> R.string.settings_category_relay_info
     destinationRoute == Route.AccessControlSettings.route -> R.string.settings_category_access_control
     destinationRoute == Route.NetworkSettings.route -> R.string.settings_category_network

@@ -376,6 +376,15 @@ fun CitrineScaffold(
                     navController = navController,
                 )
             }
+
+            composable(Route.Rebroadcast.route) {
+                RebroadcastScreen(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
+                )
+            }
         }
         DisplayCrashMessages()
     }
