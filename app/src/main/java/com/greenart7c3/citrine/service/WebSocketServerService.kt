@@ -249,6 +249,10 @@ class WebSocketServerService : Service() {
         if (Settings.useTor || Settings.useProxy) {
             Log.d(Citrine.TAG, "Starting embedded Tor (hiddenService=${Settings.useTor}, socks=${Settings.useProxy})")
             TorManager.start(Settings.port, enableHiddenService = Settings.useTor)
+        } else {
+            // Tor may still be running from before a settings change if onDestroy's
+            // timed cleanup was cut short.
+            TorManager.stop()
         }
 
         if (Settings.relayAggregatorEnabled) {
@@ -301,6 +305,10 @@ class WebSocketServerService : Service() {
     }
 
     override fun onDestroy() {
+        // Outside the timed block below: this only enqueues the daemon stop on the
+        // application scope, and it must always run so the Tor foreground service
+        // (and its notification) goes away even if the server shutdown times out.
+        TorManager.stop()
         runBlocking {
             withTimeoutOrNull(5_000) {
                 try {
@@ -309,7 +317,6 @@ class WebSocketServerService : Service() {
                     RelayAggregator.stop()
                     EventSubscription.closeAll()
                     CustomWebSocketService.server?.stop()
-                    TorManager.stop()
                 } catch (e: Throwable) {
                     Log.e(Citrine.TAG, "Error during service onDestroy cleanup", e)
                 }

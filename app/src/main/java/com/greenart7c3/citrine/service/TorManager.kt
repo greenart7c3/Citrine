@@ -8,7 +8,7 @@ import com.greenart7c3.citrine.server.Settings
 import io.matthewnelson.kmp.file.readUtf8
 import io.matthewnelson.kmp.file.resolve
 import io.matthewnelson.kmp.tor.resource.exec.tor.ResourceLoaderTorExec
-import io.matthewnelson.kmp.tor.runtime.Action.Companion.startDaemonAsync
+import io.matthewnelson.kmp.tor.runtime.Action.Companion.restartDaemonAsync
 import io.matthewnelson.kmp.tor.runtime.Action.Companion.stopDaemonAsync
 import io.matthewnelson.kmp.tor.runtime.RuntimeEvent
 import io.matthewnelson.kmp.tor.runtime.TorListeners
@@ -20,6 +20,8 @@ import io.matthewnelson.kmp.tor.runtime.core.net.Port.Companion.toPort
 import io.matthewnelson.kmp.tor.runtime.service.TorServiceConfig
 import io.matthewnelson.kmp.tor.runtime.service.TorServiceUI
 import io.matthewnelson.kmp.tor.runtime.service.ui.KmpTorServiceUI
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,7 +55,19 @@ object TorManager {
     @Volatile
     private var lastEnableHiddenService: Boolean = false
 
-    private fun buildRuntime(localPort: Int, enableHiddenService: Boolean): TorRuntime {
+    // Chains start/stop daemon actions so a restart cycle (service onDestroy ->
+    // onCreate) can never enqueue StartDaemon while StopDaemon is still executing,
+    // which kmp-tor would resolve by interrupting the start.
+    @Volatile
+    private var pendingAction: Job? = null
+
+    // kmp-tor caches TorRuntime instances per work directory for the life of the
+    // process: builder/observer blocks passed to a second TorRuntime.Builder()
+    // call for the same environment are silently discarded. Nothing in here may
+    // capture per-start parameters — observers and config callbacks must read the
+    // volatile fields above. Config callbacks re-run on every daemon (re)start,
+    // which is what lets the single cached runtime pick up settings changes.
+    private fun buildRuntime(): TorRuntime {
         val uiFactory = KmpTorServiceUI.Factory(
             iconReady = R.drawable.ic_notification,
             iconNotReady = R.drawable.ic_notification,
@@ -106,7 +120,7 @@ object TorManager {
             }
 
             observerStatic(RuntimeEvent.READY, exec) {
-                if (!enableHiddenService) {
+                if (!lastEnableHiddenService) {
                     _state.value = State.Running("")
                     return@observerStatic
                 }
@@ -131,14 +145,13 @@ object TorManager {
                 }
             }
 
-            if (enableHiddenService) {
-                config { _ ->
-                    TorOption.HiddenServiceDir.tryConfigure {
-                        directory(env.workDirectory.resolve(HS_DIR_NAME))
-                        version(3)
-                        port(virtual = ONION_VIRTUAL_PORT.toPort()) {
-                            target(port = localPort.toPort())
-                        }
+            config { _ ->
+                if (!lastEnableHiddenService) return@config
+                TorOption.HiddenServiceDir.tryConfigure {
+                    directory(env.workDirectory.resolve(HS_DIR_NAME))
+                    version(3)
+                    port(virtual = ONION_VIRTUAL_PORT.toPort()) {
+                        target(port = lastLocalPort.toPort())
                     }
                 }
             }
@@ -147,21 +160,25 @@ object TorManager {
 
     @Synchronized
     fun start(localPort: Int, enableHiddenService: Boolean) {
-        if (runtime != null) return
         lastLocalPort = localPort
         lastEnableHiddenService = enableHiddenService
         _state.value = State.Bootstrapping
-        val rt = try {
-            buildRuntime(localPort, enableHiddenService)
+        val rt = runtime ?: try {
+            buildRuntime()
         } catch (e: Exception) {
             Log.e(Citrine.TAG, "Failed to build TorRuntime", e)
             _state.value = State.Error(e.message ?: "tor build failed")
             return
         }
         runtime = rt
-        Citrine.instance.applicationScope.launch {
+        val previous = pendingAction
+        pendingAction = Citrine.instance.applicationScope.launch {
+            previous?.join()
             try {
-                rt.startDaemonAsync()
+                // Restart (rather than start) so that a daemon left running from a
+                // previous configuration regenerates its config; if the daemon is
+                // off this is equivalent to a plain start.
+                rt.restartDaemonAsync()
             } catch (e: Exception) {
                 Log.e(Citrine.TAG, "Failed to start Tor daemon", e)
                 _state.value = State.Error(e.message ?: "tor start failed")
@@ -171,9 +188,7 @@ object TorManager {
 
     fun retry() {
         val port = lastLocalPort.takeIf { it > 0 } ?: Settings.port
-        val enableHs = lastEnableHiddenService || Settings.useTor
-        stop()
-        start(port, enableHs)
+        start(port, lastEnableHiddenService || Settings.useTor)
     }
 
     @Synchronized
@@ -182,17 +197,23 @@ object TorManager {
             _state.value = State.Off
             return
         }
-        runtime = null
         _socksPort.value = null
         HttpClientManager.setDefaultProxy(null)
-        Citrine.instance.applicationScope.launch {
+        val previous = pendingAction
+        var job: Job? = null
+        job = Citrine.instance.applicationScope.launch(start = CoroutineStart.LAZY) {
+            previous?.join()
             try {
                 rt.stopDaemonAsync()
             } catch (e: Exception) {
                 Log.e(Citrine.TAG, "Failed to stop Tor daemon", e)
             } finally {
-                _state.value = State.Off
+                // Skip if a newer start was chained behind this stop, so the Off
+                // state doesn't clobber its Bootstrapping/Running state.
+                if (pendingAction === job) _state.value = State.Off
             }
         }
+        pendingAction = job
+        job?.start()
     }
 }
