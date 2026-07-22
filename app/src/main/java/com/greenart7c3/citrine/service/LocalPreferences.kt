@@ -55,6 +55,10 @@ object PrefKeys {
     // Amber (NIP-55) signer package holding the relay owner's key; set together with
     // RELAY_OWNER_PUBKEY by the Amber login in relay info settings.
     const val RELAY_SIGNER_PACKAGE_NAME = "relay_signer_package_name"
+
+    // Hex private key of the relay's generated fallback identity, used to sign NIP-29
+    // group metadata when no owner is configured. Read/written only by RelayIdentity.
+    const val RELAY_PRIVATE_KEY = "relay_private_key"
 }
 
 object LocalPreferences {

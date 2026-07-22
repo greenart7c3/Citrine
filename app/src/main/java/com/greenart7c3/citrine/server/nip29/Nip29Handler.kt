@@ -1,8 +1,6 @@
 package com.greenart7c3.citrine.server.nip29
 
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Connection
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.service.RelayIdentity
@@ -22,9 +20,9 @@ sealed class Nip29Result {
 
 /**
  * NIP-29 write-path rules, applied by [CustomWebSocketServer.innerProcessEvent] after an
- * event passes normal verification and only when `Settings.nip29Enabled`. Events for
- * group ids this relay doesn't manage always return [Nip29Result.NotApplicable] so
- * mirrored/backed-up group content from other relays keeps flowing unmanaged.
+ * event passes normal verification. Events for group ids this relay doesn't manage
+ * always return [Nip29Result.NotApplicable] so mirrored/backed-up group content from
+ * other relays keeps flowing unmanaged.
  */
 object Nip29Handler {
     private val HEX_KEY_REGEX = Regex("^[0-9a-f]{64}$")
@@ -175,10 +173,6 @@ object Nip29Handler {
      */
     private suspend fun issueMembershipEvent(server: CustomWebSocketServer, groupId: String, pubkey: String, add: Boolean) {
         val signer = RelayIdentity.signer()
-        if (signer == null) {
-            Log.w(Citrine.TAG, "No relay signer configured; skipping relay-issued membership event for group $groupId")
-            return
-        }
         val kind = if (add) Nip29.KIND_PUT_USER else Nip29.KIND_REMOVE_USER
         val tags = if (add) {
             arrayOf(arrayOf("h", groupId), arrayOf("p", pubkey, Nip29.ROLE_MEMBER))

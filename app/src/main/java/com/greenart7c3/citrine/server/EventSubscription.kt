@@ -55,9 +55,7 @@ object EventSubscription {
                 // NIP-29: never live-push private-group events to connections that are
                 // not authenticated as a member (stored-query reads are gated the same
                 // way in EventRepository.subscribe).
-                if (sub.filters.any { it.test(event) } &&
-                    (!Settings.nip29Enabled || GroupManager.canRead(event, sub.connection))
-                ) {
+                if (sub.filters.any { it.test(event) } && GroupManager.canRead(event, sub.connection)) {
                     val json = eventJsonStr ?: ENVELOPE_MAPPER.writeValueAsString(event.toJsonObject()).also { eventJsonStr = it }
                     sub.connection.trySend("[\"EVENT\",${sub.escapedId},$json]")
                     sentEvent = true

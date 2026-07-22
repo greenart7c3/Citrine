@@ -31,6 +31,7 @@ import com.greenart7c3.citrine.server.nip29.Nip29Result
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.EventBroadcastWorker
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.service.RelayIdentity
 import com.greenart7c3.citrine.utils.isEphemeral
 import com.greenart7c3.citrine.utils.isParameterizedReplaceable
 import com.greenart7c3.citrine.utils.shouldDelete
@@ -127,17 +128,13 @@ class CustomWebSocketServer(
         if (serverSocket == null) return
         serverSocket.close()
 
-        if (Settings.nip29Enabled) {
-            Citrine.instance.applicationScope.launch(Dispatchers.IO) {
-                try {
-                    GroupManager.load(appDatabase)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    Log.e(Citrine.TAG, "Failed to load NIP-29 groups", e)
-                }
+        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            try {
+                GroupManager.load(appDatabase)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.e(Citrine.TAG, "Failed to load NIP-29 groups", e)
             }
-        } else {
-            GroupManager.clear()
         }
 
         Log.d(Citrine.TAG, "Starting server on $host:$port isInitialized: ${::server.isInitialized}")
@@ -468,7 +465,7 @@ class CustomWebSocketServer(
         // NIP-29: ids removed by a group admin's kind-9005 moderation event stay deleted,
         // but only for groups this relay manages — mirrored 9005s from foreign groups
         // must not block re-imports.
-        if (Settings.nip29Enabled && GroupManager.hasGroups()) {
+        if (GroupManager.hasGroups()) {
             val moderationDeleted = appDatabase.eventDao().getModerationDeletedGroups(event.id)
             if (moderationDeleted.any { GroupManager.get(it) != null }) {
                 Log.d(Citrine.TAG, "Event deleted by group moderation ${event.id}")
@@ -601,15 +598,13 @@ class CustomWebSocketServer(
             }
             VerificationResult.Valid -> {
                 var nip29PostSave: (suspend () -> Unit)? = null
-                if (Settings.nip29Enabled) {
-                    when (val nip29Result = Nip29Handler.process(event, connection, this, appDatabase)) {
-                        is Nip29Result.Reject -> {
-                            connection?.trySend(CommandResult(event.id, false, nip29Result.message).toJson())
-                            return VerificationResult.RejectedByNip29
-                        }
-                        is Nip29Result.Accept -> nip29PostSave = nip29Result.postSave
-                        Nip29Result.NotApplicable -> Unit
+                when (val nip29Result = Nip29Handler.process(event, connection, this, appDatabase)) {
+                    is Nip29Result.Reject -> {
+                        connection?.trySend(CommandResult(event.id, false, nip29Result.message).toJson())
+                        return VerificationResult.RejectedByNip29
                     }
+                    is Nip29Result.Accept -> nip29PostSave = nip29Result.postSave
+                    Nip29Result.NotApplicable -> Unit
                 }
 
                 when {
@@ -1223,21 +1218,21 @@ class CustomWebSocketServer(
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
-                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 40, 42, 45, 50, 59, 65, 70, 77)
-                        if (Settings.nip29Enabled) supportedNips.add(29)
+                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 29, 40, 42, 45, 50, 59, 65, 70, 77)
 
                         // NIP-29 clients discover the relay's group-signing key via the
-                        // "self" field — the owner's key, which is the relay identity.
-                        val selfEntry = if (Settings.nip29Enabled) "\"self\": \"${Settings.ownerPubkey}\"," else ""
+                        // "self" field: the owner's key when configured, otherwise the
+                        // relay's generated identity.
+                        val relayPubkey = RelayIdentity.pubKeyHex()
 
                         call.respondText(
                             """
                             {
                               "name": "${Settings.name}",
                               "description": "${Settings.description}",
-                              "pubkey": "${Settings.ownerPubkey}",
+                              "pubkey": "${Settings.ownerPubkey.ifBlank { relayPubkey }}",
                               "contact": "${Settings.contact}",
-                              $selfEntry
+                              "self": "$relayPubkey",
                               "supported_nips": $supportedNips,
                               "software": "https://github.com/greenart7c3/Citrine",
                               "version": "${BuildConfig.VERSION_NAME}",

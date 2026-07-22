@@ -8,9 +8,7 @@ object AuthGate {
     enum class Denial { AUTH_REQUIRED, RESTRICTED }
 
     fun check(filter: EventFilter, connection: Connection): Denial? {
-        if (Settings.nip29Enabled) {
-            nip29Check(filter, connection)?.let { return it }
-        }
+        nip29Check(filter, connection)?.let { return it }
 
         for (kind in filter.kinds) {
             if (KINDS_PRIVATE_EVENTS.contains(kind)) {

@@ -194,5 +194,5 @@
     <string name="settings_reset_complete">Settings reset to defaults</string>
     <string name="logout">Logout</string>
     <string name="relay_owner_not_configured">No relay owner configured</string>
-    <string name="relay_owner_login_description">Login with an external signer to set the relay owner. The owner\'s key is the relay identity that signs NIP-29 group metadata; without an owner, relay-based groups are disabled.</string>
+    <string name="relay_owner_login_description">Login with an external signer to set the relay owner. The owner\'s key becomes the relay identity that signs NIP-29 group metadata; without an owner, the relay signs with its own generated key.</string>
 </resources>

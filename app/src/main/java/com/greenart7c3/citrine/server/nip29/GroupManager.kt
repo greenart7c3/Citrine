@@ -37,9 +37,10 @@ object GroupManager {
     // replaces the previous version even when several regens land in the same second.
     private val lastMetadataStamp = AtomicLong(0)
 
-    // The relay identity is the owner's key (signed via the Amber external signer).
+    // The relay identity: the owner's key when configured (signed via the Amber
+    // external signer), otherwise the relay's generated fallback key.
     val relayPubKey: String
-        get() = Settings.ownerPubkey
+        get() = RelayIdentity.pubKeyHex()
 
     fun hasGroups(): Boolean = groups.isNotEmpty()
 
@@ -230,10 +231,6 @@ object GroupManager {
         if (group.isDeleted) return
 
         val signer = RelayIdentity.signer()
-        if (signer == null) {
-            Log.w(Citrine.TAG, "No relay signer configured; skipping NIP-29 metadata regeneration for group $groupId")
-            return
-        }
         val createdAt = lastMetadataStamp.updateAndGet { previous -> maxOf(TimeUtils.now(), previous + 1) }
 
         val metadataTags = mutableListOf(arrayOf("d", group.id))
@@ -277,6 +274,21 @@ object GroupManager {
             // shouldVerify=false: relay-signed events must not be blocked by the owner's
             // allowlists or rejected-kinds configuration.
             server.innerProcessEvent(signed, connection = null, shouldVerify = false)
+        }
+
+        // An Amber login/logout changes the relay identity; metadata signed by the
+        // previous identity is a distinct addressable event that would linger next to
+        // the fresh copies, so drop it once the new set is stored.
+        val db = AppDatabase.getDatabase(Citrine.instance)
+        val staleIds = EventRepository.query(
+            db,
+            EventFilter(
+                kinds = Nip29.METADATA_KINDS,
+                tags = mapOf("d" to setOf(group.id)),
+            ),
+        ).filter { it.event.pubkey != relayPubKey }.map { it.event.id }
+        if (staleIds.isNotEmpty()) {
+            db.eventDao().delete(staleIds)
         }
     }
 }

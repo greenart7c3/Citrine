@@ -57,15 +57,11 @@ object Settings {
 
     // Amber (NIP-55) signer package that holds the relay owner's key. Set together with
     // [ownerPubkey] by the "login with Amber" flow in relay info settings — the owner
-    // pubkey can only be configured through that login, never typed manually.
+    // pubkey can only be configured through that login, never typed manually. NIP-29
+    // groups are always managed: when an owner is configured their key is the relay
+    // identity, otherwise a locally generated key signs the group metadata
+    // (see RelayIdentity). Foreign group ids always pass through unmanaged.
     var relaySignerPackageName = ""
-
-    // NIP-29 relay-based groups are active whenever a relay owner is configured. The
-    // owner's key (via the Amber signer) is the relay identity that signs group
-    // metadata. With no owner, h-tagged and 39xxx events flow unmanaged so Citrine
-    // keeps acting as a plain cache/backup relay; foreign group ids always pass through.
-    val nip29Enabled: Boolean
-        get() = ownerPubkey.isNotBlank() && relaySignerPackageName.isNotBlank()
 
     // When true, ephemeral events that no open subscription was listening to receive a
     // NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so

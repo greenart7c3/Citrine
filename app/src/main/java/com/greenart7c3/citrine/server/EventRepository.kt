@@ -188,7 +188,7 @@ object EventRepository {
         // ever naming the group id. The per-event check works on the raw rows, so the
         // no-quartz-Event fast path below is preserved, and it only runs at all while a
         // private/hidden managed group exists.
-        val applyNip29Gate = Settings.nip29Enabled && GroupManager.hasPrivateGroups()
+        val applyNip29Gate = GroupManager.hasPrivateGroups()
 
         if (subscription.count) {
             val count = if (applyNip29Gate) {

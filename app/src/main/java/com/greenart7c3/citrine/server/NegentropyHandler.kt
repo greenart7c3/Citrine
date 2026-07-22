@@ -49,7 +49,7 @@ object NegentropyHandler {
 
         // NIP-29: with private groups on the relay, a broad filter's id set could reveal
         // private-group event ids, so the storage is built from readable events only.
-        val nip29Gate = Settings.nip29Enabled && GroupManager.hasPrivateGroups()
+        val nip29Gate = GroupManager.hasPrivateGroups()
         val storage = StorageVector().apply {
             if (nip29Gate) {
                 EventRepository.query(appDatabase, filter).forEach {
