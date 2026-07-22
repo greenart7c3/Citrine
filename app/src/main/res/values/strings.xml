@@ -182,6 +182,8 @@
     <string name="no_blocked_ips_hint">No blocked IPs. Connections from blocked addresses are refused.</string>
     <string name="invalid_event_id">Invalid event id</string>
     <string name="invalid_ip">Invalid IP address</string>
+    <string name="delete_banned_pubkey_events_title">Delete stored events?</string>
+    <string name="delete_banned_pubkey_events_message">Also delete all events stored from %1$s? They will be removed from the database when you apply changes. This cannot be undone.</string>
     <string name="nsites">Nsites</string>
     <string name="browse_nsites">Browse nsites</string>
     <string name="check_for_updates">Check for updates</string>

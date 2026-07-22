@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.PubkeyInputRow
@@ -57,6 +60,11 @@ fun Nip86SettingsScreen(
         var bannedEventInput by remember { mutableStateOf(TextFieldValue("")) }
         var blockedIpInput by remember { mutableStateOf(TextFieldValue("")) }
 
+        // Pubkeys the user opted to purge from the database. Deletion runs on
+        // Apply, so backing out of the screen without applying deletes nothing.
+        var pubkeysToPurge by remember { mutableStateOf(setOf<String>()) }
+        var purgeDialogPubkey by remember { mutableStateOf<String?>(null) }
+
         val applyChanges = {
             scope.launch(Dispatchers.IO) {
                 isLoading = true
@@ -64,6 +72,11 @@ fun Nip86SettingsScreen(
                 Settings.bannedEventIds = java.util.concurrent.ConcurrentHashMap(bannedEventIds)
                 Settings.blockedIps = java.util.concurrent.ConcurrentHashMap(blockedIps)
                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                val eventDao = AppDatabase.getDatabase(context).eventDao()
+                pubkeysToPurge.intersect(bannedPubKeys.keys).forEach { pubkey ->
+                    eventDao.deleteByPubkey(pubkey)
+                }
+                pubkeysToPurge = emptySet()
                 onApplyChanges()
                 delay(1500)
                 isLoading = false
@@ -78,6 +91,7 @@ fun Nip86SettingsScreen(
                 false
             } else {
                 bannedPubKeys = bannedPubKeys + (key to "")
+                purgeDialogPubkey = key
                 true
             }
         }
@@ -226,6 +240,29 @@ fun Nip86SettingsScreen(
             }
 
             SettingsApplyBar(enabled = !isLoading, onApply = applyChanges)
+        }
+
+        purgeDialogPubkey?.let { pubkey ->
+            AlertDialog(
+                onDismissRequest = { purgeDialogPubkey = null },
+                title = { Text(stringResource(R.string.delete_banned_pubkey_events_title)) },
+                text = { Text(stringResource(R.string.delete_banned_pubkey_events_message, pubkey.toShortenHex())) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pubkeysToPurge = pubkeysToPurge + pubkey
+                            purgeDialogPubkey = null
+                        },
+                    ) {
+                        Text(stringResource(R.string.yes))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { purgeDialogPubkey = null }) {
+                        Text(stringResource(R.string.no))
+                    }
+                },
+            )
         }
     }
 }
