@@ -117,6 +117,8 @@ fun BrowseNsitesScreen(
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
                                 items(filtered) { nsite ->
                                     val rowInstalling = installing?.takeIf { it.address == nsite.address }
+                                    val nsiteInstalledMsg = stringResource(R.string.nsite_installed, nsite.displayName)
+                                    val nsiteInstallFailedMsg = stringResource(R.string.nsite_install_failed, nsite.displayName)
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -129,9 +131,9 @@ fun BrowseNsitesScreen(
                                                     withContext(Dispatchers.Main) {
                                                         installing = null
                                                         val message = if (result.isSuccess) {
-                                                            context.getString(R.string.nsite_installed, nsite.displayName)
+                                                            nsiteInstalledMsg
                                                         } else {
-                                                            context.getString(R.string.nsite_install_failed, nsite.displayName)
+                                                            nsiteInstallFailedMsg
                                                         }
                                                         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                                     }

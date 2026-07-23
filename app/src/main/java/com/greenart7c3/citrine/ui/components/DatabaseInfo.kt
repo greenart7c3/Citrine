@@ -161,7 +161,6 @@ class DatabaseInfoViewModel(
 
     override fun onCleared() {
         Log.d(Citrine.TAG, "DatabaseInfoViewModel cleared")
-        super.onCleared()
     }
 }
 

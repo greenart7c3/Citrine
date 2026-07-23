@@ -62,6 +62,10 @@ fun ContactsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val ensureSignerAuthorizedMsg = stringResource(R.string.make_sure_the_signer_application_has_authorized_this_transaction)
+    val noRelaysFoundMsg = stringResource(R.string.no_relays_found)
+
     val signer = NostrSignerExternal(
         pubKey,
         packageName,
@@ -73,7 +77,7 @@ fun ContactsScreen(
             if (result.resultCode != Activity.RESULT_OK) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.sign_request_rejected),
+                    signRequestRejectedMsg,
                     Toast.LENGTH_SHORT,
                 ).show()
             } else {
@@ -94,7 +98,7 @@ fun ContactsScreen(
             coroutineScope.launch {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.make_sure_the_signer_application_has_authorized_this_transaction),
+                    ensureSignerAuthorizedMsg,
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -183,7 +187,7 @@ fun ContactsScreen(
                                         coroutineScope.launch {
                                             Toast.makeText(
                                                 context,
-                                                context.getString(R.string.no_relays_found),
+                                                noRelaysFoundMsg,
                                                 Toast.LENGTH_SHORT,
                                             ).show()
                                         }

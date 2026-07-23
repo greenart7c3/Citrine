@@ -2,6 +2,7 @@ package com.greenart7c3.citrine.provider
 
 import android.net.Uri
 import android.provider.BaseColumns
+import androidx.core.net.toUri
 
 /**
  * Contract class for Citrine Content Provider.
@@ -9,7 +10,7 @@ import android.provider.BaseColumns
  */
 object CitrineContract {
     const val AUTHORITY = "com.greenart7c3.citrine.provider"
-    private val BASE_URI = Uri.parse("content://$AUTHORITY")
+    private val BASE_URI = "content://$AUTHORITY".toUri()
 
     /**
      * Events table contract

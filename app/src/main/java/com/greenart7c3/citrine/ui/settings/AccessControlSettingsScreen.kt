@@ -38,6 +38,8 @@ fun AccessControlSettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboardManager = LocalClipboard.current
+    val invalidKeyMsg = stringResource(R.string.invalid_key)
+    val invalidKindMsg = stringResource(R.string.invalid_kind)
 
     Surface(modifier) {
         var allowedPubKeys by remember { mutableStateOf(Settings.allowedPubKeys) }
@@ -80,7 +82,7 @@ fun AccessControlSettingsScreen(
                                 signedBy = TextFieldValue(text)
                                 val key = text.toNostrKey()
                                 if (key == null) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
                                 allowedPubKeys = allowedPubKeys + key
@@ -90,7 +92,7 @@ fun AccessControlSettingsScreen(
                         onAdd = {
                             val key = signedBy.text.toNostrKey()
                             if (key == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             allowedPubKeys = allowedPubKeys + key
@@ -123,7 +125,7 @@ fun AccessControlSettingsScreen(
                                 referredBy = TextFieldValue(text)
                                 val key = text.toNostrKey()
                                 if (key == null) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
                                 allowedTaggedPubKeys = allowedTaggedPubKeys + key
@@ -133,7 +135,7 @@ fun AccessControlSettingsScreen(
                         onAdd = {
                             val key = referredBy.text.toNostrKey()
                             if (key == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             allowedTaggedPubKeys = allowedTaggedPubKeys + key
@@ -166,7 +168,7 @@ fun AccessControlSettingsScreen(
                                 kind = TextFieldValue(text)
                                 val k = text.toIntOrNull()
                                 if (k == null) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
                                 allowedKinds = allowedKinds + k
@@ -176,7 +178,7 @@ fun AccessControlSettingsScreen(
                         onAdd = {
                             val k = kind.text.toIntOrNull()
                             if (k == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             allowedKinds = allowedKinds + k
@@ -209,7 +211,7 @@ fun AccessControlSettingsScreen(
                                 rejectedKind = TextFieldValue(text)
                                 val k = text.toIntOrNull()
                                 if (k == null) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
                                 rejectedKinds = rejectedKinds + k
@@ -219,7 +221,7 @@ fun AccessControlSettingsScreen(
                         onAdd = {
                             val k = rejectedKind.text.toIntOrNull()
                             if (k == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             rejectedKinds = rejectedKinds + k

@@ -67,6 +67,10 @@ fun RelayInfoSettingsScreen(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val invalidHostOrPortMsg = stringResource(R.string.invalid_host_or_port)
+    val invalidIconUrlMsg = stringResource(R.string.invalid_icon_url)
+    val noSignerInstalledMsg = stringResource(R.string.no_external_signer_installed)
 
     Surface(modifier) {
         var host by remember { mutableStateOf(TextFieldValue(Settings.host)) }
@@ -95,7 +99,7 @@ fun RelayInfoSettingsScreen(
             if (result.resultCode != Activity.RESULT_OK) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.sign_request_rejected),
+                    signRequestRejectedMsg,
                     Toast.LENGTH_SHORT,
                 ).show()
             } else {
@@ -123,11 +127,11 @@ fun RelayInfoSettingsScreen(
 
         val applyChanges: () -> Unit = {
             if (!isIpValid(host.text) || host.text.isBlank()) {
-                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, invalidHostOrPortMsg, Toast.LENGTH_SHORT).show()
             } else if (port.text.isBlank() || !port.text.isDigitsOnly()) {
-                Toast.makeText(context, context.getString(R.string.invalid_host_or_port), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, invalidHostOrPortMsg, Toast.LENGTH_SHORT).show()
             } else if (relayIconUrl.text.isNotBlank() && runCatching { relayIconUrl.text.toUri() }.isFailure) {
-                Toast.makeText(context, context.getString(R.string.invalid_icon_url), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, invalidIconUrlMsg, Toast.LENGTH_SHORT).show()
             } else {
                 scope.launch(Dispatchers.IO) {
                     isLoading = true
@@ -221,7 +225,7 @@ fun RelayInfoSettingsScreen(
                                     Log.d(Citrine.TAG, e.message ?: "", e)
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.no_external_signer_installed),
+                                        noSignerInstalledMsg,
                                         Toast.LENGTH_SHORT,
                                     ).show()
                                 }

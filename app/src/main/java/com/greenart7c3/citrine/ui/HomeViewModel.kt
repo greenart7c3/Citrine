@@ -204,7 +204,6 @@ class HomeViewModel : ViewModel() {
 
     override fun onCleared() {
         Log.d(Citrine.TAG, "HomeViewModel cleared")
-        super.onCleared()
     }
 
     fun setProgress(message: String) {

@@ -83,6 +83,8 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val noSignerMsg = stringResource(R.string.no_external_signer_installed)
 
     Surface(
         modifier = modifier,
@@ -118,7 +120,7 @@ fun HomeScreen(
                 if (result.resultCode != RESULT_OK) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.sign_request_rejected),
+                        signRequestRejectedMsg,
                         Toast.LENGTH_SHORT,
                     ).show()
                 } else {
@@ -150,7 +152,7 @@ fun HomeScreen(
                 if (result.resultCode != RESULT_OK) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.sign_request_rejected),
+                        signRequestRejectedMsg,
                         Toast.LENGTH_SHORT,
                     ).show()
                 } else {
@@ -399,9 +401,11 @@ fun HomeScreen(
                 }
 
                 if (Settings.relayAggregatorEnabled) {
+                    val currentStatus = RelayAggregator.status.collectAsStateWithLifecycle()
+
                     @OptIn(FlowPreview::class)
                     val aggregatorStatus = remember { RelayAggregator.status.sample(2_000) }
-                        .collectAsStateWithLifecycle(initialValue = RelayAggregator.status.value)
+                        .collectAsStateWithLifecycle(initialValue = currentStatus.value)
                     AggregatorStatusCard(
                         status = aggregatorStatus.value,
                         modifier = Modifier.fillMaxWidth(),
@@ -422,7 +426,7 @@ fun HomeScreen(
                             coroutineScope.launch(Dispatchers.Main) {
                                 Toast.makeText(
                                     context,
-                                    context.getString(R.string.no_external_signer_installed),
+                                    noSignerMsg,
                                     Toast.LENGTH_SHORT,
                                 ).show()
                             }

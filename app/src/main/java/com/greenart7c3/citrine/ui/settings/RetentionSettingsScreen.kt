@@ -44,6 +44,8 @@ fun RetentionSettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboardManager = LocalClipboard.current
+    val invalidKeyMsg = stringResource(R.string.invalid_key)
+    val invalidKindMsg = stringResource(R.string.invalid_kind)
 
     Surface(modifier) {
         var neverDeleteFrom by remember { mutableStateOf(Settings.neverDeleteFrom) }
@@ -111,7 +113,7 @@ fun RetentionSettingsScreen(
                                 deleteFrom = TextFieldValue(text)
                                 val key = text.toNostrKey()
                                 if (key == null) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
                                 neverDeleteFrom = neverDeleteFrom + key
@@ -121,7 +123,7 @@ fun RetentionSettingsScreen(
                         onAdd = {
                             val key = deleteFrom.text.toNostrKey()
                             if (key == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             neverDeleteFrom = neverDeleteFrom + key
@@ -152,7 +154,7 @@ fun RetentionSettingsScreen(
                                 preservedKindInput = TextFieldValue(text)
                                 val k = text.toIntOrNull()
                                 if (k == null) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
                                 preservedKindsFromDeletion = preservedKindsFromDeletion + k
@@ -162,7 +164,7 @@ fun RetentionSettingsScreen(
                         onAdd = {
                             val k = preservedKindInput.text.toIntOrNull()
                             if (k == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             preservedKindsFromDeletion = preservedKindsFromDeletion + k

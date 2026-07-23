@@ -59,8 +59,8 @@
     <string name="download_your_events">Descargar tus eventos</string>
     <string name="fetch_events">Obtener eventos</string>
     <string name="login_with_external_signer">Iniciar sesión con firmante externo</string>
-    <string name="npub1">npub1...</string>
-    <string name="wss">wss://...</string>
+    <string name="npub1">npub1…</string>
+    <string name="wss">wss://…</string>
     <string name="delete">Borrar</string>
     <string name="are_you_sure_you_want_to_delete_all_events_of_kind">¿Está seguro que desea eliminar todos los eventos de tipo %1$d?</string>
     <string name="listen_to_pokey_broadcasts">Escucha las transmisiones de pokey</string>

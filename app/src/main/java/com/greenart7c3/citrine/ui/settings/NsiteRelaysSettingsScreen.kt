@@ -39,6 +39,7 @@ fun NsiteRelaysSettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboardManager = LocalClipboard.current
+    val invalidRelayMsg = stringResource(R.string.relay_aggregator_invalid_relay)
 
     Surface(modifier) {
         var nsiteRelays by remember { mutableStateOf(Settings.nsiteRelays) }
@@ -78,7 +79,7 @@ fun NsiteRelaysSettingsScreen(
                         onAdd = {
                             val normalized = normalizeRelayInput(nsiteRelayInput.text)
                             if (normalized == null) {
-                                Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidRelayMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             nsiteRelays = nsiteRelays + normalized

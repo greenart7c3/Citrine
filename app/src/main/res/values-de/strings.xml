@@ -59,8 +59,8 @@
     <string name="download_your_events">Download your events</string>
     <string name="fetch_events">Fetch events</string>
     <string name="login_with_external_signer">Login with external signer</string>
-    <string name="npub1">npub1...</string>
-    <string name="wss">wss://...</string>
+    <string name="npub1">npub1…</string>
+    <string name="wss">wss://…</string>
     <string name="delete">Delete</string>
     <string name="are_you_sure_you_want_to_delete_all_events_of_kind">Are you sure you want to delete all events of kind %1$d?</string>
     <string name="listen_to_pokey_broadcasts">Listen to pokey broadcasts</string>
