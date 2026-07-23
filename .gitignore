@@ -133,3 +133,4 @@ lint/tmp/
 # lint/reports/
 quartz/
 __pycache__/
+.ai-jail
