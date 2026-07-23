@@ -2,13 +2,23 @@
 
 package com.greenart7c3.citrine.ui.settings
 
+import android.app.Activity
+import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,14 +30,26 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.PubkeyInputRow
 import com.greenart7c3.citrine.ui.components.PubkeyListItem
+import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
+import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
+import com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType
+import com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private enum class ImportTarget { SIGNED_BY, REFERS_TO }
+
+private data class ImportSession(val pubkey: String, val packageName: String)
 
 @Composable
 fun AccessControlSettingsScreen(
@@ -49,6 +71,60 @@ fun AccessControlSettingsScreen(
         var referredBy by remember { mutableStateOf(TextFieldValue("")) }
         var kind by remember { mutableStateOf(TextFieldValue("")) }
         var rejectedKind by remember { mutableStateOf(TextFieldValue("")) }
+
+        var importTarget by remember { mutableStateOf<ImportTarget?>(null) }
+        var importSession by remember { mutableStateOf<ImportSession?>(null) }
+
+        val importLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            if (result.resultCode != Activity.RESULT_OK) {
+                Toast.makeText(context, context.getString(R.string.sign_request_rejected), Toast.LENGTH_SHORT).show()
+                importTarget = null
+            } else {
+                result.data?.let { data ->
+                    try {
+                        val key = data.getStringExtra("signature") ?: ""
+                        val packageName = data.getStringExtra("package") ?: ""
+                        val returnedKey = if (key.startsWith("npub")) {
+                            when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+                                is NPub -> parsed.hex
+                                else -> ""
+                            }
+                        } else {
+                            key
+                        }
+                        if (returnedKey.isNotBlank() && packageName.isNotBlank()) {
+                            importSession = ImportSession(returnedKey, packageName)
+                        } else {
+                            importTarget = null
+                        }
+                    } catch (e: Exception) {
+                        Log.d(Citrine.TAG, e.message ?: "", e)
+                        importTarget = null
+                    }
+                }
+            }
+        }
+
+        val launchImport: (ImportTarget) -> Unit = { target ->
+            importTarget = target
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+                intent.putExtra("type", "get_public_key")
+                val permissions = listOf(
+                    Permission(CommandType.NIP04_DECRYPT),
+                    Permission(CommandType.NIP44_DECRYPT),
+                ).joinToString(",") { it.toJson() }
+                intent.putExtra("permissions", "[$permissions]")
+                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                importLauncher.launch(intent)
+            } catch (e: Exception) {
+                Log.d(Citrine.TAG, e.message ?: "", e)
+                Toast.makeText(context, context.getString(R.string.no_external_signer_installed), Toast.LENGTH_SHORT).show()
+                importTarget = null
+            }
+        }
 
         val applyChanges = {
             scope.launch(Dispatchers.IO) {
@@ -98,6 +174,16 @@ fun AccessControlSettingsScreen(
                         },
                     )
                 }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { launchImport(ImportTarget.SIGNED_BY) }) {
+                            Text(stringResource(R.string.import_from_lists))
+                        }
+                    }
+                }
                 if (allowedPubKeys.isEmpty()) {
                     item {
                         EmptyListHint(stringResource(R.string.allow_all_pubkeys_hint))
@@ -140,6 +226,16 @@ fun AccessControlSettingsScreen(
                             referredBy = TextFieldValue("")
                         },
                     )
+                }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { launchImport(ImportTarget.REFERS_TO) }) {
+                            Text(stringResource(R.string.import_from_lists))
+                        }
+                    }
                 }
                 if (allowedTaggedPubKeys.isEmpty()) {
                     item {
@@ -241,6 +337,29 @@ fun AccessControlSettingsScreen(
             }
 
             SettingsApplyBar(enabled = !isLoading, onApply = applyChanges)
+        }
+
+        importSession?.let { session ->
+            val target = importTarget
+            if (target != null) {
+                ImportFromListsDialog(
+                    signerPubkey = session.pubkey,
+                    signerPackage = session.packageName,
+                    onDismiss = {
+                        importSession = null
+                        importTarget = null
+                    },
+                    onConfirm = { selected ->
+                        if (target == ImportTarget.SIGNED_BY) {
+                            allowedPubKeys = allowedPubKeys + selected
+                        } else {
+                            allowedTaggedPubKeys = allowedTaggedPubKeys + selected
+                        }
+                        importSession = null
+                        importTarget = null
+                    },
+                )
+            }
         }
     }
 }
