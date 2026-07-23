@@ -2,12 +2,9 @@ package com.greenart7c3.citrine.ui
 
 import android.Manifest
 import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.os.IBinder
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
@@ -32,12 +29,11 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class HomeState(
-    val loading: Boolean = false,
-    val bound: Boolean = false,
-    val service: WebSocketServerService? = null,
     val pubKey: String = "",
 )
 
@@ -54,63 +50,30 @@ class HomeViewModel : ViewModel() {
         Citrine.instance.contentResolver,
     )
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val binder = service as WebSocketServerService.LocalBinder
-            _state.value = _state.value.copy(
-                service = binder.getService(),
-                bound = true,
-            )
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            _state.value = _state.value.copy(
-                bound = false,
-            )
-        }
-    }
-
-    fun setLoading(loading: Boolean) {
-        _state.value = _state.value.copy(loading = loading)
-    }
-
     suspend fun stop(context: Context) {
         try {
-            setLoading(true)
             val intent = Intent(context, WebSocketServerService::class.java)
             context.stopService(intent)
-            if (state.value.bound) context.unbindService(connection)
-            _state.value = _state.value.copy(
-                service = null,
-                bound = false,
-            )
-            delay(2000)
+            withTimeoutOrNull(5_000) {
+                CustomWebSocketService.running.first { !it }
+            }
         } catch (e: Exception) {
-            setLoading(false)
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, e.message ?: "", e)
-        } finally {
-            setLoading(false)
         }
     }
 
     suspend fun start(context: Context) {
-        if (state.value.service?.isStarted() == true) {
+        if (CustomWebSocketService.server != null) {
             return
         }
 
         try {
-            setLoading(true)
             val intent = Intent(context, WebSocketServerService::class.java)
             context.startService(intent)
-            context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
-            delay(2000)
         } catch (e: Exception) {
-            setLoading(false)
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, e.message ?: "", e)
-        } finally {
-            setLoading(false)
         }
     }
 
@@ -240,17 +203,7 @@ class HomeViewModel : ViewModel() {
     }
 
     override fun onCleared() {
-        try {
-            Log.d(Citrine.TAG, "HomeViewModel cleared")
-            if (state.value.bound) {
-                Citrine.instance.unbindService(connection)
-                _state.value = _state.value.copy(
-                    bound = false,
-                )
-            }
-        } catch (e: Exception) {
-            Log.d(Citrine.TAG, e.message ?: "", e)
-        }
+        Log.d(Citrine.TAG, "HomeViewModel cleared")
         super.onCleared()
     }
 

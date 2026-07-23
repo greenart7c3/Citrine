@@ -317,6 +317,7 @@ class WebSocketServerService : Service() {
                     RelayAggregator.stop()
                     EventSubscription.closeAll()
                     CustomWebSocketService.server?.stop()
+                    CustomWebSocketService.server = null
                 } catch (e: Throwable) {
                     Log.e(Citrine.TAG, "Error during service onDestroy cleanup", e)
                 }

@@ -102,6 +102,7 @@ fun HomeScreen(
 
         val state = homeViewModel.state.collectAsStateWithLifecycle()
         val isUpgradingDatabase = isDatabaseUpgrading.collectAsStateWithLifecycle()
+        val isRunning = CustomWebSocketService.running.collectAsStateWithLifecycle()
         var deleteAllDialog by remember { mutableStateOf(false) }
         var showDialog by remember { mutableStateOf(false) }
         var showAutoBackupDialog by remember { mutableStateOf(false) }
@@ -317,10 +318,8 @@ fun HomeScreen(
             if (isUpgradingDatabase.value) {
                 CircularProgressIndicator()
                 Text(stringResource(R.string.upgrading_database))
-            } else if (state.value.loading) {
-                CircularProgressIndicator()
             } else {
-                val isStarted = homeViewModel.state.value.service?.isStarted() ?: false
+                val isStarted = isRunning.value
                 if (isStarted) {
                     Text(stringResource(R.string.relay_started_at))
                     AddressRow(
