@@ -98,6 +98,17 @@ fun RebroadcastScreen(
     var loadingUserRelays by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    val invalidRelayMsg = stringResource(R.string.relay_aggregator_invalid_relay)
+    val invalidAccountMsg = stringResource(R.string.rebroadcast_invalid_account)
+    val accountRequiredMsg = stringResource(R.string.rebroadcast_account_required)
+    val noRelaysFoundMsg = stringResource(R.string.no_relays_found)
+    val rebroadcastNoRelaysMsg = stringResource(R.string.rebroadcast_no_relays)
+    val invalidKindMsg = stringResource(R.string.invalid_kind)
+    val invalidDateMsg = stringResource(R.string.rebroadcast_invalid_date)
+    val invalidDateRangeMsg = stringResource(R.string.rebroadcast_invalid_date_range)
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
+
     fun toast(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
@@ -114,7 +125,7 @@ fun RebroadcastScreen(
         if (relayText.text.isBlank()) return
         val url = RelayUrlNormalizer.normalizeOrNull(relayText.text)
         if (url == null) {
-            toast(context.getString(R.string.relay_aggregator_invalid_relay))
+            toast(invalidRelayMsg)
             return
         }
         if (relays.none { it.displayUrl() == url.displayUrl() }) {
@@ -143,11 +154,11 @@ fun RebroadcastScreen(
     fun loadAuthorRelays() {
         val author = parseAuthorOrNull()
         if (author == null) {
-            toast(context.getString(R.string.rebroadcast_invalid_account))
+            toast(invalidAccountMsg)
             return
         }
         if (author.isBlank()) {
-            toast(context.getString(R.string.rebroadcast_account_required))
+            toast(accountRequiredMsg)
             return
         }
         loadingUserRelays = true
@@ -177,7 +188,7 @@ fun RebroadcastScreen(
 
                 withContext(Dispatchers.Main) {
                     if (found.isEmpty()) {
-                        toast(context.getString(R.string.no_relays_found))
+                        toast(noRelaysFoundMsg)
                     } else {
                         addRelays(found)
                     }
@@ -186,7 +197,7 @@ fun RebroadcastScreen(
                 if (e is CancellationException) throw e
                 Log.d(Citrine.TAG, e.message ?: "", e)
                 withContext(Dispatchers.Main) {
-                    toast(context.getString(R.string.no_relays_found))
+                    toast(noRelaysFoundMsg)
                 }
             } finally {
                 loadingUserRelays = false
@@ -208,20 +219,20 @@ fun RebroadcastScreen(
 
     fun validate(): RebroadcastRequest? {
         if (relays.isEmpty()) {
-            toast(context.getString(R.string.rebroadcast_no_relays))
+            toast(rebroadcastNoRelaysMsg)
             return null
         }
 
         val author = parseAuthorOrNull()
         if (author == null) {
-            toast(context.getString(R.string.rebroadcast_invalid_account))
+            toast(invalidAccountMsg)
             return null
         }
 
         val kindTokens = kindsText.text.split(",").map { it.trim() }.filter { it.isNotBlank() }
         val kinds = kindTokens.mapNotNull { it.toIntOrNull() }.toSet()
         if (kinds.size != kindTokens.size) {
-            toast(context.getString(R.string.invalid_kind))
+            toast(invalidKindMsg)
             return null
         }
 
@@ -229,7 +240,7 @@ fun RebroadcastScreen(
             null
         } else {
             parseDateOrNull(fromDateText.text, endOfDay = false) ?: run {
-                toast(context.getString(R.string.rebroadcast_invalid_date))
+                toast(invalidDateMsg)
                 return null
             }
         }
@@ -237,12 +248,12 @@ fun RebroadcastScreen(
             null
         } else {
             parseDateOrNull(toDateText.text, endOfDay = true) ?: run {
-                toast(context.getString(R.string.rebroadcast_invalid_date))
+                toast(invalidDateMsg)
                 return null
             }
         }
         if (since != null && until != null && since > until) {
-            toast(context.getString(R.string.rebroadcast_invalid_date_range))
+            toast(invalidDateRangeMsg)
             return null
         }
 
@@ -260,7 +271,7 @@ fun RebroadcastScreen(
         contract = ActivityResultContracts.StartActivityForResult(),
         onResult = { result ->
             if (result.resultCode != RESULT_OK) {
-                toast(context.getString(R.string.sign_request_rejected))
+                toast(signRequestRejectedMsg)
             } else {
                 result.data?.let {
                     try {
@@ -292,7 +303,7 @@ fun RebroadcastScreen(
             launcherLogin.launch(intent)
         } catch (e: Exception) {
             Log.d(Citrine.TAG, e.message ?: "", e)
-            toast(context.getString(R.string.no_external_signer_installed))
+            toast(noExternalSignerMsg)
             val intent = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
             launcherLogin.launch(intent)
         }

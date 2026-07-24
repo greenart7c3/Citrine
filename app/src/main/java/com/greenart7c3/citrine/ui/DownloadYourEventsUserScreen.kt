@@ -240,6 +240,8 @@ fun DownloadYourEventsUserScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
     var shouldShowDialog by remember { mutableStateOf(false) }
     var npub by remember { mutableStateOf(TextFieldValue()) }
     var signer by remember { mutableStateOf<NostrSigner?>(null) }
@@ -251,7 +253,7 @@ fun DownloadYourEventsUserScreen(
             if (result.resultCode != RESULT_OK) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.sign_request_rejected),
+                    signRequestRejectedMsg,
                     Toast.LENGTH_SHORT,
                 ).show()
             } else {
@@ -382,7 +384,7 @@ fun DownloadYourEventsUserScreen(
                     scope.launch(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.no_external_signer_installed),
+                            noExternalSignerMsg,
                             Toast.LENGTH_SHORT,
                         ).show()
                     }

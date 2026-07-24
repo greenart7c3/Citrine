@@ -126,6 +126,7 @@ fun SettingsScreen(
     onApplyChanges: () -> Unit,
 ) {
     val context = LocalContext.current
+    val settingsResetCompleteMsg = stringResource(R.string.settings_reset_complete)
     val scope = rememberCoroutineScope()
     var showResetDialog by remember { mutableStateOf(false) }
 
@@ -188,7 +189,7 @@ fun SettingsScreen(
                             scope.launch {
                                 Toast.makeText(
                                     context,
-                                    context.getString(R.string.settings_reset_complete),
+                                    settingsResetCompleteMsg,
                                     Toast.LENGTH_SHORT,
                                 ).show()
                             }

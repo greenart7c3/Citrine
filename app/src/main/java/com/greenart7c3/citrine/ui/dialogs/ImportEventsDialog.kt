@@ -4,7 +4,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.greenart7c3.citrine.R
 
 @Composable
@@ -13,27 +13,26 @@ fun ImportEventsDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onClose,
         title = {
-            Text(context.getString(R.string.import_events))
+            Text(stringResource(R.string.import_events))
         },
         text = {
-            Text(context.getString(R.string.import_events_warning))
+            Text(stringResource(R.string.import_events_warning))
         },
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
             ) {
-                Text(context.getString(R.string.yes))
+                Text(stringResource(R.string.yes))
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
             ) {
-                Text(context.getString(R.string.no))
+                Text(stringResource(R.string.no))
             }
         },
     )

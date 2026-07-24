@@ -43,7 +43,6 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
-import com.greenart7c3.citrine.logs.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
@@ -158,11 +157,6 @@ class DatabaseInfoViewModel(
                 SharingStarted.WhileSubscribed(5_000),
                 emptyList(),
             )
-
-    override fun onCleared() {
-        Log.d(Citrine.TAG, "DatabaseInfoViewModel cleared")
-        super.onCleared()
-    }
 }
 
 @Composable

@@ -62,6 +62,11 @@ fun AggregatorSettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboardManager = LocalClipboard.current
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val pubkeyOrRelaysRequiredMsg = stringResource(R.string.relay_aggregator_pubkey_or_relays_required)
+    val noSignerInstalledMsg = stringResource(R.string.no_external_signer_installed)
+    val invalidKindMsg = stringResource(R.string.invalid_kind)
+    val invalidRelayMsg = stringResource(R.string.relay_aggregator_invalid_relay)
 
     Surface(modifier) {
         var relayAggregatorEnabled by remember { mutableStateOf(Settings.relayAggregatorEnabled) }
@@ -89,7 +94,7 @@ fun AggregatorSettingsScreen(
             if (result.resultCode != Activity.RESULT_OK) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.sign_request_rejected),
+                    signRequestRejectedMsg,
                     Toast.LENGTH_SHORT,
                 ).show()
             } else {
@@ -176,7 +181,7 @@ fun AggregatorSettingsScreen(
                         checked = relayAggregatorEnabled,
                         onCheckedChange = {
                             if (it && aggregatorPubkey.text.isBlank() && aggregatorExtraRelays.isEmpty()) {
-                                Toast.makeText(context, context.getString(R.string.relay_aggregator_pubkey_or_relays_required), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, pubkeyOrRelaysRequiredMsg, Toast.LENGTH_SHORT).show()
                                 return@SwitchSettingRow
                             }
                             relayAggregatorEnabled = it
@@ -204,7 +209,7 @@ fun AggregatorSettingsScreen(
                                         Log.d(Citrine.TAG, e.message ?: "", e)
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.no_external_signer_installed),
+                                            noSignerInstalledMsg,
                                             Toast.LENGTH_SHORT,
                                         ).show()
                                         val fallback = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
@@ -264,7 +269,7 @@ fun AggregatorSettingsScreen(
                                 aggregatorKindInput = TextFieldValue(text)
                                 val k = text.toIntOrNull()
                                 if (k == null) {
-                                    Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                     return@launch
                                 }
                                 aggregatorKinds = aggregatorKinds + k
@@ -274,7 +279,7 @@ fun AggregatorSettingsScreen(
                         onAdd = {
                             val k = aggregatorKindInput.text.toIntOrNull()
                             if (k == null) {
-                                Toast.makeText(context, context.getString(R.string.invalid_kind), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidKindMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             aggregatorKinds = aggregatorKinds + k
@@ -321,7 +326,7 @@ fun AggregatorSettingsScreen(
                         onAdd = {
                             val normalized = normalizeRelayInput(aggregatorExtraRelayInput.text)
                             if (normalized == null) {
-                                Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidRelayMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             aggregatorExtraRelays = aggregatorExtraRelays + normalized
@@ -368,7 +373,7 @@ fun AggregatorSettingsScreen(
                         onAdd = {
                             val normalized = normalizeRelayInput(aggregatorSourceRelayInput.text)
                             if (normalized == null) {
-                                Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidRelayMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             aggregatorSourceRelays = aggregatorSourceRelays + normalized
@@ -417,7 +422,7 @@ fun AggregatorSettingsScreen(
                         onAdd = {
                             val normalized = normalizeRelayInput(aggregatorIndexerRelayInput.text)
                             if (normalized == null) {
-                                Toast.makeText(context, context.getString(R.string.relay_aggregator_invalid_relay), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, invalidRelayMsg, Toast.LENGTH_SHORT).show()
                                 return@PubkeyInputRow
                             }
                             aggregatorIndexerRelays = aggregatorIndexerRelays + normalized

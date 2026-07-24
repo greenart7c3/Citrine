@@ -34,6 +34,9 @@ jobs:
       - name: Linter (gradle)
         run: ./gradlew ktlintCheck
 
+      - name: Android Lint (gradle)
+        run: ./gradlew lint --no-daemon
+
       - name: Test (gradle)
         run: ./gradlew test --no-daemon
 

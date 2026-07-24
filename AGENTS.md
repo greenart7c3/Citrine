@@ -13,13 +13,16 @@ Compact guide for OpenCode sessions working in this repo. `CLAUDE.md` has fuller
 ```bash
 ./gradlew ktlintCheck          # lint — runs on pre-commit
 ./gradlew ktlintFormat         # autofix ktlint issues
+./gradlew lintDebug            # Android Lint — must pass with 0 errors before pushing
+./gradlew lintFix              # Android Lint — applies safe auto-fixes (may need 2 runs)
 ./gradlew test                 # unit tests — runs on pre-push
 ./gradlew assembleDebug        # debug APK
 ./gradlew assembleRelease      # release APK (unsigned unless SIGN_RELEASE set)
 ./gradlew :app:test --tests "com.greenart7c3.citrine.GroupStateTest"  # single test class
 ```
 
-- **CI order is `ktlintCheck -> test -> assembleDebug`** — match it locally before pushing.
+- **CI order is `ktlintCheck -> test -> assembleDebug`** — match it locally before pushing. Also run `./gradlew lintDebug` and fix any errors (warnings are OK).
+- **Always run `ktlintCheck` and `lintDebug` before committing** — `ktlintCheck` enforces Kotlin code style and `lintDebug` catches Android-specific issues (Compose, resources, manifest). Both must report 0 errors.
 - **Git hooks auto-install**: `:app:preBuild` depends on the `installGitHook` task, which copies `git-hooks/{pre-commit,pre-push}` into `.git/hooks`. So the first build installs hooks. `pre-commit` = `ktlintCheck`; `pre-push` = `test`.
 - **No instrumented tests exist** (`app/src/androidTest` is absent). `./gradlew connectedAndroidTest` is a no-op; don't rely on it.
 

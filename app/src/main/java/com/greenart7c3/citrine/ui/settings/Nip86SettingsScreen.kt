@@ -50,6 +50,9 @@ fun Nip86SettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboardManager = LocalClipboard.current
+    val invalidKeyMsg = stringResource(R.string.invalid_key)
+    val invalidEventIdMsg = stringResource(R.string.invalid_event_id)
+    val invalidIpMsg = stringResource(R.string.invalid_ip)
 
     Surface(modifier) {
         var bannedPubKeys by remember { mutableStateOf(Settings.bannedPubKeys.toMap()) }
@@ -87,7 +90,7 @@ fun Nip86SettingsScreen(
         val addBannedPubkey: (String) -> Boolean = { text ->
             val key = text.toNostrKey()
             if (key == null) {
-                Toast.makeText(context, context.getString(R.string.invalid_key), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
                 false
             } else {
                 bannedPubKeys = bannedPubKeys + (key to "")
@@ -98,7 +101,7 @@ fun Nip86SettingsScreen(
         val addBannedEvent: (String) -> Boolean = { text ->
             val id = text.trim().lowercase()
             if (!EVENT_ID_REGEX.matches(id)) {
-                Toast.makeText(context, context.getString(R.string.invalid_event_id), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, invalidEventIdMsg, Toast.LENGTH_SHORT).show()
                 false
             } else {
                 bannedEventIds = bannedEventIds + (id to "")
@@ -108,7 +111,7 @@ fun Nip86SettingsScreen(
         val addBlockedIp: (String) -> Boolean = { text ->
             val ip = text.trim()
             if (!isIpValid(ip)) {
-                Toast.makeText(context, context.getString(R.string.invalid_ip), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, invalidIpMsg, Toast.LENGTH_SHORT).show()
                 false
             } else {
                 blockedIps = blockedIps + (ip to "")
