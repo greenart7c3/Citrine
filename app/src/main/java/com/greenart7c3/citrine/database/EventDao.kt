@@ -127,6 +127,16 @@ interface EventDao {
     )
     suspend fun getLatestEventTimestamps(pubkeys: List<String>, kinds: List<Int>): List<PubkeyTimestamp>
 
+    @Query(
+        """
+        SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
+          FROM EventEntity
+         WHERE pubkey IN (:pubkeys)
+         GROUP BY pubkey
+        """,
+    )
+    suspend fun getLatestEventTimestampsAllKinds(pubkeys: List<String>): List<PubkeyTimestamp>
+
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC, id ASC")
     @Transaction
     suspend fun getByKind(kind: Int, pubkey: String): List<String>

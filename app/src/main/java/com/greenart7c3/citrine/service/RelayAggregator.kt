@@ -950,7 +950,10 @@ object RelayAggregator {
                     val filters = listOf(
                         Filter(
                             authors = chunk.ifEmpty { null },
-                            kinds = subscriptionKinds,
+                            // An empty configured-kinds set means "subscribe to all kinds":
+                            // pass null so the field is omitted from the REQ instead of
+                            // serializing as "kinds":[] which relays treat as match-nothing.
+                            kinds = subscriptionKinds.ifEmpty { null },
                             since = chunkSince,
                         ),
                     )
@@ -1012,7 +1015,7 @@ object RelayAggregator {
                 val filters = listOf(
                     Filter(
                         tags = mapOf("p" to listOf(aggPubkey)),
-                        kinds = subscriptionKinds,
+                        kinds = subscriptionKinds.ifEmpty { null },
                         since = bootstrapSince,
                     ),
                 )
@@ -1207,7 +1210,14 @@ object RelayAggregator {
         authors: Set<String>,
         kinds: List<Int>,
     ) {
-        if (authors.isEmpty() || kinds.isEmpty()) return
+        if (authors.isEmpty()) return
+        // An empty kinds list means "all kinds": seed from the latest stored event of any
+        // kind per author so the per-chunk `since` cursor resumes correctly instead of
+        // always falling back to the cold-start window.
+        if (kinds.isEmpty()) {
+            seedLastEventTimestampsAllKinds(dao, authors)
+            return
+        }
         // SQLite caps bound parameters at ~999; chunk to stay well under that with two
         // IN-lists in the same query.
         val chunkSize = 400
@@ -1225,6 +1235,26 @@ object RelayAggregator {
         rows.forEach { row ->
             // Keep the larger of (DB seed, in-memory live update). A live update that arrived
             // mid-refresh shouldn't be rolled back by a slightly older DB read.
+            lastEventByPubkey.merge(row.pubkey, row.createdAt) { a, b -> maxOf(a, b) }
+        }
+    }
+
+    private suspend fun seedLastEventTimestampsAllKinds(
+        dao: EventDao,
+        authors: Set<String>,
+    ) {
+        val chunkSize = 999
+        val rows = mutableListOf<PubkeyTimestamp>()
+        for (chunk in authors.toList().chunked(chunkSize)) {
+            try {
+                rows.addAll(dao.getLatestEventTimestampsAllKinds(chunk))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "seedLastEventTimestampsAllKinds chunk failed", e)
+            }
+        }
+        rows.forEach { row ->
             lastEventByPubkey.merge(row.pubkey, row.createdAt) { a, b -> maxOf(a, b) }
         }
     }
