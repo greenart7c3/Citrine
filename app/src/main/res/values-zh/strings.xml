@@ -86,6 +86,14 @@
     <string name="paste_from_clipboard">从剪贴板粘贴</string>
     <string name="accept_events_that_refer_to">接受引用指向特定公钥的事件</string>
     <string name="add">添加</string>
+    <string name="import_from_lists">Import from lists</string>
+    <string name="import_from_lists_title">Import from lists</string>
+    <string name="importing_lists">Fetching your lists from Nostr…</string>
+    <string name="no_lists_found">No lists found for this account</string>
+    <string name="import_lists_error">Failed to fetch lists. Make sure the signer app is available.</string>
+    <string name="add_selected">Add selected (%1$d)</string>
+    <string name="select_lists_hint">Tap a list to expand and pick pubkeys</string>
+    <string name="close">Close</string>
     <string name="allowed_kinds">允许的事件类型</string>
     <string name="rejected_kinds">Rejected kinds</string>
     <string name="invalid_kind">无效的事件类型</string>
