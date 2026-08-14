@@ -1,3 +1,61 @@
+## Citrine 3.1.0
+
+- Added NIP-29 relay-based groups support
+- Added NIP-86 relay management API and settings screen
+- Added a tool to rebroadcast stored events to selected relays
+- Offer to purge stored events when banning a pubkey locally
+- Added configurable REJECTED_KINDS to block non-publishable artifact kinds
+- Added import-from-lists picker to access control settings
+- Added nsite (NIP-5A) support to Web Clients
+- Modernized the browse nsites list: website icons, search bar, sort by last update, and install progress
+- Added a setting to choose relays for fetching nsites, with dedicated defaults (nsite.run, nos.lol, nostr.land)
+- Show nsite description and restyle nsite lists as cards with an author header
+- Performance improvements on the WebSocket and REQ query hot paths
+- Removed permessage-deflate extension from the WebSocket server
+- Fixed Tor not starting/stopping when the expose-via-Tor setting changes
+- Always stop Tor when the relay service is destroyed
+- Show the home screen without waiting for the service to bind
+- Subscribe to all kinds when the aggregator kinds list is empty
+- Move the aggregator kinds reset button below the text field
+- Persist logs to a local database and gate logcat to debug builds
+- Updated Gradle, Kotlin, and project dependencies
+- Updated translations
+
+Download it with [Zapstore](https://zapstore.dev/apps/com.greenart7c3.citrine), [Obtainium](https://github.com/ImranR98/Obtainium), [f-droid](https://f-droid.org/packages/com.greenart7c3.citrine)  or download it directly in the [releases page
+](https://github.com/greenart7c3/Citrine/releases/tag/v3.1.0)
+
+If you like my work consider making a [donation](https://greenart7c3.com)
+
+## Verifying the release
+
+In order to verify the release, you'll need to have `gpg` or `gpg2` installed on your system. Once you've obtained a copy (and hopefully verified that as well), you'll first need to import the keys that have signed this release if you haven't done so already:
+
+``` bash
+gpg --keyserver hkps://keys.openpgp.org --recv-keys 44F0AAEB77F373747E3D5444885822EED3A26A6D
+```
+
+Once you have his PGP key you can verify the release (assuming `manifest-v3.1.0.txt` and `manifest-v3.1.0.txt.sig` are in the current directory) with:
+
+``` bash
+gpg --verify manifest-v3.1.0.txt.sig manifest-v3.1.0.txt
+```
+
+You should see the following if the verification was successful:
+
+``` bash
+gpg: Signature made Fri 13 Sep 2024 08:06:52 AM -03
+gpg:                using RSA key 44F0AAEB77F373747E3D5444885822EED3A26A6D
+gpg: Good signature from "greenart7c3 <greenart7c3@proton.me>"
+```
+
+That will verify the signature on the main manifest page which ensures integrity and authenticity of the binaries you've downloaded locally. Next, depending on your operating system you should then re-calculate the sha256 sum of the binary, and compare that with the following hashes:
+
+``` bash
+cat manifest-v3.1.0.txt
+```
+
+One can use the `shasum -a 256 <file name here>` tool in order to re-compute the `sha256` hash of the target binary for your operating system. The produced hash should be compared with the hashes listed above and they should match exactly.
+
 ## Citrine 3.0.1
 
 - Fixed a crash when unregistering an unregistered Pokey receiver
