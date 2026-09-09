@@ -141,9 +141,15 @@ interface EventDao {
     @Transaction
     suspend fun getByKind(kind: Int, pubkey: String): List<String>
 
-    @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey AND createdAt >= :createdAt")
+    @Query(
+        """
+        SELECT id FROM EventEntity
+        WHERE kind = :kind AND pubkey = :pubkey
+          AND (createdAt > :createdAt OR (createdAt = :createdAt AND id < :incomingId))
+        """,
+    )
     @Transaction
-    suspend fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long): List<String>
+    suspend fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long, incomingId: String): List<String>
 
     // Tags are removed transactionally via the FK ON DELETE CASCADE on
     // TagEntity.pkEvent, which Room enables by default.
@@ -212,7 +218,7 @@ interface EventDao {
           FROM EventEntity EventEntity
          WHERE EventEntity.pubkey = :pubkey
            AND EventEntity.kind = :kind
-           AND EventEntity.createdAt >= :createdAt
+           AND (EventEntity.createdAt > :createdAt OR (EventEntity.createdAt = :createdAt AND EventEntity.id < :incomingId))
           and EventEntity.id in (SELECT EventEntity.id
                        FROM EventEntity EventEntity
                       INNER JOIN TagEntity TagEntity ON EventEntity.id = TagEntity.pkEvent
@@ -224,7 +230,7 @@ interface EventDao {
         """,
     )
     @Transaction
-    suspend fun getNewestReplaceable(kind: Int, pubkey: String, dTagValue: String, createdAt: Long): List<String>
+    suspend fun getNewestReplaceable(kind: Int, pubkey: String, dTagValue: String, createdAt: Long, incomingId: String): List<String>
 
     @Transaction
     suspend fun deleteAll() {

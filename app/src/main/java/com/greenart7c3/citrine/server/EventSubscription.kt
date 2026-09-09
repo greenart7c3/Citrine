@@ -35,6 +35,10 @@ data class Subscription(
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
 
+    // NIP-01: subscription ids are managed independently per connection. The wire id
+    // stays the client-sent value; only the cache key is connection-scoped.
+    private fun cacheKey(connection: Connection, id: String): String = "${connection.name}:$id"
+
     fun getConnection(session: WebSocketServerSession): Connection? = subscriptions.snapshot().values.firstOrNull { it.subscription.connection.session == session }?.subscription?.connection
 
     fun count(): Int = subscriptions.size()
@@ -47,9 +51,10 @@ object EventSubscription {
             var sentEvent = false
             for (manager in subscriptions.snapshot().values) {
                 val sub = manager.subscription
+                if (sub.count) continue
                 if (sub.connection.session.outgoing.isClosedForSend) {
                     // Drop closed subscriptions so future fanouts skip them entirely.
-                    close(sub.id)
+                    close(sub.connection, sub.id)
                     continue
                 }
                 // NIP-29: never live-push private-group events to connections that are
@@ -85,14 +90,16 @@ object EventSubscription {
     }
 
     fun closeAll() {
-        subscriptions.snapshot().keys.forEach {
-            close(it)
+        subscriptions.snapshot().forEach { (key, manager) ->
+            manager.subscription.scope.cancel()
+            subscriptions.remove(key)
         }
     }
 
-    fun close(subscriptionId: String) {
-        subscriptions.get(subscriptionId)?.subscription?.scope?.cancel()
-        subscriptions.remove(subscriptionId)
+    fun close(connection: Connection, subscriptionId: String) {
+        val key = cacheKey(connection, subscriptionId)
+        subscriptions.get(key)?.subscription?.scope?.cancel()
+        subscriptions.remove(key)
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -106,7 +113,9 @@ object EventSubscription {
         objectMapper: ObjectMapper,
         count: Boolean,
     ) {
-        close(subscriptionId)
+        if (!count) {
+            close(connection, subscriptionId)
+        }
         val manager = SubscriptionManager(
             Subscription(
                 subscriptionId,
@@ -117,10 +126,14 @@ object EventSubscription {
                 count,
             ),
         )
-        subscriptions.put(
-            subscriptionId,
-            manager,
-        )
+        // NIP-45: COUNT subscriptions answer once and are never registered, so they
+        // neither evict a same-id REQ subscription nor receive live EVENT fanout.
+        if (!count) {
+            subscriptions.put(
+                cacheKey(connection, subscriptionId),
+                manager,
+            )
+        }
         manager.execute()
     }
 }

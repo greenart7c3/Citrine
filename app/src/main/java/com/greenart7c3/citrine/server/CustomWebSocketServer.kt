@@ -295,6 +295,12 @@ class CustomWebSocketServer(
                         connection?.send(CommandResult.invalid(event, exception.message!!).toJson())
                         return
                     }
+                    // NIP-42: an AUTH event must carry a valid signature, otherwise any
+                    // client could authenticate as any pubkey.
+                    if (!event.verify()) {
+                        connection?.send(CommandResult.invalid(event, "auth event signature verification failed").toJson())
+                        return
+                    }
 
                     Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
                     connection?.users?.add(event.pubKey)
@@ -307,7 +313,9 @@ class CustomWebSocketServer(
                 }
 
                 "CLOSE" -> {
-                    EventSubscription.close(msgArray.get(1).asText())
+                    connection?.let {
+                        EventSubscription.close(it, msgArray.get(1).asText())
+                    }
                 }
 
                 "NEG-OPEN" -> {
@@ -532,14 +540,14 @@ class CustomWebSocketServer(
                 }
             }
             event.isParameterizedReplaceable() -> {
-                val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt)
+                val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt, event.id)
                 if (newest.isNotEmpty()) {
                     Log.d(Citrine.TAG, "newest event already in database ${event.id}")
                     return VerificationResult.NewestEventAlreadyInDatabase
                 }
             }
             event.shouldOverwrite() -> {
-                val newest = appDatabase.eventDao().getByKindNewest(event.kind, event.pubKey, event.createdAt)
+                val newest = appDatabase.eventDao().getByKindNewest(event.kind, event.pubKey, event.createdAt, event.id)
                 if (newest.isNotEmpty()) {
                     Log.d(Citrine.TAG, "newest event already in database ${event.id}")
                     return VerificationResult.NewestEventAlreadyInDatabase
@@ -586,16 +594,16 @@ class CustomWebSocketServer(
                 connection?.send(CommandResult.invalid(event, "event expired").toJson())
             }
             VerificationResult.KindNotAllowed -> {
-                connection?.send(CommandResult.invalid(event, "kind not allowed").toJson())
+                connection?.send(CommandResult.blocked(event, "kind not allowed").toJson())
             }
             VerificationResult.KindRejected -> {
                 connection?.send(CommandResult.blocked(event, "kind ${event.kind} is not accepted by this relay").toJson())
             }
             VerificationResult.PubkeyNotAllowed -> {
-                connection?.send(CommandResult.invalid(event, "pubkey not allowed").toJson())
+                connection?.send(CommandResult.blocked(event, "pubkey not allowed").toJson())
             }
             VerificationResult.TaggedPubkeyNotAllowed -> {
-                connection?.send(CommandResult.invalid(event, "tagged pubkey not allowed").toJson())
+                connection?.send(CommandResult.blocked(event, "tagged pubkey not allowed").toJson())
             }
             VerificationResult.BannedPubkey -> {
                 connection?.send(CommandResult.invalid(event, "blocked: pubkey is banned").toJson())
@@ -604,7 +612,7 @@ class CustomWebSocketServer(
                 connection?.send(CommandResult.invalid(event, "blocked: event is banned").toJson())
             }
             VerificationResult.Deleted -> {
-                connection?.send(CommandResult.invalid(event, "Event deleted").toJson())
+                connection?.send(CommandResult(event.id, false, "deleted: event has been deleted by its author").toJson())
             }
             VerificationResult.AlreadyInDatabase -> {
                 connection?.send(CommandResult.duplicated(event).toJson())
@@ -613,7 +621,7 @@ class CustomWebSocketServer(
                 connection?.send(CommandResult.invalid(event, "Tagged event pubkey mismatch ${event.toJson()}").toJson())
             }
             VerificationResult.NewestEventAlreadyInDatabase -> {
-                connection?.send(CommandResult.invalid(event, "newest event already in database").toJson())
+                connection?.send(CommandResult(event.id, false, "duplicate: a newer event already exists for this replaceable").toJson())
             }
             VerificationResult.RejectedByNip29 -> {
                 // verifyEvent never returns this; NIP-29 rejection happens below.
@@ -771,11 +779,11 @@ class CustomWebSocketServer(
             val finalReplaceables = collapsedReplaceables.filter { e ->
                 if (e.isParameterizedReplaceable()) {
                     appDatabase.eventDao()
-                        .getNewestReplaceable(e.kind, e.pubKey, dTagOrEmpty(e), e.createdAt)
+                        .getNewestReplaceable(e.kind, e.pubKey, dTagOrEmpty(e), e.createdAt, e.id)
                         .isEmpty()
                 } else {
                     appDatabase.eventDao()
-                        .getByKindNewest(e.kind, e.pubKey, e.createdAt)
+                        .getByKindNewest(e.kind, e.pubKey, e.createdAt, e.id)
                         .isEmpty()
                 }
             }
@@ -1245,6 +1253,7 @@ class CustomWebSocketServer(
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Origin", "*")
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Credentials", "true")
                     call.response.headers.appendIfAbsent("Access-Control-Allow-Methods", "*")
+                    call.response.headers.appendIfAbsent("Access-Control-Allow-Headers", "*")
                     call.response.headers.appendIfAbsent("Access-Control-Expose-Headers", "*")
 
                     if (call.request.httpMethod == HttpMethod.Options) {
@@ -1252,7 +1261,7 @@ class CustomWebSocketServer(
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
                         LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
 
-                        val supportedNips = mutableListOf(1, 2, 4, 9, 11, 29, 40, 42, 45, 50, 59, 65, 70, 77)
+                        val supportedNips = mutableListOf(1, 2, 9, 11, 29, 40, 42, 45, 50, 59, 65, 70, 77)
                         if (Settings.ownerPubkey.isNotBlank()) supportedNips.add(86)
 
                         // NIP-29 clients discover the relay's group-signing key via the
@@ -1260,20 +1269,20 @@ class CustomWebSocketServer(
                         // relay's generated identity.
                         val relayPubkey = RelayIdentity.pubKeyHex()
 
+                        val relayDocument = JacksonMapper.mapper.createObjectNode().apply {
+                            put("name", Settings.name)
+                            put("description", Settings.description)
+                            put("pubkey", Settings.ownerPubkey.ifBlank { relayPubkey })
+                            put("contact", Settings.contact)
+                            put("self", relayPubkey)
+                            val nips = putArray("supported_nips")
+                            supportedNips.forEach { nips.add(it) }
+                            put("software", "https://github.com/greenart7c3/Citrine")
+                            put("version", BuildConfig.VERSION_NAME)
+                            put("icon", Settings.relayIcon)
+                        }
                         call.respondText(
-                            """
-                            {
-                              "name": "${Settings.name}",
-                              "description": "${Settings.description}",
-                              "pubkey": "${Settings.ownerPubkey.ifBlank { relayPubkey }}",
-                              "contact": "${Settings.contact}",
-                              "self": "$relayPubkey",
-                              "supported_nips": $supportedNips,
-                              "software": "https://github.com/greenart7c3/Citrine",
-                              "version": "${BuildConfig.VERSION_NAME}",
-                              "icon": "${Settings.relayIcon}"
-                            }
-                            """.trimIndent(),
+                            JacksonMapper.mapper.writeValueAsString(relayDocument),
                             ContentType.Application.Json,
                         )
                     } else {

@@ -13,7 +13,7 @@ data class CommandResult(val eventId: String, val result: Boolean, val descripti
 
     companion object {
         fun ok(event: Event) = CommandResult(event.id, true)
-        fun duplicated(event: Event) = CommandResult(event.id, true, "duplicate:")
+        fun duplicated(event: Event) = CommandResult(event.id, true, "duplicate: already have this event")
         fun invalid(event: Event, message: String) = CommandResult(event.id, false, "invalid: $message")
         fun blocked(event: Event, message: String) = CommandResult(event.id, false, "blocked: $message")
         fun required(event: Event, message: String) = CommandResult(event.id, false, "auth-required: $message")

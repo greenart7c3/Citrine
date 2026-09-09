@@ -190,20 +190,6 @@ object EventRepository {
         // private/hidden managed group exists.
         val applyNip29Gate = GroupManager.hasPrivateGroups()
 
-        if (subscription.count) {
-            val count = if (applyNip29Gate) {
-                query(subscription.appDatabase, filter).count {
-                    GroupManager.canRead(it, subscription.connection)
-                }
-            } else {
-                countQuery(subscription.appDatabase, filter)
-            }
-            subscription.connection.send(
-                "[\"COUNT\",${subscription.escapedId},{\"count\":$count}]",
-            )
-            return
-        }
-
         val events = query(subscription.appDatabase, filter)
         var sent = 0
         for (dbEvent in events) {

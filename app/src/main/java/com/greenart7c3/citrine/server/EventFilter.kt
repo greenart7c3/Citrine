@@ -30,12 +30,11 @@ data class EventFilter(
             return false
         }
 
-        // O(1) exact match first; fall back to the O(n) prefix scan only on miss.
-        if (ids.isNotEmpty() && event.id !in ids && ids.none { event.id.startsWith(it) }) {
+        if (ids.isNotEmpty() && event.id !in ids) {
             return false
         }
 
-        if (authors.isNotEmpty() && event.pubKey !in authors && authors.none { event.pubKey.startsWith(it) }) {
+        if (authors.isNotEmpty() && event.pubKey !in authors) {
             return false
         }
 
