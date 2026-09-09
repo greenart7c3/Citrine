@@ -28,7 +28,7 @@ object AuthGate {
             if (connection.users.isEmpty()) return Denial.AUTH_REQUIRED
 
             val senders = filter.authors
-            val receivers = filter.tags.filter { it.key == "#p" }
+            val receivers = filter.tags.filter { it.key == "p" }
             if (!senders.any { connection.users.contains(it) } &&
                 !receivers.any { entry -> entry.value.any { receiver -> connection.users.contains(receiver) } }
             ) {

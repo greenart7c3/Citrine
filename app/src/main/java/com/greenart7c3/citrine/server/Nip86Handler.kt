@@ -35,8 +35,10 @@ object Nip86Handler {
     private val SUPPORTED_METHODS = listOf(
         "supportedmethods",
         "banpubkey",
+        "unbanpubkey",
         "listbannedpubkeys",
         "allowpubkey",
+        "unallowpubkey",
         "listallowedpubkeys",
         "banevent",
         "listbannedevents",
@@ -124,8 +126,10 @@ object Nip86Handler {
     private suspend fun dispatch(rpc: RpcRequest, db: AppDatabase, ctx: Context): Any? = when (rpc.method) {
         "supportedmethods" -> SUPPORTED_METHODS
         "banpubkey" -> banPubkey(rpc.params, db, ctx)
+        "unbanpubkey" -> unbanPubkey(rpc.params, ctx)
         "listbannedpubkeys" -> listBannedPubkeys()
         "allowpubkey" -> allowPubkey(rpc.params, ctx)
+        "unallowpubkey" -> unallowPubkey(rpc.params, ctx)
         "listallowedpubkeys" -> listAllowedPubkeys()
         "banevent" -> banEvent(rpc.params, db, ctx)
         "listbannedevents" -> listBannedEvents()
@@ -162,8 +166,21 @@ object Nip86Handler {
 
     private fun allowPubkey(params: List<JsonNode>, ctx: Context): Boolean {
         val pubkey = stringParam(params, 0, "pubkey")
-        Settings.bannedPubKeys.remove(pubkey)
         Settings.allowedPubKeys = Settings.allowedPubKeys + pubkey
+        persist(ctx)
+        return true
+    }
+
+    private fun unbanPubkey(params: List<JsonNode>, ctx: Context): Boolean {
+        val pubkey = stringParam(params, 0, "pubkey")
+        Settings.bannedPubKeys.remove(pubkey)
+        persist(ctx)
+        return true
+    }
+
+    private fun unallowPubkey(params: List<JsonNode>, ctx: Context): Boolean {
+        val pubkey = stringParam(params, 0, "pubkey")
+        Settings.allowedPubKeys = Settings.allowedPubKeys - pubkey
         persist(ctx)
         return true
     }
