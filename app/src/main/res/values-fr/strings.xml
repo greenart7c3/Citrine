@@ -44,6 +44,8 @@
     <string name="delete_all_events_warning">Êtes-vous sûr de vouloir supprimer tous les événements de la base de données ?</string>
     <string name="feed">Fil</string>
     <string name="show_events">Afficher les événements</string>
+    <string name="show_graph">Show graph</string>
+    <string name="hide_graph">Hide graph</string>
     <string name="copy_address">Copier l\'adresse</string>
     <string name="relay_running_at_ws">Relais en cours d\'exécution à ws://%1$s:%2$s</string>
     <string name="address_local">Local</string>
