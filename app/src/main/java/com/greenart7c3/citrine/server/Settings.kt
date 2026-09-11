@@ -138,6 +138,10 @@ object Settings {
     var aggregatorSignerPubkey: String = ""
     var aggregatorSignerPackageName: String = ""
 
+    // UI preference for the "Show events" screen: when false the per-kind pie chart
+    // and legend are hidden, leaving only the kind list.
+    var showEventGraph: Boolean = true
+
     fun defaultValues() {
         allowedKinds = emptySet()
         rejectedKinds = DEFAULT_REJECTED_KINDS
@@ -185,6 +189,7 @@ object Settings {
         relayAggregatorPauseOnLimitedNetwork = true
         aggregatorSignerPubkey = ""
         aggregatorSignerPackageName = ""
+        showEventGraph = true
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)

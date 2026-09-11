@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
@@ -31,8 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -43,6 +47,8 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
+import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.service.LocalPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
@@ -170,6 +176,9 @@ fun DatabaseInfo(
 
     var wantsToDeleteKind by remember { mutableStateOf<Int?>(null) }
 
+    val context = LocalContext.current
+    var showGraph by remember { mutableStateOf(Settings.showEventGraph) }
+
     if (wantsToDeleteKind != null) {
         AlertDialog(
             text = {
@@ -215,10 +224,33 @@ fun DatabaseInfo(
             .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(stringResource(R.string.total, total))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(R.string.total, total),
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+            )
+            IconButton(
+                onClick = {
+                    showGraph = !showGraph
+                    Settings.showEventGraph = showGraph
+                    Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                    }
+                },
+            ) {
+                Icon(
+                    imageVector = if (showGraph) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = stringResource(if (showGraph) R.string.hide_graph else R.string.show_graph),
+                )
+            }
+        }
         Spacer(modifier = Modifier.padding(4.dp))
 
-        if (slices.isNotEmpty()) {
+        if (showGraph && slices.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

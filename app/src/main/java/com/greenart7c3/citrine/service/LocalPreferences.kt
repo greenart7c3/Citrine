@@ -55,6 +55,7 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK = "relay_aggregator_pause_on_limited_network"
     const val AGGREGATOR_SIGNER_PUBKEY = "aggregator_signer_pubkey"
     const val AGGREGATOR_SIGNER_PACKAGE_NAME = "aggregator_signer_package_name"
+    const val SHOW_EVENT_GRAPH = "show_event_graph"
 
     // Amber (NIP-55) signer package holding the relay owner's key; set together with
     // RELAY_OWNER_PUBKEY by the Amber login in relay info settings.
@@ -156,6 +157,7 @@ object LocalPreferences {
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, settings.relayAggregatorPauseOnLimitedNetwork)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, settings.aggregatorSignerPubkey)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, settings.aggregatorSignerPackageName)
+                putBoolean(PrefKeys.SHOW_EVENT_GRAPH, settings.showEventGraph)
             }
         }
     }
@@ -236,5 +238,6 @@ object LocalPreferences {
         Settings.relayAggregatorPauseOnLimitedNetwork = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, true)
         Settings.aggregatorSignerPubkey = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, "") ?: ""
         Settings.aggregatorSignerPackageName = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, "") ?: ""
+        Settings.showEventGraph = prefs.getBoolean(PrefKeys.SHOW_EVENT_GRAPH, true)
     }
 }
