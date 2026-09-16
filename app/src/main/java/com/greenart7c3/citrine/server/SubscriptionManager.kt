@@ -60,9 +60,13 @@ class SubscriptionManager(
 
             try {
                 total += if (GroupManager.hasPrivateGroups()) {
-                    EventRepository.query(subscription.appDatabase, filter).count {
-                        GroupManager.canRead(it, subscription.connection)
+                    var count = 0
+                    EventRepository.batchedQuery(subscription.appDatabase, filter, null) { batch ->
+                        count += batch.count {
+                            GroupManager.canRead(it, subscription.connection)
+                        }
                     }
+                    count
                 } else {
                     EventRepository.countQuery(subscription.appDatabase, filter)
                 }

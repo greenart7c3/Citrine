@@ -20,6 +20,7 @@
  */
 package com.greenart7c3.citrine.service.crashreports
 
+import com.greenart7c3.citrine.logs.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -33,8 +34,12 @@ class UnexpectedCrashSaver(
         t: Thread,
         e: Throwable,
     ) {
-        if (e !is OutOfMemoryError) {
-            // OOM reports are junk
+        if (e is OutOfMemoryError) {
+            // OOM reports are junk, so no report is cached — but leave a persistent
+            // LogDatabase trace so a field OOM can still be diagnosed via the in-app
+            // log screen (failing thread + message).
+            Log.e("UnexpectedCrashSaver", "OutOfMemoryError suppressed on thread ${t.name}: ${e.message}", e)
+        } else {
             scope.launch {
                 cache.writeReport(ReportAssembler().buildReport(e))
             }

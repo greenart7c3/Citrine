@@ -19,6 +19,8 @@ private val TAG_KEY_REGEX = Regex("^[a-zA-Z0-9]+$")
 private val JACKSON_NODE_FACTORY = JacksonMapper.mapper.nodeFactory
 
 object EventRepository {
+    private const val QUERY_BATCH_SIZE = 500
+
     enum class SelectMode {
         FULL_EVENTS,
         COUNT,
@@ -28,6 +30,9 @@ object EventRepository {
     fun createQuery(
         filter: EventFilter,
         mode: SelectMode,
+        cursorCreatedAt: Long? = null,
+        cursorId: String? = null,
+        batchLimit: Int? = null,
     ): Pair<String, List<Any>> {
         val params = mutableListOf<Any>()
         val joinClause = StringBuilder()
@@ -112,6 +117,16 @@ object EventRepository {
             appendWhere(existsClause)
         }
 
+        // Keyset pagination cursor: continues strictly after the previous page's last row
+        // under the non-search ordering "createdAt DESC, id ASC", index-backed by
+        // idx_event_created_id. Never combine with searchKeywords (rowid ordering).
+        if (cursorCreatedAt != null && cursorId != null) {
+            appendWhere("(EventEntity.createdAt < ? OR (EventEntity.createdAt = ? AND EventEntity.id > ?))")
+            params.add(cursorCreatedAt)
+            params.add(cursorCreatedAt)
+            params.add(cursorId)
+        }
+
         // --- Build SQL ---
         val orderBy = if (filter.searchKeywords.isNotEmpty()) {
             "EventEntity.rowid DESC"
@@ -142,9 +157,14 @@ object EventRepository {
             }
         }
 
-        filter.limit?.let {
+        if (batchLimit != null) {
             query.append(" LIMIT ?")
-            params.add(it)
+            params.add(batchLimit)
+        } else {
+            filter.limit?.let {
+                query.append(" LIMIT ?")
+                params.add(it)
+            }
         }
         return Pair(query.toString(), params)
     }
@@ -169,14 +189,60 @@ object EventRepository {
         return database.eventDao().count(rawSql)
     }
 
-    fun idsAndCreatedAt(
+    /**
+     * Streams [filter]'s full-event matches to [onBatch] in keyset-paginated chunks of at
+     * most [QUERY_BATCH_SIZE] rows (or the remainder of [clientLimit], whichever is
+     * smaller), so the whole match set is never materialized in the heap. Returns the
+     * total number of rows handed to [onBatch].
+     */
+    suspend fun batchedQuery(
         database: AppDatabase,
         filter: EventFilter,
-    ): List<IdAndCreatedAt> {
-        val query = createQuery(filter, SelectMode.IDS_AND_CREATED_AT)
+        clientLimit: Int?,
+        onBatch: suspend (List<EventWithTags>) -> Unit,
+    ): Int {
+        var sent = 0
+        var cursorCreatedAt: Long? = null
+        var cursorId: String? = null
+        while (true) {
+            val effective = minOf(QUERY_BATCH_SIZE, clientLimit?.let { it - sent } ?: Int.MAX_VALUE)
+            if (effective <= 0) break
 
-        val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
-        return database.eventDao().getIdsAndCreatedAt(rawSql)
+            val query = createQuery(filter, SelectMode.FULL_EVENTS, cursorCreatedAt, cursorId, effective)
+            val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
+            val batch = database.eventDao().getEvents(rawSql)
+            if (batch.isEmpty()) break
+
+            onBatch(batch)
+            sent += batch.size
+            if (batch.size < effective) break
+
+            cursorCreatedAt = batch.last().event.createdAt
+            cursorId = batch.last().event.id
+        }
+        return sent
+    }
+
+    /** Same streaming loop as [batchedQuery] for id+createdAt-only rows, without a client limit. */
+    suspend fun batchedIdsAndCreatedAt(
+        database: AppDatabase,
+        filter: EventFilter,
+        onBatch: (List<IdAndCreatedAt>) -> Unit,
+    ) {
+        var cursorCreatedAt: Long? = null
+        var cursorId: String? = null
+        while (true) {
+            val query = createQuery(filter, SelectMode.IDS_AND_CREATED_AT, cursorCreatedAt, cursorId, QUERY_BATCH_SIZE)
+            val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
+            val batch = database.eventDao().getIdsAndCreatedAt(rawSql)
+            if (batch.isEmpty()) break
+
+            onBatch(batch)
+            if (batch.size < QUERY_BATCH_SIZE) break
+
+            cursorCreatedAt = batch.last().createdAt
+            cursorId = batch.last().id
+        }
     }
 
     suspend fun subscribe(
@@ -190,14 +256,28 @@ object EventRepository {
         // private/hidden managed group exists.
         val applyNip29Gate = GroupManager.hasPrivateGroups()
 
-        val events = query(subscription.appDatabase, filter)
-        var sent = 0
-        for (dbEvent in events) {
-            if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
-                continue
+        val sent = if (filter.searchKeywords.isNotEmpty()) {
+            // FTS results are ordered by rowid, so the (createdAt, id) keyset cursor does
+            // not apply; FTS matches are text-bounded, so a single-shot load stays small.
+            val events = query(subscription.appDatabase, filter)
+            var count = 0
+            for (dbEvent in events) {
+                if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
+                    continue
+                }
+                subscription.connection.send("[\"EVENT\",${subscription.escapedId},${dbEvent.toEventJson()}]")
+                count++
             }
-            subscription.connection.send("[\"EVENT\",${subscription.escapedId},${dbEvent.toEventJson()}]")
-            sent++
+            count
+        } else {
+            batchedQuery(subscription.appDatabase, filter, filter.limit) { batch ->
+                for (dbEvent in batch) {
+                    if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
+                        continue
+                    }
+                    subscription.connection.send("[\"EVENT\",${subscription.escapedId},${dbEvent.toEventJson()}]")
+                }
+            }
         }
         if (sent > 0 && Log.isLoggable(Citrine.TAG, Log.DEBUG)) {
             Log.d(Citrine.TAG, "sent $sent events for subscription ${subscription.id} filter $filter")
