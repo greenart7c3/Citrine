@@ -299,7 +299,7 @@ fun DownloadYourEventsUserScreen(
                 Citrine.job = Citrine.instance.applicationScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
 
-                    RelayAuthenticator(Citrine.instance.client, Citrine.instance.applicationScope) { template ->
+                    RelayAuthenticator(Citrine.instance.client, Citrine.instance.applicationScope) { _, template, _ ->
                         val signer = if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair())
                         val event = signer.sign(template)
                         listOf(event)

@@ -248,7 +248,7 @@ object EventRebroadcaster {
 
         fun hasResponded(relay: NormalizedRelayUrl): Boolean = responded.contains(relay)
 
-        override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+        override suspend fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
             if (msg is OkMessage) {
                 oks[key(msg.eventId, relay.url)] = msg
                 responded.add(relay.url)

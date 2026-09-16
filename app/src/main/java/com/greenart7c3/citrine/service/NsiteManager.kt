@@ -268,7 +268,7 @@ object NsiteManager {
         val done = CompletableDeferred<Unit>()
 
         val collector = object : RelayConnectionListener {
-            override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+            override suspend fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
                 when (msg) {
                     is EventMessage -> {
                         if (msg.subId != subId) return
@@ -325,7 +325,7 @@ object NsiteManager {
         val done = CompletableDeferred<Unit>()
 
         val collector = object : RelayConnectionListener {
-            override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+            override suspend fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
                 when (msg) {
                     is EventMessage -> {
                         if (msg.subId != subId) return

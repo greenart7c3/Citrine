@@ -285,7 +285,7 @@ class RelayClientSubscription(
         super.onDisconnected(relay)
     }
 
-    override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+    override suspend fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
         if (msg is EventMessage && this.subId == msg.subId) {
             received++
             if (msg.event.createdAt < oldestTimestamp) {

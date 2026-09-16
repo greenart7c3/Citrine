@@ -511,20 +511,20 @@ object RelayAggregator {
         installedAuthIdentity = desired
         signedAuthCache.clear()
         Log.d(TAG, "Installing RelayAuthenticator for $pubkey via $pkg")
-        authenticator = RelayAuthenticator(Citrine.instance.client, scope) { template ->
-            val relay = template.tags.firstOrNull { it.size > 1 && it[0] == "relay" }?.get(1)
+        authenticator = RelayAuthenticator(Citrine.instance.client, scope) { relay, template, _ ->
+            val relayUrl = relay.url
             val challenge = template.tags.firstOrNull { it.size > 1 && it[0] == "challenge" }?.get(1)
-            if (relay != null && challenge != null) {
-                val cached = signedAuthCache[relay]
+            if (challenge != null) {
+                val cached = signedAuthCache[relayUrl]
                 if (cached != null && cached.first == challenge) {
-                    Log.d(TAG, "Reusing cached AUTH for $relay (challenge unchanged)")
+                    Log.d(TAG, "Reusing cached AUTH for $relayUrl (challenge unchanged)")
                     return@RelayAuthenticator listOf(cached.second)
                 }
             }
             try {
                 val signed = signer.sign(template)
-                if (relay != null && challenge != null) {
-                    signedAuthCache[relay] = challenge to signed
+                if (challenge != null) {
+                    signedAuthCache[relayUrl] = challenge to signed
                 }
                 listOf(signed)
             } catch (e: CancellationException) {
@@ -1651,7 +1651,7 @@ object RelayAggregator {
         val done = CompletableDeferred<Unit>()
 
         val collector = object : RelayConnectionListener {
-            override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+            override suspend fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
                 when (msg) {
                     is EventMessage -> {
                         if (msg.subId != subId) return
@@ -1741,7 +1741,7 @@ object RelayAggregator {
         val done = CompletableDeferred<Unit>()
 
         val collector = object : RelayConnectionListener {
-            override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+            override suspend fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
                 when (msg) {
                     is EventMessage -> {
                         if (msg.subId != subId) return
@@ -1812,7 +1812,7 @@ object RelayAggregator {
     }
 
     private class AggregatorListener : RelayConnectionListener {
-        override fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
+        override suspend fun onIncomingMessage(relay: IRelayClient, msgStr: String, msg: Message) {
             if (subscribedRelays.contains(relay.url)) {
                 if (connectedRelays.add(relay.url)) {
                     Log.d(TAG, "Relay live (${connectedRelays.size}/${subscribedRelays.size}): ${relay.url.url}")
