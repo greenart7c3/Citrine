@@ -101,3 +101,5 @@ Jetpack Compose with a bottom navigation bar (Home, Settings). Navigation is def
 - **Room** — SQLite ORM with FTS4 support
 - **OkHttp** — HTTP/WebSocket client for outbound relay connections
 - **Anon.storage** — SAF-based file picker used for import/export
+
+- For repository collaboration, use ngit and follow `.claude/skills/ngit/SKILL.md`.

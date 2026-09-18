@@ -59,3 +59,5 @@ Compact guide for OpenCode sessions working in this repo. `CLAUDE.md` has fuller
 ## Translations
 
 - Managed via Crowdin (`crowdin.yml`). `androidResources.localeFilters` restricts shipped locales to `en, de, es, fr, ru, zh, zh-rCN`; `MissingTranslation` lint is disabled, so untranslated strings won't fail the build.
+
+- For repository collaboration, use ngit and follow `.agents/skills/ngit/SKILL.md`.
