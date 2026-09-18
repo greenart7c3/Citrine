@@ -27,6 +27,10 @@ Usage:
     # A/B the permessage-deflate theory:
     python3 relay_bench.py --compression gorilla   # go-nostr-like (default)
     python3 relay_bench.py --compression off       # no compression offered
+    # NIP-42 auth (the relay sends a challenge on connect; needed over LAN for
+    # protected events and for relays restricted to allowed pubkeys):
+    python3 relay_bench.py --auth                  # ephemeral key
+    python3 relay_bench.py --sec <64-char hex>     # pinned key (printed pubkey)
 
 Interpreting output:
     - "timeout" queries with events_received=0 and no first-event latency mean
@@ -145,8 +149,10 @@ def _tagged_hash(tag: str, data: bytes) -> bytes:
 
 
 class _PurePySigner:
-    def __init__(self):
-        self.d0 = int.from_bytes(secrets.token_bytes(32), "big") % (_N - 1) + 1
+    def __init__(self, sec=None):
+        # Random keys are clamped into [1, N-1]; provided keys are used exactly
+        # as given (already validated) so the identity matches the user's key.
+        self.d0 = int.from_bytes(sec, "big") if sec else int.from_bytes(secrets.token_bytes(32), "big") % (_N - 1) + 1
         pub = _point_mul((_GX, _GY), self.d0)
         self.point = pub
         self.pubkey_bytes = pub[0].to_bytes(32, "big")
@@ -169,8 +175,8 @@ class _PurePySigner:
 
 
 class _CoincurveSigner:
-    def __init__(self):
-        self.sk = _CoincurvePrivateKey(secrets.token_bytes(32))
+    def __init__(self, sec=None):
+        self.sk = _CoincurvePrivateKey(sec or secrets.token_bytes(32))
         self.pubkey = self.sk.public_key.format(compressed=True)[1:].hex()
 
     def sign(self, msg32: bytes) -> bytes:
@@ -178,8 +184,14 @@ class _CoincurveSigner:
 
 
 class Signer:
-    def __init__(self):
-        self._impl = _CoincurveSigner() if _CoincurvePrivateKey else _PurePySigner()
+    def __init__(self, sec=None):
+        if sec is not None:
+            if len(sec) != 32:
+                raise ValueError("private key must be 32 bytes (64 hex chars)")
+            d = int.from_bytes(sec, "big")
+            if d == 0 or d >= _N:
+                raise ValueError("private key out of BIP-340 range")
+        self._impl = (_CoincurveSigner if _CoincurvePrivateKey else _PurePySigner)(sec)
         self.pubkey = self._impl.pubkey
 
     def sign_event(self, kind: int, content: str, tags=None) -> dict:
@@ -224,8 +236,41 @@ def make_connect_kwargs(compression: str) -> dict:
     return {"max_size": None}  # "default": library default (context takeover)
 
 
-async def publisher(url: str, events: list, kwargs: dict, stats: dict):
+async def authenticate(url: str, signer: Signer, ws, timeout: float = 10.0):
+    """NIP-42 handshake. Citrine sends ["AUTH", <challenge>] right after the
+    websocket opens; answer with a signed kind-22242 event and wait for OK.
+    Challenges are per-connection, so every benchmark connection re-runs this."""
+    deadline = time.monotonic() + timeout
+    challenge = None
+    while challenge is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError(f"{url}: timed out waiting for the relay's NIP-42 AUTH challenge")
+        msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=remaining))
+        if msg[0] == "AUTH" and len(msg) > 1:
+            challenge = msg[1]
+        elif msg[0] == "NOTICE":
+            print(f"  NOTICE: {msg[1] if len(msg) > 1 else ''}")
+
+    ev = signer.sign_event(22242, "", [["relay", url], ["challenge", challenge]])
+    await ws.send(dumps(["AUTH", ev]))
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError(f"{url}: timed out waiting for the relay to accept the NIP-42 auth event")
+        msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=remaining))
+        if msg[0] == "OK" and msg[1] == ev["id"]:
+            if msg[2] is not True:
+                raise RuntimeError(f"{url}: relay rejected NIP-42 auth: {msg[3] if len(msg) > 3 else ''}")
+            return
+        if msg[0] == "NOTICE":
+            print(f"  NOTICE: {msg[1] if len(msg) > 1 else ''}")
+
+
+async def publisher(url: str, events: list, kwargs: dict, stats: dict, auth_signer=None):
     async with websockets.connect(url, **kwargs) as ws:
+        if auth_signer:
+            await authenticate(url, auth_signer, ws)
         for ev in events:
             await ws.send(dumps(["EVENT", ev]))
             while True:  # wait for OK, like go-nostr Publish
@@ -242,7 +287,7 @@ async def publisher(url: str, events: list, kwargs: dict, stats: dict):
                     break
 
 
-async def publish_phase(url, events, concurrency, content_size, kwargs):
+async def publish_phase(url, events, concurrency, content_size, kwargs, auth_signer=None):
     # Pre-sign everything so signing speed (pure-Python fallback is slow)
     # cannot skew the measured relay publish rate.
     signer_kind = "coincurve" if _CoincurvePrivateKey else "pure-python"
@@ -274,7 +319,7 @@ async def publish_phase(url, events, concurrency, content_size, kwargs):
 
     stats = {"published": 0, "rejected": 0, "duplicate": 0}
     start = time.monotonic()
-    await asyncio.gather(*(publisher(url, batch, kwargs, stats) for batch in batches))
+    await asyncio.gather(*(publisher(url, batch, kwargs, stats, auth_signer) for batch in batches))
     dur = time.monotonic() - start
     print(f"  Published: {stats['published']}")
     if stats["rejected"]:
@@ -308,7 +353,7 @@ def query_filter(i: int):
     return "#e", {"#e": [E_POOL[i % len(E_POOL)], E_POOL[(i + 1) % len(E_POOL)], E_POOL[(i + 2) % len(E_POOL)]], "limit": limit}
 
 
-async def query_phase(url, queries, timeout, kwargs):
+async def query_phase(url, queries, timeout, kwargs, auth_signer=None):
     total_events = 0
     timeouts = []
     latencies = []
@@ -316,6 +361,8 @@ async def query_phase(url, queries, timeout, kwargs):
     per_shape = {}  # label -> {"lat": [...], "events": int, "timeouts": int}
 
     async with websockets.connect(url, **kwargs) as ws:
+        if auth_signer:
+            await authenticate(url, auth_signer, ws)
         for i in range(queries):
             sub = f"bench{i}"
             label, f = query_filter(i)
@@ -417,18 +464,30 @@ async def main():
     p.add_argument("--timeout", type=float, default=7.0, help="per-query timeout (go-nostr QuerySync default: 7)")
     p.add_argument("--compression", choices=["gorilla", "default", "off"], default="gorilla",
                    help="permessage-deflate mode: gorilla=go-nostr-like, off=none")
+    p.add_argument("--auth", action="store_true",
+                   help="authenticate via NIP-42 on every connection (ephemeral key unless --sec)")
+    p.add_argument("--sec", metavar="HEX",
+                   help="64-char hex private key to authenticate with (implies --auth)")
     args = p.parse_args()
+
+    auth_signer = None
+    if args.sec or args.auth:
+        try:
+            auth_signer = Signer(bytes.fromhex(args.sec)) if args.sec else Signer()
+        except ValueError as e:
+            p.error(f"--sec: {e}")
+        print(f"NIP-42 auth as pubkey {auth_signer.pubkey}")
 
     kwargs = make_connect_kwargs(args.compression)
     print(f"Relay: {args.url}  compression={args.compression}")
 
     if args.events > 0:
         print(f"Publishing {args.events} events...")
-        await publish_phase(args.url, args.events, args.concurrency, args.content_size, kwargs)
+        await publish_phase(args.url, args.events, args.concurrency, args.content_size, kwargs, auth_signer)
 
     if args.queries > 0:
         print(f"Executing {args.queries} queries...")
-        await query_phase(args.url, args.queries, args.timeout, kwargs)
+        await query_phase(args.url, args.queries, args.timeout, kwargs, auth_signer)
 
 
 if __name__ == "__main__":
