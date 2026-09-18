@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.util.LruCache
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
@@ -93,6 +94,13 @@ object RelayAggregator {
     // prefers relays that already cover other authors so the chosen set converges to a
     // small number of well-shared relays even with a large follow list.
     private const val MAX_RELAYS_PER_AUTHOR = 3
+
+    // Cap on the total number of distinct outbound relays across all authors. Each relay
+    // costs a full OkHttp TLS WebSocket: hundreds of KB of JVM + native memory plus kernel
+    // socket buffers and a file descriptor. Beyond ~200 relays the per-connection RSS/FD
+    // cost outweighs the marginal per-author coverage, so keep the relays that cover the
+    // most authors.
+    private const val MAX_TOTAL_SUB_RELAYS = 200
     private const val DEFAULT_COLD_START_WINDOW_SEC = 24L * 60L * 60L
     private const val OVERLAP_SEC = 5L * 60L
     private const val BATCH_FETCH_TIMEOUT_MS = 15_000L
@@ -139,9 +147,10 @@ object RelayAggregator {
     private val lastEventByPubkey: ConcurrentHashMap<String, Long> = ConcurrentHashMap()
 
     // Pubkeys we've already considered for opportunistic kind-0 / kind-3 backfill in this
-    // session. Add()-on-first-sight guarantees we only spawn one backfill coroutine per pubkey
-    // even when many events arrive in quick succession.
-    private val backfilledPubkeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    // session. The LruCache bound trades a rare duplicate backfill (idempotent: the DAO
+    // existence check inside backfillUserIfMissing skips the network call) for never
+    // letting the seen-set grow with every stranger surfaced by the tagged subs.
+    private val backfilledPubkeys = LruCache<String, Boolean>(10_000)
 
     private val subscribedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
     private val connectedRelays: MutableSet<NormalizedRelayUrl> = ConcurrentHashMap.newKeySet()
@@ -423,7 +432,7 @@ object RelayAggregator {
         mutedPubkeys = emptySet()
         mutedWords = emptySet()
         muteListSeenAt = 0L
-        backfilledPubkeys.clear()
+        backfilledPubkeys.evictAll()
         eventsReceived.set(0)
         droppedEvents.set(0)
         statusDirty.set(false)
@@ -753,6 +762,9 @@ object RelayAggregator {
             val cachedRelayLists = mutableMapOf<String, AdvertisedRelayListEvent>()
             val fetched: Map<String, AdvertisedRelayListEvent>
             val relayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
+            // Authors in scope for the current subscription topology; empty in no-pubkey
+            // mode. Used to prune lastEventByPubkey cursors that nothing consumes.
+            var scopedAuthors: Set<String> = emptySet()
 
             if (noPubkeyMode) {
                 authorCount = 0
@@ -797,6 +809,7 @@ object RelayAggregator {
                 val contactList = loadOrBootstrapContactList(dao, aggPubkey, skipNetworkIfCached = cacheFresh)
                 val follows = contactList?.verifiedFollowKeySet() ?: emptySet()
                 val authors = (follows + aggPubkey).toSet()
+                scopedAuthors = authors
                 authorCount = authors.size
                 Log.d(
                     TAG,
@@ -853,6 +866,24 @@ object RelayAggregator {
                 sources.forEach { relay ->
                     relayToAuthors.getOrPut(relay) { mutableSetOf() }.addAll(authors)
                 }
+                if (relayToAuthors.size > MAX_TOTAL_SUB_RELAYS) {
+                    // Keep the relays covering the most authors; drop the long tail.
+                    val keptKeys = relayToAuthors.entries
+                        .sortedWith(
+                            compareByDescending<Map.Entry<NormalizedRelayUrl, MutableSet<String>>> { it.value.size }
+                                .thenComparator { a, b -> a.key.url.compareTo(b.key.url) },
+                        )
+                        .take(MAX_TOTAL_SUB_RELAYS)
+                        .map { it.key }
+                        .toSet()
+                    val droppedCount = relayToAuthors.size - keptKeys.size
+                    relayToAuthors.keys.retainAll(keptKeys)
+                    Log.d(
+                        TAG,
+                        "Relay cap: dropped $droppedCount relays beyond $MAX_TOTAL_SUB_RELAYS " +
+                            "(kept the ones covering the most authors)",
+                    )
+                }
                 Log.d(
                     TAG,
                     "Outbox map built: ${relayToAuthors.size} relays for ${authors.size} authors " +
@@ -908,6 +939,10 @@ object RelayAggregator {
                 MetadataEvent.KIND - ContactListEvent.KIND
             val bootstrapSince = computeBootstrapSince()
             val allAuthors = relayToAuthors.values.flatten().toSet()
+            // Cursors for authors that left scope (unfollowed, or strangers merged in by the
+            // tagged subs) are never consumed by computeChunkSince — drop them so the map
+            // stays bounded; in-scope cursors are re-seeded from the DB on the next line.
+            lastEventByPubkey.keys.retainAll(scopedAuthors)
             seedLastEventTimestamps(dao, allAuthors, subscriptionKinds)
             Log.d(
                 TAG,
@@ -1852,7 +1887,8 @@ object RelayAggregator {
                 // surfaced via the tagged sub get a profile + follow list. The DAO check
                 // inside backfillUserIfMissing skips the network call when both are already
                 // cached, so authors covered by the periodic batch fetch are a no-op.
-                if (backfilledPubkeys.add(ev.pubKey)) {
+                if (backfilledPubkeys.get(ev.pubKey) == null) {
+                    backfilledPubkeys.put(ev.pubKey, true)
                     backfillChannel?.trySend(ev.pubKey)
                 }
             }

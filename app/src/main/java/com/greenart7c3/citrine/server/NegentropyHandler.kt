@@ -13,7 +13,8 @@ import com.vitorpamplona.negentropy.storage.StorageVector
 @OptIn(ExperimentalStdlibApi::class)
 object NegentropyHandler {
     private const val FRAME_SIZE_LIMIT = 50_000L
-    private const val MAX_EVENTS = 1_000_000
+    private const val MAX_EVENTS = 250_000
+    private const val MAX_SESSIONS_PER_CONNECTION = 4
 
     suspend fun handleOpen(
         connection: Connection,
@@ -47,20 +48,29 @@ object NegentropyHandler {
             return
         }
 
+        // Each open session holds a materialized id set plus reconciliation state until
+        // the client finishes or closes it; abandoned sessions must not accumulate.
+        if (connection.negentropySessions.size >= MAX_SESSIONS_PER_CONNECTION) {
+            connection.trySend(negError(objectMapper, subId, "blocked: too many concurrent sessions"))
+            return
+        }
+
         // NIP-29: with private groups on the relay, a broad filter's id set could reveal
         // private-group event ids, so the storage is built from readable events only.
         val nip29Gate = GroupManager.hasPrivateGroups()
         val storage = StorageVector().apply {
             if (nip29Gate) {
-                EventRepository.query(appDatabase, filter).forEach {
-                    val event = it.toEvent()
-                    if (GroupManager.canRead(event, connection)) {
-                        insert(event.createdAt, event.id)
+                EventRepository.batchedQuery(appDatabase, filter, null) { batch ->
+                    for (row in batch) {
+                        val event = row.toEvent()
+                        if (GroupManager.canRead(event, connection)) {
+                            insert(event.createdAt, event.id)
+                        }
                     }
                 }
             } else {
-                EventRepository.idsAndCreatedAt(appDatabase, filter).forEach {
-                    insert(it.createdAt, it.id)
+                EventRepository.batchedIdsAndCreatedAt(appDatabase, filter) { batch ->
+                    batch.forEach { insert(it.createdAt, it.id) }
                 }
             }
             seal()
