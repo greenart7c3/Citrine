@@ -63,6 +63,7 @@ import com.greenart7c3.citrine.ui.settings.RelayInfoSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RetentionSettingsScreen
 import com.greenart7c3.citrine.ui.settings.WebClientsSettingsScreen
 import com.greenart7c3.citrine.ui.settings.toShortenHex
+import com.greenart7c3.citrine.utils.formatEpochSecondsToCustomDateTimeWithSeconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -188,7 +189,7 @@ fun CitrineScaffold(
                                         )
                                         EventSection(
                                             label = stringResource(R.string.date),
-                                            displayValue = event.createdAt.formatLongToCustomDateTimeWithSeconds(),
+                                            displayValue = event.createdAt.formatEpochSecondsToCustomDateTimeWithSeconds(),
                                             onCopy = {
                                                 copyToClipboard(clipboard, "${event.createdAt}")
                                             },

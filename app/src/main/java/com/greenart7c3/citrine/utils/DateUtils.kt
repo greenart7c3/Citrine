@@ -19,3 +19,12 @@ fun Long.toDateString(): String {
 
     return formatter.format(dateTime)
 }
+
+fun Long.formatEpochSecondsToCustomDateTimeWithSeconds(): String {
+    val dateTime = LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(this * 1000),
+        ZoneId.systemDefault(),
+    )
+    val formatter = DateTimeFormatter.ofPattern("HH:mm:ss - dd MMM")
+    return dateTime.format(formatter)
+}
