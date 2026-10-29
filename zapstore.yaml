@@ -1,0 +1,16 @@
+repository: https://github.com/greenart7c3/Citrine
+release_source: https://github.com/greenart7c3/Citrine
+match: '^citrine-arm64-v8a-.*\.apk$'
+
+name: Citrine
+summary: Nostr relay for Android
+description: |
+  Citrine is a nostr relay for android. It allows any nostr client that supports Android to send and receive events from this application.
+license: MIT
+
+icon: ./fastlane/metadata/android/en-US/images/icon.png
+images:
+  - ./fastlane/metadata/android/en-US/images/phoneScreenshots/01-home.png
+  - ./fastlane/metadata/android/en-US/images/phoneScreenshots/02-settings.png
+  - ./fastlane/metadata/android/en-US/images/phoneScreenshots/03-nsites.png
+release_notes: ./docs/changelogs/3.2.1.md
