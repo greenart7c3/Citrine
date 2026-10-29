@@ -2,7 +2,7 @@ package com.greenart7c3.citrine.server
 
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.R
-import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
+import com.greenart7c3.citrine.json.JacksonMapper
 
 object Settings {
     // Event kinds that are signed artifacts never meant to be published to a relay as

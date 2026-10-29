@@ -142,6 +142,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.jackson.module.kotlin)
     implementation(libs.androidx.core.ktx)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)

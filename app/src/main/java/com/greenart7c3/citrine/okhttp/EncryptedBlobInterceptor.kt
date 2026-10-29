@@ -21,8 +21,9 @@
 package com.greenart7c3.citrine.okhttp
 
 import com.greenart7c3.citrine.logs.Log
-import com.vitorpamplona.quartz.utils.ciphers.AESGCM
-import com.vitorpamplona.quartz.utils.ciphers.NostrCipher
+import com.vitorpamplona.crypto.SymmetricCipher
+import com.vitorpamplona.crypto.aes.AESGCM
+import com.vitorpamplona.quartz.nip01Core.core.toHexKey
 import okhttp3.Interceptor
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -30,21 +31,28 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 class EncryptedBlobInterceptor(
     private val cache: EncryptionKeyCache,
 ) : Interceptor {
-    fun Response.decrypt(cipher: NostrCipher): Response {
+    fun Response.decrypt(cipher: SymmetricCipher): Response {
         val body = peekBody(Long.MAX_VALUE)
         val decryptedBytes = cipher.decrypt(body.bytes())
         val newBody = decryptedBytes.toResponseBody(body.contentType())
         return newBuilder().body(newBody).build()
     }
 
-    private fun Response.decryptOrNull(cipher: NostrCipher): Response? = try {
+    private fun Response.decryptOrNull(cipher: SymmetricCipher): Response? = try {
         decrypt(cipher)
     } catch (e: Exception) {
         Log.w("EncryptedBlobInterceptor", "Failed to decrypt", e)
         null
     }
 
-    private fun Response.decryptOrNullWithErrorCorrection(cipher: NostrCipher): Response? {
+    // Blobs encrypted by implementations that used the hex nonce's UTF-8 bytes as the
+    // actual GCM nonce; retried when the standard decryption fails to authenticate.
+    private fun AESGCM.copyUsingUTF8Nonce(): AESGCM = AESGCM(
+        keyBytes,
+        nonce.toHexKey().toByteArray(Charsets.UTF_8),
+    )
+
+    private fun Response.decryptOrNullWithErrorCorrection(cipher: SymmetricCipher): Response? {
         return decryptOrNull(cipher) ?: return if (cipher is AESGCM) {
             decryptOrNull(cipher.copyUsingUTF8Nonce())
         } else {
