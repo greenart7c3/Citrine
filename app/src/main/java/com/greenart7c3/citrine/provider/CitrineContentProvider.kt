@@ -607,6 +607,9 @@ class CitrineContentProvider : ContentProvider() {
                         CustomWebSocketServer.VerificationResult.BannedEvent -> {
                             QueryResult.error<Uri>("Event is banned")
                         }
+                        CustomWebSocketServer.VerificationResult.EventTooLarge -> {
+                            QueryResult.error<Uri>("Event too large")
+                        }
                     }
                 } else {
                     // Server not available, do basic validation and insert

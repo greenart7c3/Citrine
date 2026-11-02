@@ -397,6 +397,7 @@ class CustomWebSocketServer(
         RejectedByNip29,
         BannedPubkey,
         BannedEvent,
+        EventTooLarge,
     }
 
     suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean, fromAggregator: Boolean = false): VerificationResult {
@@ -407,6 +408,11 @@ class CustomWebSocketServer(
         if (event.isExpired() && connection != null) {
             Log.d(Citrine.TAG, "event expired ${event.id} ${event.expiration()}")
             return VerificationResult.Expired
+        }
+
+        if (Settings.maxEventSize > 0 && event.content.length > Settings.maxEventSize) {
+            Log.d(Citrine.TAG, "event too large ${event.id} ${event.content.length}")
+            return VerificationResult.EventTooLarge
         }
 
         if (event.kind in Settings.rejectedKinds) {
@@ -610,6 +616,9 @@ class CustomWebSocketServer(
             }
             VerificationResult.BannedEvent -> {
                 connection?.send(CommandResult.invalid(event, "blocked: event is banned").toJson())
+            }
+            VerificationResult.EventTooLarge -> {
+                connection?.send(CommandResult.invalid(event, "invalid: event too large (max ${Settings.maxEventSize} characters of content)").toJson())
             }
             VerificationResult.Deleted -> {
                 connection?.send(CommandResult(event.id, false, "deleted: event has been deleted by its author").toJson())
@@ -1280,6 +1289,9 @@ class CustomWebSocketServer(
                             put("software", "https://github.com/greenart7c3/Citrine")
                             put("version", BuildConfig.VERSION_NAME)
                             put("icon", Settings.relayIcon)
+                            if (Settings.maxEventSize > 0) {
+                                putObject("limitation").put("max_content_length", Settings.maxEventSize)
+                            }
                         }
                         call.respondText(
                             JacksonMapper.mapper.writeValueAsString(relayDocument),
