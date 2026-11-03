@@ -70,6 +70,7 @@ fun RelayInfoSettingsScreen(
     val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
     val invalidHostOrPortMsg = stringResource(R.string.invalid_host_or_port)
     val invalidIconUrlMsg = stringResource(R.string.invalid_icon_url)
+    val invalidMaxEventSizeMsg = stringResource(R.string.invalid_max_event_size)
     val noSignerInstalledMsg = stringResource(R.string.no_external_signer_installed)
 
     Surface(modifier) {
@@ -80,6 +81,7 @@ fun RelayInfoSettingsScreen(
         var relaySignerPackageName by remember { mutableStateOf(Settings.relaySignerPackageName) }
         var relayContact by remember { mutableStateOf(TextFieldValue(Settings.contact)) }
         var relayDescription by remember { mutableStateOf(TextFieldValue(Settings.description)) }
+        var maxEventSize by remember { mutableStateOf(TextFieldValue(Settings.maxEventSize.toString())) }
         var relayIconUrl by remember { mutableStateOf(TextFieldValue(Settings.relayIcon)) }
 
         val ownerNpub = remember(relayOwnerPubkey) {
@@ -132,9 +134,12 @@ fun RelayInfoSettingsScreen(
                 Toast.makeText(context, invalidHostOrPortMsg, Toast.LENGTH_SHORT).show()
             } else if (relayIconUrl.text.isNotBlank() && runCatching { relayIconUrl.text.toUri() }.isFailure) {
                 Toast.makeText(context, invalidIconUrlMsg, Toast.LENGTH_SHORT).show()
+            } else if (maxEventSize.text.isBlank() || !maxEventSize.text.isDigitsOnly() || maxEventSize.text.toIntOrNull() == null) {
+                Toast.makeText(context, invalidMaxEventSizeMsg, Toast.LENGTH_SHORT).show()
             } else {
                 scope.launch(Dispatchers.IO) {
                     isLoading = true
+                    Settings.maxEventSize = maxEventSize.text.toInt()
                     Settings.host = host.text
                     Settings.port = port.text.toInt()
                     Settings.name = relayName.text
@@ -273,6 +278,17 @@ fun RelayInfoSettingsScreen(
                         onValueChange = { relayIconUrl = it },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        value = maxEventSize,
+                        label = { Text(stringResource(R.string.max_event_size)) },
+                        supportingText = { Text(stringResource(R.string.max_event_size_description)) },
+                        onValueChange = { maxEventSize = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
                 }
             }

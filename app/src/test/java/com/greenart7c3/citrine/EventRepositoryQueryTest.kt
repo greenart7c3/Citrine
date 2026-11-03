@@ -3,9 +3,12 @@ package com.greenart7c3.citrine
 import com.greenart7c3.citrine.server.EventFilter
 import com.greenart7c3.citrine.server.EventRepository
 import com.greenart7c3.citrine.server.EventRepository.SelectMode
+import com.greenart7c3.citrine.server.Settings
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -14,6 +17,39 @@ import org.junit.Test
  * SimpleSQLiteQuery binds positionally) and must compose with the batch LIMIT.
  */
 class EventRepositoryQueryTest {
+    private var savedMax = 0
+
+    @Before
+    fun disableSizeCap() {
+        savedMax = Settings.maxEventSize
+        Settings.maxEventSize = 0
+    }
+
+    @After
+    fun restoreSizeCap() {
+        Settings.maxEventSize = savedMax
+    }
+
+    @Test
+    fun sizeCapPredicateIsBoundBeforeCursor() {
+        Settings.maxEventSize = 1000
+        val (sql, params) = EventRepository.createQuery(
+            EventFilter(kinds = setOf(1)),
+            SelectMode.FULL_EVENTS,
+            cursorCreatedAt = 5L,
+            cursorId = "x",
+            batchLimit = 10,
+        )
+        assertTrue(sql.contains("length(EventEntity.content) <= ?"))
+        // expiry, kind, size cap, cursor x3, limit
+        assertEquals(7, params.size)
+        assertEquals(1000, params[2])
+        assertEquals(5L, params[3])
+
+        val (countSql, _) = EventRepository.createQuery(EventFilter(), SelectMode.COUNT)
+        assertFalse(countSql.contains("length(EventEntity.content)"))
+    }
+
     @Test
     fun cursorPredicateAndBatchLimitAppendInOrder() {
         val (sql, params) = EventRepository.createQuery(

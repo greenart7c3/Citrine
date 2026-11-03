@@ -20,6 +20,8 @@ private val JACKSON_NODE_FACTORY = JacksonMapper.mapper.nodeFactory
 
 object EventRepository {
     private const val QUERY_BATCH_SIZE = 500
+    private const val MIN_BATCH_SIZE = 10
+    private const val BATCH_CONTENT_BUDGET_CHARS = 8L * 1024 * 1024
 
     enum class SelectMode {
         FULL_EVENTS,
@@ -117,6 +119,13 @@ object EventRepository {
             appendWhere(existsClause)
         }
 
+        // Never load rows whose content exceeds the size cap: a single multi-MB row can
+        // exhaust the heap while being serialized (issue #187).
+        if (mode == SelectMode.FULL_EVENTS && Settings.maxEventSize > 0) {
+            appendWhere("length(EventEntity.content) <= ?")
+            params.add(Settings.maxEventSize)
+        }
+
         // Keyset pagination cursor: continues strictly after the previous page's last row
         // under the non-search ordering "createdAt DESC, id ASC", index-backed by
         // idx_event_created_id. Never combine with searchKeywords (rowid ordering).
@@ -204,14 +213,23 @@ object EventRepository {
         var sent = 0
         var cursorCreatedAt: Long? = null
         var cursorId: String? = null
+        var batchSize = QUERY_BATCH_SIZE
         while (true) {
-            val effective = minOf(QUERY_BATCH_SIZE, clientLimit?.let { it - sent } ?: Int.MAX_VALUE)
+            val effective = minOf(batchSize, clientLimit?.let { it - sent } ?: Int.MAX_VALUE)
             if (effective <= 0) break
 
             val query = createQuery(filter, SelectMode.FULL_EVENTS, cursorCreatedAt, cursorId, effective)
             val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
             val batch = database.eventDao().getEvents(rawSql)
             if (batch.isEmpty()) break
+
+            // Byte-aware paging: shrink the next page after a heavy one, recover after a light one.
+            val chars = batch.sumOf { it.event.content.length.toLong() }
+            batchSize = if (chars > BATCH_CONTENT_BUDGET_CHARS) {
+                maxOf(MIN_BATCH_SIZE, batchSize / 2)
+            } else {
+                minOf(QUERY_BATCH_SIZE, batchSize * 2)
+            }
 
             onBatch(batch)
             sent += batch.size
@@ -265,7 +283,7 @@ object EventRepository {
                 if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
                     continue
                 }
-                subscription.connection.send("[\"EVENT\",${subscription.escapedId},${dbEvent.toEventJson()}]")
+                subscription.connection.send(dbEvent.toEventFrame(subscription.escapedId))
                 count++
             }
             count
@@ -275,7 +293,7 @@ object EventRepository {
                     if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
                         continue
                     }
-                    subscription.connection.send("[\"EVENT\",${subscription.escapedId},${dbEvent.toEventJson()}]")
+                    subscription.connection.send(dbEvent.toEventFrame(subscription.escapedId))
                 }
             }
         }
@@ -290,8 +308,12 @@ object EventRepository {
      * JSON as `toEvent().toJsonObject()`: tags are flattened the same way as
      * [com.greenart7c3.citrine.database.toTags] (non-null col0..col3, then col4Plus).
      */
-    private fun EventWithTags.toEventJson(): String {
-        val writer = StringWriter(256 + event.content.length)
+    private fun EventWithTags.toEventFrame(escapedSubId: String): String {
+        // The frame is written once, prefix and suffix included, into a single buffer.
+        val writer = StringWriter(256 + escapedSubId.length + event.content.length)
+        writer.write("[\"EVENT\",")
+        writer.write(escapedSubId)
+        writer.write(",")
         JacksonMapper.mapper.factory.createGenerator(writer).use { gen ->
             gen.writeStartObject()
             gen.writeStringField("id", event.id)
@@ -313,6 +335,7 @@ object EventRepository {
             gen.writeStringField("sig", event.sig)
             gen.writeEndObject()
         }
+        writer.write("]")
         return writer.toString()
     }
 }

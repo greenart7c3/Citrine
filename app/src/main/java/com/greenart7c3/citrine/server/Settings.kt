@@ -4,6 +4,8 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.json.JacksonMapper
 
+const val DEFAULT_MAX_EVENT_SIZE = 1_048_576
+
 object Settings {
     // Event kinds that are signed artifacts never meant to be published to a relay as
     // standalone events. They are rejected at ingestion with an OK false "blocked:" response
@@ -54,6 +56,7 @@ object Settings {
     var contact: String = ""
     var description: String = "A Nostr relay in your phone"
     var relayIcon: String = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+    var maxEventSize: Int = DEFAULT_MAX_EVENT_SIZE
     var autoBackup = false
     var autoBackupFolder = ""
 
@@ -158,6 +161,7 @@ object Settings {
         contact = ""
         description = "A Nostr relay in your phone"
         relayIcon = "https://github.com/greenart7c3/Citrine/blob/master/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+        maxEventSize = DEFAULT_MAX_EVENT_SIZE
         autoBackup = false
         autoBackupFolder = ""
         relaySignerPackageName = ""

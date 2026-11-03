@@ -3,6 +3,7 @@ package com.greenart7c3.citrine.service
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.greenart7c3.citrine.server.DEFAULT_MAX_EVENT_SIZE
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 
@@ -22,6 +23,7 @@ object PrefKeys {
     const val RELAY_CONTACT = "relay_contact"
     const val RELAY_DESCRIPTION = "relay_description"
     const val RELAY_ICON = "relay_icon"
+    const val MAX_EVENT_SIZE = "max_event_size"
     const val AUTO_BACKUP = "auto_backup"
     const val AUTO_BACKUP_FOLDER = "auto_backup_folder"
     const val SEND_MUTE_RESPONSE = "send_mute_response"
@@ -100,6 +102,7 @@ object LocalPreferences {
                 putString(PrefKeys.RELAY_CONTACT, settings.contact)
                 putString(PrefKeys.RELAY_DESCRIPTION, settings.description)
                 putString(PrefKeys.RELAY_ICON, settings.relayIcon)
+                putInt(PrefKeys.MAX_EVENT_SIZE, settings.maxEventSize)
                 putBoolean(PrefKeys.AUTO_BACKUP, settings.autoBackup)
                 putString(PrefKeys.AUTO_BACKUP_FOLDER, settings.autoBackupFolder)
                 putString(PrefKeys.RELAY_SIGNER_PACKAGE_NAME, settings.relaySignerPackageName)
@@ -187,6 +190,7 @@ object LocalPreferences {
         Settings.contact = prefs.getString(PrefKeys.RELAY_CONTACT, "") ?: ""
         Settings.description = prefs.getString(PrefKeys.RELAY_DESCRIPTION, "A Nostr relay in your phone") ?: "A Nostr relay in your phone"
         Settings.relayIcon = prefs.getString(PrefKeys.RELAY_ICON, "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true") ?: "https://github.com/greenart7c3/Citrine/blob/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png?raw=true"
+        Settings.maxEventSize = prefs.getInt(PrefKeys.MAX_EVENT_SIZE, DEFAULT_MAX_EVENT_SIZE)
         Settings.autoBackup = prefs.getBoolean(PrefKeys.AUTO_BACKUP, false)
         Settings.autoBackupFolder = prefs.getString(PrefKeys.AUTO_BACKUP_FOLDER, "") ?: ""
         Settings.relaySignerPackageName = prefs.getString(PrefKeys.RELAY_SIGNER_PACKAGE_NAME, "") ?: ""

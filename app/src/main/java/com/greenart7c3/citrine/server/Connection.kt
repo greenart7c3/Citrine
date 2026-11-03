@@ -10,6 +10,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -45,11 +46,19 @@ class Connection(
     // events than the buffer could hold.
     private val outgoingQueue = Channel<String>(capacity = OUTGOING_QUEUE_CAPACITY)
 
+    // Characters currently staged in outgoingQueue. The frame-count capacity alone lets a
+    // slow client pin hundreds of MB when frames are large, so send() also waits on this.
+    private val queuedChars = AtomicLong(0)
+
     init {
         connectionScope.launch {
             try {
                 for (message in outgoingQueue) {
-                    session.send(Frame.Text(message))
+                    try {
+                        session.send(Frame.Text(message))
+                    } finally {
+                        queuedChars.addAndGet(-message.length.toLong())
+                    }
                 }
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
@@ -80,6 +89,9 @@ class Connection(
         // non-suspending producers use trySend(), which disconnects a consumer that
         // has fallen this far behind instead of silently corrupting its stream.
         private const val OUTGOING_QUEUE_CAPACITY = 1024
+
+        // Soft byte budget (in chars) for staged outbound frames.
+        private const val OUTGOING_QUEUE_MAX_CHARS = 16L * 1024 * 1024
     }
     val name = "user${lastId.getAndIncrement()}"
 
@@ -105,7 +117,18 @@ class Connection(
     suspend fun send(data: String) {
         if (closed.get()) return
         try {
-            outgoingQueue.send(data)
+            // Wait while over budget; a single frame larger than the budget still goes
+            // through once the queue has drained.
+            while (queuedChars.get() > OUTGOING_QUEUE_MAX_CHARS && !closed.get()) {
+                delay(5)
+            }
+            queuedChars.addAndGet(data.length.toLong())
+            try {
+                outgoingQueue.send(data)
+            } catch (e: Throwable) {
+                queuedChars.addAndGet(-data.length.toLong())
+                throw e
+            }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
@@ -115,7 +138,9 @@ class Connection(
 
     fun trySend(data: String) {
         if (closed.get()) return
+        queuedChars.addAndGet(data.length.toLong())
         val result = outgoingQueue.trySend(data)
+        if (!result.isSuccess) queuedChars.addAndGet(-data.length.toLong())
         if (result.isClosed) {
             Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
             // Do not call removeConnection here — the webSocket finally block owns removal.

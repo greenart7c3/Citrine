@@ -66,6 +66,9 @@ def now() -> int:
 # previously published events too (including query-only runs with --events 0).
 TOPICS = [f"bench-topic-{i}" for i in range(5)]
 E_POOL = [hashlib.sha256(f"citrine-bench-e-{i}".encode()).hexdigest() for i in range(20)]
+# Set by main() when authenticating: the relay only serves #p filters to a connection
+# authenticated as the tagged pubkey, so the #p case queries (and events tag) this key.
+AUTH_PUBKEY = None
 P_POOL = [hashlib.sha256(f"citrine-bench-p-{i}".encode()).hexdigest() for i in range(20)]
 
 
@@ -310,7 +313,7 @@ async def publish_phase(url, events, concurrency, content_size, kwargs, auth_sig
             # cases have events to find.
             tags = [
                 ["e", E_POOL[seq % len(E_POOL)]],
-                ["p", P_POOL[seq % len(P_POOL)]],
+                ["p", AUTH_PUBKEY if AUTH_PUBKEY and seq % 2 == 0 else P_POOL[seq % len(P_POOL)]],
                 ["t", TOPICS[seq % len(TOPICS)]],
             ]
             batch.append(signer.sign_event(1, content, tags))
@@ -349,6 +352,8 @@ def query_filter(i: int):
     if case == 5:
         return "#t + kinds", {"kinds": [1], "#t": [TOPICS[i % len(TOPICS)]], "limit": limit}
     if case == 6:
+        if AUTH_PUBKEY:
+            return "#p (own)", {"#p": [AUTH_PUBKEY], "limit": limit}
         return "#p", {"#p": [P_POOL[i % len(P_POOL)], P_POOL[(i + 1) % len(P_POOL)]], "limit": limit}
     return "#e", {"#e": [E_POOL[i % len(E_POOL)], E_POOL[(i + 1) % len(E_POOL)], E_POOL[(i + 2) % len(E_POOL)]], "limit": limit}
 
@@ -373,6 +378,7 @@ async def query_phase(url, queries, timeout, kwargs, auth_signer=None):
 
             got = 0
             eose = False
+            closed_reason = None
             first_event_at = None
             last_frame_at = q0
             max_gap = 0.0
@@ -396,12 +402,20 @@ async def query_phase(url, queries, timeout, kwargs, auth_signer=None):
                 elif msg[0] == "EOSE" and msg[1] == sub:
                     eose = True
                     break
+                elif msg[0] == "CLOSED" and msg[1] == sub:
+                    closed_reason = msg[2] if len(msg) > 2 else ""
+                    break
                 # frames for other (closed) subs are ignored, like go-nostr
 
             qdur = time.monotonic() - q0
             await ws.send(dumps(["CLOSE", sub]))
 
-            if eose:
+            if closed_reason is not None:
+                # The relay answered with a denial; that is not a stalled query.
+                shape["closed"] = shape.get("closed", 0) + 1
+                if shape["closed"] == 1:
+                    print(f"  CLOSED query {i} ({label}): {closed_reason}  (use --auth for #p)")
+            elif eose:
                 total_events += got
                 latencies.append(qdur)
                 shape["lat"].append(qdur)
@@ -441,6 +455,8 @@ async def query_phase(url, queries, timeout, kwargs, auth_signer=None):
                 line = f"    {label:<20} n={len(s['lat']):<3} p50={med:5.0f}ms max={mx:5.0f}ms avg_events={avg_ev:.0f}"
             else:
                 line = f"    {label:<20} n=0"
+            if s.get("closed"):
+                line += f"  CLOSED={s['closed']} (denied by relay)"
             if s["timeouts"]:
                 line += f"  TIMEOUTS={s['timeouts']}"
             print(line)
@@ -477,6 +493,8 @@ async def main():
         except ValueError as e:
             p.error(f"--sec: {e}")
         print(f"NIP-42 auth as pubkey {auth_signer.pubkey}")
+        global AUTH_PUBKEY
+        AUTH_PUBKEY = auth_signer.pubkey
 
     kwargs = make_connect_kwargs(args.compression)
     print(f"Relay: {args.url}  compression={args.compression}")
