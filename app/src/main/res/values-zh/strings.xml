@@ -78,6 +78,9 @@
     <string name="host">主机名</string>
     <string name="server">服务器</string>
     <string name="relay_icon_url">中继图标链接</string>
+    <string name="max_event_size">Max event content size (characters)</string>
+    <string name="max_event_size_description">Events with larger content are rejected and not served. 0 disables the limit.</string>
+    <string name="invalid_max_event_size">Invalid max event size</string>
     <string name="invalid_owner_pubkey">无效的所有者公钥</string>
     <string name="invalid_icon_url">无效的图标链接</string>
     <string name="default_value">默认</string>
