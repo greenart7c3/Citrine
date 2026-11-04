@@ -122,6 +122,23 @@ object RelayAggregator {
     // into a single evaluation.
     private const val NETWORK_DEBOUNCE_MS = 2_000L
 
+    // How long to let a network change settle before rebuilding the relay sockets.
+    private const val NETWORK_SETTLE_MS = 1_000L
+
+    private val TRACKED_TRANSPORTS = intArrayOf(
+        NetworkCapabilities.TRANSPORT_CELLULAR,
+        NetworkCapabilities.TRANSPORT_WIFI,
+        NetworkCapabilities.TRANSPORT_ETHERNET,
+        NetworkCapabilities.TRANSPORT_BLUETOOTH,
+        NetworkCapabilities.TRANSPORT_VPN,
+    )
+
+    private fun NetworkCapabilities.toSnapshot(network: Network) = NetworkSnapshot(
+        networkId = network.networkHandle,
+        transports = TRACKED_TRANSPORTS.filter { hasTransport(it) }.toSet(),
+        validated = hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+    )
+
     // Cap on how often counter-only status updates (relay count, event count) are pushed
     // through `_status`. Phase changes (BOOTSTRAPPING/REFRESHING/LISTENING/PAUSED) still
     // emit immediately. Without this, the StateFlow fires on every received event and
@@ -197,6 +214,13 @@ object RelayAggregator {
     @Volatile private var database: AppDatabase? = null
 
     @Volatile private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    // Tracks the default network so a switch (Wi-Fi <-> mobile, VPN up/down, regaining
+    // internet access) rebuilds the relay sockets instead of leaving them on dead routes.
+    @Volatile private var networkChangeDetector = NetworkChangeDetector()
+
+    // Settle delay for [resetRelayConnections]; replaced by every network change.
+    @Volatile private var pendingRelayReset: Job? = null
 
     // RelayAuthenticator listens for NIP-42 AUTH challenges from upstream relays and signs
     // a kind-22242 event using the external signer. Held so the start/stop lifecycle ties
@@ -580,13 +604,78 @@ object RelayAggregator {
         if (networkCallback != null) return
         val cm = connectivityManager() ?: return
         val cb = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) = scheduleNetworkEval()
-            override fun onLost(network: Network) = scheduleNetworkEval()
-            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = scheduleNetworkEval()
+            override fun onAvailable(network: Network) {
+                // onCapabilitiesChanged follows right away, but read them here too in
+                // case it does not, so a new default network is never missed.
+                connectivityManager()?.getNetworkCapabilities(network)?.let {
+                    onNetworkState(network, it)
+                }
+                scheduleNetworkEval()
+            }
+
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                onNetworkState(network, capabilities)
+                scheduleNetworkEval()
+            }
+
+            override fun onLost(network: Network) {
+                Log.d(TAG, "Network lost: ${network.networkHandle}")
+                if (networkChangeDetector.onLost(network.networkHandle)) {
+                    cancelPendingRelayReset()
+                    Citrine.instance.client.disconnect()
+                }
+                scheduleNetworkEval()
+            }
         }
         runCatching { cm.registerDefaultNetworkCallback(cb) }
             .onSuccess { networkCallback = cb }
             .onFailure { Log.e(TAG, "registerDefaultNetworkCallback failed", it) }
+    }
+
+    private fun onNetworkState(network: Network, capabilities: NetworkCapabilities) {
+        val reason = networkChangeDetector.onNetwork(capabilities.toSnapshot(network))
+        if (reason != null) {
+            Log.d(TAG, "Network ${network.networkHandle} change: $reason")
+            scheduleRelayReset(reason)
+        } else if (!Citrine.instance.client.isActive()) {
+            Citrine.instance.client.connect()
+        }
+    }
+
+    /**
+     * Network changes arrive as a burst of callbacks (the new network, then its
+     * capabilities as validation completes); wait for it to settle so the relays are
+     * rebuilt once, on the final network.
+     */
+    @Synchronized
+    private fun scheduleRelayReset(reason: String) {
+        val s = scope ?: return
+        pendingRelayReset?.cancel()
+        pendingRelayReset = s.launch {
+            delay(NETWORK_SETTLE_MS)
+            resetRelayConnections(reason)
+        }
+    }
+
+    @Synchronized
+    private fun cancelPendingRelayReset() {
+        pendingRelayReset?.cancel()
+        pendingRelayReset = null
+    }
+
+    /**
+     * Sockets opened on the previous network keep looking connected until a ping times
+     * out, and Quartz may still hold a long retry backoff from the offline stretch. Drop
+     * every socket, clear the backoff and redial; Quartz replays the stored REQs on
+     * reconnect, so the aggregator's subscriptions come back on their own.
+     */
+    private fun resetRelayConnections(reason: String) {
+        Log.d(TAG, "Resetting relay connections: $reason")
+        val client = Citrine.instance.client
+        client.disconnect()
+        // disconnect() also clears each relay's backoff; this covers relays without a socket.
+        client.resetBackoff()
+        client.connect()
     }
 
     private fun unregisterNetworkCallback() {
@@ -594,6 +683,8 @@ object RelayAggregator {
         networkCallback = null
         networkEvalJob?.cancel()
         networkEvalJob = null
+        cancelPendingRelayReset()
+        networkChangeDetector = NetworkChangeDetector()
         val cm = connectivityManager() ?: return
         runCatching { cm.unregisterNetworkCallback(cb) }
             .onFailure { Log.e(TAG, "unregisterNetworkCallback failed", it) }
