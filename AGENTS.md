@@ -58,6 +58,7 @@ Compact guide for OpenCode sessions working in this repo. `CLAUDE.md` has fuller
 
 ## Translations
 
-- Managed via Crowdin (`crowdin.yml`). `androidResources.localeFilters` restricts shipped locales to `en, de, es, fr, ru, zh, zh-rCN`; `MissingTranslation` lint is disabled, so untranslated strings won't fail the build.
+- Translations live in `app/src/main/res/values-<locale>/strings.xml` and are maintained in-repo (no Crowdin). The shipped locales match Amber: `en, de, es, fr, in, it-rIT, ja, ko-rKR, pt-rBR, ru, th, tr, vi-rVN, zh`, pinned by `androidResources.localeFilters` in `app/build.gradle.kts` and listed in `app/src/main/res/xml/locales_config.xml`.
+- **Strings must be translated in the same change.** Whenever you add or change a string in `app/src/main/res/values/strings.xml`, add the real translation to **every** `app/src/main/res/values-*/strings.xml` locale file before reporting the work as done. Never stop at English and never copy English into a locale file — write the actual translation, matching the existing tone/register of that file. Because `MissingTranslation` lint is disabled, a passing build does **not** mean the translations are present. Escape apostrophes as `\'` in languages that use them (French, Italian, Turkish, …), exactly like neighboring entries.
 
 - For repository collaboration, use ngit and follow `.agents/skills/ngit/SKILL.md`.

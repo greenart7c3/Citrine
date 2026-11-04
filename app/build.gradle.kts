@@ -34,7 +34,14 @@ android {
                     "fr",
                     "ru",
                     "zh",
-                    "zh-rCN",
+                    "pt-rBR",
+                    "in",
+                    "ja",
+                    "tr",
+                    "vi-rVN",
+                    "ko-rKR",
+                    "it-rIT",
+                    "th",
                 ),
             )
         }
