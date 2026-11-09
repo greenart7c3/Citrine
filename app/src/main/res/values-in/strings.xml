@@ -120,6 +120,8 @@
     <string name="tags">Tag</string>
     <string name="copy_raw_json">Salin JSON mentah</string>
     <string name="download_tagged_events">Unduh event yang ditandai</string>
+    <string name="downloading_events_progress">%1$s event · %2$d/%3$d relay</string>
+    <string name="downloading_events_finished">Unduhan selesai · %1$s event</string>
     <string name="allow_all_pubkeys_hint">Daftar kosong mengizinkan event dari semua pubkey</string>
     <string name="allow_all_tagged_pubkeys_hint">Daftar kosong mengizinkan event yang merujuk pubkey mana pun</string>
     <string name="allow_all_kinds_hint">Daftar kosong mengizinkan semua jenis event</string>

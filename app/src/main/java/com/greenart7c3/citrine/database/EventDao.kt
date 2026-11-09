@@ -7,6 +7,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
+import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.greenart7c3.citrine.Citrine
@@ -34,16 +35,53 @@ interface EventDao {
     @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
     fun countByKind(): Flow<List<CountResult>>
 
+    /**
+     * Inserts [event] and returns its row id, or null when the event was already stored.
+     *
+     * Hand-written instead of an `@Insert` returning `Long?`: Room resolves the id of a
+     * row-returning `@Insert` with two extra SQL statements per row (`SELECT changes()` and
+     * `SELECT last_insert_rowid()`), while `executeInsert()` gets the same answer from the INSERT
+     * itself (-1 when `OR IGNORE` swallowed the row). This runs once per event the relay ingests,
+     * so the two statements are not free.
+     */
+    @Transaction
+    suspend fun insertEventIfNew(
+        database: RoomDatabase,
+        event: EventEntity,
+    ): Long? {
+        val statement = database.openHelper.writableDatabase.compileStatement(
+            "INSERT OR IGNORE INTO `EventEntity` (`id`,`pubkey`,`createdAt`,`kind`,`content`,`sig`,`expiresAt`) VALUES (?,?,?,?,?,?,?)",
+        )
+        try {
+            statement.bindString(1, event.id)
+            statement.bindString(2, event.pubkey)
+            statement.bindLong(3, event.createdAt)
+            statement.bindLong(4, event.kind.toLong())
+            statement.bindString(5, event.content)
+            statement.bindString(6, event.sig)
+            val expiresAt = event.expiresAt
+            if (expiresAt == null) statement.bindNull(7) else statement.bindLong(7, expiresAt)
+            return statement.executeInsert().takeIf { it != -1L }
+        } finally {
+            statement.close()
+        }
+    }
+
+    /**
+     * Bulk insert of events.
+     *
+     * Deliberately returns nothing: Room only prepares the INSERT once for a Unit-returning bulk
+     * insert. When the method declares a return value, Room resolves each row's id with two extra
+     * statements (`SELECT changes()` and `SELECT last_insert_rowid()`) — three statement
+     * preparations per row instead of one. On a phone that is ~3x slower for the tag bulk insert.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEvents(events: List<EventEntity>)
+
+    /** Same as [insertEvents]: no return value, so Room reuses one prepared statement. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
-    suspend fun insertEvent(event: EventEntity): Long?
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertEvents(events: List<EventEntity>): List<Long>
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    @Transaction
-    suspend fun insertTags(tags: List<TagEntity>): List<Long>?
+    suspend fun insertTags(tags: List<TagEntity>)
 
     @Query("SELECT id FROM EventEntity WHERE id IN (:ids)")
     suspend fun existingIds(ids: List<String>): List<String>
@@ -246,16 +284,15 @@ interface EventDao {
     @Transaction
     suspend fun deleteAllTags()
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
     @Transaction
     suspend fun insertEventWithTags(
+        database: RoomDatabase,
         dbEvent: EventWithTags,
         connection: Connection?,
     ) {
-        // insertEvent returns null when the row already exists (IGNORE) —
-        // skip tag I/O and fan-out in that case rather than orphaning the
-        // existing event's tags.
-        insertEvent(dbEvent.event)?.let {
+        // Returns null when the row already exists (IGNORE) — skip tag I/O and
+        // fan-out in that case rather than orphaning the existing event's tags.
+        insertEventIfNew(database, dbEvent.event)?.let {
             dbEvent.tags.forEach {
                 it.pkEvent = dbEvent.event.id
             }

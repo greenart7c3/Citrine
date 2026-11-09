@@ -120,6 +120,8 @@
     <string name="tags">Tags</string>
     <string name="copy_raw_json">Copiar JSON bruto</string>
     <string name="download_tagged_events">Baixar eventos marcados</string>
+    <string name="downloading_events_progress">%1$s eventos · %2$d/%3$d relays</string>
+    <string name="downloading_events_finished">Download concluído · %1$s eventos</string>
     <string name="allow_all_pubkeys_hint">Uma lista vazia permite eventos de todas as chaves públicas</string>
     <string name="allow_all_tagged_pubkeys_hint">Uma lista vazia permite eventos que fazem referência a qualquer chave pública</string>
     <string name="allow_all_kinds_hint">Uma lista vazia permite todos os tipos de evento</string>

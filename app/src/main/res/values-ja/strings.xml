@@ -120,6 +120,8 @@
     <string name="tags">タグ</string>
     <string name="copy_raw_json">生の JSON をコピー</string>
     <string name="download_tagged_events">タグ付けされたイベントをダウンロード</string>
+    <string name="downloading_events_progress">%1$s 件 · %2$d/%3$d リレー</string>
+    <string name="downloading_events_finished">ダウンロード完了 · %1$s 件</string>
     <string name="allow_all_pubkeys_hint">リストが空の場合、すべての公開鍵からのイベントを許可します</string>
     <string name="allow_all_tagged_pubkeys_hint">リストが空の場合、任意の公開鍵を参照するイベントを許可します</string>
     <string name="allow_all_kinds_hint">リストが空の場合、すべての種類のイベントを許可します</string>

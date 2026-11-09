@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -28,6 +29,9 @@ import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
+import java.text.NumberFormat
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +50,8 @@ object EventDownloader {
      *
      * Each completed batch is handed to [sink] for persistence, so memory stays bounded to
      * one in-flight batch per relay instead of accumulating the full set before writing.
+     *
+     * [onBatchDownloaded] is called with the size of every batch once it has been sunk.
      */
     suspend fun fetchAllEventsByUserPaginated(
         client: NostrClient,
@@ -53,6 +59,7 @@ object EventDownloader {
         authorPubKey: String,
         downloadTaggedEvents: Boolean,
         batchSize: Int = 500,
+        onBatchDownloaded: ((batchSize: Int) -> Unit)? = null,
         sink: suspend (List<Event>) -> Unit,
     ) {
         val normalizedUrl = NormalizedRelayUrl(relayUrl)
@@ -74,12 +81,15 @@ object EventDownloader {
             },
         )
 
+        var downloaded = 0
+        var unansweredRounds = 0
+
         try {
             while (!completed) {
-                withTimeoutOrNull(30_000) {
+                val answered = withTimeoutOrNull(REQ_TIMEOUT_MS) {
                     subscription.updateFilter()
                     finishedSignal.await()
-                }
+                } != null
                 finishedSignal = CompletableDeferred()
                 val toSend = synchronized(bufferLock) {
                     if (buffer.isEmpty()) {
@@ -92,6 +102,29 @@ object EventDownloader {
                 }
                 if (toSend != null) {
                     sink(toSend)
+                    downloaded += toSend.size
+                    onBatchDownloaded?.invoke(toSend.size)
+                }
+
+                if (answered || toSend != null) {
+                    // A slow relay that is still streaming events is making progress: keep waiting
+                    // on the REQ in flight instead of giving up on it.
+                    unansweredRounds = 0
+                } else {
+                    // Nothing arrived and the relay never answered the REQ. `until` only moves on
+                    // EOSE, so the next REQ would carry the exact same filters and the relay
+                    // client would dedupe it away (or consider the old one still in flight),
+                    // leaving this loop spinning forever. Drop the subscription so the retry is
+                    // actually sent, and give up on this relay after a few silent rounds.
+                    unansweredRounds++
+                    if (unansweredRounds >= MAX_UNANSWERED_ROUNDS) {
+                        Log.w(
+                            Citrine.TAG,
+                            "Giving up on ${normalizedUrl.url} after $unansweredRounds unanswered requests ($downloaded events downloaded)",
+                        )
+                        break
+                    }
+                    subscription.restartSubscription()
                 }
             }
         } finally {
@@ -175,28 +208,36 @@ object EventDownloader {
             Citrine.instance.client.connect()
         }
         val targets = relays.filter { !it.url.contains("127.0.0.1") }
+        val progress = DownloadProgress(targets.size)
         try {
+            progress.publish(force = true)
             val sem = Semaphore(3)
             coroutineScope {
                 targets.map { relay ->
                     async(Dispatchers.IO) {
                         sem.withPermit {
-                            setProgress("loading events from ${relay.url}")
-                            fetchAllEventsByUserPaginated(
-                                client = Citrine.instance.client,
-                                relayUrl = relay.url,
-                                authorPubKey = signer.pubKey,
-                                downloadTaggedEvents = downloadTaggedEvents,
-                                sink = { batch ->
-                                    CustomWebSocketService.server?.innerProcessEventBatch(batch)
-                                },
-                            )
+                            try {
+                                fetchAllEventsByUserPaginated(
+                                    client = Citrine.instance.client,
+                                    relayUrl = relay.url,
+                                    authorPubKey = signer.pubKey,
+                                    downloadTaggedEvents = downloadTaggedEvents,
+                                    onBatchDownloaded = { size ->
+                                        progress.onBatchDownloaded(size)
+                                    },
+                                    sink = { batch ->
+                                        CustomWebSocketService.server?.innerProcessEventBatch(batch)
+                                    },
+                                )
+                            } finally {
+                                progress.onRelayFinished()
+                            }
                         }
                     }
                 }.awaitAll()
             }
 
-            setProgress("Finished loading events from ${targets.size} relays")
+            progress.publishFinished()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Log.e(Citrine.TAG, e.message ?: "", e)
@@ -207,7 +248,64 @@ object EventDownloader {
         }
     }
 
-    fun setProgress(message: String) {
+    /**
+     * Tracks how many events the download has pulled so far and keeps notification 2 in sync.
+     * Notifications are throttled: with a big archive `sink` runs for seconds per batch, and
+     * `notify` is a binder round-trip, so republishing on every batch would be wasted work.
+     */
+    private class DownloadProgress(
+        private val relayCount: Int,
+    ) {
+        private val downloaded = AtomicInteger(0)
+        private val finishedRelays = AtomicInteger(0)
+        private val lastPublish = AtomicLong(0)
+
+        fun onBatchDownloaded(batchSize: Int) {
+            downloaded.addAndGet(batchSize)
+            publish(force = false)
+        }
+
+        fun onRelayFinished() {
+            finishedRelays.incrementAndGet()
+            publish(force = true)
+        }
+
+        fun publishFinished() {
+            setProgress(
+                Citrine.instance.getString(
+                    R.string.downloading_events_finished,
+                    formatCount(downloaded.get()),
+                ),
+            )
+        }
+
+        fun publish(force: Boolean) {
+            val now = SystemClock.elapsedRealtime()
+            if (!force && now - lastPublish.get() < PUBLISH_INTERVAL_MS) return
+            lastPublish.set(now)
+            setProgress(
+                Citrine.instance.getString(
+                    R.string.downloading_events_progress,
+                    formatCount(downloaded.get()),
+                    finishedRelays.get(),
+                    relayCount,
+                ),
+                ongoing = true,
+            )
+        }
+
+        private fun formatCount(count: Int): String = NumberFormat.getIntegerInstance().format(count.toLong())
+
+        private companion object {
+            /** Minimum gap between two progress notifications, in milliseconds. */
+            const val PUBLISH_INTERVAL_MS = 1_000L
+        }
+    }
+
+    fun setProgress(
+        message: String,
+        ongoing: Boolean = false,
+    ) {
         val notificationManager = NotificationManagerCompat.from(Citrine.instance)
 
         if (message.isBlank()) {
@@ -239,6 +337,9 @@ object EventDownloader {
             .setContentText(message)
             .setSmallIcon(R.drawable.ic_notification)
             .setOnlyAlertOnce(true)
+            .setOngoing(ongoing)
+            .setAutoCancel(!ongoing)
+            .setProgress(0, 0, ongoing)
             .addAction(R.drawable.ic_launcher_background, Citrine.instance.getString(R.string.cancel), copyPendingIntent)
             .build()
 
@@ -247,6 +348,11 @@ object EventDownloader {
         }
         notificationManager.notify(2, notification)
     }
+
+    private const val REQ_TIMEOUT_MS = 30_000L
+
+    /** How many consecutive unanswered REQs a relay gets before the download gives up on it. */
+    private const val MAX_UNANSWERED_ROUNDS = 3
 }
 
 class RelayClientSubscription(
@@ -336,5 +442,15 @@ class RelayClientSubscription(
 
     fun closeSubscription() {
         client.unsubscribe(subId)
+    }
+
+    /**
+     * Drops the current subscription so the next [updateFilter] sends a brand new REQ, even when
+     * the filters are unchanged. Without this, a REQ that the relay never answered (or that it
+     * closed) is deduped by the relay client on the retry, and pagination never resumes.
+     */
+    fun restartSubscription() {
+        client.unsubscribe(subId)
+        subId = newSubId()
     }
 }

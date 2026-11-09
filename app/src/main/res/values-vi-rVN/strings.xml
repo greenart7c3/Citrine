@@ -120,6 +120,8 @@
     <string name="tags">Thẻ</string>
     <string name="copy_raw_json">Sao chép JSON thô</string>
     <string name="download_tagged_events">Tải xuống sự kiện được gắn thẻ</string>
+    <string name="downloading_events_progress">%1$s sự kiện · %2$d/%3$d relay</string>
+    <string name="downloading_events_finished">Tải xuống hoàn tất · %1$s sự kiện</string>
     <string name="allow_all_pubkeys_hint">Danh sách trống cho phép sự kiện từ mọi pubkey</string>
     <string name="allow_all_tagged_pubkeys_hint">Danh sách trống cho phép sự kiện tham chiếu đến bất kỳ pubkey nào</string>
     <string name="allow_all_kinds_hint">Danh sách trống cho phép mọi loại sự kiện</string>

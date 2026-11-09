@@ -120,6 +120,8 @@
     <string name="tags">Tag</string>
     <string name="copy_raw_json">Copia JSON grezzo</string>
     <string name="download_tagged_events">Scarica eventi taggati</string>
+    <string name="downloading_events_progress">%1$s eventi · %2$d/%3$d relay</string>
+    <string name="downloading_events_finished">Download completato · %1$s eventi</string>
     <string name="allow_all_pubkeys_hint">Una lista vuota consente eventi da tutte le chiavi pubbliche</string>
     <string name="allow_all_tagged_pubkeys_hint">Una lista vuota consente eventi che fanno riferimento a qualsiasi chiave pubblica</string>
     <string name="allow_all_kinds_hint">Una lista vuota consente tutti i tipi di evento</string>

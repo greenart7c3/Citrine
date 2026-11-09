@@ -119,6 +119,8 @@
     <string name="tags">Tags</string>
     <string name="copy_raw_json">Copy raw json</string>
     <string name="download_tagged_events">Download tagged events</string>
+    <string name="downloading_events_progress">%1$s events · %2$d/%3$d relays</string>
+    <string name="downloading_events_finished">Download finished · %1$s events</string>
     <string name="allow_all_pubkeys_hint">Empty list allows events from all pubkeys</string>
     <string name="allow_all_tagged_pubkeys_hint">Empty list allows events referencing any pubkey</string>
     <string name="allow_all_kinds_hint">Empty list allows all event kinds</string>
