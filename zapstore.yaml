@@ -13,4 +13,4 @@ images:
   - ./fastlane/metadata/android/en-US/images/phoneScreenshots/01-home.png
   - ./fastlane/metadata/android/en-US/images/phoneScreenshots/02-settings.png
   - ./fastlane/metadata/android/en-US/images/phoneScreenshots/03-nsites.png
-release_notes: ./docs/changelogs/3.2.1.md
+release_notes: ./docs/changelogs/3.2.2.md
