@@ -120,6 +120,8 @@
     <string name="tags">标签</string>
     <string name="copy_raw_json">复制原始 JSON</string>
     <string name="download_tagged_events">下载已标记事件</string>
+    <string name="downloading_events_progress">%1$s 条事件 · %2$d/%3$d 中继</string>
+    <string name="downloading_events_finished">下载完成 · %1$s 条事件</string>
     <string name="allow_all_pubkeys_hint">空列表允许所有公钥的事件</string>
     <string name="allow_all_tagged_pubkeys_hint">空列表允许事件引用任意的公钥</string>
     <string name="allow_all_kinds_hint">空列表允许所有类型事件</string>

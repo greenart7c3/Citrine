@@ -120,6 +120,8 @@
     <string name="tags">แท็ก</string>
     <string name="copy_raw_json">คัดลอก JSON ดิบ</string>
     <string name="download_tagged_events">ดาวน์โหลดอีเวนต์ที่ถูกแท็ก</string>
+    <string name="downloading_events_progress">%1$s อีเวนต์ · %2$d/%3$d รีเลย์</string>
+    <string name="downloading_events_finished">ดาวน์โหลดเสร็จสิ้น · %1$s อีเวนต์</string>
     <string name="allow_all_pubkeys_hint">รายการว่างจะอนุญาตอีเวนต์จากทุก pubkey</string>
     <string name="allow_all_tagged_pubkeys_hint">รายการว่างจะอนุญาตอีเวนต์ที่อ้างอิง pubkey ใดก็ได้</string>
     <string name="allow_all_kinds_hint">รายการว่างจะอนุญาตอีเวนต์ทุกชนิด</string>

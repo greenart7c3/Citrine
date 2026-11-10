@@ -120,6 +120,8 @@
     <string name="tags">Теги</string>
     <string name="copy_raw_json">Скопировать необработанный JSON</string>
     <string name="download_tagged_events">Загрузить отмеченные события</string>
+    <string name="downloading_events_progress">%1$s событий · %2$d/%3$d ретрансляторов</string>
+    <string name="downloading_events_finished">Загрузка завершена · %1$s событий</string>
     <string name="allow_all_pubkeys_hint">Пустой список разрешает события от всех публичных ключей</string>
     <string name="allow_all_tagged_pubkeys_hint">Пустой список разрешает события, ссылающиеся на любой публичный ключ</string>
     <string name="allow_all_kinds_hint">Пустой список разрешает все типы событий</string>

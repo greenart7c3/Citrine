@@ -120,6 +120,8 @@
     <string name="tags">Etiketler</string>
     <string name="copy_raw_json">Ham JSON\'u kopyala</string>
     <string name="download_tagged_events">Etiketlenen olayları indir</string>
+    <string name="downloading_events_progress">%1$s olay · %2$d/%3$d röle</string>
+    <string name="downloading_events_finished">İndirme tamamlandı · %1$s olay</string>
     <string name="allow_all_pubkeys_hint">Boş liste tüm pubkey\'lerden gelen olaylara izin verir</string>
     <string name="allow_all_tagged_pubkeys_hint">Boş liste herhangi bir pubkey\'e atıfta bulunan olaylara izin verir</string>
     <string name="allow_all_kinds_hint">Boş liste tüm olay türlerine izin verir</string>

@@ -120,6 +120,8 @@
     <string name="tags">태그</string>
     <string name="copy_raw_json">원본 JSON 복사</string>
     <string name="download_tagged_events">태그된 이벤트 다운로드</string>
+    <string name="downloading_events_progress">%1$s개 · 릴레이 %2$d/%3$d</string>
+    <string name="downloading_events_finished">다운로드 완료 · %1$s개</string>
     <string name="allow_all_pubkeys_hint">목록이 비어 있으면 모든 공개키의 이벤트를 허용합니다</string>
     <string name="allow_all_tagged_pubkeys_hint">목록이 비어 있으면 모든 공개키를 참조하는 이벤트를 허용합니다</string>
     <string name="allow_all_kinds_hint">목록이 비어 있으면 모든 종류의 이벤트를 허용합니다</string>

@@ -120,6 +120,8 @@
     <string name="tags">Tags</string>
     <string name="copy_raw_json">Rohes JSON kopieren</string>
     <string name="download_tagged_events">Markierte Events herunterladen</string>
+    <string name="downloading_events_progress">%1$s Events · %2$d/%3$d Relays</string>
+    <string name="downloading_events_finished">Download abgeschlossen · %1$s Events</string>
     <string name="allow_all_pubkeys_hint">Eine leere Liste erlaubt Events von allen Pubkeys</string>
     <string name="allow_all_tagged_pubkeys_hint">Eine leere Liste erlaubt Events, die auf beliebige Pubkeys verweisen</string>
     <string name="allow_all_kinds_hint">Eine leere Liste erlaubt alle Event-Kinds</string>

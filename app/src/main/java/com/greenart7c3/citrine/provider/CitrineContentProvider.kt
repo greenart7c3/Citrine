@@ -624,7 +624,7 @@ class CitrineContentProvider : ContentProvider() {
                     }
 
                     val eventWithTags = event.toEventWithTags()
-                    eventDao.insertEventWithTags(eventWithTags, null)
+                    eventDao.insertEventWithTags(database, eventWithTags, null)
                     QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                 }
             } catch (e: Exception) {
