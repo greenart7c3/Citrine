@@ -98,4 +98,37 @@ class EventRepositoryQueryTest {
         assertFalse(noLimitSql.contains("LIMIT"))
         assertEquals(1, noLimitParams.size)
     }
+
+    private fun chunks(counts: List<Int>, budget: Int): List<List<Int>> {
+        val result = mutableListOf<List<Int>>()
+        var start = 0
+        while (start < counts.size) {
+            val end = EventRepository.tagChunkEnd(start, counts.size, budget) { counts[it] }
+            assertTrue("chunk must advance", end > start)
+            result.add(counts.subList(start, end))
+            start = end
+        }
+        return result
+    }
+
+    @Test
+    fun tagChunksStayWithinBudget() {
+        assertEquals(
+            listOf(listOf(4, 3, 3), listOf(5, 5), listOf(1)),
+            chunks(listOf(4, 3, 3, 5, 5, 1), budget = 10),
+        )
+    }
+
+    @Test
+    fun eventAboveTagBudgetGetsItsOwnChunk() {
+        assertEquals(
+            listOf(listOf(2), listOf(5000), listOf(3, 0)),
+            chunks(listOf(2, 5000, 3, 0), budget = 10),
+        )
+    }
+
+    @Test
+    fun taglessEventsShareOneChunk() {
+        assertEquals(listOf(List(500) { 0 }), chunks(List(500) { 0 }, budget = 10))
+    }
 }
