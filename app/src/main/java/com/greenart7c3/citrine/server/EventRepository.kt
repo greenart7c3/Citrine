@@ -4,6 +4,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.EventEntity
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.IdAndCreatedAt
 import com.greenart7c3.citrine.json.JacksonMapper
@@ -14,6 +15,9 @@ import com.vitorpamplona.quartz.utils.TimeUtils
 import java.io.StringWriter
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 private val TAG_KEY_REGEX = Regex("^[a-zA-Z0-9]+$")
 private val JACKSON_NODE_FACTORY = JacksonMapper.mapper.nodeFactory
@@ -22,6 +26,9 @@ object EventRepository {
     private const val QUERY_BATCH_SIZE = 500
     private const val MIN_BATCH_SIZE = 10
     private const val BATCH_CONTENT_BUDGET_CHARS = 8L * 1024 * 1024
+
+    // Tags held in memory at once per in-flight query (~3 MB of TagEntity objects).
+    private const val CHUNK_TAG_BUDGET = 10_000
 
     enum class SelectMode {
         FULL_EVENTS,
@@ -199,10 +206,11 @@ object EventRepository {
     }
 
     /**
-     * Streams [filter]'s full-event matches to [onBatch] in keyset-paginated chunks of at
+     * Streams [filter]'s full-event matches to [onBatch] in keyset-paginated pages of at
      * most [QUERY_BATCH_SIZE] rows (or the remainder of [clientLimit], whichever is
-     * smaller), so the whole match set is never materialized in the heap. Returns the
-     * total number of rows handed to [onBatch].
+     * smaller), so the whole match set is never materialized in the heap. Each page is
+     * handed over in chunks of at most [CHUNK_TAG_BUDGET] tags (see [emitWithTags]).
+     * Returns the total number of rows read.
      */
     suspend fun batchedQuery(
         database: AppDatabase,
@@ -215,30 +223,104 @@ object EventRepository {
         var cursorId: String? = null
         var batchSize = QUERY_BATCH_SIZE
         while (true) {
+            // The queries below block uninterruptibly, so this is where a subscription
+            // whose client sent CLOSE or disconnected stops costing memory and I/O.
+            currentCoroutineContext().ensureActive()
+
             val effective = minOf(batchSize, clientLimit?.let { it - sent } ?: Int.MAX_VALUE)
             if (effective <= 0) break
 
             val query = createQuery(filter, SelectMode.FULL_EVENTS, cursorCreatedAt, cursorId, effective)
             val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
-            val batch = database.eventDao().getEvents(rawSql)
-            if (batch.isEmpty()) break
+            val rows = database.eventDao().getEventRows(rawSql)
+            if (rows.isEmpty()) break
 
             // Byte-aware paging: shrink the next page after a heavy one, recover after a light one.
-            val chars = batch.sumOf { it.event.content.length.toLong() }
+            val chars = rows.sumOf { it.content.length.toLong() }
             batchSize = if (chars > BATCH_CONTENT_BUDGET_CHARS) {
                 maxOf(MIN_BATCH_SIZE, batchSize / 2)
             } else {
                 minOf(QUERY_BATCH_SIZE, batchSize * 2)
             }
 
-            onBatch(batch)
-            sent += batch.size
-            if (batch.size < effective) break
+            emitWithTags(database, rows, onBatch)
+            sent += rows.size
+            if (rows.size < effective) break
 
-            cursorCreatedAt = batch.last().event.createdAt
-            cursorId = batch.last().event.id
+            cursorCreatedAt = rows.last().createdAt
+            cursorId = rows.last().id
         }
         return sent
+    }
+
+    /**
+     * Attaches tags to [rows] and hands them to [onBatch] in order, in chunks holding at
+     * most [CHUNK_TAG_BUDGET] tags (a single event above the budget gets a chunk of its
+     * own).
+     *
+     * Loading the tags of a whole page at once is what used to exhaust the heap: 500
+     * contact lists are ~275k tag rows (~70 MB of [com.greenart7c3.citrine.database.TagEntity]
+     * objects), a client's subscriptions run concurrently, and the load could not be
+     * cancelled once started, so a few such REQs — or one client reconnecting and
+     * re-issuing them — ended in an OutOfMemoryError.
+     */
+    private suspend fun emitWithTags(
+        database: AppDatabase,
+        rows: List<EventEntity>,
+        onBatch: suspend (List<EventWithTags>) -> Unit,
+    ) {
+        val dao = database.eventDao()
+        for (page in rows.chunked(QUERY_BATCH_SIZE)) {
+            val tagCounts = HashMap<String, Int>(page.size * 2)
+            dao.countTagsByEvent(page.map { it.id }).forEach { tagCounts[it.pkEvent] = it.count }
+
+            var start = 0
+            while (start < page.size) {
+                currentCoroutineContext().ensureActive()
+
+                val end = tagChunkEnd(start, page.size, CHUNK_TAG_BUDGET) { tagCounts[page[it].id] ?: 0 }
+                val chunk = page.subList(start, end)
+                val chunkTags = chunk.sumOf { tagCounts[it.id] ?: 0 }
+                val tagsByEvent = if (chunkTags == 0) {
+                    emptyMap()
+                } else {
+                    dao.getTagsByEvents(chunk.map { it.id }).groupBy { it.pkEvent }
+                }
+                val events = ArrayList<EventWithTags>(chunk.size)
+                for (row in chunk) {
+                    val tags = tagsByEvent[row.id]
+                    // Tags were counted but are gone: the event was deleted or replaced
+                    // between the two reads. Sending it without tags would hand the client
+                    // an event whose id and signature no longer verify.
+                    if (tags == null && (tagCounts[row.id] ?: 0) > 0) continue
+                    events.add(EventWithTags(row, tags ?: emptyList()))
+                }
+                if (events.isNotEmpty()) onBatch(events)
+                start = end
+            }
+        }
+    }
+
+    /**
+     * End (exclusive) of the chunk starting at [start]: as many consecutive events as fit
+     * in [budget] tags, and always at least one, so an event above the budget is not stuck.
+     */
+    internal inline fun tagChunkEnd(start: Int, size: Int, budget: Int, tagCount: (Int) -> Int): Int {
+        var end = start
+        var tags = 0L
+        while (end < size) {
+            val count = tagCount(end)
+            if (end > start && tags + count > budget) break
+            tags += count
+            end++
+        }
+        return end
+    }
+
+    // Subscriptions that are not registered in EventSubscription (or were evicted from it)
+    // are not cancelled when their connection goes away, so the streaming loops check.
+    private fun stopIfClosed(connection: Connection) {
+        if (connection.closed.get()) throw CancellationException("connection ${connection.name} closed")
     }
 
     /** Same streaming loop as [batchedQuery] for id+createdAt-only rows, without a client limit. */
@@ -276,19 +358,24 @@ object EventRepository {
 
         val sent = if (filter.searchKeywords.isNotEmpty()) {
             // FTS results are ordered by rowid, so the (createdAt, id) keyset cursor does
-            // not apply; FTS matches are text-bounded, so a single-shot load stays small.
-            val events = query(subscription.appDatabase, filter)
-            var count = 0
-            for (dbEvent in events) {
-                if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
-                    continue
+            // not apply and the matching rows are loaded in one shot; FTS matches are
+            // text-bounded, so that stays small. Their tags are still loaded in chunks.
+            val query = createQuery(filter, SelectMode.FULL_EVENTS)
+            val rows = subscription.appDatabase.eventDao()
+                .getEventRows(SimpleSQLiteQuery(query.first, query.second.toTypedArray()))
+            emitWithTags(subscription.appDatabase, rows) { batch ->
+                stopIfClosed(subscription.connection)
+                for (dbEvent in batch) {
+                    if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
+                        continue
+                    }
+                    subscription.connection.send(dbEvent.toEventFrame(subscription.escapedId))
                 }
-                subscription.connection.send(dbEvent.toEventFrame(subscription.escapedId))
-                count++
             }
-            count
+            rows.size
         } else {
             batchedQuery(subscription.appDatabase, filter, filter.limit) { batch ->
+                stopIfClosed(subscription.connection)
                 for (dbEvent in batch) {
                     if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
                         continue
