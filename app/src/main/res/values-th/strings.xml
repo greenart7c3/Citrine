@@ -5,6 +5,7 @@
     <string name="app_name_debug">Citrine Debug</string>
     <string name="no_follow_list_found">ไม่พบรายการที่ติดตาม</string>
     <string name="no_relays_found">ไม่พบรีเลย์</string>
+    <string name="loading_relays">กำลังค้นหารีเลย์ของคุณ</string>
     <string name="restore">กู้คืน</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">ตรวจสอบให้แน่ใจว่าแอปลงนามได้อนุญาตธุรกรรมนี้แล้ว</string>
     <string name="sign_request_rejected">คำขอลงนามถูกปฏิเสธ</string>

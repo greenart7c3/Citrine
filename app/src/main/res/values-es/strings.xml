@@ -5,6 +5,7 @@
     <string name="app_name_debug">Citrine Debug</string>
     <string name="no_follow_list_found">Lista de seguidos no encontrada</string>
     <string name="no_relays_found">No se encontraron relés</string>
+    <string name="loading_relays">Buscando tus relés</string>
     <string name="restore">Restaurar</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">Asegúrese de que la aplicación firmante haya autorizado esta transacción</string>
     <string name="sign_request_rejected">Solicitud de firma rechazada</string>

@@ -5,6 +5,7 @@
     <string name="app_name_debug">Citrine Debug</string>
     <string name="no_follow_list_found">Không tìm thấy danh sách theo dõi</string>
     <string name="no_relays_found">Không tìm thấy relay</string>
+    <string name="loading_relays">Đang tìm relay của bạn</string>
     <string name="restore">Khôi phục</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">Hãy đảm bảo ứng dụng ký đã cho phép giao dịch này</string>
     <string name="sign_request_rejected">Yêu cầu ký bị từ chối</string>

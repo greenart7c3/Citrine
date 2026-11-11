@@ -5,6 +5,7 @@
     <string name="app_name_debug">Citrine Debug</string>
     <string name="no_follow_list_found">Takip listesi bulunamadı</string>
     <string name="no_relays_found">Röle bulunamadı</string>
+    <string name="loading_relays">Röleleriniz aranıyor</string>
     <string name="restore">Geri yükle</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">İmzalayıcı uygulamanın bu işlemi onayladığından emin olun</string>
     <string name="sign_request_rejected">İmza isteği reddedildi</string>

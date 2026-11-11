@@ -38,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
@@ -158,7 +159,7 @@ object EventDownloader {
             relays.associateWith { filters },
         )
         event?.let {
-            CustomWebSocketService.server?.innerProcessEvent(it, null)
+            storeInBackground(it)
             result = it as AdvertisedRelayListEvent
         }
 
@@ -192,11 +193,28 @@ object EventDownloader {
             relays.associateWith { filters },
         )
         event?.let {
-            CustomWebSocketService.server?.innerProcessEvent(it, null)
+            storeInBackground(it)
             result = it as ContactListEvent
         }
         Citrine.instance.client.unsubscribe(subId)
         return result
+    }
+
+    /**
+     * Stores an event fetched from an indexer without making the caller wait for Room.
+     *
+     * The relay-list lookups above only need the event itself; the write (signature check, the
+     * replaceable-event cleanup, the history database) must not gate the UI that asked for it.
+     */
+    private fun storeInBackground(event: Event) {
+        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            try {
+                CustomWebSocketService.server?.innerProcessEvent(event, null)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.e(Citrine.TAG, "Could not store fetched event ${event.id}", e)
+            }
+        }
     }
 
     suspend fun fetchEvents(
