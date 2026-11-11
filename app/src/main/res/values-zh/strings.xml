@@ -5,6 +5,7 @@
     <string name="app_name_debug">Citrine 调试</string>
     <string name="no_follow_list_found">未找到关注列表</string>
     <string name="no_relays_found">未找到中继</string>
+    <string name="loading_relays">正在查找您的中继</string>
     <string name="restore">恢复</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">请确保签名器已授权本次请求</string>
     <string name="sign_request_rejected">签名请求已被拒绝</string>

@@ -8,13 +8,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
@@ -37,6 +39,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,9 +79,39 @@ import com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.Hex
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** Upper bound for one relay lookup in [SelectRelayModal]. */
+private const val RELAY_LOOKUP_TIMEOUT_MS = 15_000L
+
+/**
+ * Runs one relay lookup under a hard deadline.
+ *
+ * Timeouts and failures both degrade to "nothing found": the relay sheet must always open with
+ * whatever was resolved — even nothing — so that manual relay entry and the fetch button stay
+ * reachable. Nothing in here may keep the spinner up forever.
+ */
+private suspend fun <T> lookupRelays(
+    what: String,
+    block: suspend () -> T?,
+): T? = try {
+    withTimeoutOrNull(RELAY_LOOKUP_TIMEOUT_MS) { block() }
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    Log.e(Citrine.TAG, "Could not load $what", e)
+    null
+}
+
+/** Adds [relayUrl] to the sheet's list unless an equivalent relay is already listed. */
+private fun MutableList<NormalizedRelayUrl>.addIfNew(relayUrl: String) {
+    val normalized = RelayUrlNormalizer.normalizeOrNull(relayUrl) ?: return
+    if (none { it.displayUrl() == normalized.displayUrl() }) add(normalized)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,46 +131,50 @@ fun SelectRelayModal(
         content = {
             val keyboardController = LocalSoftwareKeyboardController.current
             var relayText by remember { mutableStateOf(TextFieldValue()) }
-            val relays = remember { mutableListOf<NormalizedRelayUrl>() }
+            // Snapshot list: the lookups below land off the main thread, so a plain
+            // MutableList would fill up without ever recomposing the list.
+            val relays = remember { mutableStateListOf<NormalizedRelayUrl>() }
 
-            var loading by remember { mutableStateOf(false) }
+            var loading by remember { mutableStateOf(true) }
 
             LaunchedEffect(Unit) {
-                launch(Dispatchers.IO) {
-                    loading = true
-                    try {
-                        if (!Citrine.instance.client.isActive()) {
-                            Citrine.instance.client.connect()
-                        }
-                        val database = AppDatabase.getDatabase(Citrine.instance)
-                        var contactList = database.eventDao().getContactList(signer.pubKey)?.toEvent() as ContactListEvent?
-                        if (contactList == null) {
-                            contactList = EventDownloader.fetchContactList(
-                                signer = signer,
-                            )
-                        }
-                        contactList?.let {
-                            val contactListRelays = it.relays()
-                            contactListRelays?.forEach { relay ->
-                                val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.key.url) ?: return@forEach
-                                if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
+                try {
+                    withTimeoutOrNull(RELAY_LOOKUP_TIMEOUT_MS) {
+                        withContext(Dispatchers.IO) {
+                            if (!Citrine.instance.client.isActive()) {
+                                Citrine.instance.client.connect()
                             }
                         }
-                        var advertisedRelayList = database.eventDao().getAdvertisedRelayList(signer.pubKey)?.toEvent() as AdvertisedRelayListEvent?
-                        if (advertisedRelayList == null) {
-                            advertisedRelayList = EventDownloader.fetchAdvertisedRelayList(
-                                signer = signer,
-                            )
-                        }
-                        advertisedRelayList?.let {
-                            it.relays().forEach { relay ->
-                                val formattedUrl = RelayUrlNormalizer.normalizeOrNull(relay.relayUrl.url) ?: return@forEach
-                                if (!relays.any { value -> value.displayUrl() == formattedUrl.displayUrl() }) relays.add(formattedUrl)
-                            }
-                        }
-                    } finally {
-                        loading = false
                     }
+
+                    // Both lookups are bounded and fall back to "nothing found": a relay that
+                    // never answers, or a local query stuck behind a write, must never leave the
+                    // sheet spinning with no way out. Results are added as they arrive.
+                    lookupRelays("contact list for ${signer.pubKey}") {
+                        withContext(Dispatchers.IO) {
+                            val stored = AppDatabase.getDatabase(Citrine.instance)
+                                .eventDao()
+                                .getContactList(signer.pubKey)
+                                ?.toEvent() as? ContactListEvent
+                            stored ?: EventDownloader.fetchContactList(
+                                signer = signer,
+                            )
+                        }
+                    }?.relays()?.forEach { relays.addIfNew(it.key.url) }
+
+                    lookupRelays("relay list for ${signer.pubKey}") {
+                        withContext(Dispatchers.IO) {
+                            val stored = AppDatabase.getDatabase(Citrine.instance)
+                                .eventDao()
+                                .getAdvertisedRelayList(signer.pubKey)
+                                ?.toEvent() as? AdvertisedRelayListEvent
+                            stored ?: EventDownloader.fetchAdvertisedRelayList(
+                                signer = signer,
+                            )
+                        }
+                    }?.relays()?.forEach { relays.addIfNew(it.relayUrl.url) }
+                } finally {
+                    loading = false
                 }
             }
 
@@ -147,80 +184,79 @@ fun SelectRelayModal(
                     .padding(16.dp),
             ) {
                 if (loading) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                } else {
-                    OutlinedTextField(
-                        keyboardOptions = KeyboardOptions.Default.copy(
-                            autoCorrectEnabled = false,
-                            imeAction = ImeAction.Done,
-                            capitalization = KeyboardCapitalization.None,
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (relayText.text.isBlank()) return@KeyboardActions
-                                val url = RelayUrlNormalizer.normalizeOrNull(relayText.text) ?: return@KeyboardActions
-                                if (relays.any { value -> value.displayUrl() == url.displayUrl() }) {
-                                    return@KeyboardActions
-                                }
-
-                                scope.launch {
-                                    loading = true
-                                    relays.add(url)
-                                    relayText = TextFieldValue()
-                                    keyboardController?.hide()
-                                    delay(200)
-                                    loading = false
-                                }
-                            },
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        value = relayText,
-                        onValueChange = {
-                            relayText = it
-                        },
-                        label = {
-                            Text(stringResource(R.string.wss))
-                        },
-                    )
-                    LazyColumn(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(0.9f)
-                            .padding(top = 4.dp),
+                            .padding(bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        itemsIndexed(relays) { index, relay ->
-                            RelayCard(
-                                relay = relay.url,
-                                modifier = Modifier.fillMaxWidth(),
-                                onClick = {
-                                    scope.launch {
-                                        loading = true
-                                        relays.removeAt(index)
-                                        delay(200)
-                                        loading = false
-                                    }
-                                },
-                            )
-                        }
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.loading_relays),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
-                    ElevatedButton(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp, bottom = 4.dp),
-                        content = {
-                            Text(stringResource(R.string.fetch_events))
-                        },
-                        onClick = {
-                            // TODO: find out why nostr.band keeps downloading events forever
-                            onDone(relays)
-                        },
-                    )
                 }
+                OutlinedTextField(
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        autoCorrectEnabled = false,
+                        imeAction = ImeAction.Done,
+                        capitalization = KeyboardCapitalization.None,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (relayText.text.isBlank()) return@KeyboardActions
+                            val url = RelayUrlNormalizer.normalizeOrNull(relayText.text) ?: return@KeyboardActions
+                            if (relays.any { value -> value.displayUrl() == url.displayUrl() }) {
+                                return@KeyboardActions
+                            }
+
+                            relays.add(url)
+                            relayText = TextFieldValue()
+                            keyboardController?.hide()
+                        },
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    value = relayText,
+                    onValueChange = {
+                        relayText = it
+                    },
+                    label = {
+                        Text(stringResource(R.string.wss))
+                    },
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.9f)
+                        .padding(top = 4.dp),
+                ) {
+                    itemsIndexed(relays) { index, relay ->
+                        RelayCard(
+                            relay = relay.url,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                relays.removeAt(index)
+                            },
+                        )
+                    }
+                }
+                ElevatedButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 4.dp),
+                    content = {
+                        Text(stringResource(R.string.fetch_events))
+                    },
+                    onClick = {
+                        // TODO: find out why nostr.band keeps downloading events forever
+                        onDone(relays)
+                    },
+                )
             }
         },
         sheetState = sheetState,

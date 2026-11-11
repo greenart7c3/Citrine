@@ -5,6 +5,7 @@
     <string name="app_name_debug">Citrine Debug</string>
     <string name="no_follow_list_found">フォローリストが見つかりません</string>
     <string name="no_relays_found">リレーが見つかりません</string>
+    <string name="loading_relays">リレーを検索しています</string>
     <string name="restore">復元</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">署名アプリがこの操作を承認していることを確認してください</string>
     <string name="sign_request_rejected">署名リクエストが拒否されました</string>

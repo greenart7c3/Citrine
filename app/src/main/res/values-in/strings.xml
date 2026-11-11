@@ -5,6 +5,7 @@
     <string name="app_name_debug">Citrine Debug</string>
     <string name="no_follow_list_found">Daftar ikuti tidak ditemukan</string>
     <string name="no_relays_found">Relay tidak ditemukan</string>
+    <string name="loading_relays">Mencari relay Anda</string>
     <string name="restore">Pulihkan</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">Pastikan aplikasi penanda tangan telah mengizinkan transaksi ini</string>
     <string name="sign_request_rejected">Permintaan tanda tangan ditolak</string>

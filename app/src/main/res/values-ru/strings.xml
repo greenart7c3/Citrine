@@ -5,6 +5,7 @@
     <string name="app_name_debug">Отладка Citrine</string>
     <string name="no_follow_list_found">Список подписок не найден</string>
     <string name="no_relays_found">Ретрансляторы не найдены</string>
+    <string name="loading_relays">Поиск ваших ретрансляторов</string>
     <string name="restore">Восстановить</string>
     <string name="make_sure_the_signer_application_has_authorized_this_transaction">Убедитесь, что приложение-подписант авторизовало эту операцию</string>
     <string name="sign_request_rejected">Запрос на подпись отклонен</string>
