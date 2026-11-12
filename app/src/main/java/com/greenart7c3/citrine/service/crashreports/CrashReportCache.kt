@@ -48,6 +48,20 @@ class CrashReportCache(
         trace.close()
     }
 
+    /**
+     * Appends [report] to the cached text instead of replacing it. Used when the process
+     * survives the error (a request that ran out of memory, for example) — the report of a
+     * fatal crash from the same session must not be lost because a previous one was cached
+     * later.
+     */
+    fun appendReport(report: String) {
+        val existing = inputStreamOrNull()?.use { inStream ->
+            InputStreamReader(inStream).use { reader -> reader.readText() }
+        }
+        val combined = if (existing.isNullOrBlank()) report else "$existing\n\n$report"
+        writeReport(combined)
+    }
+
     suspend fun loadAndDelete(): String? = withContext(Dispatchers.IO) {
         val stack =
             inputStreamOrNull()?.use { inStream ->

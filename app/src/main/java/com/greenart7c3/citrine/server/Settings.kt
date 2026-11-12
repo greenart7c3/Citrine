@@ -134,6 +134,11 @@ object Settings {
     // traffic. Resumes automatically once an unrestricted network is available.
     var relayAggregatorPauseOnLimitedNetwork: Boolean = true
 
+    // True once the one-shot cleanup of contact lists belonging to authors the owner does
+    // not follow has run (see RelayAggregator.pruneStrangerContactLists). Persisted so a
+    // restart does not re-scan the whole kind-3 set.
+    var strangerContactListsPruned: Boolean = false
+
     // External signer used by the aggregator to answer NIP-42 AUTH challenges from upstream
     // relays. Populated by the "Log in with external signer" flow in settings. When both
     // fields are set, the aggregator installs a RelayAuthenticator and signs kind-22242
@@ -191,6 +196,7 @@ object Settings {
         relayAggregatorIndexerRelays = DEFAULT_NIP65_INDEXER_RELAYS
         relayAggregatorWifiOnly = true
         relayAggregatorPauseOnLimitedNetwork = true
+        strangerContactListsPruned = false
         aggregatorSignerPubkey = ""
         aggregatorSignerPackageName = ""
         showEventGraph = true

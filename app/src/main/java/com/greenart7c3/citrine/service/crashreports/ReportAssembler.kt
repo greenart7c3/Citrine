@@ -20,10 +20,19 @@
  */
 package com.greenart7c3.citrine.service.crashreports
 
+import android.content.Context
 import android.os.Build
+import android.os.Debug
 import com.greenart7c3.citrine.BuildConfig
 
-class ReportAssembler {
+/**
+ * Text a user can paste into a report: device, build, failing thread, stack trace and heap
+ * state. Built while the process may already be out of memory, so it stays allocation-light —
+ * numbers and short strings only, no file listings or event counts.
+ */
+class ReportAssembler(
+    private val context: Context? = null,
+) {
     fun buildReport(e: Throwable): String = buildString {
         append(e.javaClass.simpleName)
         append(": ")
@@ -88,5 +97,48 @@ class ReportAssembler {
             }
         }
         appendLine("```")
+
+        appendMemory()
     }
+
+    /**
+     * Thread and heap snapshot. For an `OutOfMemoryError` these are the numbers that say which
+     * kind of memory ran out (Java heap vs native) and how large the databases were.
+     */
+    private fun StringBuilder.appendMemory() {
+        val thread = Thread.currentThread()
+        appendLine()
+        appendLine("| Memory | Value |")
+        appendLine("|--------|-------|")
+        append("| Thread | ")
+        append(thread.name)
+        appendLine(" |")
+
+        val runtime = Runtime.getRuntime()
+        append("| Java heap | max=")
+        append(mb(runtime.maxMemory()))
+        append("MB total=")
+        append(mb(runtime.totalMemory()))
+        append("MB free=")
+        append(mb(runtime.freeMemory()))
+        appendLine("MB |")
+
+        append("| Native heap | allocated=")
+        append(mb(Debug.getNativeHeapAllocatedSize()))
+        appendLine("MB |")
+
+        val appContext = context ?: return
+        listOf("citrine_database", "citrine_history_database").forEach { name ->
+            val file = appContext.getDatabasePath(name)
+            append("| DB ")
+            append(name)
+            append(" | ")
+            append(mb(file.length()))
+            append("MB, wal ")
+            append(mb(appContext.getDatabasePath("$name-wal").length()))
+            appendLine("MB |")
+        }
+    }
+
+    private fun mb(bytes: Long): Long = bytes / (1024 * 1024)
 }
