@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Bu türlerdeki olaylar, \"şundan eski olayları sil\" ayarından bağımsız olarak yaşa dayalı temizlik tarafından asla kaldırılmaz.</string>
     <string name="name_access_client_with_name_localhost_port">Ad (istemciye ad.localhost:port ile erişin)</string>
     <string name="name_cannot_be_blank">Ad boş bırakılamaz</string>
-    <string name="copy_crash_report_to_clipboard">Çökme raporunu panoya kopyalayıp Amber\'a göndermek için bir istemci açmak ister misiniz?</string>
-    <string name="crashreport_found_send">Gönder</string>
+    <string name="crash_report_send_prompt">Citrine çöktü. Rapor şifrelenmiş bir DM ile geliştiriciye gönderilsin mi? Geliştiricinin açık anahtarınızı görüp yanıtlayabilmesi için Amber ile imzalayın veya tek kullanımlık bir anahtarla anonim olarak gönderin.</string>
+    <string name="crash_report_sign_with_amber">Amber ile imzala</string>
+    <string name="crash_report_send_anonymously">Anonim olarak gönder</string>
+    <string name="crash_report_sent">Çökme raporu gönderildi. Teşekkürler!</string>
+    <string name="crash_report_send_failed">Çökme raporu gönderilemedi. Bağlantınızı kontrol edip tekrar deneyin.</string>
     <string name="crashreport_found">Çökme Raporu bulundu</string>
     <string name="copy">Kopyala</string>
     <string name="more">%1$s tane daha…</string>

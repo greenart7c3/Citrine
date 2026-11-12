@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Les événements de ces types ne sont jamais supprimés par le nettoyage basé sur l\'âge, quel que soit le paramètre « supprimer les événements antérieurs à ».</string>
     <string name="name_access_client_with_name_localhost_port">Nom (accéder au client via nom.localhost:port)</string>
     <string name="name_cannot_be_blank">Le nom ne peut pas être vide</string>
-    <string name="copy_crash_report_to_clipboard">Voulez-vous copier le rapport de plantage dans le presse-papiers et ouvrir un client pour l\'envoyer à Amber ?</string>
-    <string name="crashreport_found_send">Envoyer</string>
+    <string name="crash_report_send_prompt">Citrine a planté. Envoyer le rapport au développeur en message privé chiffré ? Signez-le avec Amber pour que le développeur voie votre clé publique et puisse répondre, ou envoyez-le anonymement avec une clé jetable.</string>
+    <string name="crash_report_sign_with_amber">Signer avec Amber</string>
+    <string name="crash_report_send_anonymously">Envoyer anonymement</string>
+    <string name="crash_report_sent">Rapport de plantage envoyé. Merci !</string>
+    <string name="crash_report_send_failed">Impossible d\'envoyer le rapport de plantage. Vérifiez votre connexion et réessayez.</string>
     <string name="crashreport_found">Rapport de plantage trouvé</string>
     <string name="copy">Copier</string>
     <string name="more">%1$s de plus…</string>

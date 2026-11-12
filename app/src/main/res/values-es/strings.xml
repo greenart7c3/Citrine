@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Los eventos de estos tipos nunca se eliminan con la limpieza por antigüedad, independientemente del ajuste \"eliminar eventos anteriores a\".</string>
     <string name="name_access_client_with_name_localhost_port">Nombre (cliente de acceso con nombre.localhost:puerto)</string>
     <string name="name_cannot_be_blank">El nombre no puede estar en blanco</string>
-    <string name="copy_crash_report_to_clipboard">¿Desea copiar el informe de error al portapapeles y abrir un cliente para enviarlo a Amber?</string>
-    <string name="crashreport_found_send">Enviar</string>
+    <string name="crash_report_send_prompt">Citrine se cerró inesperadamente. ¿Enviar el informe al desarrollador en un mensaje directo cifrado? Fírmalo con Amber para que el desarrollador vea tu clave pública y pueda responderte, o envíalo de forma anónima con una clave desechable.</string>
+    <string name="crash_report_sign_with_amber">Firmar con Amber</string>
+    <string name="crash_report_send_anonymously">Enviar de forma anónima</string>
+    <string name="crash_report_sent">Informe de error enviado. ¡Gracias!</string>
+    <string name="crash_report_send_failed">No se pudo enviar el informe de error. Comprueba tu conexión e inténtalo de nuevo.</string>
     <string name="crashreport_found">Informe de error encontrado</string>
     <string name="copy">Copiar</string>
     <string name="more">%1$s más…</string>

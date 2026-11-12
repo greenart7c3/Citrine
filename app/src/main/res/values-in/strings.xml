@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Event dengan jenis ini tidak pernah dihapus oleh pembersihan berdasarkan usia, terlepas dari pengaturan \"hapus event yang lebih lama dari\".</string>
     <string name="name_access_client_with_name_localhost_port">Nama (akses klien dengan nama.localhost:port)</string>
     <string name="name_cannot_be_blank">Nama tidak boleh kosong</string>
-    <string name="copy_crash_report_to_clipboard">Apakah Anda ingin menyalin laporan crash ke papan klip dan membuka Klien untuk mengirimkannya ke Amber?</string>
-    <string name="crashreport_found_send">Kirim</string>
+    <string name="crash_report_send_prompt">Citrine mengalami crash. Kirim laporan ke pengembang sebagai DM terenkripsi? Tandatangani dengan Amber agar pengembang melihat kunci publik Anda dan bisa membalas, atau kirim secara anonim dengan kunci sekali pakai.</string>
+    <string name="crash_report_sign_with_amber">Tandatangani dengan Amber</string>
+    <string name="crash_report_send_anonymously">Kirim secara anonim</string>
+    <string name="crash_report_sent">Laporan crash terkirim. Terima kasih!</string>
+    <string name="crash_report_send_failed">Tidak dapat mengirim laporan crash. Periksa koneksi Anda dan coba lagi.</string>
     <string name="crashreport_found">Laporan crash ditemukan</string>
     <string name="copy">Salin</string>
     <string name="more">%1$s lainnya…</string>

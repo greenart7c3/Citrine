@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Sự kiện thuộc các loại này không bao giờ bị xóa bởi quá trình dọn dẹp theo thời gian, bất kể cài đặt \"xóa sự kiện cũ hơn\".</string>
     <string name="name_access_client_with_name_localhost_port">Tên (truy cập ứng dụng bằng tên.localhost:cổng)</string>
     <string name="name_cannot_be_blank">Tên không được để trống</string>
-    <string name="copy_crash_report_to_clipboard">Bạn có muốn sao chép báo cáo sự cố vào bộ nhớ tạm và mở một ứng dụng để gửi cho Amber không?</string>
-    <string name="crashreport_found_send">Gửi</string>
+    <string name="crash_report_send_prompt">Citrine đã gặp sự cố. Gửi báo cáo cho nhà phát triển qua tin nhắn riêng đã mã hóa? Ký bằng Amber để nhà phát triển thấy khóa công khai của bạn và có thể trả lời, hoặc gửi ẩn danh bằng một khóa dùng một lần.</string>
+    <string name="crash_report_sign_with_amber">Ký bằng Amber</string>
+    <string name="crash_report_send_anonymously">Gửi ẩn danh</string>
+    <string name="crash_report_sent">Đã gửi báo cáo sự cố. Cảm ơn bạn!</string>
+    <string name="crash_report_send_failed">Không thể gửi báo cáo sự cố. Hãy kiểm tra kết nối và thử lại.</string>
     <string name="crashreport_found">Đã tìm thấy báo cáo sự cố</string>
     <string name="copy">Sao chép</string>
     <string name="more">Thêm %1$s…</string>

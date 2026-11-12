@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Gli eventi di questi tipi non vengono mai rimossi dalla pulizia basata sull\'età, indipendentemente dall\'impostazione \"elimina eventi più vecchi di\".</string>
     <string name="name_access_client_with_name_localhost_port">Nome (accedi al client con nome.localhost:porta)</string>
     <string name="name_cannot_be_blank">Il nome non può essere vuoto</string>
-    <string name="copy_crash_report_to_clipboard">Vuoi copiare il rapporto di arresto anomalo negli appunti e aprire un client per inviarlo ad Amber?</string>
-    <string name="crashreport_found_send">Invia</string>
+    <string name="crash_report_send_prompt">Citrine si è arrestato in modo anomalo. Inviare il rapporto allo sviluppatore in un messaggio privato cifrato? Firmalo con Amber così lo sviluppatore vede la tua chiave pubblica e può risponderti, oppure invialo in modo anonimo con una chiave usa e getta.</string>
+    <string name="crash_report_sign_with_amber">Firma con Amber</string>
+    <string name="crash_report_send_anonymously">Invia in modo anonimo</string>
+    <string name="crash_report_sent">Rapporto di arresto anomalo inviato. Grazie!</string>
+    <string name="crash_report_send_failed">Impossibile inviare il rapporto di arresto anomalo. Controlla la connessione e riprova.</string>
     <string name="crashreport_found">Rapporto di arresto anomalo trovato</string>
     <string name="copy">Copia</string>
     <string name="more">Altri %1$s…</string>

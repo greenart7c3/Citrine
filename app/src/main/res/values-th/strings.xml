@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">อีเวนต์ของชนิดเหล่านี้จะไม่ถูกลบโดยการล้างข้อมูลตามอายุ ไม่ว่าการตั้งค่า \"ลบอีเวนต์ที่เก่ากว่า\" จะเป็นอย่างไร</string>
     <string name="name_access_client_with_name_localhost_port">ชื่อ (เข้าถึงไคลเอนต์ด้วย name.localhost:port)</string>
     <string name="name_cannot_be_blank">ชื่อต้องไม่ว่างเปล่า</string>
-    <string name="copy_crash_report_to_clipboard">คุณต้องการคัดลอกรายงานข้อขัดข้องไปยังคลิปบอร์ดและเปิดไคลเอนต์เพื่อส่งให้ Amber หรือไม่?</string>
-    <string name="crashreport_found_send">ส่ง</string>
+    <string name="crash_report_send_prompt">Citrine หยุดทำงานกะทันหัน ต้องการส่งรายงานให้ผู้พัฒนาเป็นข้อความส่วนตัวที่เข้ารหัสหรือไม่? ลงนามด้วย Amber เพื่อให้ผู้พัฒนาเห็นกุญแจสาธารณะของคุณและตอบกลับได้ หรือส่งแบบไม่ระบุตัวตนด้วยกุญแจใช้ครั้งเดียว</string>
+    <string name="crash_report_sign_with_amber">ลงนามด้วย Amber</string>
+    <string name="crash_report_send_anonymously">ส่งแบบไม่ระบุตัวตน</string>
+    <string name="crash_report_sent">ส่งรายงานข้อขัดข้องแล้ว ขอบคุณ!</string>
+    <string name="crash_report_send_failed">ไม่สามารถส่งรายงานข้อขัดข้องได้ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง</string>
     <string name="crashreport_found">พบรายงานข้อขัดข้อง</string>
     <string name="copy">คัดลอก</string>
     <string name="more">อีก %1$s…</string>

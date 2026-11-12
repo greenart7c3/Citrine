@@ -43,7 +43,6 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventPagingSource
 import com.greenart7c3.citrine.database.toEvent
-import com.greenart7c3.citrine.service.crashreports.DisplayCrashMessages
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
 import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
@@ -387,6 +386,5 @@ fun CitrineScaffold(
                 )
             }
         }
-        DisplayCrashMessages()
     }
 }
