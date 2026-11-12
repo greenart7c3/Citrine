@@ -264,7 +264,7 @@ object EventRepository {
      * cancelled once started, so a few such REQs — or one client reconnecting and
      * re-issuing them — ended in an OutOfMemoryError.
      */
-    private suspend fun emitWithTags(
+    internal suspend fun emitWithTags(
         database: AppDatabase,
         rows: List<EventEntity>,
         onBatch: suspend (List<EventWithTags>) -> Unit,

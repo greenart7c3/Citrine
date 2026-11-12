@@ -97,6 +97,12 @@ android {
         resValues = true
     }
 
+    testOptions {
+        // Crash-report assembly reads Build.*, Debug.getNativeHeap* and file sizes; returning
+        // defaults instead of throwing keeps those paths unit-testable on the JVM.
+        unitTests.isReturnDefaultValues = true
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

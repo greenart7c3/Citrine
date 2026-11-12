@@ -52,7 +52,7 @@ private const val ONE_DAY_SECONDS = 24L * 60 * 60
 const val NSITE_UPDATE_NOTIFICATION_ID = 4
 
 class WebSocketServerService : Service() {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + Citrine.instance.exceptionHandler)
     private val binder = LocalBinder()
     private var timer: Timer? = null
 

@@ -28,7 +28,7 @@ data class Subscription(
     val objectMapper: ObjectMapper,
     val count: Boolean,
 ) {
-    val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + Citrine.instance.exceptionHandler)
     val escapedId: String = ENVELOPE_MAPPER.writeValueAsString(id)
 }
 

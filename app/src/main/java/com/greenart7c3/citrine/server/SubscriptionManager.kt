@@ -3,6 +3,7 @@ package com.greenart7c3.citrine.server
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.nip29.GroupManager
+import com.greenart7c3.citrine.service.crashreports.ReportAssembler
 import kotlin.time.measureTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -37,6 +38,9 @@ class SubscriptionManager(
                         )
                     }
                     Log.d(Citrine.TAG, "Subscription (${EventSubscription.count()}) ${subscription.id} took $time to execute $filter")
+                } catch (e: OutOfMemoryError) {
+                    failForOutOfMemory(e)
+                    return@launch
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
 
@@ -70,6 +74,9 @@ class SubscriptionManager(
                 } else {
                     EventRepository.countQuery(subscription.appDatabase, filter)
                 }
+            } catch (e: OutOfMemoryError) {
+                failForOutOfMemory(e)
+                return
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
 
@@ -97,5 +104,25 @@ class SubscriptionManager(
             true
         }
         null -> false
+    }
+
+    /**
+     * An `OutOfMemoryError` in one request must not take the whole relay down: the process
+     * would die and every other client would lose its subscription. Instead cache a copyable
+     * diagnostics report, tell the client why, and stop only this subscription.
+     */
+    private suspend fun failForOutOfMemory(e: OutOfMemoryError) {
+        Log.e(Citrine.TAG, "Out of memory answering subscription ${subscription.id}", e)
+        runCatching {
+            Citrine.instance.crashReportCache.appendReport(
+                ReportAssembler().buildReport(e),
+            )
+        }
+        runCatching {
+            subscription.connection.send(
+                ClosedResult(subscription.id, "error: relay out of memory").toJson(),
+            )
+        }
+        EventSubscription.close(subscription.connection, subscription.id)
     }
 }

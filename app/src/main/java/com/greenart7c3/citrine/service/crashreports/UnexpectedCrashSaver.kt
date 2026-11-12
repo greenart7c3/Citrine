@@ -21,12 +21,9 @@
 package com.greenart7c3.citrine.service.crashreports
 
 import com.greenart7c3.citrine.logs.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 class UnexpectedCrashSaver(
     val cache: CrashReportCache,
-    val scope: CoroutineScope,
 ) : Thread.UncaughtExceptionHandler {
     private val defaultUEH: Thread.UncaughtExceptionHandler? = Thread.getDefaultUncaughtExceptionHandler()
 
@@ -34,16 +31,15 @@ class UnexpectedCrashSaver(
         t: Thread,
         e: Throwable,
     ) {
-        if (e is OutOfMemoryError) {
-            // OOM reports are junk, so no report is cached — but leave a persistent
-            // LogDatabase trace so a field OOM can still be diagnosed via the in-app
-            // log screen (failing thread + message).
-            Log.e("UnexpectedCrashSaver", "OutOfMemoryError suppressed on thread ${t.name}: ${e.message}", e)
-        } else {
-            scope.launch {
-                cache.writeReport(ReportAssembler().buildReport(e))
-            }
+        // Written synchronously: the default handler terminates the process immediately after
+        // this returns, so a report launched on a scope is usually lost. OOMs are included too
+        // — a real user's heap report is the only way to see which query exhausted memory in
+        // the field, and the try/catch below keeps the write itself from failing.
+        try {
+            cache.appendReport(ReportAssembler(cache.appContext).buildReport(e))
+        } catch (reportError: Throwable) {
+            Log.e("UnexpectedCrashSaver", "Could not cache crash report: ${reportError.message}", reportError)
         }
-        defaultUEH!!.uncaughtException(t, e)
+        defaultUEH?.uncaughtException(t, e)
     }
 }

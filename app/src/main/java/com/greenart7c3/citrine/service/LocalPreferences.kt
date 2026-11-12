@@ -55,6 +55,9 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_INDEXER_RELAYS = "relay_aggregator_indexer_relays"
     const val RELAY_AGGREGATOR_WIFI_ONLY = "relay_aggregator_wifi_only"
     const val RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK = "relay_aggregator_pause_on_limited_network"
+
+    // One-shot flag: contact lists of authors the owner does not follow have been deleted.
+    const val STRANGER_CONTACT_LISTS_PRUNED = "stranger_contact_lists_pruned"
     const val AGGREGATOR_SIGNER_PUBKEY = "aggregator_signer_pubkey"
     const val AGGREGATOR_SIGNER_PACKAGE_NAME = "aggregator_signer_package_name"
     const val SHOW_EVENT_GRAPH = "show_event_graph"
@@ -158,6 +161,7 @@ object LocalPreferences {
                 putStringSet(PrefKeys.RELAY_AGGREGATOR_INDEXER_RELAYS, settings.relayAggregatorIndexerRelays)
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, settings.relayAggregatorPauseOnLimitedNetwork)
+                putBoolean(PrefKeys.STRANGER_CONTACT_LISTS_PRUNED, settings.strangerContactListsPruned)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, settings.aggregatorSignerPubkey)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, settings.aggregatorSignerPackageName)
                 putBoolean(PrefKeys.SHOW_EVENT_GRAPH, settings.showEventGraph)
@@ -240,6 +244,7 @@ object LocalPreferences {
             ?: Settings.DEFAULT_NIP65_INDEXER_RELAYS
         Settings.relayAggregatorWifiOnly = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, true)
         Settings.relayAggregatorPauseOnLimitedNetwork = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, true)
+        Settings.strangerContactListsPruned = prefs.getBoolean(PrefKeys.STRANGER_CONTACT_LISTS_PRUNED, false)
         Settings.aggregatorSignerPubkey = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, "") ?: ""
         Settings.aggregatorSignerPackageName = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, "") ?: ""
         Settings.showEventGraph = prefs.getBoolean(PrefKeys.SHOW_EVENT_GRAPH, true)

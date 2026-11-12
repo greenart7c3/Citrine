@@ -21,6 +21,7 @@ import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.service.crashreports.CrashReportCache
+import com.greenart7c3.citrine.service.crashreports.ExitReasons
 import com.greenart7c3.citrine.service.crashreports.UnexpectedCrashSaver
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -141,7 +142,17 @@ class Citrine :
 
         Log.init(this)
 
-        Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache, applicationScope))
+        Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache))
+
+        // Record why the previous process died (ANR, low-memory kill, native crash) while it
+        // can still be read, and leave it in the in-app log as well as the crash dialog.
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                ExitReasons.detect(this@Citrine).forEach { Log.w(TAG, it) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not read previous exit reasons", e)
+            }
+        }
 
         client.connect()
 

@@ -55,19 +55,28 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun DisplayCrashMessages() {
-    val stackTrace = remember { mutableStateOf<String?>(null) }
+    val report = remember { mutableStateOf<String?>(null) }
     val clipboardManager = LocalClipboard.current
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            stackTrace.value = Citrine.instance.crashReportCache.loadAndDelete()
+            val stack = Citrine.instance.crashReportCache.loadAndDelete()
+            // ANRs, low-memory kills and native crashes never reach the uncaught-exception
+            // handler, so the exit records are the only trace of them the user can send.
+            val exits = ExitReasons.pending(Citrine.instance)
+            report.value = listOfNotNull(stack?.takeIf { it.isNotBlank() }, exits?.takeIf { it.isNotBlank() })
+                .joinToString("\n\n")
+                .takeIf { it.isNotBlank() }
         }
     }
 
-    stackTrace.value?.let { stack ->
+    report.value?.let { stack ->
         CrashReportAlertDialog(
             text = stringResource(R.string.copy_crash_report_to_clipboard),
-            onDismiss = { stackTrace.value = null },
+            onDismiss = {
+                ExitReasons.clearPending(Citrine.instance)
+                report.value = null
+            },
             onConfirm = {
                 Citrine.instance.applicationScope.launch(Dispatchers.Main) {
                     try {
@@ -81,9 +90,10 @@ fun DisplayCrashMessages() {
                         intent.data = "nostr:$npub".toUri()
                         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         Citrine.instance.startActivity(intent)
-                        stackTrace.value = null
+                        ExitReasons.clearPending(Citrine.instance)
+                        report.value = null
                     } catch (_: Exception) {
-                        stackTrace.value = null
+                        report.value = null
                     }
                 }
             },

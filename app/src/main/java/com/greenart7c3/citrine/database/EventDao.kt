@@ -50,6 +50,22 @@ interface EventDao {
     @RawQuery
     fun count(query: SupportSQLiteQuery): Int
 
+    /**
+     * One keyset page of whole rows, ordered by primary key. Used by backup/export so a
+     * multi-GB database can be written out without ever holding more than a page of
+     * [EventEntity] (and no tags at all) in the heap.
+     */
+    @Query("SELECT * FROM EventEntity WHERE id > :afterId ORDER BY id ASC LIMIT :limit")
+    suspend fun getEventRowsAfter(afterId: String, limit: Int): List<EventEntity>
+
+    @Query("SELECT COUNT(*) FROM EventEntity")
+    suspend fun countAll(): Int
+
+    /** Author + id of every event of [kind], without loading tags. Used by the aggregator's
+     * one-shot cleanup of contact lists belonging to authors the owner does not follow. */
+    @Query("SELECT id, pubkey FROM EventEntity WHERE kind = :kind")
+    suspend fun getIdsAndPubkeysByKind(kind: Int): List<IdAndPubkey>
+
     @RawQuery
     fun getIdsAndCreatedAt(query: SupportSQLiteQuery): List<IdAndCreatedAt>
 
@@ -223,10 +239,6 @@ interface EventDao {
     @Query("DELETE FROM TagEntity WHERE pkEvent = :id")
     @Transaction
     suspend fun deletetags(id: String)
-
-    @Query("SELECT id from EventEntity")
-    @Transaction
-    suspend fun getAllIds(): List<String>
 
     @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind AND createdAt < (SELECT MAX(createdAt) FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind)")
     @Transaction
@@ -497,6 +509,11 @@ data class EventKey(
 data class PubkeyTimestamp(
     val pubkey: String,
     val createdAt: Long,
+)
+
+data class IdAndPubkey(
+    val id: String,
+    val pubkey: String,
 )
 
 class EventPagingSource(

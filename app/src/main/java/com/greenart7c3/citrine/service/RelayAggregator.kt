@@ -10,6 +10,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
+import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.PubkeyTimestamp
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.json.JacksonMapper
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 
 enum class AggregatorPhase {
     IDLE,
@@ -117,6 +119,10 @@ object RelayAggregator {
     // re-queries with a `since` derived from the DB so any dropped event is recoverable.
     private const val EVENT_CHANNEL_CAPACITY = 256
 
+    // Rows deleted per statement by the one-shot contact-list cleanup. Small enough that no
+    // single transaction holds the database long enough to stall the relay's writers.
+    private const val CONTACT_LIST_PRUNE_CHUNK_SIZE = 200
+
     // How long to wait after the last connectivity callback before re-evaluating the
     // network state. Collapses bursts of `onCapabilitiesChanged` during signal flapping
     // into a single evaluation.
@@ -178,6 +184,13 @@ object RelayAggregator {
     // copy of the event content without per-word allocation. Both sets are swapped as a
     // pair so a partial load never produces an inconsistent view.
     @Volatile private var mutedPubkeys: Set<String> = emptySet()
+
+    // Authors whose contact list the owner actually consumes: their own follows plus
+    // themselves. Contact lists of strangers surfaced by the tagged subs are no longer
+    // backfilled — they are the largest events on the network, kind 3 is in
+    // [Settings.preservedKindsFromDeletion] so retention never prunes them, and they are
+    // what drove the REQ path into an OutOfMemoryError.
+    @Volatile private var followedAuthors: Set<String> = emptySet()
 
     @Volatile private var mutedWords: Set<String> = emptySet()
 
@@ -305,7 +318,7 @@ object RelayAggregator {
         Log.d(TAG, "Starting aggregator for $startLabel")
         currentPubkey = Settings.aggregatorPubkey
         this.database = database
-        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + Citrine.instance.exceptionHandler)
         scope = newScope
 
         val newEventChannel = Channel<Event>(EVENT_CHANNEL_CAPACITY, BufferOverflow.DROP_OLDEST)
@@ -456,6 +469,7 @@ object RelayAggregator {
         mutedPubkeys = emptySet()
         mutedWords = emptySet()
         muteListSeenAt = 0L
+        followedAuthors = emptySet()
         backfilledPubkeys.evictAll()
         eventsReceived.set(0)
         droppedEvents.set(0)
@@ -856,6 +870,9 @@ object RelayAggregator {
             // Authors in scope for the current subscription topology; empty in no-pubkey
             // mode. Used to prune lastEventByPubkey cursors that nothing consumes.
             var scopedAuthors: Set<String> = emptySet()
+            // Follows resolved this refresh, or empty when the owner's contact list could not
+            // be loaded (nothing is deleted in that case — see pruneStrangerContactLists).
+            var ownerFollows: Set<String> = emptySet()
 
             if (noPubkeyMode) {
                 authorCount = 0
@@ -901,6 +918,8 @@ object RelayAggregator {
                 val follows = contactList?.verifiedFollowKeySet() ?: emptySet()
                 val authors = (follows + aggPubkey).toSet()
                 scopedAuthors = authors
+                followedAuthors = authors
+                ownerFollows = follows
                 authorCount = authors.size
                 Log.d(
                     TAG,
@@ -1220,6 +1239,21 @@ object RelayAggregator {
                     "noPubkey=$noPubkeyMode, tagged=${Settings.relayAggregatorIncludeTagged}",
             )
             publishStatus(phase = AggregatorPhase.LISTENING)
+
+            // One-shot cleanup of contact lists stored for authors the owner does not follow.
+            // Runs on the aggregator scope so a large delete never delays the subscriptions
+            // that were just opened.
+            if (!noPubkeyMode && !Settings.strangerContactListsPruned) {
+                scope?.launch {
+                    try {
+                        pruneStrangerContactLists(database, aggPubkey, ownerFollows)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Contact list cleanup failed", e)
+                    }
+                }
+            }
         } finally {
             lastRefreshFinishedAt = System.currentTimeMillis()
             refreshing.set(false)
@@ -1468,6 +1502,18 @@ object RelayAggregator {
     }
 
     /**
+     * Delete every kind-3 event whose author is neither the owner, followed by the owner, nor
+     * explicitly protected by the relay settings. Runs once per install (guarded by
+     * [Settings.strangerContactListsPruned]) over both the main and the history database; the
+     * history database holds the replaced versions of the same contact lists.
+     *
+     * Deleted events can be re-fetched from the network if the owner ever follows the author.
+     * This database runs with `auto_vacuum=FULL`, so each chunk also rewrites pages to reclaim
+     * disk space: the delete is slow and the file shrinks as rows go (measured on a 1.26 GB
+     * database: 4,227 contact lists deleted in ~4.5 min, file down to 337 MB), which is why the
+     * chunks are small and the loop yields between them.
+     */
+    /**
      * For an author we just saw an event from but who has no profile / contact list / NIP-65
      * relay list in the local DB, pull whatever's missing from the indexer relays once and
      * persist it. The kind-10002 list is fetched first so that, if we just learned it, we can
@@ -1475,9 +1521,57 @@ object RelayAggregator {
      * when everything is already cached. Caller is responsible for deduping repeated
      * invocations via [backfilledPubkeys].
      */
+    private suspend fun pruneStrangerContactLists(
+        database: AppDatabase,
+        aggregatorPubkey: String,
+        ownerFollows: Set<String>,
+    ) {
+        if (Settings.strangerContactListsPruned) return
+        if (Citrine.isImportingEvents) {
+            Log.d(TAG, "Contact list cleanup skipped: import in progress")
+            return
+        }
+        if (ownerFollows.isEmpty()) {
+            Log.d(TAG, "Contact list cleanup skipped: owner's follow list not resolved this refresh")
+            return
+        }
+
+        val keep = ContactListPolicy.keepSet(
+            aggregatorPubkey = aggregatorPubkey,
+            ownerFollows = ownerFollows,
+            relayOwnerPubkey = Settings.ownerPubkey,
+            neverDeleteFrom = Settings.neverDeleteFrom,
+            allowedPubKeys = Settings.allowedPubKeys,
+        )
+
+        val daos = listOf(
+            database.eventDao(),
+            HistoryDatabase.getDatabase(Citrine.instance).eventDao(),
+        )
+
+        var deleted = 0
+        for (dao in daos) {
+            val rows = dao.getIdsAndPubkeysByKind(ContactListEvent.KIND)
+            val ids = ContactListPolicy.strangerContactListIds(rows, ownerFollows, keep)
+            if (ids.isEmpty()) continue
+            ids.chunked(CONTACT_LIST_PRUNE_CHUNK_SIZE).forEach { chunk ->
+                dao.delete(chunk)
+                deleted += chunk.size
+                // Give writers (and the UI) a chance between chunks on a multi-thousand row delete.
+                yield()
+            }
+        }
+
+        Settings.strangerContactListsPruned = true
+        LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+        Log.d(TAG, "Contact list cleanup: deleted $deleted kind-3 event(s) from authors outside the follow graph")
+    }
+
     private suspend fun backfillUserIfMissing(dao: EventDao, pubkey: String) {
         val needsMetadata = dao.getMetadata(pubkey) == null
-        val needsContactList = dao.getContactList(pubkey) == null
+        // Contact lists are only fetched for authors the owner follows: strangers met through
+        // the tagged subs would otherwise pile up thousands of large, never-pruned kind-3 events.
+        val needsContactList = ContactListPolicy.shouldBackfillContactList(pubkey, followedAuthors) && dao.getContactList(pubkey) == null
         val needsRelayList = dao.getAdvertisedRelayList(pubkey) == null
         if (!needsMetadata && !needsContactList && !needsRelayList) return
         Log.d(
