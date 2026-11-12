@@ -1,3 +1,47 @@
+## Citrine 3.2.4
+
+- Citrine no longer stores the contact lists of people you don't follow: they are fetched only for your own follow graph, and the ones already stored for strangers are deleted once (this freed about 900 MB on a 1.26 GB database)
+- Exporting a backup no longer loads every event id and a thousand events at once, so a large database can be exported without running out of memory
+- A request that runs out of memory now fails on its own with "relay out of memory" instead of taking the whole relay down
+- Crash reports are now written before the app is killed (out-of-memory reports are no longer dropped) and include the failing thread, Java/native heap and database sizes
+- On Android 11+, the crash dialog now also reports deaths that are not Java crashes, such as ANRs, low-memory kills and native crashes
+- The relay answers much faster now: unfiltered queries went from about 2 s to 0.15 s, and "#e" tag queries from 436 ms to 188 ms
+
+Download it with [Zapstore](https://zapstore.dev/apps/com.greenart7c3.citrine), [Obtainium](https://github.com/ImranR98/Obtainium), [f-droid](https://f-droid.org/packages/com.greenart7c3.citrine)  or download it directly in the [releases page
+](https://github.com/greenart7c3/Citrine/releases/tag/v3.2.4)
+
+If you like my work consider making a [donation](https://greenart7c3.com)
+
+## Verifying the release
+
+In order to verify the release, you'll need to have `gpg` or `gpg2` installed on your system. Once you've obtained a copy (and hopefully verified that as well), you'll first need to import the keys that have signed this release if you haven't done so already:
+
+``` bash
+gpg --keyserver hkps://keys.openpgp.org --recv-keys 44F0AAEB77F373747E3D5444885822EED3A26A6D
+```
+
+Once you have his PGP key you can verify the release (assuming `manifest-v3.2.4.txt` and `manifest-v3.2.4.txt.sig` are in the current directory) with:
+
+``` bash
+gpg --verify manifest-v3.2.4.txt.sig manifest-v3.2.4.txt
+```
+
+You should see the following if the verification was successful:
+
+``` bash
+gpg: Signature made Fri 13 Sep 2024 08:06:52 AM -03
+gpg:                using RSA key 44F0AAEB77F373747E3D5444885822EED3A26A6D
+gpg: Good signature from "greenart7c3 <greenart7c3@proton.me>"
+```
+
+That will verify the signature on the main manifest page which ensures integrity and authenticity of the binaries you've downloaded locally. Next, depending on your operating system you should then re-calculate the sha256 sum of the binary, and compare that with the following hashes:
+
+``` bash
+cat manifest-v3.2.4.txt
+```
+
+One can use the `shasum -a 256 <file name here>` tool in order to re-compute the sha256 hash of the target binary for your operating system. The produced hash should be compared with the hashes listed above and they should match exactly.
+
 ## Citrine 3.2.3
 
 - Fixed the relay crashing (running out of memory) when a client such as Amethyst requests events with very large tag lists (contact lists, mute lists, follow sets): tags are now loaded in bounded chunks instead of a whole page at once
