@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">这些类型的事件永远不会被基于时间的清理删除，无论「删除早于该时间的事件」如何设定。</string>
     <string name="name_access_client_with_name_localhost_port">名称（使用 name.localhost:port 访问客户端）</string>
     <string name="name_cannot_be_blank">名称不能为空</string>
-    <string name="copy_crash_report_to_clipboard">想要复制崩溃报告到剪贴板并打开客户端发送给 Amber 吗？</string>
-    <string name="crashreport_found_send">发送</string>
+    <string name="crash_report_send_prompt">Citrine 崩溃了。要通过加密私信把报告发送给开发者吗？用 Amber 签名后开发者能看到你的公钥并回复，也可以用一次性密钥匿名发送。</string>
+    <string name="crash_report_sign_with_amber">用 Amber 签名</string>
+    <string name="crash_report_send_anonymously">匿名发送</string>
+    <string name="crash_report_sent">崩溃报告已发送。谢谢！</string>
+    <string name="crash_report_send_failed">无法发送崩溃报告。请检查网络连接后重试。</string>
     <string name="crashreport_found">找到崩溃报告</string>
     <string name="copy">复制</string>
     <string name="more">%1$s 项…</string>

@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">これらの種類のイベントは、「次の期間より古いイベントを削除」の設定にかかわらず、期間ベースのクリーンアップで削除されることはありません。</string>
     <string name="name_access_client_with_name_localhost_port">名前（name.localhost:port でクライアントにアクセス）</string>
     <string name="name_cannot_be_blank">名前を空にすることはできません</string>
-    <string name="copy_crash_report_to_clipboard">クラッシュレポートをクリップボードにコピーし、クライアントを開いて Amber に送信しますか？</string>
-    <string name="crashreport_found_send">送信</string>
+    <string name="crash_report_send_prompt">Citrine がクラッシュしました。レポートを暗号化された DM で開発者に送信しますか？Amber で署名すると開発者にあなたの公開鍵が表示され返信できます。使い捨ての鍵で匿名で送信することもできます。</string>
+    <string name="crash_report_sign_with_amber">Amber で署名</string>
+    <string name="crash_report_send_anonymously">匿名で送信</string>
+    <string name="crash_report_sent">クラッシュレポートを送信しました。ありがとうございます！</string>
+    <string name="crash_report_send_failed">クラッシュレポートを送信できませんでした。接続を確認して再試行してください。</string>
     <string name="crashreport_found">クラッシュレポートが見つかりました</string>
     <string name="copy">コピー</string>
     <string name="more">他 %1$s 件…</string>

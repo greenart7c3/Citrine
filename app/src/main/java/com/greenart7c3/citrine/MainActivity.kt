@@ -4,9 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.service.RelayIdentity
+import com.greenart7c3.citrine.service.crashreports.CrashReportScreen
 import com.greenart7c3.citrine.ui.CitrineScaffold
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 
@@ -42,9 +46,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CitrineTheme {
-                CitrineScaffold(
-                    storageHelper = storageHelper,
-                )
+                Box(Modifier.fillMaxSize()) {
+                    CitrineScaffold(
+                        storageHelper = storageHelper,
+                    )
+                    // A report left by a previous run takes over the whole window, above the bars.
+                    CrashReportScreen()
+                }
             }
         }
     }

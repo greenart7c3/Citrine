@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Eventos desses tipos nunca são removidos pela limpeza por idade, independentemente da configuração \"excluir eventos mais antigos que\".</string>
     <string name="name_access_client_with_name_localhost_port">Nome (acesse o cliente com nome.localhost:porta)</string>
     <string name="name_cannot_be_blank">O nome não pode ficar em branco</string>
-    <string name="copy_crash_report_to_clipboard">Deseja copiar o relatório de falha para a área de transferência e abrir um cliente para enviá-lo ao Amber?</string>
-    <string name="crashreport_found_send">Enviar</string>
+    <string name="crash_report_send_prompt">O Citrine falhou. Enviar o relatório ao desenvolvedor em uma DM criptografada? Assine com o Amber para que o desenvolvedor veja sua chave pública e possa responder, ou envie anonimamente com uma chave descartável.</string>
+    <string name="crash_report_sign_with_amber">Assinar com Amber</string>
+    <string name="crash_report_send_anonymously">Enviar anonimamente</string>
+    <string name="crash_report_sent">Relatório de falha enviado. Obrigado!</string>
+    <string name="crash_report_send_failed">Não foi possível enviar o relatório de falha. Verifique sua conexão e tente novamente.</string>
     <string name="crashreport_found">Relatório de falha encontrado</string>
     <string name="copy">Copiar</string>
     <string name="more">Mais %1$s…</string>

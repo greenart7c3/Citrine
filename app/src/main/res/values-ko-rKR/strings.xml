@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">이 종류의 이벤트는 \"다음 기간보다 오래된 이벤트 삭제\" 설정과 관계없이 기간 기반 정리로 삭제되지 않습니다.</string>
     <string name="name_access_client_with_name_localhost_port">이름(name.localhost:port로 클라이언트에 접속)</string>
     <string name="name_cannot_be_blank">이름은 비워 둘 수 없습니다</string>
-    <string name="copy_crash_report_to_clipboard">충돌 보고서를 클립보드에 복사하고 클라이언트를 열어 Amber에게 보내시겠습니까?</string>
-    <string name="crashreport_found_send">보내기</string>
+    <string name="crash_report_send_prompt">Citrine이 충돌했습니다. 보고서를 암호화된 DM으로 개발자에게 보내시겠습니까? Amber로 서명하면 개발자가 공개 키를 보고 답장할 수 있으며, 일회용 키로 익명으로 보낼 수도 있습니다.</string>
+    <string name="crash_report_sign_with_amber">Amber로 서명</string>
+    <string name="crash_report_send_anonymously">익명으로 보내기</string>
+    <string name="crash_report_sent">충돌 보고서를 보냈습니다. 감사합니다!</string>
+    <string name="crash_report_send_failed">충돌 보고서를 보낼 수 없습니다. 연결을 확인하고 다시 시도하세요.</string>
     <string name="crashreport_found">충돌 보고서를 찾았습니다</string>
     <string name="copy">복사</string>
     <string name="more">%1$s개 더…</string>

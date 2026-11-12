@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">Events dieser Kinds werden von der altersbasierten Bereinigung nie entfernt, unabhängig von der Einstellung \"Events löschen, die älter sind als\".</string>
     <string name="name_access_client_with_name_localhost_port">Name (Client über name.localhost:port aufrufen)</string>
     <string name="name_cannot_be_blank">Name darf nicht leer sein</string>
-    <string name="copy_crash_report_to_clipboard">Möchtest du den Absturzbericht in die Zwischenablage kopieren und einen Client öffnen, um ihn an Amber zu senden?</string>
-    <string name="crashreport_found_send">Senden</string>
+    <string name="crash_report_send_prompt">Citrine ist abgestürzt. Den Bericht verschlüsselt an den Entwickler senden? Signiere ihn mit Amber, damit der Entwickler deinen öffentlichen Schlüssel sieht und antworten kann, oder sende ihn anonym mit einem Wegwerfschlüssel.</string>
+    <string name="crash_report_sign_with_amber">Mit Amber signieren</string>
+    <string name="crash_report_send_anonymously">Anonym senden</string>
+    <string name="crash_report_sent">Absturzbericht gesendet. Danke!</string>
+    <string name="crash_report_send_failed">Der Absturzbericht konnte nicht gesendet werden. Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="crashreport_found">Absturzbericht gefunden</string>
     <string name="copy">Kopieren</string>
     <string name="more">%1$s weitere…</string>

@@ -109,8 +109,11 @@
     <string name="preserved_kinds_from_deletion_description">События этих типов никогда не удаляются очисткой по возрасту, независимо от настройки «удалять события старше чем».</string>
     <string name="name_access_client_with_name_localhost_port">Имя (доступ к клиенту с помощью name.localhost:port)</string>
     <string name="name_cannot_be_blank">Имя не может быть пустым</string>
-    <string name="copy_crash_report_to_clipboard">Хотите скопировать отчет о сбое в буфер обмена и открыть клиент, чтобы отправить его Amber?</string>
-    <string name="crashreport_found_send">Отправить</string>
+    <string name="crash_report_send_prompt">Citrine аварийно завершился. Отправить отчёт разработчику в зашифрованном личном сообщении? Подпишите его через Amber, чтобы разработчик увидел ваш публичный ключ и смог ответить, или отправьте анонимно с одноразовым ключом.</string>
+    <string name="crash_report_sign_with_amber">Подписать через Amber</string>
+    <string name="crash_report_send_anonymously">Отправить анонимно</string>
+    <string name="crash_report_sent">Отчёт о сбое отправлен. Спасибо!</string>
+    <string name="crash_report_send_failed">Не удалось отправить отчёт о сбое. Проверьте подключение и попробуйте снова.</string>
     <string name="crashreport_found">Обнаружен отчет о сбое</string>
     <string name="copy">Копировать</string>
     <string name="more">Ещё %1$s…</string>
