@@ -61,10 +61,19 @@ interface EventDao {
     @Query("SELECT COUNT(*) FROM EventEntity")
     suspend fun countAll(): Int
 
-    /** Author + id of every event of [kind], without loading tags. Used by the aggregator's
-     * one-shot cleanup of contact lists belonging to authors the owner does not follow. */
-    @Query("SELECT id, pubkey FROM EventEntity WHERE kind = :kind")
-    suspend fun getIdsAndPubkeysByKind(kind: Int): List<IdAndPubkey>
+    /** One keyset page of id + author of [kind] events (newest first), without loading tags,
+     * strictly after the cursor ([createdAt], [id]). Used by the aggregator's one-shot cleanup
+     * of contact lists belonging to authors the owner does not follow. The redundant
+     * `createdAt <= :createdAt` gives SQLite a range on idx_event_kind_created_id. */
+    @Query(
+        """
+        SELECT id, pubkey, createdAt FROM EventEntity
+         WHERE kind = :kind AND createdAt <= :createdAt AND (createdAt < :createdAt OR id > :id)
+         ORDER BY createdAt DESC, id ASC
+         LIMIT :limit
+        """,
+    )
+    suspend fun getIdsAndPubkeysByKindAfter(kind: Int, createdAt: Long, id: String, limit: Int): List<IdAndPubkey>
 
     @RawQuery
     fun getIdsAndCreatedAt(query: SupportSQLiteQuery): List<IdAndCreatedAt>
@@ -514,6 +523,7 @@ data class PubkeyTimestamp(
 data class IdAndPubkey(
     val id: String,
     val pubkey: String,
+    val createdAt: Long = 0,
 )
 
 class EventPagingSource(

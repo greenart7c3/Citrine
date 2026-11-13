@@ -1551,12 +1551,20 @@ object RelayAggregator {
 
         var deleted = 0
         for (dao in daos) {
-            val rows = dao.getIdsAndPubkeysByKind(ContactListEvent.KIND)
-            val ids = ContactListPolicy.strangerContactListIds(rows, ownerFollows, keep)
-            if (ids.isEmpty()) continue
-            ids.chunked(CONTACT_LIST_PRUNE_CHUNK_SIZE).forEach { chunk ->
-                dao.delete(chunk)
-                deleted += chunk.size
+            // Paged so a huge database never holds every kind-3 row in the heap at once. Deleting
+            // rows already behind the cursor does not disturb the keyset.
+            var cursorCreatedAt = Long.MAX_VALUE
+            var cursorId = ""
+            while (true) {
+                val page = dao.getIdsAndPubkeysByKindAfter(ContactListEvent.KIND, cursorCreatedAt, cursorId, CONTACT_LIST_PRUNE_CHUNK_SIZE)
+                if (page.isEmpty()) break
+                val ids = ContactListPolicy.strangerContactListIds(page, ownerFollows, keep)
+                if (ids.isNotEmpty()) {
+                    dao.delete(ids)
+                    deleted += ids.size
+                }
+                cursorCreatedAt = page.last().createdAt
+                cursorId = page.last().id
                 // Give writers (and the UI) a chance between chunks on a multi-thousand row delete.
                 yield()
             }
