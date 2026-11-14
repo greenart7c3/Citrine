@@ -90,8 +90,10 @@ class Connection(
         // has fallen this far behind instead of silently corrupting its stream.
         private const val OUTGOING_QUEUE_CAPACITY = 1024
 
-        // Soft byte budget (in chars) for staged outbound frames.
-        private const val OUTGOING_QUEUE_MAX_CHARS = 16L * 1024 * 1024
+        // Soft byte budget (in chars) for staged outbound frames. Sized against the connection
+        // cap in CustomWebSocketServer: MAX_CONNECTIONS x this must stay well under the heap,
+        // since slow clients (e.g. over Tor) keep their queue full.
+        private const val OUTGOING_QUEUE_MAX_CHARS = 2L * 1024 * 1024
     }
     val name = "user${lastId.getAndIncrement()}"
 
@@ -138,13 +140,18 @@ class Connection(
 
     fun trySend(data: String) {
         if (closed.get()) return
-        queuedChars.addAndGet(data.length.toLong())
-        val result = outgoingQueue.trySend(data)
-        if (!result.isSuccess) queuedChars.addAndGet(-data.length.toLong())
-        if (result.isClosed) {
+        // Over the char budget counts as full too: 1024 frames of large events is hundreds of MB.
+        val overBudget = queuedChars.get() > OUTGOING_QUEUE_MAX_CHARS
+        val result = if (overBudget) {
+            null
+        } else {
+            queuedChars.addAndGet(data.length.toLong())
+            outgoingQueue.trySend(data).also { if (!it.isSuccess) queuedChars.addAndGet(-data.length.toLong()) }
+        }
+        if (result?.isClosed == true) {
             Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
             // Do not call removeConnection here — the webSocket finally block owns removal.
-        } else if (result.isFailure) {
+        } else if (result == null || result.isFailure) {
             // The client is not reading fast enough to keep up. Disconnect it rather than
             // silently dropping frames mid-stream, which corrupts REQ/OK semantics.
             Log.w(Citrine.TAG, "Outgoing queue full for connection $name $remoteAddress, closing slow consumer")

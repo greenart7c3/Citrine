@@ -86,7 +86,9 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.copyTo
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import java.io.File
 import java.net.ServerSocket
@@ -108,6 +110,10 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+
+// With Connection's 2M-char outbound budget, 50 connections bound outbound buffers to ~200 MB.
+private const val MAX_CONNECTIONS = 50
+private const val MIN_MAX_FRAME_SIZE = 4L * 1024 * 1024
 
 class CustomWebSocketServer(
     private val host: String,
@@ -1231,6 +1237,9 @@ class CustomWebSocketServer(
             install(WebSockets) {
                 pingPeriodMillis = 5000L
                 timeoutMillis = 300000L
+                // Ktor's default is unlimited, so one frame could be read whole into the heap
+                // before the event size check runs. 4x covers JSON escaping of max-size content.
+                maxFrameSize = maxOf(MIN_MAX_FRAME_SIZE, Settings.maxEventSize * 4L)
                 // permessage-deflate is intentionally NOT installed. Nearly all clients
                 // connect over localhost/LAN where compression only burns CPU/battery,
                 // and some client deflate implementations (e.g. gorilla/websocket's
@@ -1472,6 +1481,13 @@ class CustomWebSocketServer(
 
                 // WebSocket endpoint
                 webSocket("/") {
+                    // Tor hidden-service clients all arrive from 127.0.0.1, so blockedIps can't
+                    // limit them; cap the total so per-connection buffers can't add up to an OOM.
+                    if (connections.value.size >= MAX_CONNECTIONS) {
+                        Log.w(Citrine.TAG, "Refusing connection: $MAX_CONNECTIONS connections already open")
+                        close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "too many connections"))
+                        return@webSocket
+                    }
                     val thisConnection = Connection(this)
                     connections.update { it + thisConnection }
 
@@ -1484,7 +1500,9 @@ class CustomWebSocketServer(
                     // on the network engine's threads, stalling reads for this and other
                     // connections. A bounded channel keeps per-connection ordering while
                     // letting reads continue during processing bursts.
-                    val messageChannel = Channel<String>(capacity = 256)
+                    // Small: with maxFrameSize at several MB, 256 queued frames per connection
+                    // could pin the heap on their own.
+                    val messageChannel = Channel<String>(capacity = 16)
                     val processor = launch(Dispatchers.Default) {
                         for (newMessage in messageChannel) {
                             try {
