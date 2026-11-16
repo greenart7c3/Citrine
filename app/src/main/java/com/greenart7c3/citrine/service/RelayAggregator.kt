@@ -408,7 +408,13 @@ object RelayAggregator {
             while (isActive) {
                 if (!pausedForNetwork) {
                     try {
-                        refreshAndSubscribe(database)
+                        if (!refreshAndSubscribe(database)) {
+                            // Skipped, e.g. a cancelled refresh from before a restart still holds
+                            // `refreshing` or just stamped the floor. Sleeping the full interval
+                            // here left the status on "Fetching…" for an hour, so retry soon.
+                            delay(MIN_REFRESH_INTERVAL_MS)
+                            continue
+                        }
                         consecutiveFailures = 0
                     } catch (e: CancellationException) {
                         throw e
@@ -812,25 +818,26 @@ object RelayAggregator {
         }
     }
 
-    private suspend fun refreshAndSubscribe(database: AppDatabase) {
+    /** Returns false when the refresh was skipped without running, so the loop can retry soon. */
+    private suspend fun refreshAndSubscribe(database: AppDatabase): Boolean {
         if (Citrine.isImportingEvents) {
             Log.d(TAG, "Import in progress; skipping refresh")
-            return
+            return false
         }
         if (pausedForNetwork) {
             Log.d(TAG, "Paused for network condition; skipping refresh")
-            return
+            return false
         }
         if (!refreshing.compareAndSet(false, true)) {
             Log.d(TAG, "Refresh already running; skipping")
-            return
+            return false
         }
         val refreshStartMs = System.currentTimeMillis()
         val sinceLastFinish = refreshStartMs - lastRefreshFinishedAt
         if (lastRefreshFinishedAt > 0L && sinceLastFinish < MIN_REFRESH_INTERVAL_MS) {
             Log.d(TAG, "Refresh requested ${sinceLastFinish}ms after last completion; skipping (floor=${MIN_REFRESH_INTERVAL_MS}ms)")
             refreshing.set(false)
-            return
+            return false
         }
         try {
             val aggPubkey = Settings.aggregatorPubkey
@@ -839,7 +846,7 @@ object RelayAggregator {
                 .toSet()
             if (aggPubkey.isBlank() && extraRelays.isEmpty()) {
                 Log.d(TAG, "No pubkey and no extra relays; nothing to refresh")
-                return
+                return true
             }
             val dao = database.eventDao()
 
@@ -1258,6 +1265,7 @@ object RelayAggregator {
             lastRefreshFinishedAt = System.currentTimeMillis()
             refreshing.set(false)
         }
+        return true
     }
 
     /**
