@@ -9,6 +9,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 
 @OptIn(DelicateCoroutinesApi::class)
 class SubscriptionManager(
@@ -27,31 +28,33 @@ class SubscriptionManager(
                 return@launch
             }
 
-            for (filter in subscription.filters) {
-                if (sendClosedIfDenied(filter)) return@launch
+            subscription.connection.historyQueryLock.withLock {
+                for (filter in subscription.filters) {
+                    if (sendClosedIfDenied(filter)) return@launch
 
-                try {
-                    val time = measureTime {
-                        EventRepository.subscribe(
-                            subscription,
-                            filter,
+                    try {
+                        val time = measureTime {
+                            EventRepository.subscribe(
+                                subscription,
+                                filter,
+                            )
+                        }
+                        Log.d(Citrine.TAG, "Subscription (${EventSubscription.count()}) ${subscription.id} took $time to execute $filter")
+                    } catch (e: OutOfMemoryError) {
+                        failForOutOfMemory(e)
+                        return@launch
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+
+                        Log.d(Citrine.TAG, "Error reading data from database $filter", e)
+                        subscription.connection.send(
+                            NoticeResult.invalid("Error reading data from database").toJson(),
                         )
                     }
-                    Log.d(Citrine.TAG, "Subscription (${EventSubscription.count()}) ${subscription.id} took $time to execute $filter")
-                } catch (e: OutOfMemoryError) {
-                    failForOutOfMemory(e)
-                    return@launch
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-
-                    Log.d(Citrine.TAG, "Error reading data from database $filter", e)
-                    subscription.connection.send(
-                        NoticeResult.invalid("Error reading data from database").toJson(),
-                    )
                 }
-            }
 
-            subscription.connection.send(EOSE(subscription.id).toJson())
+                subscription.connection.send(EOSE(subscription.id).toJson())
+            }
         }
     }
 

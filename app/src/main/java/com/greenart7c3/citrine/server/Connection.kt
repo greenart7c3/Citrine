@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 class Connection(
     val session: DefaultWebSocketServerSession,
@@ -31,6 +32,10 @@ class Connection(
     val sharedFlow = messageResponseFlow.asSharedFlow()
 
     val negentropySessions: MutableMap<String, Negentropy> = ConcurrentHashMap()
+
+    // Held while one REQ streams its stored events, so each subscription that is blocked on a
+    // slow reader does not pin its own page of rows and tags: memory scales per connection.
+    val historyQueryLock = Mutex()
 
     val closed = AtomicBoolean(false)
 

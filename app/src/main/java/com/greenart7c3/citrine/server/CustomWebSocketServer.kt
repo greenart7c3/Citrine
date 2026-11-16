@@ -86,6 +86,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.copyTo
+import io.ktor.websocket.ChannelOverflow
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
@@ -1240,6 +1241,11 @@ class CustomWebSocketServer(
                 // Ktor's default is unlimited, so one frame could be read whole into the heap
                 // before the event size check runs. 4x covers JSON escaping of max-size content.
                 maxFrameSize = maxOf(MIN_MAX_FRAME_SIZE, Settings.maxEventSize * 4L)
+                // Ktor's outgoing queue is unlimited by default, so session.send() never
+                // suspended and a non-reading client pinned the heap behind Connection's budget.
+                channels {
+                    outgoing = bounded(8, ChannelOverflow.SUSPEND)
+                }
                 // permessage-deflate is intentionally NOT installed. Nearly all clients
                 // connect over localhost/LAN where compression only burns CPU/battery,
                 // and some client deflate implementations (e.g. gorilla/websocket's
