@@ -1333,7 +1333,7 @@ class CustomWebSocketServer(
                         val createdAtFrom = call.request.queryParameters["createdAt_from"]?.toLongOrNull()
                         val createdAtTo = call.request.queryParameters["createdAt_to"]?.toLongOrNull()
 
-                        val uriBuilder = "content://com.greenart7c3.citrine.provider/events".toUri()
+                        val uriBuilder = "content://${CitrineContract.AUTHORITY}/events".toUri()
                             .buildUpon()
                             .appendQueryParameter("limit", limit.toString())
                             .appendQueryParameter("offset", offset.toString())
@@ -1374,7 +1374,7 @@ class CustomWebSocketServer(
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
                         val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
-                        val uriBuilder = "content://com.greenart7c3.citrine.provider/events/by_pubkey".toUri()
+                        val uriBuilder = "content://${CitrineContract.AUTHORITY}/events/by_pubkey".toUri()
                             .buildUpon()
                             .appendQueryParameter("pubkey", pubkey)
                             .appendQueryParameter("limit", limit.toString())
@@ -1415,7 +1415,7 @@ class CustomWebSocketServer(
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
                         val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
-                        val uriBuilder = "content://com.greenart7c3.citrine.provider/events/by_kind".toUri()
+                        val uriBuilder = "content://${CitrineContract.AUTHORITY}/events/by_kind".toUri()
                             .buildUpon()
                             .appendQueryParameter("kind", kind.toString())
                             .appendQueryParameter("limit", limit.toString())

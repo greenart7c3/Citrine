@@ -14,11 +14,11 @@
 
     <!-- Content Provider Permissions -->
     <permission
-        android:name="com.greenart7c3.citrine.permission.READ_EVENTS"
+        android:name="${applicationId}.permission.READ_EVENTS"
         android:label="Read Nostr Events"
         android:protectionLevel="normal" />
     <permission
-        android:name="com.greenart7c3.citrine.permission.WRITE_EVENTS"
+        android:name="${applicationId}.permission.WRITE_EVENTS"
         android:label="Write Nostr Events"
         android:protectionLevel="signature" />
 
@@ -97,10 +97,10 @@
 
         <provider
             android:name=".provider.CitrineContentProvider"
-            android:authorities="com.greenart7c3.citrine.provider"
+            android:authorities="${applicationId}.provider"
             android:exported="true"
-            android:readPermission="com.greenart7c3.citrine.permission.READ_EVENTS"
-            android:writePermission="com.greenart7c3.citrine.permission.WRITE_EVENTS" />
+            android:readPermission="${applicationId}.permission.READ_EVENTS"
+            android:writePermission="${applicationId}.permission.WRITE_EVENTS" />
 
         <activity
             android:name=".MainActivity"

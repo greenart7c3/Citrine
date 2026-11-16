@@ -3,13 +3,15 @@ package com.greenart7c3.citrine.provider
 import android.net.Uri
 import android.provider.BaseColumns
 import androidx.core.net.toUri
+import com.greenart7c3.citrine.BuildConfig
 
 /**
  * Contract class for Citrine Content Provider.
  * Defines URIs and column names for accessing Nostr events and tags.
  */
 object CitrineContract {
-    const val AUTHORITY = "com.greenart7c3.citrine.provider"
+    // Follows the applicationId so debug (.debug) and release builds can be installed side by side.
+    const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.provider"
     private val BASE_URI = "content://$AUTHORITY".toUri()
 
     /**
