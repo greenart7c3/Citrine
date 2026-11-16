@@ -17,8 +17,8 @@ android {
         applicationId = "com.greenart7c3.citrine"
         minSdk = 26
         targetSdk = 36
-        versionCode = 69
-        versionName = "3.2.5"
+        versionCode = 70
+        versionName = "3.2.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
