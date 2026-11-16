@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Compact guide for OpenCode sessions working in this repo. `CLAUDE.md` has fuller component architecture, but its **Database section is outdated** (says version 11 / 3 entities — actually version 13 / 6 entities, see below). Trust this file where they disagree.
+Compact guide for agent sessions working in this repo. This file is the single source of truth; `CLAUDE.md` only points here.
 
 ## Toolchain
 
@@ -26,7 +26,18 @@ Compact guide for OpenCode sessions working in this repo. `CLAUDE.md` has fuller
 - **Git hooks auto-install**: `:app:preBuild` depends on the `installGitHook` task, which copies `git-hooks/{pre-commit,pre-push}` into `.git/hooks`. So the first build installs hooks. `pre-commit` = `ktlintCheck`; `pre-push` = `test`.
 - **No instrumented tests exist** (`app/src/androidTest` is absent). `./gradlew connectedAndroidTest` is a no-op; don't rely on it.
 
-## Database (corrects CLAUDE.md)
+## Components
+
+- `Citrine.kt` — `Application`. Global singletons: `applicationScope` (`Dispatchers.IO + SupervisorJob()`), `client` (`NostrClient` broadcasting to external relays), `job` (periodic cleanup of ephemeral/expired events), `isImportingEvents` (blocks concurrent database mutations).
+- `server/CustomWebSocketServer.kt` — Ktor CIO WebSocket server handling `EVENT`/`REQ`/`CLOSE`/`COUNT`/`AUTH`; entry point for validation (`verifyEvent()`, `innerProcessEvent()`, `VerificationResult`).
+- `server/EventRepository.kt` builds raw SQL from `EventFilter`s (tag joins, FTS, author/kind, limit/offset); `server/SubscriptionManager.kt` runs a subscription's filters (enforcing NIP-42 first); `server/EventSubscription.kt` is the in-memory registry of live subscriptions that new events fan out to.
+- `service/WebSocketServerService.kt` — foreground service hosting the server, with a 100 s `Timer` for cleanup and optional auto-backup. `service/EventBroadcastWorker.kt` — `WorkManager` worker broadcasting an event to the relays of the user's NIP-65 list (kind 10002).
+- `database/` — `EventEntity` (id/pubkey/kind/content/createdAt/sig/expiresAt), `TagEntity` (flattened `col0Name`…`col4Plus` plus denormalized `kind`/`pkEvent`), `EventFTS` (FTS4 on `content`). `EventDao.insertEventWithTags()` inserts transactionally and fans out via `EventSubscription.executeAll()`; `@RawQuery` serves `EventRepository`; `getByKindKeyset()` pages the feed.
+- `provider/CitrineContentProvider.kt` — Android IPC over the `events`/`tags` URIs, mirroring `SubscriptionManager`'s auth filtering; contract constants in `CitrineContract`.
+- `ui/` — Compose, routes in `Route.kt`, bottom nav Home/Settings: `HomeScreen` (start/stop, event counts, DB controls), `SettingsScreen`, `LogcatScreen`, `ContactsScreen`/`DownloadYourEventsUserScreen`, `Feed` (`EventPagingSource`).
+- Libraries: Quartz (`com.vitorpamplona.quartz`), Ktor (CIO) server and client, Room with FTS4, OkHttp for outbound relays, Anon.storage (SAF) for import/export, kmp-tor, Paging 3.
+
+## Database
 
 - Room DB file `citrine_database`, **version 13**, **6 entities**: `EventEntity`, `TagEntity`, `EventFTS`, plus `GroupEntity`, `GroupMemberEntity`, `GroupInviteEntity` (added in migration 12→13). `EventEntity.expiresAt` added in 11→12.
 - Migrations are top-level `val MIGRATION_N_(N+1)` in `database/AppDatabase.kt`. When changing schema: add a `MIGRATION_N_(N+1)`, bump the `@Database(version = ...)` **and `TARGET_VERSION`** in **both** `AppDatabase` and `HistoryDatabase`, and `.addMigrations(...)` it on **both** builders.
@@ -51,6 +62,13 @@ Compact guide for OpenCode sessions working in this repo. `CLAUDE.md` has fuller
 - `./build.sh <version> <appName>` runs `clean bundleRelease` + `assembleRelease`, moves outputs to `~/release/`, then invokes `generate_manifest.sh`. (Does not set `SIGN_RELEASE`.)
 - CI (`create-release.yml`, on `v*` tags) signs via GitHub secrets, not `keystore.properties`.
 - ABI splits are enabled: builds emit per-ABI APKs **plus** a universal APK. Debug universal artifact: `app/build/outputs/apk/debug/app-universal-debug.apk`.
+- **A version bump is one commit touching a fixed set of files**, tagged with a lightweight `v<version>` tag on that commit (CI's `create-release.yml` builds from the tag and creates the release with an empty body):
+  - `app/build.gradle.kts`: `versionCode` + 1 and `versionName`. The version code is what F-Droid and Zapstore compare — never reuse one.
+  - `CHANGELOG.md`: **only the new release section** — `## Citrine <version>`, the version's bullets, the download/donation footer and the `## Verifying the release` block. Copy the previous section and update the version, the `releases/tag/v<version>` URL and the `manifest-v<version>.txt` names. Older sections are deleted from this file: every version's notes live in `docs/changelogs/<version>.md`, and the file keeps a single closing line pointing there.
+  - `docs/changelogs/<version>.md`: byte-identical to that section of `CHANGELOG.md` (check with `diff <(head -n <n> CHANGELOG.md) docs/changelogs/<version>.md`). `docs/changelogs/README.md`: add the new row at the top of the table.
+  - `zapstore.yaml`: `release_notes: ./docs/changelogs/<version>.md`.
+- `~/release_citrine.sh <tag> [appName] [--dry-run]` does the rest, **after the tag is pushed**: waits for the tag's CI run and the release it creates, builds the unsigned APKs locally, signs them via `~/sign_apks.sh` into `~/Downloads/signed_apks/<tag>`, sets the release body from the `## Citrine <version>` section of `CHANGELOG.md`, uploads the APKs + manifest, publishes to Zapstore (`SIGN_WITH` must be set) and posts the kind-1 changelog note. It reads `CHANGELOG.md` and `zapstore.yaml` from the working tree, not from the tag, so those must be committed and correct before it runs.
+- **Remotes:** `origin` has two push URLs — the `nostr://` ngit remote and `https://github.com/greenart7c3/Citrine.git` — so a plain `git push` / `git push origin master` (tags the same way) updates both; never pass a URL or push to only one of them. If the GitHub leg fails with `could not read Username`, the `gh` credential helper path in `~/.config/git/config` went stale after a mise `gh` upgrade: point it at `/home/admin/.local/share/mise/shims/gh`.
 
 ## Dev / perf tooling
 
