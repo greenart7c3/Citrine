@@ -33,8 +33,8 @@ class Connection(
 
     val negentropySessions: MutableMap<String, Negentropy> = ConcurrentHashMap()
 
-    // Held while one REQ streams its stored events, so each subscription that is blocked on a
-    // slow reader does not pin its own page of rows and tags: memory scales per connection.
+    // Held while one REQ streams its stored events, so a connection streams one subscription at
+    // a time and takes at most one of the app-wide history permits (EventRepository).
     val historyQueryLock = Mutex()
 
     val closed = AtomicBoolean(false)
@@ -140,6 +140,17 @@ class Connection(
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
             // Do not call removeConnection here — the webSocket finally block owns removal.
+        }
+    }
+
+    /**
+     * Waits until the outbound queue is at most half full, so a history chunk (up to 1M
+     * chars of content) mostly fits without [send] blocking while it holds an app-wide
+     * history permit (see EventRepository.emitByIds).
+     */
+    suspend fun awaitQueueRoom() {
+        while (queuedChars.get() > OUTGOING_QUEUE_MAX_CHARS / 2 && !closed.get()) {
+            delay(5)
         }
     }
 

@@ -18,17 +18,26 @@ import kotlin.collections.joinToString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 private val TAG_KEY_REGEX = Regex("^[a-zA-Z0-9]+$")
 private val JACKSON_NODE_FACTORY = JacksonMapper.mapper.nodeFactory
 
 object EventRepository {
     private const val QUERY_BATCH_SIZE = 500
-    private const val MIN_BATCH_SIZE = 10
-    private const val BATCH_CONTENT_BUDGET_CHARS = 8L * 1024 * 1024
 
-    // Tags held in memory at once per in-flight query (~3 MB of TagEntity objects).
+    // Content loaded at once per content chunk: one max-size event.
+    private const val BATCH_CONTENT_BUDGET_CHARS = 1024 * 1024
+
+    // Tags loaded at once per content chunk (~3 MB of TagEntity objects).
     private const val CHUNK_TAG_BUDGET = 10_000
+
+    // App-wide cap on content chunks loaded at once, whatever the number of connections and
+    // subscriptions: about HISTORY_CHUNK_PERMITS x (1M chars of content + 10k tags + their
+    // frames), ~40 MB, or one oversized event's tags instead of the 10k.
+    private const val HISTORY_CHUNK_PERMITS = 4
+    private val historyChunkPermits = Semaphore(HISTORY_CHUNK_PERMITS)
 
     enum class SelectMode {
         FULL_EVENTS,
@@ -208,49 +217,90 @@ object EventRepository {
     /**
      * Streams [filter]'s full-event matches to [onBatch] in keyset-paginated pages of at
      * most [QUERY_BATCH_SIZE] rows (or the remainder of [clientLimit], whichever is
-     * smaller), so the whole match set is never materialized in the heap. Each page is
-     * handed over in chunks of at most [CHUNK_TAG_BUDGET] tags (see [emitWithTags]).
-     * Returns the total number of rows read.
+     * smaller), so the whole match set is never materialized in memory. Each page is
+     * selected as ids only and its content loaded by [emitByIds]. Returns the number of
+     * events sent. [awaitRoom] runs before each chunk, see [emitByIds].
      */
     suspend fun batchedQuery(
         database: AppDatabase,
         filter: EventFilter,
         clientLimit: Int?,
+        awaitRoom: suspend () -> Unit = {},
         onBatch: suspend (List<EventWithTags>) -> Unit,
     ): Int {
         var sent = 0
         var cursorCreatedAt: Long? = null
         var cursorId: String? = null
-        var batchSize = QUERY_BATCH_SIZE
         while (true) {
             // The queries below block uninterruptibly, so this is where a subscription
             // whose client sent CLOSE or disconnected stops costing memory and I/O.
             currentCoroutineContext().ensureActive()
 
-            val effective = minOf(batchSize, clientLimit?.let { it - sent } ?: Int.MAX_VALUE)
+            val effective = minOf(QUERY_BATCH_SIZE, clientLimit?.let { it - sent } ?: Int.MAX_VALUE)
             if (effective <= 0) break
 
-            val query = createQuery(filter, SelectMode.FULL_EVENTS, cursorCreatedAt, cursorId, effective)
-            val rawSql = SimpleSQLiteQuery(query.first, query.second.toTypedArray())
-            val rows = database.eventDao().getEventRows(rawSql)
-            if (rows.isEmpty()) break
+            // Ids only: with an IN list on authors/kinds SQLite sorts the candidates in a temp
+            // B-tree (native memory, temp_store=MEMORY), and full rows put up to
+            // QUERY_BATCH_SIZE x maxEventSize of content there, on top of the same in the heap.
+            val query = createQuery(filter, SelectMode.IDS_AND_CREATED_AT, cursorCreatedAt, cursorId, effective)
+            val page = database.eventDao().getIdsAndCreatedAt(SimpleSQLiteQuery(query.first, query.second.toTypedArray()))
+            if (page.isEmpty()) break
 
-            // Byte-aware paging: shrink the next page after a heavy one, recover after a light one.
-            val chars = rows.sumOf { it.content.length.toLong() }
-            batchSize = if (chars > BATCH_CONTENT_BUDGET_CHARS) {
-                maxOf(MIN_BATCH_SIZE, batchSize / 2)
-            } else {
-                minOf(QUERY_BATCH_SIZE, batchSize * 2)
-            }
+            // Counts what was sent, not the page: skipped ids must not eat into the client's limit.
+            sent += emitByIds(database, page.map { it.id }, awaitRoom, onBatch)
+            if (page.size < effective) break
 
-            emitWithTags(database, rows, onBatch)
-            sent += rows.size
-            if (rows.size < effective) break
-
-            cursorCreatedAt = rows.last().createdAt
-            cursorId = rows.last().id
+            cursorCreatedAt = page.last().createdAt
+            cursorId = page.last().id
         }
         return sent
+    }
+
+    /**
+     * Loads the events of [ids] and hands them to [onBatch] in [ids] order, in chunks of at
+     * most [BATCH_CONTENT_BUDGET_CHARS] of content (an event above the budget gets a chunk of
+     * its own), so a page of maximum-size events is never in memory at once. Events above
+     * [Settings.maxEventSize] or deleted since the ids were read are skipped. Returns the
+     * number of events handed to [onBatch].
+     *
+     * Each chunk is loaded and handed over under one of the app-wide [historyChunkPermits].
+     * [awaitRoom] runs before the permit is taken: it should wait until the receiving client
+     * can take the chunk, so a client that is slow or not reading does not hold a permit
+     * every other connection needs.
+     */
+    internal suspend fun emitByIds(
+        database: AppDatabase,
+        ids: List<String>,
+        awaitRoom: suspend () -> Unit = {},
+        onBatch: suspend (List<EventWithTags>) -> Unit,
+    ): Int {
+        var emitted = 0
+        val dao = database.eventDao()
+        val maxSize = Settings.maxEventSize
+        for (page in ids.chunked(QUERY_BATCH_SIZE)) {
+            val lengths = HashMap<String, Int>(page.size * 2)
+            dao.contentLengths(page).forEach { lengths[it.id] = it.length }
+            val present = page.filter { id -> lengths[id]?.let { maxSize <= 0 || it <= maxSize } == true }
+
+            var start = 0
+            while (start < present.size) {
+                currentCoroutineContext().ensureActive()
+
+                val end = chunkEnd(start, present.size, BATCH_CONTENT_BUDGET_CHARS) { lengths[present[it]] ?: 0 }
+                val chunk = present.subList(start, end)
+                awaitRoom()
+                // shortcut: a chunk bigger than the room left in the client's queue still waits on it mid-send while holding the permit; make awaitRoom size-aware if permits starve.
+                historyChunkPermits.withPermit {
+                    val byId = dao.getEventRowsByIds(chunk).associateBy { it.id }
+                    emitWithTags(database, chunk.mapNotNull { byId[it] }) { batch ->
+                        onBatch(batch)
+                        emitted += batch.size
+                    }
+                }
+                start = end
+            }
+        }
+        return emitted
     }
 
     /**
@@ -278,7 +328,7 @@ object EventRepository {
             while (start < page.size) {
                 currentCoroutineContext().ensureActive()
 
-                val end = tagChunkEnd(start, page.size, CHUNK_TAG_BUDGET) { tagCounts[page[it].id] ?: 0 }
+                val end = chunkEnd(start, page.size, CHUNK_TAG_BUDGET) { tagCounts[page[it].id] ?: 0 }
                 val chunk = page.subList(start, end)
                 val chunkTags = chunk.sumOf { tagCounts[it.id] ?: 0 }
                 val tagsByEvent = if (chunkTags == 0) {
@@ -303,15 +353,16 @@ object EventRepository {
 
     /**
      * End (exclusive) of the chunk starting at [start]: as many consecutive events as fit
-     * in [budget] tags, and always at least one, so an event above the budget is not stuck.
+     * in [budget] (tags or content chars, per [weight]), and always at least one, so an event
+     * above the budget is not stuck.
      */
-    internal inline fun tagChunkEnd(start: Int, size: Int, budget: Int, tagCount: (Int) -> Int): Int {
+    internal inline fun chunkEnd(start: Int, size: Int, budget: Int, weight: (Int) -> Int): Int {
         var end = start
-        var tags = 0L
+        var total = 0L
         while (end < size) {
-            val count = tagCount(end)
-            if (end > start && tags + count > budget) break
-            tags += count
+            val w = weight(end)
+            if (end > start && total + w > budget) break
+            total += w
             end++
         }
         return end
@@ -358,12 +409,14 @@ object EventRepository {
 
         val sent = if (filter.searchKeywords.isNotEmpty()) {
             // FTS results are ordered by rowid, so the (createdAt, id) keyset cursor does
-            // not apply and the matching rows are loaded in one shot; FTS matches are
-            // text-bounded, so that stays small. Their tags are still loaded in chunks.
-            val query = createQuery(filter, SelectMode.FULL_EVENTS)
-            val rows = subscription.appDatabase.eventDao()
-                .getEventRows(SimpleSQLiteQuery(query.first, query.second.toTypedArray()))
-            emitWithTags(subscription.appDatabase, rows) { batch ->
+            // not apply and the matching ids are loaded in one shot; content and tags are
+            // still loaded in bounded chunks.
+            // shortcut: a common search term with no limit holds every matching id (~200 B each), page by rowid if that shows up.
+            val query = createQuery(filter, SelectMode.IDS_AND_CREATED_AT)
+            val ids = subscription.appDatabase.eventDao()
+                .getIdsAndCreatedAt(SimpleSQLiteQuery(query.first, query.second.toTypedArray()))
+                .map { it.id }
+            emitByIds(subscription.appDatabase, ids, awaitRoom = subscription.connection::awaitQueueRoom) { batch ->
                 stopIfClosed(subscription.connection)
                 for (dbEvent in batch) {
                     if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {
@@ -372,9 +425,8 @@ object EventRepository {
                     subscription.connection.send(dbEvent.toEventFrame(subscription.escapedId))
                 }
             }
-            rows.size
         } else {
-            batchedQuery(subscription.appDatabase, filter, filter.limit) { batch ->
+            batchedQuery(subscription.appDatabase, filter, filter.limit, awaitRoom = subscription.connection::awaitQueueRoom) { batch ->
                 stopIfClosed(subscription.connection)
                 for (dbEvent in batch) {
                     if (applyNip29Gate && !GroupManager.canRead(dbEvent, subscription.connection)) {

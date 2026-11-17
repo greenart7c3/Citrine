@@ -99,11 +99,29 @@ class EventRepositoryQueryTest {
         assertEquals(1, noLimitParams.size)
     }
 
+    @Test
+    fun pageQuerySortsIdsOnlyWithCursorAndLimit() {
+        // batchedQuery's page query: SQLite sorts these rows in a temp B-tree for IN filters,
+        // so it must not carry content.
+        val (sql, params) = EventRepository.createQuery(
+            EventFilter(kinds = setOf(1, 6), authors = setOf("a", "b")),
+            SelectMode.IDS_AND_CREATED_AT,
+            cursorCreatedAt = 5L,
+            cursorId = "x",
+            batchLimit = 500,
+        )
+        assertTrue(sql.startsWith("SELECT EventEntity.id AS id, EventEntity.createdAt AS createdAt FROM"))
+        assertFalse(sql.contains("EventEntity.*"))
+        assertTrue(sql.endsWith(" LIMIT ?"))
+        assertEquals(500, params.last())
+        assertEquals(listOf(5L, 5L, "x", 500), params.takeLast(4))
+    }
+
     private fun chunks(counts: List<Int>, budget: Int): List<List<Int>> {
         val result = mutableListOf<List<Int>>()
         var start = 0
         while (start < counts.size) {
-            val end = EventRepository.tagChunkEnd(start, counts.size, budget) { counts[it] }
+            val end = EventRepository.chunkEnd(start, counts.size, budget) { counts[it] }
             assertTrue("chunk must advance", end > start)
             result.add(counts.subList(start, end))
             start = end
