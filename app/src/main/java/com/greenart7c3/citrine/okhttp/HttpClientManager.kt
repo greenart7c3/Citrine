@@ -20,6 +20,7 @@
  */
 package com.greenart7c3.citrine.okhttp
 
+import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.logs.Log
 import java.net.InetSocketAddress
@@ -58,7 +59,7 @@ object HttpClientManager {
     private var defaultHttpClient: OkHttpClient? = null
     private var defaultHttpClientWithoutProxy: OkHttpClient? = null
     private var failClosedHttpClient: OkHttpClient? = null
-    private var userAgent: String = "Amethyst"
+    private var userAgent: String = "Citrine/${BuildConfig.VERSION_NAME}"
 
     private var currentProxy: Proxy? = null
 
