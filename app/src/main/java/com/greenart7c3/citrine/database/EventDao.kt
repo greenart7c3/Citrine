@@ -31,21 +31,26 @@ interface EventDao {
     @RawQuery
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
-    /**
-     * Event rows only, without the `@Relation` tag fetch of [getEvents]. Room loads the tags
-     * of every row of a [getEvents] result in one go, which for tag-heavy kinds (contact
-     * lists, mute lists, follow sets) is hundreds of thousands of [TagEntity] objects per
-     * page. Callers pair this with [countTagsByEvent] and [getTagsByEvents] to load tags in
-     * bounded chunks instead.
-     */
-    @RawQuery
-    fun getEventRows(query: SupportSQLiteQuery): List<EventEntity>
-
+    // Callers pair [getEventRowsByIds] with these instead of [getEvents]: its `@Relation`
+    // loads the tags of every row at once, hundreds of thousands of [TagEntity] objects
+    // per page for contact lists, mute lists and follow sets.
     @Query("SELECT pkEvent, COUNT(*) AS count FROM TagEntity WHERE pkEvent IN (:ids) GROUP BY pkEvent")
     fun countTagsByEvent(ids: List<String>): List<TagCount>
 
     @Query("SELECT * FROM TagEntity WHERE pkEvent IN (:ids)")
     fun getTagsByEvents(ids: List<String>): List<TagEntity>
+
+    class ContentLength {
+        var id: String = ""
+        var length: Int = 0
+    }
+
+    // Primary-key lookups, so sizing a page reads no content into memory.
+    @Query("SELECT id, length(content) AS length FROM EventEntity WHERE id IN (:ids)")
+    fun contentLengths(ids: List<String>): List<ContentLength>
+
+    @Query("SELECT * FROM EventEntity WHERE id IN (:ids)")
+    fun getEventRowsByIds(ids: List<String>): List<EventEntity>
 
     @RawQuery
     fun count(query: SupportSQLiteQuery): Int
