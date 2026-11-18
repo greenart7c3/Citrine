@@ -1,10 +1,10 @@
-## Citrine 3.2.6
+## Citrine 3.2.7
 
-- One slow client can no longer fill the relay's memory: outgoing messages now wait for clients that read slowly (common over Tor) instead of piling up, and each connection streams one subscription's stored events at a time. This fixes the out-of-memory crashes and freezes when a client opened many subscriptions at once
-- The relay aggregator no longer gets stuck on "Fetching follow list and relay lists…" after you change its settings: a refresh interrupted by the restart is now retried within 30 seconds instead of an hour later
+- The relay's memory stays capped no matter how much history a client asks for: subscriptions now stream stored events page by page by id and event content is loaded in bounded chunks, instead of loading everything at once
+- Outbound requests to relays now identify themselves with a Citrine user agent instead of Amethyst's
 
 Download it with [Zapstore](https://zapstore.dev/apps/com.greenart7c3.citrine), [Obtainium](https://github.com/ImranR98/Obtainium), [f-droid](https://f-droid.org/packages/com.greenart7c3.citrine)  or download it directly in the [releases page
-](https://github.com/greenart7c3/Citrine/releases/tag/v3.2.6)
+](https://github.com/greenart7c3/Citrine/releases/tag/v3.2.7)
 
 If you like my work consider making a [donation](https://greenart7c3.com)
 
@@ -16,10 +16,10 @@ In order to verify the release, you'll need to have `gpg` or `gpg2` installed on
 gpg --keyserver hkps://keys.openpgp.org --recv-keys 44F0AAEB77F373747E3D5444885822EED3A26A6D
 ```
 
-Once you have his PGP key you can verify the release (assuming `manifest-v3.2.6.txt` and `manifest-v3.2.6.txt.sig` are in the current directory) with:
+Once you have his PGP key you can verify the release (assuming `manifest-v3.2.7.txt` and `manifest-v3.2.7.txt.sig` are in the current directory) with:
 
 ``` bash
-gpg --verify manifest-v3.2.6.txt.sig manifest-v3.2.6.txt
+gpg --verify manifest-v3.2.7.txt.sig manifest-v3.2.7.txt
 ```
 
 You should see the following if the verification was successful:
@@ -33,7 +33,7 @@ gpg: Good signature from "greenart7c3 <greenart7c3@proton.me>"
 That will verify the signature on the main manifest page which ensures integrity and authenticity of the binaries you've downloaded locally. Next, depending on your operating system you should then re-calculate the sha256 sum of the binary, and compare that with the following hashes:
 
 ``` bash
-cat manifest-v3.2.6.txt
+cat manifest-v3.2.7.txt
 ```
 
 One can use the `shasum -a 256 <file name here>` tool in order to re-compute the sha256 hash of the target binary for your operating system. The produced hash should be compared with the hashes listed above and they should match exactly.
