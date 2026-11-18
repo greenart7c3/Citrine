@@ -12,6 +12,9 @@ plugins {
 android {
     namespace = "com.greenart7c3.citrine"
     compileSdk = 37
+    // AGP strips native libraries with this NDK while packaging, so it is an
+    // APK input: pinned so release builds strip identically across AGP bumps.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "com.greenart7c3.citrine"
@@ -110,6 +113,9 @@ android {
         }
         jniLibs {
             useLegacyPackaging = true
+            // Already stripped by tools/arti/build.sh; ship it byte-identical to the
+            // committed file so it can be checked against a rebuild of tools/arti.
+            keepDebugSymbols += "**/libcitrine_arti.so"
         }
     }
     splits {
@@ -184,10 +190,6 @@ dependencies {
     implementation(libs.paging.compose)
     implementation(libs.paging.runtime)
     implementation(libs.room.paging)
-    implementation(libs.kmp.tor.runtime)
-    implementation(libs.kmp.tor.runtime.service)
-    implementation(libs.kmp.tor.runtime.service.ui)
-    implementation(libs.kmp.tor.resource.exec)
     implementation(libs.negentropy)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)

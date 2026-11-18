@@ -27,8 +27,6 @@ ktlint = "14.2.0"
 securityCryptoKtx = "1.1.0"
 collections = "0.5.2"
 pagingCommon = "3.5.3"
-kmpTor = "2.6.0"
-kmpTorResource = "409.5.0"
 negentropy = "v1.2.1"
 coil = "3.6.3"
 jackson = "2.23.0"
@@ -74,10 +72,6 @@ room-paging = { module = "androidx.room:room-paging", version.ref = "room" }
 paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "pagingCommon" }
 paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "pagingCommon" }
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "pagingCommon" }
-kmp-tor-runtime = { module = "io.matthewnelson.kmp-tor:runtime", version.ref = "kmpTor" }
-kmp-tor-runtime-service = { module = "io.matthewnelson.kmp-tor:runtime-service", version.ref = "kmpTor" }
-kmp-tor-runtime-service-ui = { module = "io.matthewnelson.kmp-tor:runtime-service-ui", version.ref = "kmpTor" }
-kmp-tor-resource-exec = { module = "io.matthewnelson.kmp-tor:resource-exec-tor", version.ref = "kmpTorResource" }
 negentropy = { module = "com.vitorpamplona.negentropy:kmp-negentropy-android", version.ref = "negentropy" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }

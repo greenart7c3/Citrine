@@ -305,9 +305,9 @@ class WebSocketServerService : Service() {
     }
 
     override fun onDestroy() {
-        // Outside the timed block below: this only enqueues the daemon stop on the
-        // application scope, and it must always run so the Tor foreground service
-        // (and its notification) goes away even if the server shutdown times out.
+        // Outside the timed block below: this only enqueues the Tor stop on the
+        // application scope, and it must always run so the SOCKS listener and
+        // the onion service go away even if the server shutdown times out.
         TorManager.stop()
         runBlocking {
             withTimeoutOrNull(5_000) {
