@@ -35,7 +35,7 @@ Compact guide for agent sessions working in this repo. This file is the single s
 - `database/` — `EventEntity` (id/pubkey/kind/content/createdAt/sig/expiresAt), `TagEntity` (flattened `col0Name`…`col4Plus` plus denormalized `kind`/`pkEvent`), `EventFTS` (FTS4 on `content`). `EventDao.insertEventWithTags()` inserts transactionally and fans out via `EventSubscription.executeAll()`; `@RawQuery` serves `EventRepository`; `getByKindKeyset()` pages the feed.
 - `provider/CitrineContentProvider.kt` — Android IPC over the `events`/`tags` URIs, mirroring `SubscriptionManager`'s auth filtering; contract constants in `CitrineContract`.
 - `ui/` — Compose, routes in `Route.kt`, bottom nav Home/Settings: `HomeScreen` (start/stop, event counts, DB controls), `SettingsScreen`, `LogcatScreen`, `ContactsScreen`/`DownloadYourEventsUserScreen`, `Feed` (`EventPagingSource`).
-- Libraries: Quartz (`com.vitorpamplona.quartz`), Ktor (CIO) server and client, Room with FTS4, OkHttp for outbound relays, Anon.storage (SAF) for import/export, kmp-tor, Paging 3.
+- Libraries: Quartz (`com.vitorpamplona.quartz`), Ktor (CIO) server and client, Room with FTS4, OkHttp for outbound relays, Anon.storage (SAF) for import/export, Arti via JNI (`tools/arti`), Paging 3.
 
 ## Database
 
@@ -48,7 +48,7 @@ Compact guide for agent sessions working in this repo. This file is the single s
 
 - `service/CustomWebSocketService.kt` is a global `object` holding the single nullable `CustomWebSocketServer` instance (`CustomWebSocketService.server`). Started/stopped from `service/WebSocketServerService.kt` (foreground service). Many components feed events back into the server via `CustomWebSocketService.server?.innerProcessEvent(...)`.
 - `server/Settings.kt` is a global `object`. Any settings change must be persisted with `LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)` (EncryptedSharedPreferences), or it's lost on restart.
-- Outbound relay traffic can route through **Tor** (`service/TorManager.kt`, `kmp-tor`), not just direct OkHttp WebSockets.
+- Outbound relay traffic can route through **Tor** (`service/TorManager.kt`, Arti 2.7 in-process via the JNI wrapper in `tools/arti`; prebuilt `libcitrine_arti.so` lives in `app/src/main/jniLibs`, rebuild with `tools/arti/build.sh`), not just direct OkHttp WebSockets.
 - Nostr protocol rules enforced in `server/CustomWebSocketServer.kt`:
   - Ephemeral: kinds 20000–29999 (deleted 1 min after creation if `deleteEphemeralEvents`).
   - Regular replaceable: kinds 0, 3, 10000–19999 — newest per pubkey+kind.

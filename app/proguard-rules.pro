@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Arti (built-in Tor): JNI entry points, and the log callback the native side calls by name
+-keep class com.greenart7c3.citrine.tor.ArtiNative { native <methods>; }
+-keep interface com.greenart7c3.citrine.tor.ArtiLogCallback { *; }
+-keep class * implements com.greenart7c3.citrine.tor.ArtiLogCallback { public void onLogLine(java.lang.String); }

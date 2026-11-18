@@ -1,37 +1,43 @@
 package com.greenart7c3.citrine.service
 
+import android.content.Context
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.server.Settings
-import io.matthewnelson.kmp.file.readUtf8
-import io.matthewnelson.kmp.file.resolve
-import io.matthewnelson.kmp.tor.resource.exec.tor.ResourceLoaderTorExec
-import io.matthewnelson.kmp.tor.runtime.Action.Companion.restartDaemonAsync
-import io.matthewnelson.kmp.tor.runtime.Action.Companion.stopDaemonAsync
-import io.matthewnelson.kmp.tor.runtime.RuntimeEvent
-import io.matthewnelson.kmp.tor.runtime.TorListeners
-import io.matthewnelson.kmp.tor.runtime.TorRuntime
-import io.matthewnelson.kmp.tor.runtime.TorState
-import io.matthewnelson.kmp.tor.runtime.core.OnEvent
-import io.matthewnelson.kmp.tor.runtime.core.config.TorOption
-import io.matthewnelson.kmp.tor.runtime.core.net.Port.Companion.toPort
-import io.matthewnelson.kmp.tor.runtime.service.TorServiceConfig
-import io.matthewnelson.kmp.tor.runtime.service.TorServiceUI
-import io.matthewnelson.kmp.tor.runtime.service.ui.KmpTorServiceUI
-import kotlinx.coroutines.CoroutineStart
+import com.greenart7c3.citrine.tor.ArtiNative
+import com.greenart7c3.citrine.tor.TorSocksAuthenticator
+import java.io.File
+import java.net.InetAddress
+import java.net.ServerSocket
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
+/**
+ * Built-in Tor, backed by Arti (Tor in Rust) running in-process through
+ * [ArtiNative]. Ported from Amber's TorManager; Citrine additionally runs an
+ * onion service (the relay's .onion address) instead of only a SOCKS proxy.
+ */
 object TorManager {
     const val ONION_VIRTUAL_PORT: Int = 80
 
-    private const val HS_DIR_NAME = "citrine_hs"
-    private const val NOTIFICATION_ID: Short = 615
+    private const val BOOTSTRAP_POLL_MS = 500L
+    private const val SOCKS_BIND_ATTEMPTS = 5
+
+    // The identity key is generated right after startOnionService, so the
+    // hostname normally shows up with the first poll. The deadline only
+    // matters if the keystore write fails or the launch silently stalls.
+    private const val ONION_HOSTNAME_TIMEOUT_MS = 90_000L
 
     sealed interface State {
         data object Off : State
@@ -46,8 +52,16 @@ object TorManager {
     private val _socksPort = MutableStateFlow<Int?>(null)
     val socksPort: StateFlow<Int?> = _socksPort.asStateFlow()
 
+    /** The start → bootstrap job; non-null and active while Tor is up or coming up. */
     @Volatile
-    private var runtime: TorRuntime? = null
+    private var job: Job? = null
+
+    /** Serializes binding and releasing the SOCKS listener against [stop]. */
+    private val proxyLock = Any()
+
+    /** True once the native library loaded; native calls are skipped until then. */
+    @Volatile
+    private var nativeReady = false
 
     @Volatile
     private var lastLocalPort: Int = 0
@@ -55,165 +69,190 @@ object TorManager {
     @Volatile
     private var lastEnableHiddenService: Boolean = false
 
-    // Chains start/stop daemon actions so a restart cycle (service onDestroy ->
-    // onCreate) can never enqueue StartDaemon while StopDaemon is still executing,
-    // which kmp-tor would resolve by interrupting the start.
     @Volatile
-    private var pendingAction: Job? = null
+    private var restarting = false
 
-    // kmp-tor caches TorRuntime instances per work directory for the life of the
-    // process: builder/observer blocks passed to a second TorRuntime.Builder()
-    // call for the same environment are silently discarded. Nothing in here may
-    // capture per-start parameters — observers and config callbacks must read the
-    // volatile fields above. Config callbacks re-run on every daemon (re)start,
-    // which is what lets the single cached runtime pick up settings changes.
-    private fun buildRuntime(): TorRuntime {
-        val uiFactory = KmpTorServiceUI.Factory(
-            iconReady = R.drawable.ic_notification,
-            iconNotReady = R.drawable.ic_notification,
-            info = TorServiceUI.NotificationInfo(
-                notificationId = NOTIFICATION_ID,
-                channelId = "citrine_tor",
-                channelName = R.string.tor_channel_name,
-                channelDescription = R.string.tor_channel_description,
-                channelShowBadge = false,
-                channelImportanceLow = true,
-            ),
-            block = { defaultConfig { enableActionStop = true } },
-        )
-
-        val serviceConfig = TorServiceConfig.Foreground.Builder(uiFactory) { /* defaults */ }
-        val env = serviceConfig.newEnvironment(ResourceLoaderTorExec::getOrCreate)
-
-        return TorRuntime.Builder(env) {
-            val exec = OnEvent.Executor.Immediate
-
-            observerStatic(RuntimeEvent.STATE, exec) { s: TorState ->
-                when (val daemon = s.daemon) {
-                    is TorState.Daemon.Off -> {
-                        if (_state.value !is State.Running) _state.value = State.Off
-                    }
-                    is TorState.Daemon.Starting,
-                    is TorState.Daemon.Stopping,
-                    -> _state.value = State.Bootstrapping
-                    is TorState.Daemon.On -> {
-                        if (!daemon.isBootstrapped) _state.value = State.Bootstrapping
-                    }
-                }
-            }
-
-            observerStatic(RuntimeEvent.ERROR, exec) { t: Throwable ->
-                Log.e(Citrine.TAG, "Tor error", t)
-                _state.value = State.Error(t.message ?: t::class.simpleName.orEmpty())
-            }
-
-            observerStatic(RuntimeEvent.LISTENERS, exec) { listeners: TorListeners ->
-                val port = listeners.socks.firstOrNull()?.port?.value
-                if (port != null && _socksPort.value != port) {
-                    Log.d(Citrine.TAG, "Tor SOCKS listener on port $port")
-                    _socksPort.value = port
-                    HttpClientManager.setDefaultProxyOnPort(port)
-                } else if (listeners.socks.isEmpty() && _socksPort.value != null) {
-                    _socksPort.value = null
-                    HttpClientManager.setDefaultProxy(null)
-                }
-            }
-
-            observerStatic(RuntimeEvent.READY, exec) {
-                if (!lastEnableHiddenService) {
-                    _state.value = State.Running("")
-                    return@observerStatic
-                }
-                val hostnameFile = env.workDirectory.resolve(HS_DIR_NAME).resolve("hostname")
-                runCatching { hostnameFile.readUtf8().trim() }
-                    .onSuccess { host ->
-                        _state.value = State.Running(host)
-                        if (Settings.onionHostname != host) {
-                            Settings.onionHostname = host
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
-                        }
-                    }
-                    .onFailure {
-                        Log.e(Citrine.TAG, "Failed to read onion hostname", it)
-                        _state.value = State.Error("hostname unreadable: ${it.message}")
-                    }
-            }
-
-            config { _ ->
-                TorOption.__SocksPort.configure {
-                    auto()
-                }
-            }
-
-            config { _ ->
-                if (!lastEnableHiddenService) return@config
-                TorOption.HiddenServiceDir.tryConfigure {
-                    directory(env.workDirectory.resolve(HS_DIR_NAME))
-                    version(3)
-                    port(virtual = ONION_VIRTUAL_PORT.toPort()) {
-                        target(port = lastLocalPort.toPort())
-                    }
-                }
-            }
-        }
-    }
-
-    @Synchronized
     fun start(localPort: Int, enableHiddenService: Boolean) {
         lastLocalPort = localPort
         lastEnableHiddenService = enableHiddenService
         _state.value = State.Bootstrapping
-        val rt = runtime ?: try {
-            buildRuntime()
-        } catch (e: Exception) {
-            Log.e(Citrine.TAG, "Failed to build TorRuntime", e)
-            _state.value = State.Error(e.message ?: "tor build failed")
-            return
-        }
-        runtime = rt
-        val previous = pendingAction
-        pendingAction = Citrine.instance.applicationScope.launch {
-            previous?.join()
-            try {
-                // Restart (rather than start) so that a daemon left running from a
-                // previous configuration regenerates its config; if the daemon is
-                // off this is equivalent to a plain start.
-                rt.restartDaemonAsync()
-            } catch (e: Exception) {
-                Log.e(Citrine.TAG, "Failed to start Tor daemon", e)
-                _state.value = State.Error(e.message ?: "tor start failed")
-            }
+        synchronized(this) {
+            job?.cancel()
+            job = Citrine.instance.applicationScope.launch(Dispatchers.IO) { run() }
         }
     }
 
     fun retry() {
         val port = lastLocalPort.takeIf { it > 0 } ?: Settings.port
-        start(port, lastEnableHiddenService || Settings.useTor)
-    }
-
-    @Synchronized
-    fun stop() {
-        val rt = runtime ?: run {
-            _state.value = State.Off
-            return
-        }
-        _socksPort.value = null
-        HttpClientManager.setDefaultProxy(null)
-        val previous = pendingAction
-        var job: Job? = null
-        job = Citrine.instance.applicationScope.launch(start = CoroutineStart.LAZY) {
-            previous?.join()
+        if (restarting) return
+        restarting = true
+        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             try {
-                rt.stopDaemonAsync()
-            } catch (e: Exception) {
-                Log.e(Citrine.TAG, "Failed to stop Tor daemon", e)
+                stop()
+                // Rebuild the client (fresh circuits), as restarting the old tor
+                // daemon did — the UI's Retry button is the way out of Error.
+                if (nativeReady) ArtiNative.destroy()
+                start(port, lastEnableHiddenService || Settings.useTor)
             } finally {
-                // Skip if a newer start was chained behind this stop, so the Off
-                // state doesn't clobber its Bootstrapping/Running state.
-                if (pendingAction === job) _state.value = State.Off
+                restarting = false
             }
         }
-        pendingAction = job
-        job?.start()
+    }
+
+    fun stop() {
+        synchronized(this) {
+            job?.cancel()
+            job = null
+        }
+        _state.value = State.Off
+        releaseSocksPort()
+        if (!nativeReady) return
+        try {
+            synchronized(proxyLock) { ArtiNative.stopSocksProxy() }
+            ArtiNative.stopOnionService()
+            Log.i(Citrine.TAG, "Built-in Tor stopped")
+        } catch (e: Throwable) {
+            Log.e(Citrine.TAG, "Error stopping built-in Tor", e)
+        }
+    }
+
+    private suspend fun run() {
+        try {
+            ArtiNative.setLogCallback { line -> Log.d(Citrine.TAG, line) }
+            nativeReady = true
+            Log.i(Citrine.TAG, "Starting built-in Tor: ${ArtiNative.getVersion()}")
+
+            val dataDir = File(Citrine.instance.filesDir, "arti").apply { mkdirs() }
+            // kmp-tor's hidden service directory holds the relay's onion
+            // identity key: hand it to Arti for the address carry-over before
+            // anything can generate a fresh key. kmp-tor's work directory is
+            // the app_torservice getDir.
+            val legacyHsDir = File(
+                Citrine.instance.getDir("torservice", Context.MODE_PRIVATE),
+                "citrine_hs",
+            ).takeIf { File(it, "hs_ed25519_secret_key").exists() }
+            val result = ArtiNative.initialize(
+                dataDir.absolutePath,
+                legacyHsDir?.absolutePath ?: "",
+            )
+            if (result != 0) {
+                fail("Arti failed to initialize ($result)")
+                return
+            }
+            if (legacyHsDir == null) {
+                // kmp-tor leftovers without a hidden service identity.
+                deleteLegacyKmpTorData()
+            } else {
+                // The identity-bearing directory is the native side's to remove
+                // (only after a successful import); the Tor cache holds no
+                // keys and can go as soon as Arti initialized.
+                File(Citrine.instance.cacheDir, "torservice").deleteRecursively()
+            }
+
+            val port = bindSocksProxy() ?: return
+            Log.i(Citrine.TAG, "Built-in Tor SOCKS proxy on port $port")
+
+            if (lastEnableHiddenService) {
+                val hsResult = ArtiNative.startOnionService(ONION_VIRTUAL_PORT, lastLocalPort)
+                if (hsResult != 0) {
+                    fail("onion service start failed ($hsResult)")
+                    return
+                }
+            } else {
+                ArtiNative.stopOnionService()
+            }
+
+            // The SOCKS listener accepts connections right away (each one waits
+            // for its circuit), but report Running only once Arti can carry
+            // traffic — like the old daemon's bootstrap did — and, for the
+            // onion service, once the hostname is readable from the keystore.
+            val hostname = withTimeoutOrNull(ONION_HOSTNAME_TIMEOUT_MS) {
+                while (currentCoroutineContext().isActive) {
+                    if (ArtiNative.isBootstrapped() == 1) {
+                        Log.i(Citrine.TAG, "Built-in Tor bootstrapped")
+                        if (!lastEnableHiddenService) return@withTimeoutOrNull ""
+                        ArtiNative.getOnionHostname().takeIf { it.isNotBlank() }?.let { return@withTimeoutOrNull it }
+                    }
+                    delay(BOOTSTRAP_POLL_MS.milliseconds)
+                }
+                null
+            }
+            if (hostname == null) {
+                fail("onion hostname unavailable")
+                return
+            }
+            _state.value = State.Running(hostname)
+            if (hostname.isNotBlank() && Settings.onionHostname != hostname) {
+                Settings.onionHostname = hostname
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Throwable: a missing/broken native library surfaces as an Error
+            // (UnsatisfiedLinkError, ExceptionInInitializerError).
+            Log.e(Citrine.TAG, "Failed to start built-in Tor", e)
+            fail(e.message)
+        }
+    }
+
+    /** Binds the SOCKS listener on a free loopback port; null (and Error) when none could be bound. */
+    private suspend fun bindSocksProxy(): Int? {
+        val context = currentCoroutineContext()
+        repeat(SOCKS_BIND_ATTEMPTS) {
+            val port = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { it.localPort }
+            val (username, password) = TorSocksAuthenticator.newCredentials()
+            val result = synchronized(proxyLock) {
+                // stop() may have run while initialize() was blocking.
+                if (!context.isActive) return null
+                ArtiNative.startSocksProxy(port, username, password)
+            }
+            if (result == 0) {
+                // Published before the port, so no dial can reach the listener without them.
+                TorSocksAuthenticator.set(port, username, password)
+                _socksPort.value = port
+                HttpClientManager.setDefaultProxyOnPort(port)
+                return port
+            }
+            Log.e(Citrine.TAG, "Failed to bind the Tor SOCKS proxy on port $port ($result)")
+        }
+        fail("Could not open the Tor SOCKS port")
+        return null
+    }
+
+    /**
+     * Drops the SOCKS port and, while OkHttp still dials through it, replaces
+     * the proxy with a fail-closed placeholder. Without this, the released
+     * loopback port stays configured until Tor rebinds, and a co-installed app
+     * that binds it first receives Citrine's proxied dials.
+     */
+    private fun releaseSocksPort() {
+        _socksPort.value = null
+        TorSocksAuthenticator.clear()
+        HttpClientManager.setDefaultProxy(null)
+    }
+
+    private fun fail(message: String?) {
+        _state.value = State.Error(message ?: "tor error")
+        releaseSocksPort()
+    }
+
+    /**
+     * kmp-tor's working directories from before the switch to Arti (the
+     * app_torservice getDir plus its cache). Only called when there is no
+     * hidden service identity in them: with one, the native side removes the
+     * directory itself after importing the key.
+     */
+    private fun deleteLegacyKmpTorData() {
+        listOf(
+            Citrine.instance.getDir("torservice", Context.MODE_PRIVATE),
+            File(Citrine.instance.cacheDir, "torservice"),
+            File(Citrine.instance.filesDir, "kmptor"),
+            File(Citrine.instance.cacheDir, "kmptor"),
+        ).forEach { dir ->
+            if (dir.exists()) {
+                runCatching { dir.deleteRecursively() }
+            }
+        }
     }
 }
