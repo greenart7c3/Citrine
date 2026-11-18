@@ -9,13 +9,15 @@ plugins {
     alias(libs.plugins.kt.lint) apply false
 }
 
-tasks.register<Copy>("installGitHook") {
-    from(File(rootProject.rootDir, "git-hooks/pre-commit"))
-    from(File(rootProject.rootDir, "git-hooks/pre-push"))
-    into(File(rootProject.rootDir, ".git/hooks"))
-    filePermissions {
-        unix(0b111101101)
-    }
+tasks.register<Exec>("installGitHook") {
+    // core.hooksPath instead of copying into .git/hooks: works in git worktrees,
+    // where .git is a file and there is no per-worktree hooks dir.
+    commandLine(
+        "git",
+        "config",
+        "core.hooksPath",
+        rootProject.layout.projectDirectory.dir("git-hooks").asFile.absolutePath,
+    )
 }
 
 

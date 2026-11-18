@@ -23,7 +23,7 @@ Compact guide for agent sessions working in this repo. This file is the single s
 
 - **CI order is `ktlintCheck -> test -> assembleDebug`** — match it locally before pushing. Also run `./gradlew lintDebug` and fix any errors (warnings are OK).
 - **Always run `ktlintCheck` and `lintDebug` before committing** — `ktlintCheck` enforces Kotlin code style and `lintDebug` catches Android-specific issues (Compose, resources, manifest). Both must report 0 errors.
-- **Git hooks auto-install**: `:app:preBuild` depends on the `installGitHook` task, which copies `git-hooks/{pre-commit,pre-push}` into `.git/hooks`. So the first build installs hooks. `pre-commit` = `ktlintCheck`; `pre-push` = `test`.
+- **Git hooks auto-install**: `:app:preBuild` depends on the `installGitHook` task, which runs `git config core.hooksPath <repo>/git-hooks` (works in git worktrees too, where `.git` is a file). So the first build installs hooks; files must stay executable (`git update-index --chmod=+x`). `pre-commit` = `ktlintCheck`; `pre-push` = `test`.
 - **No instrumented tests exist** (`app/src/androidTest` is absent). `./gradlew connectedAndroidTest` is a no-op; don't rely on it.
 
 ## Components
