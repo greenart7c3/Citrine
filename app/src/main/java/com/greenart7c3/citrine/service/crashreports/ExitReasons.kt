@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.edit
+import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.logs.Log
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
@@ -119,6 +120,17 @@ object ExitReasons {
 
     @RequiresApi(Build.VERSION_CODES.R)
     private fun describe(info: ApplicationExitInfo): String = buildString {
+        // Exit records carry no app version; this is the version installed when it was read.
+        append("Citrine ")
+        append(BuildConfig.VERSION_NAME)
+        append(" (")
+        append(BuildConfig.VERSION_CODE)
+        append(") · ")
+        append(Build.MANUFACTURER)
+        append(" ")
+        append(Build.MODEL)
+        append(" · Android ")
+        appendLine(Build.VERSION.RELEASE)
         append("Previous exit: ")
         append(reasonLabel(info.reason))
         append(" at ")

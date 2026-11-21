@@ -24,6 +24,8 @@ import android.content.Context
 import android.os.Build
 import android.os.Debug
 import com.greenart7c3.citrine.BuildConfig
+import com.greenart7c3.citrine.server.EventSubscription
+import com.greenart7c3.citrine.service.CustomWebSocketService
 
 /**
  * Text a user can paste into a report: device, build, failing thread, stack trace and heap
@@ -126,6 +128,18 @@ class ReportAssembler(
         append("| Native heap | allocated=")
         append(mb(Debug.getNativeHeapAllocatedSize()))
         appendLine("MB |")
+
+        // Who held the heap: connections, live subscriptions and frames queued to slow clients.
+        runCatching {
+            val connections = CustomWebSocketService.server?.connections?.value.orEmpty()
+            append("| Relay | connections=")
+            append(connections.size)
+            append(" subscriptions=")
+            append(EventSubscription.count())
+            append(" queued=")
+            append(mb(connections.sumOf { it.queuedChars() } * 2))
+            appendLine("MB |")
+        }
 
         val appContext = context ?: return
         listOf("citrine_database", "citrine_history_database").forEach { name ->

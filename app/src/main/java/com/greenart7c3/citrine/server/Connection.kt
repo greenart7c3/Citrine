@@ -55,6 +55,8 @@ class Connection(
     // slow client pin hundreds of MB when frames are large, so send() also waits on this.
     private val queuedChars = AtomicLong(0)
 
+    fun queuedChars(): Long = queuedChars.get()
+
     init {
         connectionScope.launch {
             try {
