@@ -7,15 +7,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.service.RelayIdentity
 import com.greenart7c3.citrine.service.crashreports.CrashReportScreen
 import com.greenart7c3.citrine.ui.CitrineScaffold
+import com.greenart7c3.citrine.ui.StoragePickerHelper
 import com.greenart7c3.citrine.ui.theme.CitrineTheme
 
 class MainActivity : ComponentActivity() {
-    private val storageHelper = SimpleStorageHelper(this@MainActivity)
+    private val storageHelper = StoragePickerHelper.create(this@MainActivity)
 
     // Launcher used by the aggregator's foreground signer path. Going through
     // registerForActivityResult preserves the calling package on the intent — startActivity

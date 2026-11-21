@@ -267,4 +267,5 @@
     <string name="logout">Esci</string>
     <string name="relay_owner_not_configured">Nessun proprietario del relay configurato</string>
     <string name="relay_owner_login_description">Accedi con un firmatario esterno per impostare il proprietario del relay. La chiave del proprietario diventa l\'identità del relay che firma i metadati dei gruppi NIP-29; senza un proprietario, il relay firma con una propria chiave generata.</string>
+    <string name="storage_permission_required">L\'autorizzazione di archiviazione è necessaria per selezionare una cartella</string>
 </resources>

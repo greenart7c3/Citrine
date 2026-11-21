@@ -267,4 +267,5 @@
     <string name="logout">ออกจากระบบ</string>
     <string name="relay_owner_not_configured">ยังไม่ได้กำหนดเจ้าของรีเลย์</string>
     <string name="relay_owner_login_description">เข้าสู่ระบบด้วยแอปลงนามภายนอกเพื่อกำหนดเจ้าของรีเลย์ คีย์ของเจ้าของจะกลายเป็นตัวตนของรีเลย์ที่ใช้ลงนามเมทาดาทากลุ่ม NIP-29 หากไม่มีเจ้าของ รีเลย์จะลงนามด้วยคีย์ที่สร้างขึ้นเอง</string>
+    <string name="storage_permission_required">จำเป็นต้องได้รับสิทธิ์พื้นที่จัดเก็บข้อมูลเพื่อเลือกโฟลเดอร์</string>
 </resources>

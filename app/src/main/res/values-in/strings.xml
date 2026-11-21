@@ -267,4 +267,5 @@
     <string name="logout">Keluar</string>
     <string name="relay_owner_not_configured">Pemilik relay belum dikonfigurasi</string>
     <string name="relay_owner_login_description">Masuk dengan penanda tangan eksternal untuk mengatur pemilik relay. Kunci pemilik menjadi identitas relay yang menandatangani metadata grup NIP-29; tanpa pemilik, relay menandatangani dengan kunci yang dibuatnya sendiri.</string>
+    <string name="storage_permission_required">Izin penyimpanan diperlukan untuk memilih folder</string>
 </resources>

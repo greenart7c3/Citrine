@@ -267,4 +267,5 @@
     <string name="logout">退出登录</string>
     <string name="relay_owner_not_configured">未配置中继所有者</string>
     <string name="relay_owner_login_description">使用外部签名器登录以设置中继所有者。所有者的密钥将成为签署 NIP-29 群组元数据的中继身份；没有所有者时，中继使用自己生成的密钥签名。</string>
+    <string name="storage_permission_required">选择文件夹需要存储权限</string>
 </resources>

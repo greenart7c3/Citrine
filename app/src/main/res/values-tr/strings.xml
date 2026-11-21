@@ -267,4 +267,5 @@
     <string name="logout">Çıkış yap</string>
     <string name="relay_owner_not_configured">Röle sahibi yapılandırılmadı</string>
     <string name="relay_owner_login_description">Röle sahibini belirlemek için harici bir imzalayıcıyla giriş yapın. Sahibin anahtarı, NIP-29 grup meta verilerini imzalayan röle kimliği olur; sahip yoksa röle kendi oluşturduğu anahtarla imzalar.</string>
+    <string name="storage_permission_required">Bir klasör seçmek için depolama izni gerekiyor</string>
 </resources>

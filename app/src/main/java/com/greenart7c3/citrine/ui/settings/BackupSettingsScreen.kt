@@ -13,10 +13,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.ui.StoragePickerHelper
 import com.greenart7c3.citrine.ui.components.SwitchSettingRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun BackupSettingsScreen(
     modifier: Modifier = Modifier,
-    storageHelper: SimpleStorageHelper,
+    storageHelper: StoragePickerHelper,
     onApplyChanges: () -> Unit,
 ) {
     var isLoading by remember { mutableStateOf(false) }

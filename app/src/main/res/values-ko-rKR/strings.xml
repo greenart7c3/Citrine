@@ -267,4 +267,5 @@
     <string name="logout">로그아웃</string>
     <string name="relay_owner_not_configured">릴레이 소유자가 설정되지 않았습니다</string>
     <string name="relay_owner_login_description">외부 서명 앱으로 로그인하여 릴레이 소유자를 설정하세요. 소유자의 키는 NIP-29 그룹 메타데이터에 서명하는 릴레이 ID가 됩니다. 소유자가 없으면 릴레이는 자체 생성한 키로 서명합니다.</string>
+    <string name="storage_permission_required">폴더를 선택하려면 저장소 권한이 필요합니다</string>
 </resources>

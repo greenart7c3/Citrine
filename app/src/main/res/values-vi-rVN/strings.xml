@@ -267,4 +267,5 @@
     <string name="logout">Đăng xuất</string>
     <string name="relay_owner_not_configured">Chưa cấu hình chủ relay</string>
     <string name="relay_owner_login_description">Đăng nhập bằng ứng dụng ký bên ngoài để đặt chủ relay. Khóa của chủ sẽ trở thành danh tính relay dùng để ký siêu dữ liệu nhóm NIP-29; nếu không có chủ, relay sẽ ký bằng khóa do chính nó tạo ra.</string>
+    <string name="storage_permission_required">Cần cấp quyền bộ nhớ để chọn thư mục</string>
 </resources>

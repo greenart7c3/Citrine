@@ -267,4 +267,5 @@
     <string name="logout">Sair</string>
     <string name="relay_owner_not_configured">Nenhum dono do relay configurado</string>
     <string name="relay_owner_login_description">Entre com um assinador externo para definir o dono do relay. A chave do dono se torna a identidade do relay que assina os metadados de grupos NIP-29; sem um dono, o relay assina com sua própria chave gerada.</string>
+    <string name="storage_permission_required">A permissão de armazenamento é necessária para selecionar uma pasta</string>
 </resources>

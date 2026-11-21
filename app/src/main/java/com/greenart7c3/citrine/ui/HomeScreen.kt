@@ -45,7 +45,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
@@ -79,7 +78,7 @@ fun HomeScreen(
     modifier: Modifier,
     homeViewModel: HomeViewModel,
     navController: NavController,
-    storageHelper: SimpleStorageHelper,
+    storageHelper: StoragePickerHelper,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()

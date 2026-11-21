@@ -28,12 +28,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.NsiteManager
+import com.greenart7c3.citrine.ui.StoragePickerHelper
 import com.greenart7c3.citrine.ui.components.NsiteRow
 import com.greenart7c3.citrine.ui.components.WebAppInput
 import com.greenart7c3.citrine.ui.components.WebAppRow
@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun WebClientsSettingsScreen(
     modifier: Modifier = Modifier,
-    storageHelper: SimpleStorageHelper,
+    storageHelper: StoragePickerHelper,
     onApplyChanges: () -> Unit,
     onBrowseNsites: () -> Unit,
     onNsiteRelays: () -> Unit,

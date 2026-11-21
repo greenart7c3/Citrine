@@ -267,4 +267,5 @@
     <string name="logout">Abmelden</string>
     <string name="relay_owner_not_configured">Kein Relay-Betreiber konfiguriert</string>
     <string name="relay_owner_login_description">Melde dich mit einem externen Signierer an, um den Relay-Betreiber festzulegen. Der Schlüssel des Betreibers wird zur Relay-Identität, die NIP-29-Gruppenmetadaten signiert; ohne Betreiber signiert das Relay mit einem eigenen generierten Schlüssel.</string>
+    <string name="storage_permission_required">Speicherberechtigung ist erforderlich, um einen Ordner auszuwählen</string>
 </resources>

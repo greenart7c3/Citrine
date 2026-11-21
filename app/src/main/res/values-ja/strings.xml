@@ -267,4 +267,5 @@
     <string name="logout">ログアウト</string>
     <string name="relay_owner_not_configured">リレー所有者が設定されていません</string>
     <string name="relay_owner_login_description">外部署名アプリでログインしてリレー所有者を設定します。所有者の鍵は NIP-29 グループのメタデータに署名するリレーの ID になります。所有者がいない場合、リレーは自身で生成した鍵で署名します。</string>
+    <string name="storage_permission_required">フォルダを選択するにはストレージの権限が必要です</string>
 </resources>

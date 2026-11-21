@@ -267,4 +267,5 @@
     <string name="logout">Cerrar sesión</string>
     <string name="relay_owner_not_configured">No hay ningún dueño del relé configurado</string>
     <string name="relay_owner_login_description">Inicie sesión con un firmante externo para establecer el dueño del relé. La clave del dueño se convierte en la identidad del relé que firma los metadatos de grupos NIP-29; sin dueño, el relé firma con su propia clave generada.</string>
+    <string name="storage_permission_required">Se requiere permiso de almacenamiento para seleccionar una carpeta</string>
 </resources>

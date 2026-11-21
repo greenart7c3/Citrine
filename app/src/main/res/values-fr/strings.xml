@@ -267,4 +267,5 @@
     <string name="logout">Se déconnecter</string>
     <string name="relay_owner_not_configured">Aucun propriétaire du relais configuré</string>
     <string name="relay_owner_login_description">Connectez-vous avec un signataire externe pour définir le propriétaire du relais. La clé du propriétaire devient l\'identité du relais qui signe les métadonnées des groupes NIP-29 ; sans propriétaire, le relais signe avec sa propre clé générée.</string>
+    <string name="storage_permission_required">L\'autorisation de stockage est requise pour sélectionner un dossier</string>
 </resources>

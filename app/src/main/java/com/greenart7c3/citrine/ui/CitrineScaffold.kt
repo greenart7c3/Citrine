@@ -37,7 +37,6 @@ import androidx.paging.LoadState
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.compose.collectAsLazyPagingItems
-import com.anggrayudi.storage.SimpleStorageHelper
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
@@ -80,7 +79,7 @@ fun copyToClipboard(clipboard: Clipboard, text: String) {
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun CitrineScaffold(
-    storageHelper: SimpleStorageHelper,
+    storageHelper: StoragePickerHelper,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val navController = rememberNavController()
