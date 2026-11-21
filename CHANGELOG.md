@@ -1,11 +1,10 @@
-## Citrine 3.3.0
+## Citrine 3.3.1
 
-- Built-in Tor now runs Arti (Tor in Rust) in-process instead of the old C tor daemon, with smaller libraries in the APK
-- The relay keeps its .onion address when upgrading from previous versions
-- The built-in Tor SOCKS listener now requires authentication, so other apps on the device can no longer route through your Tor
+- Crash reports for native crashes, ANRs and low-memory kills now include the app version and device
+- Out-of-memory reports now include the number of relay connections, subscriptions and queued data, to help find what used the memory
 
 Download it with [Zapstore](https://zapstore.dev/apps/com.greenart7c3.citrine), [Obtainium](https://github.com/ImranR98/Obtainium), [f-droid](https://f-droid.org/packages/com.greenart7c3.citrine)  or download it directly in the [releases page
-](https://github.com/greenart7c3/Citrine/releases/tag/v3.3.0)
+](https://github.com/greenart7c3/Citrine/releases/tag/v3.3.1)
 
 If you like my work consider making a [donation](https://greenart7c3.com)
 
@@ -17,10 +16,10 @@ In order to verify the release, you'll need to have `gpg` or `gpg2` installed on
 gpg --keyserver hkps://keys.openpgp.org --recv-keys 44F0AAEB77F373747E3D5444885822EED3A26A6D
 ```
 
-Once you have his PGP key you can verify the release (assuming `manifest-v3.3.0.txt` and `manifest-v3.3.0.txt.sig` are in the current directory) with:
+Once you have his PGP key you can verify the release (assuming `manifest-v3.3.1.txt` and `manifest-v3.3.1.txt.sig` are in the current directory) with:
 
 ``` bash
-gpg --verify manifest-v3.3.0.txt.sig manifest-v3.3.0.txt
+gpg --verify manifest-v3.3.1.txt.sig manifest-v3.3.1.txt
 ```
 
 You should see the following if the verification was successful:
@@ -34,7 +33,7 @@ gpg: Good signature from "greenart7c3 <greenart7c3@proton.me>"
 That will verify the signature on the main manifest page which ensures integrity and authenticity of the binaries you've downloaded locally. Next, depending on your operating system you should then re-calculate the sha256 sum of the binary, and compare that with the following hashes:
 
 ``` bash
-cat manifest-v3.3.0.txt
+cat manifest-v3.3.1.txt
 ```
 
 One can use the `shasum -a 256 <file name here>` tool in order to re-compute the sha256 hash of the target binary for your operating system. The produced hash should be compared with the hashes listed above and they should match exactly.
