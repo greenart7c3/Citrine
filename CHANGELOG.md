@@ -1,9 +1,10 @@
-## Citrine 3.3.3
+## Citrine 3.3.4
 
-- Stopped showing crash report prompts when Android stops the background service due to device-wide low memory, and prevented stale exits from earlier versions from being reported after an update
+- Dropped cached crash reports from older versions after an update and capped the crash report cache size so reports stay within NIP-17 message limits
+- Reduced temporary memory allocations when serializing events with large tag lists such as contact lists
 
 Download it with [Zapstore](https://zapstore.dev/apps/com.greenart7c3.citrine), [Obtainium](https://github.com/ImranR98/Obtainium), [f-droid](https://f-droid.org/packages/com.greenart7c3.citrine)  or download it directly in the [releases page
-](https://github.com/greenart7c3/Citrine/releases/tag/v3.3.3)
+](https://github.com/greenart7c3/Citrine/releases/tag/v3.3.4)
 
 If you like my work consider making a [donation](https://greenart7c3.com)
 
@@ -15,10 +16,10 @@ In order to verify the release, you'll need to have `gpg` or `gpg2` installed on
 gpg --keyserver hkps://keys.openpgp.org --recv-keys 44F0AAEB77F373747E3D5444885822EED3A26A6D
 ```
 
-Once you have his PGP key you can verify the release (assuming `manifest-v3.3.3.txt` and `manifest-v3.3.3.txt.sig` are in the current directory) with:
+Once you have his PGP key you can verify the release (assuming `manifest-v3.3.4.txt` and `manifest-v3.3.4.txt.sig` are in the current directory) with:
 
 ``` bash
-gpg --verify manifest-v3.3.3.txt.sig manifest-v3.3.3.txt
+gpg --verify manifest-v3.3.4.txt.sig manifest-v3.3.4.txt
 ```
 
 You should see the following if the verification was successful:
@@ -32,7 +33,7 @@ gpg: Good signature from "greenart7c3 <greenart7c3@proton.me>"
 That will verify the signature on the main manifest page which ensures integrity and authenticity of the binaries you've downloaded locally. Next, depending on your operating system you should then re-calculate the sha256 sum of the binary, and compare that with the following hashes:
 
 ``` bash
-cat manifest-v3.3.3.txt
+cat manifest-v3.3.4.txt
 ```
 
 One can use the `shasum -a 256 <file name here>` tool in order to re-compute the sha256 hash of the target binary for your operating system. The produced hash should be compared with the hashes listed above and they should match exactly.
