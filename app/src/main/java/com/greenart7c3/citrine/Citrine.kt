@@ -144,11 +144,11 @@ class Citrine :
 
         Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache))
 
-        // Record why the previous process died (ANR, low-memory kill, native crash) while it
-        // can still be read, and leave it in the in-app log as well as the crash dialog.
+        // Record why the previous process died (ANR, native crash, excessive resource usage) while
+        // it can still be read, and leave it in the in-app log as well as the crash dialog.
         applicationScope.launch(Dispatchers.IO) {
             try {
-                ExitReasons.detect(this@Citrine).forEach { Log.w(TAG, it) }
+                ExitReasons.detect(this@Citrine)
             } catch (e: Exception) {
                 Log.e(TAG, "Could not read previous exit reasons", e)
             }

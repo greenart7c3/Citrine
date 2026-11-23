@@ -3,10 +3,12 @@ package com.greenart7c3.citrine.service.crashreports
 import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.edit
 import com.greenart7c3.citrine.BuildConfig
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.logs.Log
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
@@ -17,33 +19,43 @@ import java.util.Locale
  * Why the previous process died, when it did not die of a Java exception.
  *
  * The in-app crash dialog is fed by [CrashReportCache], which only ever sees exceptions the
- * runtime handed to the uncaught-exception handler. ANRs, low-memory kills, native crashes and
- * initialization failures never get there, so nothing was reportable for them. Android keeps
- * those records in [ActivityManager.getHistoricalProcessExitReasons]; this object turns the ones
- * that matter into plain text the user can copy from the crash dialog and paste into a report.
+ * runtime handed to the uncaught-exception handler. ANRs, native crashes and initialization
+ * failures never get there, so nothing was reportable for them. Android keeps those records in
+ * [ActivityManager.getHistoricalProcessExitReasons]; this object turns the ones that matter into
+ * plain text the user can send from the crash report screen.
+ *
+ * System low-memory kills (`REASON_LOW_MEMORY`) are logged locally for diagnostics but not
+ * surfaced as crashes: Android's `lmkd` routinely kills foreground services under device-wide
+ * memory pressure with no actionable trace, whereas Citrine's own heap exhaustion is already
+ * captured with full diagnostics by [UnexpectedCrashSaver] and `SubscriptionManager`, and
+ * ActivityManager kills for excessive resource usage use `REASON_EXCESSIVE_RESOURCE_USAGE`.
  *
  * Records are de-duplicated with a "last seen" timestamp in plain SharedPreferences (this runs
- * very early, before the encrypted settings store is guaranteed to be usable), and the formatted
- * records are kept in a second key so both the log line written from `Citrine.onCreate` and the
- * dialog see the same text.
+ * very early, before the encrypted settings store is guaranteed to be usable), and exits older
+ * than the current APK's `lastUpdateTime` are skipped so upgrading does not report stale history
+ * from an earlier version. Formatted abnormal records are kept in a second key so both the log
+ * line written from `Citrine.onCreate` and the crash screen see the same text.
  */
 object ExitReasons {
     private const val PREFS = "exit_reasons"
     private const val KEY_LAST_SEEN = "last_seen_timestamp"
     private const val KEY_PENDING = "pending_records"
+    private const val KEY_PENDING_UPDATE_TIME = "pending_update_time"
     private const val MAX_RECORDS = 5
     private const val MAX_TRACE_CHARS = 2_000
 
     private val detectionLock = Any()
     private val timestampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    private var stateSummarySet = false
 
-    // Exit reasons worth showing to a user: all of them mean the process was killed without
-    // reaching the uncaught-exception handler.
+    // Exit reasons worth showing to a user: all of them mean the process died abnormally without
+    // reaching the uncaught-exception handler. REASON_LOW_MEMORY is deliberately excluded because
+    // Android's lmkd kills foreground services under device-wide memory pressure and provides no
+    // stack trace or actionable diagnostics.
     private val ABNORMAL_REASONS = setOf(
         ApplicationExitInfo.REASON_CRASH,
         ApplicationExitInfo.REASON_CRASH_NATIVE,
         ApplicationExitInfo.REASON_ANR,
-        ApplicationExitInfo.REASON_LOW_MEMORY,
         ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE,
         ApplicationExitInfo.REASON_INITIALIZATION_FAILURE,
         ApplicationExitInfo.REASON_SIGNALED,
@@ -56,6 +68,29 @@ object ExitReasons {
      * important, so the process must have been at least as important as a foreground service.
      */
     fun isAbnormal(reason: Int, importance: Int): Boolean = importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE && reason in ABNORMAL_REASONS
+
+    /**
+     * Earliest exit timestamp that can belong to the current install and has not been seen yet.
+     * Ignoring exits older than [lastUpdateTime] prevents an upgrade from surfacing stale exits
+     * from a prior version under the newly installed version's label.
+     */
+    internal fun cutoffTimestamp(lastSeen: Long, lastUpdateTime: Long): Long = maxOf(lastSeen, lastUpdateTime)
+
+    /**
+     * True when pending records stored under [pendingUpdateTime] still belong to the currently
+     * installed APK ([currentUpdateTime]). Pending records written before an upgrade (or before
+     * this timestamp was tracked) are dropped so an update does not surface stale prior-version
+     * reports.
+     */
+    internal fun isPendingCurrent(pendingUpdateTime: Long, currentUpdateTime: Long): Boolean = currentUpdateTime == 0L || pendingUpdateTime == currentUpdateTime
+
+    internal fun resolveVersionLabel(processStateSummary: ByteArray?, fallback: String = currentVersionLabel()): String = processStateSummary
+        ?.takeIf { it.isNotEmpty() }
+        ?.toString(Charsets.UTF_8)
+        ?.takeIf { it.isNotBlank() }
+        ?: fallback
+
+    private fun currentVersionLabel(): String = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
 
     /** Short label for [reason], matching the constant names in [ApplicationExitInfo]. */
     fun reasonLabel(reason: Int): String = when (reason) {
@@ -73,16 +108,39 @@ object ExitReasons {
     }
 
     /**
-     * Reads the exit records newer than the last one already stored, appends the abnormal ones to
-     * the pending report text, and returns them. Safe to call repeatedly: the stored timestamp
-     * only advances past the records that were read.
+     * Reads the exit records newer than the last one already stored (and newer than the current
+     * APK install/update time), appends the abnormal ones to the pending report text, and returns
+     * them. Safe to call repeatedly: the stored timestamp only advances past the records that were
+     * read. Also stamps the current process with its version via
+     * [ActivityManager.setProcessStateSummary] so future exit records carry the version that died.
      */
     fun detect(context: Context): List<String> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptyList()
         return synchronized(detectionLock) {
             val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return emptyList()
+            if (!stateSummarySet) {
+                try {
+                    manager.setProcessStateSummary(currentVersionLabel().toByteArray(Charsets.UTF_8))
+                    stateSummarySet = true
+                } catch (e: Exception) {
+                    Log.e("ExitReasons", "Could not set process state summary", e)
+                }
+            }
+
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val lastSeen = prefs.getLong(KEY_LAST_SEEN, 0L)
+            val updateTime = lastUpdateTime(context)
+            val pendingIsCurrent = isPendingCurrent(prefs.getLong(KEY_PENDING_UPDATE_TIME, 0L), updateTime)
+            if (!pendingIsCurrent && (prefs.contains(KEY_PENDING) || prefs.contains(KEY_PENDING_UPDATE_TIME))) {
+                prefs.edit {
+                    remove(KEY_PENDING)
+                    remove(KEY_PENDING_UPDATE_TIME)
+                }
+            }
+
+            val cutoff = cutoffTimestamp(
+                lastSeen = prefs.getLong(KEY_LAST_SEEN, 0L),
+                lastUpdateTime = updateTime,
+            )
 
             val records = try {
                 manager.getHistoricalProcessExitReasons(context.packageName, 0, MAX_RECORDS)
@@ -92,40 +150,83 @@ object ExitReasons {
             }
             if (records.isNullOrEmpty()) return emptyList()
 
-            val fresh = records
-                .filter { it.timestamp > lastSeen && isAbnormal(it.reason, it.importance) }
+            val unseen = records.filter { it.timestamp > cutoff }
+            unseen
+                .filter {
+                    it.reason == ApplicationExitInfo.REASON_LOW_MEMORY &&
+                        it.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
+                }
+                .forEach { Log.i("ExitReasons", describe(it)) }
+
+            val fresh = unseen
+                .filter { isAbnormal(it.reason, it.importance) }
                 .map { describe(it) }
 
+            fresh.forEach { Log.w(Citrine.TAG, it) }
+
             prefs.edit {
-                putLong(KEY_LAST_SEEN, records.maxOf { it.timestamp })
+                putLong(KEY_LAST_SEEN, maxOf(cutoff, records.maxOf { it.timestamp }))
                 if (fresh.isNotEmpty()) {
-                    // Keep earlier unread records: a crash on startup must not erase the ANR
-                    // that happened before it.
-                    val previous = prefs.getString(KEY_PENDING, null)
+                    // Keep earlier unread records from this install: a crash on startup must not
+                    // erase the ANR that happened before it.
+                    val previous = if (pendingIsCurrent) prefs.getString(KEY_PENDING, null) else null
                     val combined = listOfNotNull(previous?.takeIf { it.isNotBlank() }, fresh.joinToString("\n\n"))
                     putString(KEY_PENDING, combined.joinToString("\n\n"))
+                    putLong(KEY_PENDING_UPDATE_TIME, updateTime)
                 }
             }
             fresh
         }
     }
 
-    /** Abnormal exit records waiting to be shown to the user, oldest first. */
-    fun pending(context: Context): String? = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_PENDING, null)
+    /** Abnormal exit records from the current install waiting to be shown to the user. */
+    fun pending(context: Context): String? = synchronized(detectionLock) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val stored = prefs.getString(KEY_PENDING, null) ?: return null
+        val updateTime = lastUpdateTime(context)
+        if (!isPendingCurrent(prefs.getLong(KEY_PENDING_UPDATE_TIME, 0L), updateTime)) {
+            prefs.edit {
+                remove(KEY_PENDING)
+                remove(KEY_PENDING_UPDATE_TIME)
+            }
+            return null
+        }
+        stored
+    }
 
     /** Drops the pending records once the user has seen (or sent) the report. */
     fun clearPending(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { remove(KEY_PENDING) }
+        synchronized(detectionLock) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit {
+                remove(KEY_PENDING)
+                remove(KEY_PENDING_UPDATE_TIME)
+            }
+        }
+    }
+
+    private fun lastUpdateTime(context: Context): Long = try {
+        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.PackageInfoFlags.of(0),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }
+        info.lastUpdateTime
+    } catch (e: Exception) {
+        Log.e("ExitReasons", "Could not read package update time", e)
+        0L
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
     private fun describe(info: ApplicationExitInfo): String = buildString {
-        // Exit records carry no app version; this is the version installed when it was read.
+        // Prefer the version recorded on the dying process via setProcessStateSummary; fall back
+        // to the currently installed version when absent.
         append("Citrine ")
-        append(BuildConfig.VERSION_NAME)
-        append(" (")
-        append(BuildConfig.VERSION_CODE)
-        append(") · ")
+        append(resolveVersionLabel(info.processStateSummary))
+        append(" · ")
         append(Build.MANUFACTURER)
         append(" ")
         append(Build.MODEL)

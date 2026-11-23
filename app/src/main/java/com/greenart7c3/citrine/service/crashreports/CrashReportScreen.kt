@@ -90,8 +90,10 @@ fun CrashReportScreen() {
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val stack = Citrine.instance.crashReportCache.loadAndDelete()
-            // ANRs, low-memory kills and native crashes never reach the uncaught-exception
-            // handler, so the exit records are the only trace of them the user can send.
+            // ANRs and native crashes never reach the uncaught-exception handler, so the exit
+            // records are the only trace of them the user can send. Run detect() here too so the
+            // crash screen does not race ahead of Citrine.onCreate()'s background detection.
+            ExitReasons.detect(Citrine.instance)
             val exits = ExitReasons.pending(Citrine.instance)
             val joined = listOfNotNull(stack?.takeIf { it.isNotBlank() }, exits?.takeIf { it.isNotBlank() })
                 .joinToString("\n\n")
