@@ -607,14 +607,36 @@ object EventRepository {
     }
 
     /**
+     * Estimates the serialized JSON frame length in chars (envelope + event fields + tags +
+     * content) so [toEventFrame] allocates a single appropriately-sized buffer instead of
+     * doubling repeatedly on large tag lists (e.g. kind-3 contact lists).
+     */
+    internal fun EventWithTags.estimateFrameChars(escapedSubId: String): Int {
+        // Fixed envelope + field names + id(64) + pubkey(64) + sig(128) + numbers ≈ 357 chars.
+        var chars = 360L + escapedSubId.length + event.content.length
+        for (tag in tags) {
+            // "[", "]", and trailing ","
+            chars += 3
+            tag.col0Name?.let { chars += it.length + 3 }
+            tag.col1Value?.let { chars += it.length + 3 }
+            tag.col2Differentiator?.let { chars += it.length + 3 }
+            tag.col3Amount?.let { chars += it.length + 3 }
+            for (extra in tag.col4Plus) {
+                chars += extra.length + 3
+            }
+        }
+        return chars.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    /**
      * Serializes a stored event straight from its database row, skipping the construction
      * of a kind-specific quartz [Event] and an intermediate Jackson tree. Produces the same
      * JSON as `toEvent().toJsonObject()`: tags are flattened the same way as
      * [com.greenart7c3.citrine.database.toTags] (non-null col0..col3, then col4Plus).
      */
-    private fun EventWithTags.toEventFrame(escapedSubId: String): String {
+    internal fun EventWithTags.toEventFrame(escapedSubId: String): String {
         // The frame is written once, prefix and suffix included, into a single buffer.
-        val writer = StringWriter(256 + escapedSubId.length + event.content.length)
+        val writer = StringWriter(estimateFrameChars(escapedSubId))
         writer.write("[\"EVENT\",")
         writer.write(escapedSubId)
         writer.write(",")

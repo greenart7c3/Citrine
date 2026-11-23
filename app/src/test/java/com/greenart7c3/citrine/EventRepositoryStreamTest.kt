@@ -156,4 +156,38 @@ class EventRepositoryStreamTest {
         assertEquals("d", tag.col2Differentiator)
         assertEquals("a", tag.col3Amount)
     }
+
+    @Test
+    fun estimateFrameCharsCoversSerializedTagHeavyFrame() {
+        val tags = (0 until 500).map { i ->
+            TagEntity(
+                pkEvent = "a".repeat(64),
+                position = i,
+                col0Name = "p",
+                col1Value = i.toString().padStart(64, '0'),
+                col2Differentiator = "wss://relay.example.com",
+                col3Amount = "petname",
+                col4Plus = listOf("extra"),
+                kind = 3,
+            )
+        }
+        val ewt = EventWithTags(
+            event = EventEntity(
+                id = "a".repeat(64),
+                pubkey = "b".repeat(64),
+                createdAt = 1_700_000_000L,
+                kind = 3,
+                content = "",
+                sig = "c".repeat(128),
+            ),
+            tags = tags,
+        )
+        val escapedSubId = "\"sub-1\""
+        val estimate = with(EventRepository) { ewt.estimateFrameChars(escapedSubId) }
+        val frame = with(EventRepository) { ewt.toEventFrame(escapedSubId) }
+
+        assertEquals(true, estimate >= frame.length)
+        // Estimate should stay tight (no excessive over-allocation).
+        assertEquals(true, estimate - frame.length < 2_000)
+    }
 }
