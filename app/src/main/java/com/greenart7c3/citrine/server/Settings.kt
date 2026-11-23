@@ -139,6 +139,10 @@ object Settings {
     // restart does not re-scan the whole kind-3 set.
     var strangerContactListsPruned: Boolean = false
 
+    // True once the one-shot cleanup of duplicate TagEntity rows left behind by Citrine
+    // 3.0.0–3.2.1 has completed over both databases (see TagDeduplicator.cleanDatabases).
+    var duplicateTagsCleaned: Boolean = false
+
     // External signer used by the aggregator to answer NIP-42 AUTH challenges from upstream
     // relays. Populated by the "Log in with external signer" flow in settings. When both
     // fields are set, the aggregator installs a RelayAuthenticator and signs kind-22242
@@ -197,6 +201,7 @@ object Settings {
         relayAggregatorWifiOnly = true
         relayAggregatorPauseOnLimitedNetwork = true
         strangerContactListsPruned = false
+        duplicateTagsCleaned = false
         aggregatorSignerPubkey = ""
         aggregatorSignerPackageName = ""
         showEventGraph = true

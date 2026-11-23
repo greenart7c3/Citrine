@@ -8,8 +8,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 import androidx.room.TypeConverter
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.greenart7c3.citrine.json.JacksonMapper
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.utils.EventFactory
 
@@ -100,20 +100,18 @@ data class TagEntity(
 )
 
 class Converters {
-    val mapper = jacksonObjectMapper()
-
     @TypeConverter
     fun fromString(value: String?): List<String> {
         if (value == null) return emptyList()
         if (value == "") return emptyList()
-        return mapper.readValue(value)
+        return JacksonMapper.mapper.readValue(value)
     }
 
     @TypeConverter
     fun fromList(list: List<String?>?): String {
         if (list == null) return ""
         if (list.isEmpty()) return ""
-        return mapper.writeValueAsString(list)
+        return JacksonMapper.mapper.writeValueAsString(list)
     }
 }
 

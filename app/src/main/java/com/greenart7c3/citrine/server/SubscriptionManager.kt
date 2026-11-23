@@ -118,7 +118,7 @@ class SubscriptionManager(
         Log.e(Citrine.TAG, "Out of memory answering subscription ${subscription.id}", e)
         runCatching {
             Citrine.instance.crashReportCache.appendReport(
-                ReportAssembler().buildReport(e),
+                ReportAssembler(Citrine.instance).buildReport(e),
             )
         }
         runCatching {

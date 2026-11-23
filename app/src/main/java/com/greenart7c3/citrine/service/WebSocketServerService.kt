@@ -22,6 +22,7 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
+import com.greenart7c3.citrine.database.TagDeduplicator
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.logs.LogDatabase
 import com.greenart7c3.citrine.server.CustomWebSocketServer
@@ -257,6 +258,18 @@ class WebSocketServerService : Service() {
 
         if (Settings.relayAggregatorEnabled) {
             RelayAggregator.start(database)
+        }
+
+        if (!Settings.duplicateTagsCleaned) {
+            scope.launch {
+                try {
+                    TagDeduplicator.cleanDatabases(database, this@WebSocketServerService)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(Citrine.TAG, "Duplicate tag cleanup failed", e)
+                }
+            }
         }
 
         var error = true

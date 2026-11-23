@@ -20,7 +20,6 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.toEventWithTags
 import com.greenart7c3.citrine.json.JacksonMapper
@@ -522,14 +521,13 @@ class CustomWebSocketServer(
 
         when {
             event.shouldDelete() -> {
-                val eventEntity = appDatabase.eventDao().getById(event.id)
-                if (eventEntity != null) {
+                if (appDatabase.eventDao().existsById(event.id)) {
                     Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
                 event.taggedEvents().forEach { taggedEvent ->
-                    val taggedEventEntity = appDatabase.eventDao().getById(taggedEvent.eventId)
-                    if (taggedEventEntity != null && taggedEventEntity.event.pubkey != event.pubKey) {
+                    val taggedPubkey = appDatabase.eventDao().getPubkeyById(taggedEvent.eventId)
+                    if (taggedPubkey != null && taggedPubkey != event.pubKey) {
                         Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.id}")
                         return VerificationResult.TaggedPubKeyMismatch
                     }
@@ -553,6 +551,10 @@ class CustomWebSocketServer(
                 }
             }
             event.isParameterizedReplaceable() -> {
+                if (appDatabase.eventDao().existsById(event.id)) {
+                    Log.d(Citrine.TAG, "Event already in database ${event.id}")
+                    return VerificationResult.AlreadyInDatabase
+                }
                 val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt, event.id)
                 if (newest.isNotEmpty()) {
                     Log.d(Citrine.TAG, "newest event already in database ${event.id}")
@@ -560,6 +562,10 @@ class CustomWebSocketServer(
                 }
             }
             event.shouldOverwrite() -> {
+                if (appDatabase.eventDao().existsById(event.id)) {
+                    Log.d(Citrine.TAG, "Event already in database ${event.id}")
+                    return VerificationResult.AlreadyInDatabase
+                }
                 val newest = appDatabase.eventDao().getByKindNewest(event.kind, event.pubKey, event.createdAt, event.id)
                 if (newest.isNotEmpty()) {
                     Log.d(Citrine.TAG, "newest event already in database ${event.id}")
@@ -567,8 +573,7 @@ class CustomWebSocketServer(
                 }
             }
             else -> {
-                val eventEntity = appDatabase.eventDao().getById(event.id)
-                if (eventEntity != null && !event.isEphemeral()) {
+                if (!event.isEphemeral() && appDatabase.eventDao().existsById(event.id)) {
                     Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
@@ -862,10 +867,10 @@ class CustomWebSocketServer(
         return offline
     }
 
-    private fun broadcastWithWorkManager(dbEvent: EventWithTags) {
+    private fun broadcastWithWorkManager(eventId: String) {
         try {
             val inputData = androidx.work.Data.Builder()
-                .putString("event_id", dbEvent.event.id)
+                .putString("event_id", eventId)
                 .build()
 
             val constraints = Constraints.Builder()
@@ -878,7 +883,7 @@ class CustomWebSocketServer(
                 .build()
 
             WorkManager.getInstance(Citrine.instance).enqueue(workRequest)
-            Log.d(Citrine.TAG, "Queued event ${dbEvent.event.id} for broadcast when connectivity is restored")
+            Log.d(Citrine.TAG, "Queued event $eventId for broadcast when connectivity is restored")
         } catch (e: Exception) {
             Log.e(Citrine.TAG, "Failed to queue event for broadcast: ${e.message}", e)
         }
@@ -888,11 +893,8 @@ class CustomWebSocketServer(
         appDatabase.eventDao().insertEventWithTags(appDatabase, event.toEventWithTags(), connection = connection)
 
         // Check if offline and broadcast with WorkManager
-        if (isOffline()) {
-            val dbEvent = appDatabase.eventDao().getById(event.id)
-            if (dbEvent != null) {
-                broadcastWithWorkManager(dbEvent)
-            }
+        if (isOffline() && appDatabase.eventDao().existsById(event.id)) {
+            broadcastWithWorkManager(event.id)
         }
     }
 

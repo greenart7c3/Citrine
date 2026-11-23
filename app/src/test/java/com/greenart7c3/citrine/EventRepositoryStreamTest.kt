@@ -96,4 +96,64 @@ class EventRepositoryStreamTest {
         assertEquals(2, sent)
         assertEquals(listOf("e2", "e1"), got)
     }
+
+    @Test
+    fun emitWithTagsRepairsDuplicateTagsAboveChunkBudgetOnTheFly() = runBlocking {
+        val dao = db.eventDao()
+        val ev = event("dup", 10)
+        insert(ev)
+
+        // 100 unique tags duplicated 105 times = 10,500 rows (> CHUNK_TAG_BUDGET = 10,000).
+        val oneCopy = (0 until 100).map { pos ->
+            TagEntity(
+                pkEvent = "dup",
+                position = pos,
+                col0Name = "p",
+                col1Value = "pk-$pos",
+                col2Differentiator = null,
+                col3Amount = null,
+                col4Plus = emptyList(),
+                kind = 1,
+            )
+        }
+        repeat(105) { dao.insertTags(oneCopy) }
+        assertEquals(10_500, dao.countTagsForEvent("dup"))
+
+        val (n, batches) = emit(listOf("dup"))
+
+        assertEquals(1, n)
+        assertEquals(100, batches.flatten().single().tags.size)
+        assertEquals(100, dao.countTagsForEvent("dup"))
+    }
+
+    @Test
+    fun emitWithTagsSkipsEventExceedingMaxTagsAndMaxTagChars() = runBlocking {
+        val dao = db.eventDao()
+        val normal = event("ok", 1)
+        val tooManyTags = event("many", 2)
+        val hugeTagText = event("bigtext", 3)
+        insert(normal, tooManyTags, hugeTagText)
+
+        dao.insertTags(
+            listOf(
+                TagEntity(pkEvent = "ok", position = 0, col0Name = "t", col1Value = "v", col2Differentiator = "d", col3Amount = "a", col4Plus = listOf("extra1", "extra2"), kind = 1),
+                TagEntity(pkEvent = "many", position = 0, col0Name = "p", col1Value = "1", col2Differentiator = null, col3Amount = null, col4Plus = emptyList(), kind = 1),
+                TagEntity(pkEvent = "many", position = 1, col0Name = "p", col1Value = "2", col2Differentiator = null, col3Amount = null, col4Plus = emptyList(), kind = 1),
+                TagEntity(pkEvent = "many", position = 2, col0Name = "p", col1Value = "3", col2Differentiator = null, col3Amount = null, col4Plus = emptyList(), kind = 1),
+                TagEntity(pkEvent = "bigtext", position = 0, col0Name = "t", col1Value = "x".repeat(500), col2Differentiator = null, col3Amount = null, col4Plus = emptyList(), kind = 1),
+            ),
+        )
+
+        val rows = dao.getEventRowsByIds(listOf("ok", "many", "bigtext"))
+        val emitted = mutableListOf<EventWithTags>()
+        EventRepository.emitWithTags(db, rows, maxTagsPerEvent = 2, maxTagCharsPerEvent = 100) { batch ->
+            emitted.addAll(batch)
+        }
+
+        assertEquals(listOf("ok"), emitted.map { it.event.id })
+        val tag = emitted.single().tags.single()
+        assertEquals(listOf("extra1", "extra2"), tag.col4Plus)
+        assertEquals("d", tag.col2Differentiator)
+        assertEquals("a", tag.col3Amount)
+    }
 }

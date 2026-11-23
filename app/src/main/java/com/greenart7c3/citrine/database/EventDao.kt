@@ -28,17 +28,83 @@ interface EventDao {
         var count: Int = 0
     }
 
+    class TagDuplicateStats {
+        var totalCount: Int = 0
+        var distinctCount: Int = 0
+        var maxKeepPk: Long? = null
+    }
+
     @RawQuery
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
-    // Callers pair [getEventRowsByIds] with these instead of [getEvents]: its `@Relation`
+    // Callers pair [getEventRowsByIds] with this instead of [getEvents]: its `@Relation`
     // loads the tags of every row at once, hundreds of thousands of [TagEntity] objects
     // per page for contact lists, mute lists and follow sets.
     @Query("SELECT pkEvent, COUNT(*) AS count FROM TagEntity WHERE pkEvent IN (:ids) GROUP BY pkEvent")
     fun countTagsByEvent(ids: List<String>): List<TagCount>
 
-    @Query("SELECT * FROM TagEntity WHERE pkEvent IN (:ids)")
-    fun getTagsByEvents(ids: List<String>): List<TagEntity>
+    @Query("SELECT COUNT(*) FROM TagEntity WHERE pkEvent = :eventId")
+    suspend fun countTagsForEvent(eventId: String): Int
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(cnt), 0) AS totalCount,
+               COUNT(*) AS distinctCount,
+               MAX(minPk) AS maxKeepPk
+          FROM (
+              SELECT COUNT(*) AS cnt, MIN(pk) AS minPk
+                FROM TagEntity
+               WHERE pkEvent = :eventId
+               GROUP BY position
+          )
+        """,
+    )
+    suspend fun getTagDuplicateStats(eventId: String): TagDuplicateStats
+
+    @Query(
+        """
+        DELETE FROM TagEntity
+         WHERE pk IN (
+             SELECT pk FROM TagEntity
+              WHERE pkEvent = :eventId AND pk > :afterPk
+              LIMIT :limit
+         )
+        """,
+    )
+    suspend fun deleteEventTagsAfterPk(eventId: String, afterPk: Long, limit: Int): Int
+
+    @Query(
+        """
+        DELETE FROM TagEntity
+         WHERE pkEvent = :eventId
+           AND pk NOT IN (
+               SELECT MIN(pk) FROM TagEntity WHERE pkEvent = :eventId GROUP BY position
+           )
+        """,
+    )
+    suspend fun deleteRemainingDuplicateTags(eventId: String): Int
+
+    @Query(
+        """
+        SELECT pkEvent FROM TagEntity
+         WHERE pkEvent IN (:ids)
+         GROUP BY pkEvent
+        HAVING COUNT(*) > COUNT(DISTINCT position)
+        """,
+    )
+    suspend fun findEventIdsWithDuplicateTags(ids: List<String>): List<String>
+
+    @Query("SELECT id FROM EventEntity WHERE id > :afterId ORDER BY id ASC LIMIT :limit")
+    suspend fun getEventIdsAfter(afterId: String, limit: Int): List<String>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM EventEntity WHERE id = :id)")
+    suspend fun existsById(id: String): Boolean
+
+    @Query("SELECT pubkey FROM EventEntity WHERE id = :id LIMIT 1")
+    suspend fun getPubkeyById(id: String): String?
+
+    @Query("SELECT id FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind ORDER BY createdAt DESC, id ASC LIMIT 1")
+    suspend fun getLatestEventIdByKind(pubkey: String, kind: Int): String?
 
     class ContentLength {
         var id: String = ""

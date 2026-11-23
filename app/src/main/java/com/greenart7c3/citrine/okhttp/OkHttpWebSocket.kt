@@ -45,6 +45,8 @@ class OkHttpWebSocket(
 
     @Volatile private var socket: okhttp3.WebSocket? = null
 
+    @Volatile private var activeListener: OkHttpWebsocketListener? = null
+
     /**
      * Set once, by whichever of `onClosed`, `onFailure` or [disconnect] ends the session first.
      *
@@ -86,7 +88,9 @@ class OkHttpWebSocket(
         if (socket != null || ended.get()) return
 
         usingOkHttp = httpClient(url)
-        socket = usingOkHttp?.newWebSocket(buildRequest(), OkHttpWebsocketListener(out))
+        val listener = OkHttpWebsocketListener(out)
+        activeListener = listener
+        socket = usingOkHttp?.newWebSocket(buildRequest(), listener)
     }
 
     inner class OkHttpWebsocketListener(
@@ -108,13 +112,18 @@ class OkHttpWebSocket(
                 }
             }
 
+        fun closeResources() {
+            incomingMessages.close()
+            job.cancel()
+            scope.cancel()
+        }
+
         /** Claims the session's single terminal report. False if it already ended. */
         private fun endSession(): Boolean {
             if (!ended.compareAndSet(false, true)) return false
             socket = null
-            incomingMessages.close()
-            job.cancel()
-            scope.cancel()
+            activeListener = null
+            closeResources()
             return true
         }
 
@@ -197,6 +206,8 @@ class OkHttpWebSocket(
         val closing = socket ?: return
         if (!ended.compareAndSet(false, true)) return
         socket = null
+        activeListener?.closeResources()
+        activeListener = null
         closing.cancel()
         out.onClosed(1000, "client disconnect")
     }

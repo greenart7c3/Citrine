@@ -10,8 +10,10 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
+import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.HistoryDatabase
 import com.greenart7c3.citrine.database.PubkeyTimestamp
+import com.greenart7c3.citrine.database.TagDeduplicator
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.json.JacksonMapper
 import com.greenart7c3.citrine.logs.Log
@@ -940,7 +942,7 @@ object RelayAggregator {
                 // Resolve NIP-65 for all authors in one batch instead of N sequential fetches.
                 val uncached = mutableSetOf<String>()
                 for (pk in authors) {
-                    val cached = dao.getAdvertisedRelayList(pk)?.toEvent() as? AdvertisedRelayListEvent
+                    val cached = loadCleanLatestByKind(dao, pk, AdvertisedRelayListEvent.KIND)?.toEvent() as? AdvertisedRelayListEvent
                     if (cached != null) cachedRelayLists[pk] = cached else uncached.add(pk)
                 }
                 Log.d(TAG, "NIP-65 cache: ${cachedRelayLists.size} hit, ${uncached.size} miss")
@@ -1583,12 +1585,21 @@ object RelayAggregator {
         Log.d(TAG, "Contact list cleanup: deleted $deleted kind-3 event(s) from authors outside the follow graph")
     }
 
+    private suspend fun loadCleanLatestByKind(dao: EventDao, pubkey: String, kind: Int): EventWithTags? {
+        val id = dao.getLatestEventIdByKind(pubkey, kind) ?: return null
+        if (!Settings.duplicateTagsCleaned) {
+            TagDeduplicator.deduplicateEvent(dao, id)
+        }
+        return dao.getById(id)
+    }
+
     private suspend fun backfillUserIfMissing(dao: EventDao, pubkey: String) {
-        val needsMetadata = dao.getMetadata(pubkey) == null
+        val needsMetadata = dao.getLatestEventIdByKind(pubkey, MetadataEvent.KIND) == null
         // Contact lists are only fetched for authors the owner follows: strangers met through
         // the tagged subs would otherwise pile up thousands of large, never-pruned kind-3 events.
-        val needsContactList = ContactListPolicy.shouldBackfillContactList(pubkey, followedAuthors) && dao.getContactList(pubkey) == null
-        val needsRelayList = dao.getAdvertisedRelayList(pubkey) == null
+        val needsContactList = ContactListPolicy.shouldBackfillContactList(pubkey, followedAuthors) &&
+            dao.getLatestEventIdByKind(pubkey, ContactListEvent.KIND) == null
+        val needsRelayList = dao.getLatestEventIdByKind(pubkey, AdvertisedRelayListEvent.KIND) == null
         if (!needsMetadata && !needsContactList && !needsRelayList) return
         Log.d(
             TAG,
@@ -1620,7 +1631,7 @@ object RelayAggregator {
      * value from the DB so a kind-10002 fetch performed earlier in the same refresh is visible.
      */
     private suspend fun userWriteRelays(dao: EventDao, pubkey: String): List<NormalizedRelayUrl>? {
-        val relayList = dao.getAdvertisedRelayList(pubkey)?.toEvent() as? AdvertisedRelayListEvent
+        val relayList = loadCleanLatestByKind(dao, pubkey, AdvertisedRelayListEvent.KIND)?.toEvent() as? AdvertisedRelayListEvent
         return relayList
             ?.writeRelays()
             ?.mapNotNull { raw -> normalizeRemote(raw) }
@@ -1632,7 +1643,7 @@ object RelayAggregator {
         pubkey: String,
         skipNetworkIfCached: Boolean = false,
     ): ContactListEvent? {
-        val cached = dao.getContactList(pubkey)?.toEvent() as? ContactListEvent
+        val cached = loadCleanLatestByKind(dao, pubkey, ContactListEvent.KIND)?.toEvent() as? ContactListEvent
         // When the cache is fresh and we already have a copy, skip the indexer round-trip and
         // reuse it. A null cache (e.g. a wiped DB) always falls through to the network fetch.
         if (skipNetworkIfCached && cached != null) {
@@ -1696,7 +1707,7 @@ object RelayAggregator {
      * for the network refresh path).
      */
     private suspend fun loadCachedMuteListFromDb(dao: EventDao, pubkey: String) {
-        val cached = dao.getMuteList(pubkey)?.toEvent() ?: return
+        val cached = loadCleanLatestByKind(dao, pubkey, 10000)?.toEvent() ?: return
         if (cached.createdAt <= muteListSeenAt) return
         val (pubs, words) = extractPublicMuteEntries(cached)
         mutedPubkeys = pubs
@@ -1714,7 +1725,7 @@ object RelayAggregator {
         if (pubkey.isBlank()) return
         // When the cache is fresh and a mute list is already stored, keep the in-memory sets
         // (warm-loaded on start() or applied by a prior refresh) and skip the network fetch.
-        if (skipNetworkIfCached && dao.getMuteList(pubkey) != null) {
+        if (skipNetworkIfCached && dao.getLatestEventIdByKind(pubkey, 10000) != null) {
             Log.d(TAG, "Mute list: reusing cached copy for $pubkey")
             return
         }
@@ -1836,7 +1847,7 @@ object RelayAggregator {
     }
 
     private suspend fun loadOrBootstrapMuteList(dao: EventDao, pubkey: String): Event? {
-        val cached = dao.getMuteList(pubkey)?.toEvent()
+        val cached = loadCleanLatestByKind(dao, pubkey, 10000)?.toEvent()
         val filters = listOf(
             Filter(
                 kinds = listOf(10000),

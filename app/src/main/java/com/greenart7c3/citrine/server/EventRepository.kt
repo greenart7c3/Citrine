@@ -2,11 +2,14 @@ package com.greenart7c3.citrine.server
 
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventEntity
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.IdAndCreatedAt
+import com.greenart7c3.citrine.database.TagDeduplicator
+import com.greenart7c3.citrine.database.TagEntity
 import com.greenart7c3.citrine.json.JacksonMapper
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.nip29.GroupManager
@@ -31,7 +34,12 @@ object EventRepository {
     private const val BATCH_CONTENT_BUDGET_CHARS = 1024 * 1024
 
     // Tags loaded at once per content chunk (~3 MB of TagEntity objects).
-    private const val CHUNK_TAG_BUDGET = 10_000
+    internal const val CHUNK_TAG_BUDGET = 10_000
+
+    // Hard per-event ceilings so a single pathological event (unusually huge tag list or
+    // multi-MB tag strings) can never exhaust the 512 MB heap on read.
+    internal const val MAX_EVENT_TAGS = 50_000
+    internal const val MAX_EVENT_TAG_CHARS = 8 * 1024 * 1024
 
     // App-wide cap on content chunks loaded at once, whatever the number of connections and
     // subscriptions: about HISTORY_CHUNK_PERMITS x (1M chars of content + 10k tags + their
@@ -317,6 +325,8 @@ object EventRepository {
     internal suspend fun emitWithTags(
         database: AppDatabase,
         rows: List<EventEntity>,
+        maxTagsPerEvent: Int = MAX_EVENT_TAGS,
+        maxTagCharsPerEvent: Int = MAX_EVENT_TAG_CHARS,
         onBatch: suspend (List<EventWithTags>) -> Unit,
     ) {
         val dao = database.eventDao()
@@ -324,31 +334,186 @@ object EventRepository {
             val tagCounts = HashMap<String, Int>(page.size * 2)
             dao.countTagsByEvent(page.map { it.id }).forEach { tagCounts[it.pkEvent] = it.count }
 
+            // Events above the chunk budget may carry hundreds of thousands of duplicate tag
+            // rows from Citrine 3.0.0–3.2.1; repair those in SQLite before loading, and skip
+            // any event that still exceeds the hard per-event ceiling.
+            val usable = ArrayList<EventEntity>(page.size)
+            for (row in page) {
+                var count = tagCounts[row.id] ?: 0
+                if (count > CHUNK_TAG_BUDGET) {
+                    currentCoroutineContext().ensureActive()
+                    val removed = TagDeduplicator.deduplicateEvent(dao, row.id)
+                    if (removed > 0) {
+                        count = dao.countTagsForEvent(row.id)
+                        tagCounts[row.id] = count
+                    }
+                    if (count > maxTagsPerEvent) {
+                        Log.w(Citrine.TAG, "Skipping event ${row.id} (kind ${row.kind}) with $count tags (exceeds $maxTagsPerEvent)")
+                        continue
+                    }
+                }
+                usable.add(row)
+            }
+
             var start = 0
-            while (start < page.size) {
+            while (start < usable.size) {
                 currentCoroutineContext().ensureActive()
 
-                val end = chunkEnd(start, page.size, CHUNK_TAG_BUDGET) { tagCounts[page[it].id] ?: 0 }
-                val chunk = page.subList(start, end)
-                val chunkTags = chunk.sumOf { tagCounts[it.id] ?: 0 }
-                val tagsByEvent = if (chunkTags == 0) {
-                    emptyMap()
-                } else {
-                    dao.getTagsByEvents(chunk.map { it.id }).groupBy { it.pkEvent }
-                }
-                val events = ArrayList<EventWithTags>(chunk.size)
-                for (row in chunk) {
-                    val tags = tagsByEvent[row.id]
-                    // Tags were counted but are gone: the event was deleted or replaced
-                    // between the two reads. Sending it without tags would hand the client
-                    // an event whose id and signature no longer verify.
-                    if (tags == null && (tagCounts[row.id] ?: 0) > 0) continue
-                    events.add(EventWithTags(row, tags ?: emptyList()))
-                }
-                if (events.isNotEmpty()) onBatch(events)
+                val end = chunkEnd(start, usable.size, CHUNK_TAG_BUDGET) { tagCounts[usable[it].id] ?: 0 }
+                emitTagChunk(
+                    database = database,
+                    chunk = usable.subList(start, end),
+                    tagCounts = tagCounts,
+                    maxTagsPerEvent = maxTagsPerEvent,
+                    maxTagCharsPerEvent = maxTagCharsPerEvent,
+                    onBatch = onBatch,
+                )
                 start = end
             }
         }
+    }
+
+    // Separate frame so the chunk's TagEntity lists and EventWithTags batch are out of scope
+    // and eligible for GC before the next chunk's query starts.
+    private suspend fun emitTagChunk(
+        database: AppDatabase,
+        chunk: List<EventEntity>,
+        tagCounts: Map<String, Int>,
+        maxTagsPerEvent: Int,
+        maxTagCharsPerEvent: Int,
+        onBatch: suspend (List<EventWithTags>) -> Unit,
+    ) {
+        val chunkTags = chunk.sumOf { tagCounts[it.id] ?: 0 }
+        val tagResult = if (chunkTags == 0) {
+            TagLoadResult(emptyMap(), emptySet())
+        } else {
+            loadTagsByEvents(database, chunk, maxTagsPerEvent, maxTagCharsPerEvent)
+        }
+        val events = ArrayList<EventWithTags>(chunk.size)
+        for (row in chunk) {
+            if (row.id in tagResult.oversizedEventIds) continue
+            val tags = tagResult.tagsByEvent[row.id]
+            // Tags were counted but are gone: the event was deleted or replaced
+            // between the two reads. Sending it without tags would hand the client
+            // an event whose id and signature no longer verify.
+            if (tags == null && (tagCounts[row.id] ?: 0) > 0) continue
+            events.add(EventWithTags(row, tags ?: emptyList()))
+        }
+        if (events.isNotEmpty()) onBatch(events)
+    }
+
+    internal data class TagLoadResult(
+        val tagsByEvent: Map<String, List<TagEntity>>,
+        val oversizedEventIds: Set<String>,
+    )
+
+    /**
+     * Streams tag rows for [chunk] straight into a per-event map, skipping the intermediate
+     * flat `List<TagEntity>` + `.groupBy` copy and `Long.valueOf(pk)` boxing, canonicalizing
+     * `pkEvent` strings to the ids we already hold, checking coroutine cancellation mid-cursor,
+     * and dropping any event whose tag count or text payload exceeds the per-event ceiling.
+     */
+    internal suspend fun loadTagsByEvents(
+        database: AppDatabase,
+        chunk: List<EventEntity>,
+        maxTagsPerEvent: Int = MAX_EVENT_TAGS,
+        maxTagCharsPerEvent: Int = MAX_EVENT_TAG_CHARS,
+    ): TagLoadResult {
+        if (chunk.isEmpty()) return TagLoadResult(emptyMap(), emptySet())
+
+        val canonicalIds = HashMap<String, String>(chunk.size * 2)
+        val args = Array<Any>(chunk.size) { i ->
+            val id = chunk[i].id
+            canonicalIds[id] = id
+            id
+        }
+        val sql = buildString(108 + chunk.size * 2) {
+            append("SELECT pkEvent, position, col0Name, col1Value, col2Differentiator, col3Amount, col4Plus, kind FROM TagEntity WHERE pkEvent IN (")
+            for (i in chunk.indices) {
+                if (i > 0) append(',')
+                append('?')
+            }
+            append(')')
+        }
+
+        val tagsByEvent = HashMap<String, ArrayList<TagEntity>>(chunk.size * 2)
+        val charCounts = HashMap<String, Long>(chunk.size * 2)
+        val oversized = HashSet<String>()
+        var rowsRead = 0
+
+        database.openHelper.readableDatabase.query(SimpleSQLiteQuery(sql, args)).use { cursor ->
+            while (cursor.moveToNext()) {
+                if ((rowsRead++ and 255) == 0) {
+                    currentCoroutineContext().ensureActive()
+                }
+                if (cursor.isNull(0)) continue
+                val rawPkEvent = cursor.getString(0)
+                val pkEvent = canonicalIds[rawPkEvent] ?: rawPkEvent
+                if (pkEvent in oversized) continue
+
+                val list = tagsByEvent.getOrPut(pkEvent) { ArrayList() }
+                if (list.size >= maxTagsPerEvent) {
+                    oversized.add(pkEvent)
+                    tagsByEvent.remove(pkEvent)
+                    Log.w(Citrine.TAG, "Skipping event $pkEvent: tag count exceeded $maxTagsPerEvent while loading")
+                    continue
+                }
+
+                val col0 = if (cursor.isNull(2)) null else internTagName(cursor.getString(2))
+                val col1 = if (cursor.isNull(3)) null else cursor.getString(3)
+                val col2 = if (cursor.isNull(4)) null else cursor.getString(4)
+                val col3 = if (cursor.isNull(5)) null else cursor.getString(5)
+                val col4Raw = if (cursor.isNull(6)) "" else cursor.getString(6)
+
+                val rowChars = (col0?.length ?: 0).toLong() +
+                    (col1?.length ?: 0) +
+                    (col2?.length ?: 0) +
+                    (col3?.length ?: 0) +
+                    col4Raw.length
+                val totalChars = (charCounts[pkEvent] ?: 0L) + rowChars
+                charCounts[pkEvent] = totalChars
+                if (totalChars > maxTagCharsPerEvent) {
+                    oversized.add(pkEvent)
+                    tagsByEvent.remove(pkEvent)
+                    Log.w(Citrine.TAG, "Skipping event $pkEvent: tag payload exceeded $maxTagCharsPerEvent chars")
+                    continue
+                }
+
+                val col4Plus: List<String> = if (col4Raw.isEmpty()) {
+                    emptyList()
+                } else {
+                    JacksonMapper.mapper.readValue(col4Raw)
+                }
+                list.add(
+                    TagEntity(
+                        pk = null,
+                        pkEvent = pkEvent,
+                        position = cursor.getInt(1),
+                        col0Name = col0,
+                        col1Value = col1,
+                        col2Differentiator = col2,
+                        col3Amount = col3,
+                        col4Plus = col4Plus,
+                        kind = cursor.getInt(7),
+                    ),
+                )
+            }
+        }
+        return TagLoadResult(tagsByEvent, oversized)
+    }
+
+    private fun internTagName(name: String): String = when (name) {
+        "p" -> "p"
+        "e" -> "e"
+        "a" -> "a"
+        "t" -> "t"
+        "d" -> "d"
+        "r" -> "r"
+        "h" -> "h"
+        "q" -> "q"
+        "x" -> "x"
+        "k" -> "k"
+        else -> name
     }
 
     /**
