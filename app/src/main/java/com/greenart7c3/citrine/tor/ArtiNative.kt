@@ -69,6 +69,13 @@ object ArtiNative {
     /** Stops the onion service; the Tor client stays alive. */
     external fun stopOnionService(): Int
 
+    /**
+     * Sets Arti's dormant mode: 1 = soft dormant (pauses periodic background tasks and
+     * channel padding), 0 = normal active mode.
+     * @return 0 on success, -1 when no client exists.
+     */
+    external fun setDormant(dormant: Int): Int
+
     /** Drops the Tor client so the next [initialize] starts over (fresh circuits). */
     external fun destroy(): Int
 }

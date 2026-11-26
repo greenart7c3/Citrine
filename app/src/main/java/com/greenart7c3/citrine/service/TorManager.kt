@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +34,13 @@ object TorManager {
 
     private const val BOOTSTRAP_POLL_MS = 500L
     private const val SOCKS_BIND_ATTEMPTS = 5
+
+    // Grace window after stop() before tearing down the TorClient completely.
+    // A settings "Apply" restarts WebSocketServerService within ~1s, so keeping
+    // the client dormant briefly avoids a 15-30s re-bootstrap on unrelated
+    // setting edits while still freeing all Tor background tasks and sockets
+    // when the relay is actually stopped.
+    private const val DESTROY_AFTER_STOP_DELAY_MS = 10_000L
 
     // The identity key is generated right after startOnionService, so the
     // hostname normally shows up with the first poll. The deadline only
@@ -56,6 +64,14 @@ object TorManager {
     @Volatile
     private var job: Job? = null
 
+    /** Pending stop/destroy cleanup job, chained so lifecycle calls never race. */
+    @Volatile
+    private var pendingLifecycle: Job? = null
+
+    /** Delayed full teardown scheduled by [stop]; cancelled if [start] runs again promptly. */
+    @Volatile
+    private var pendingDestroy: Job? = null
+
     /** Serializes binding and releasing the SOCKS listener against [stop]. */
     private val proxyLock = Any()
 
@@ -73,12 +89,20 @@ object TorManager {
     private var restarting = false
 
     fun start(localPort: Int, enableHiddenService: Boolean) {
-        lastLocalPort = localPort
-        lastEnableHiddenService = enableHiddenService
-        _state.value = State.Bootstrapping
         synchronized(this) {
+            lastLocalPort = localPort
+            lastEnableHiddenService = enableHiddenService
+            _state.value = State.Bootstrapping
+            pendingDestroy?.cancel()
+            pendingDestroy = null
             job?.cancel()
-            job = Citrine.instance.applicationScope.launch(Dispatchers.IO) { run() }
+            val previous = pendingLifecycle
+            val newJob = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                previous?.join()
+                run()
+            }
+            job = newJob
+            pendingLifecycle = newJob
         }
     }
 
@@ -88,10 +112,9 @@ object TorManager {
         restarting = true
         Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             try {
-                stop()
                 // Rebuild the client (fresh circuits), as restarting the old tor
                 // daemon did — the UI's Retry button is the way out of Error.
-                if (nativeReady) ArtiNative.destroy()
+                stop(destroyClient = true)
                 start(port, lastEnableHiddenService || Settings.useTor)
             } finally {
                 restarting = false
@@ -99,20 +122,68 @@ object TorManager {
         }
     }
 
-    fun stop() {
+    /**
+     * Stops the SOCKS listener and onion service and puts the Arti client to sleep so it
+     * stops sending channel padding and running periodic background tasks.
+     *
+     * When [destroyClient] is true (e.g. Tor was disabled in settings, or [retry] wants
+     * fresh circuits), the underlying `TorClient` is destroyed immediately; otherwise it is
+     * destroyed after [DESTROY_AFTER_STOP_DELAY_MS] unless [start] is called again first
+     * (covering quick service restarts on unrelated settings edits).
+     */
+    fun stop(destroyClient: Boolean = false) {
+        val previous: Job?
+        val stopJob: Job
         synchronized(this) {
+            pendingDestroy?.cancel()
+            pendingDestroy = null
             job?.cancel()
             job = null
-        }
-        _state.value = State.Off
-        releaseSocksPort()
-        if (!nativeReady) return
-        try {
-            synchronized(proxyLock) { ArtiNative.stopSocksProxy() }
-            ArtiNative.stopOnionService()
-            Log.i(Citrine.TAG, "Built-in Tor stopped")
-        } catch (e: Throwable) {
-            Log.e(Citrine.TAG, "Error stopping built-in Tor", e)
+            _state.value = State.Off
+            releaseSocksPort()
+            if (!nativeReady) return
+            previous = pendingLifecycle
+            stopJob = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                previous?.join()
+                try {
+                    synchronized(proxyLock) { ArtiNative.stopSocksProxy() }
+                    ArtiNative.stopOnionService()
+                    if (destroyClient) {
+                        ArtiNative.destroy()
+                        Log.i(Citrine.TAG, "Built-in Tor stopped and destroyed")
+                    } else {
+                        ArtiNative.setDormant(1)
+                        Log.i(Citrine.TAG, "Built-in Tor stopped (dormant)")
+                    }
+                } catch (e: Throwable) {
+                    if (e is CancellationException) throw e
+                    Log.e(Citrine.TAG, "Error stopping built-in Tor", e)
+                }
+            }
+            pendingLifecycle = stopJob
+            if (!destroyClient) {
+                pendingDestroy = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                    val self = coroutineContext[Job]
+                    delay(DESTROY_AFTER_STOP_DELAY_MS)
+                    stopJob.join()
+                    synchronized(this@TorManager) {
+                        // A new start() or stop() arrived while we were waiting.
+                        if (!isActive || job != null || pendingDestroy !== self) return@launch
+                        pendingDestroy = null
+                        val prev = pendingLifecycle
+                        pendingLifecycle = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                            prev?.join()
+                            try {
+                                ArtiNative.destroy()
+                                Log.i(Citrine.TAG, "Built-in Tor client destroyed after idle stop")
+                            } catch (e: Throwable) {
+                                if (e is CancellationException) throw e
+                                Log.e(Citrine.TAG, "Error destroying idle built-in Tor client", e)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -120,6 +191,10 @@ object TorManager {
         try {
             ArtiNative.setLogCallback { line -> Log.d(Citrine.TAG, line) }
             nativeReady = true
+            // Check cancellation after publishing nativeReady: if stop() ran before
+            // nativeReady became true it cancelled our job without queuing a stopJob,
+            // so we must bail out before initialize() creates a live TorClient.
+            currentCoroutineContext().ensureActive()
             Log.i(Citrine.TAG, "Starting built-in Tor: ${ArtiNative.getVersion()}")
 
             val dataDir = File(Citrine.instance.filesDir, "arti").apply { mkdirs() }
@@ -139,6 +214,9 @@ object TorManager {
                 fail("Arti failed to initialize ($result)")
                 return
             }
+            currentCoroutineContext().ensureActive()
+            // Wake the client if a previous stop() placed it in DormantMode::Soft.
+            ArtiNative.setDormant(0)
             if (legacyHsDir == null) {
                 // kmp-tor leftovers without a hidden service identity.
                 deleteLegacyKmpTorData()

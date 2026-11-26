@@ -30,7 +30,7 @@ ANDROID_TARGETS=(
     "i686-linux-android:x86"
 )
 
-JNI_SYMBOLS=(getVersion setLogCallback initialize startSocksProxy stopSocksProxy startOnionService getOnionHostname stopOnionService isBootstrapped bootstrapProgressPermille destroy)
+JNI_SYMBOLS=(getVersion setLogCallback initialize startSocksProxy stopSocksProxy startOnionService getOnionHostname stopOnionService isBootstrapped bootstrapProgressPermille setDormant destroy)
 
 # Keep host paths out of the binaries.
 export CARGO_INCREMENTAL=0

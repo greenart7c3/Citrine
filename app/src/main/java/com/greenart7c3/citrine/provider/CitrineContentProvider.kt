@@ -6,6 +6,7 @@ import android.content.UriMatcher
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.EventWithTags
@@ -16,6 +17,7 @@ import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
+import com.greenart7c3.citrine.utils.isEphemeral
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.crypto.verify
 import com.vitorpamplona.quartz.nip01Core.tags.people.taggedUsers
@@ -625,6 +627,9 @@ class CitrineContentProvider : ContentProvider() {
 
                     val eventWithTags = event.toEventWithTags()
                     eventDao.insertEventWithTags(database, eventWithTags, null)
+                    if (event.isEphemeral()) {
+                        Citrine.instance.scheduleEphemeralCleanup(database)
+                    }
                     QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
                 }
             } catch (e: Exception) {

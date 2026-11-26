@@ -25,6 +25,8 @@ import com.greenart7c3.citrine.service.crashreports.ExitReasons
 import com.greenart7c3.citrine.service.crashreports.UnexpectedCrashSaver
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
 import com.vitorpamplona.quartz.utils.TimeUtils
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.measureTime
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -33,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -167,30 +170,85 @@ class Citrine :
         job?.cancel()
     }
 
-    suspend fun eventsToDelete(database: AppDatabase) {
+    private val ephemeralCleanupScheduled = AtomicBoolean(false)
+
+    // Monotonic generation incremented whenever a new ephemeral event is stored so a
+    // racing cleanup pass never clears [hasEphemeralEvents] after a newer insert.
+    private val ephemeralGeneration = AtomicLong(1L)
+
+    // True on startup so the first cleanup sweep catches any ephemeral events left
+    // behind before a restart; cleared once the table holds no ephemeral events and
+    // re-set whenever a new ephemeral event is stored.
+    @Volatile
+    private var hasEphemeralEvents = true
+
+    fun scheduleEphemeralCleanup(database: AppDatabase) {
+        ephemeralGeneration.incrementAndGet()
+        hasEphemeralEvents = true
+        ensureEphemeralCleanupRunning(database)
+    }
+
+    private fun ensureEphemeralCleanupRunning(database: AppDatabase) {
+        if (!hasEphemeralEvents || !ephemeralCleanupScheduled.compareAndSet(false, true)) return
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                while (isActive && hasEphemeralEvents) {
+                    // Wait slightly past the 1-minute ephemeral TTL so a burst of ephemeral
+                    // events is cleaned in one pass; loop again if newer ones remain.
+                    delay(75_000L)
+                    if (isImportingEvents) continue
+                    val genBefore = ephemeralGeneration.get()
+                    database.eventDao().deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
+                    if (!database.eventDao().hasEphemeralEvents()) {
+                        if (ephemeralGeneration.get() == genBefore) {
+                            hasEphemeralEvents = false
+                            break
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.e(TAG, "Error deleting ephemeral events", e)
+            } finally {
+                ephemeralCleanupScheduled.set(false)
+            }
+            // Re-arm if an ephemeral event arrived in the narrow window between exiting
+            // the loop and releasing ephemeralCleanupScheduled.
+            if (hasEphemeralEvents) {
+                ensureEphemeralCleanupRunning(database)
+            }
+        }
+    }
+
+    suspend fun eventsToDelete(database: AppDatabase, runAgeRetention: Boolean = true) {
         if (!isImportingEvents) {
-            Log.d(TAG, "entered eventsToDelete")
+            val verbose = Log.isLoggable(TAG, Log.DEBUG)
+            if (verbose) Log.d(TAG, "entered eventsToDelete")
             job?.join()
             cancelJob()
             job = applicationScope.launch(Dispatchers.IO) {
                 try {
-                    if (isActive) {
+                    if (isActive && hasEphemeralEvents) {
                         val duration = measureTime {
-                            Log.d(TAG, "Deleting ephemeral events older than one minute ago")
+                            if (verbose) Log.d(TAG, "Deleting ephemeral events older than one minute ago")
+                            val genBefore = ephemeralGeneration.get()
                             database.eventDao().deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
+                            if (!database.eventDao().hasEphemeralEvents() && ephemeralGeneration.get() == genBefore) {
+                                hasEphemeralEvents = false
+                            }
                         }
-                        Log.d(TAG, "Deleted ephemeral events in $duration")
+                        if (verbose) Log.d(TAG, "Deleted ephemeral events in $duration")
                     }
 
                     if (isActive) {
                         val duration = measureTime {
-                            Log.d(TAG, "Deleting expired events")
+                            if (verbose) Log.d(TAG, "Deleting expired events")
                             database.eventDao().deleteEventsWithExpirations(TimeUtils.now())
                         }
-                        Log.d(TAG, "Deleted expired events in $duration")
+                        if (verbose) Log.d(TAG, "Deleted expired events in $duration")
                     }
 
-                    if (Settings.deleteEventsOlderThan != OlderThan.NEVER && isActive) {
+                    if (runAgeRetention && Settings.deleteEventsOlderThan != OlderThan.NEVER && isActive) {
                         val until = when (Settings.deleteEventsOlderThan) {
                             OlderThan.DAY -> TimeUtils.oneDayAgo()
                             OlderThan.WEEK -> TimeUtils.oneWeekAgo()
@@ -200,7 +258,7 @@ class Citrine :
                         }
                         if (until > 0) {
                             val duration = measureTime {
-                                Log.d(TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
+                                if (verbose) Log.d(TAG, "Deleting old events (older than ${Settings.deleteEventsOlderThan})")
                                 val neverFrom = Settings.neverDeleteFrom
                                 val preserved = Settings.preservedKindsFromDeletion
                                 when {
@@ -214,7 +272,7 @@ class Citrine :
                                         database.eventDao().deleteAll(until, neverFrom.toTypedArray(), preserved.toIntArray())
                                 }
                             }
-                            Log.d(TAG, "Deleted old events in $duration")
+                            if (verbose) Log.d(TAG, "Deleted old events in $duration")
                         }
                     }
                 } catch (e: Exception) {
@@ -247,6 +305,12 @@ class Citrine :
 
         @Volatile
         var isImportingEvents = false
+
+        // True on startup so the first maintenance tick clears any stale progress
+        // notification left behind by a prior crash; set whenever notification id 2 is
+        // posted and cleared once cancelled, avoiding redundant Binder IPCs when idle.
+        @Volatile
+        var hasProgressNotification = true
 
         const val TAG = "Citrine"
 

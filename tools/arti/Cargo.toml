@@ -38,6 +38,8 @@ tor-hscrypto = { version = "=0.47.0", default-features = false }
 tor-hsservice = { version = "=0.47.0", default-features = false }
 # Reading the persisted HsIdKeypair through the client's keystore.
 tor-keymgr = { version = "=0.47.0", default-features = false, features = ["keymgr"] }
+# Mobile channel padding level (PaddingLevel::Reduced) for TorClientConfigBuilder.
+tor-config = { version = "=0.47.0", default-features = false }
 # Permissions check on the legacy kmp-tor hidden service directory.
 fs-mistrust = "0.16"
 # IncomingStreamRequest::Begin port check for onion service streams.
