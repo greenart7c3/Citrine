@@ -94,6 +94,7 @@ import java.io.File
 import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -119,6 +120,9 @@ class CustomWebSocketServer(
     private val host: String,
     private val port: Int,
     private val appDatabase: AppDatabase,
+    private val context: Context,
+    private val appScope: CoroutineScope,
+    private val onEphemeralEventStored: () -> Unit,
 ) {
     val connections = MutableStateFlow<List<Connection>>(emptyList())
     lateinit var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>
@@ -131,13 +135,13 @@ class CustomWebSocketServer(
             ServerSocket(Settings.port)
         } catch (e: Exception) {
             Log.d(Citrine.TAG, e.toString(), e)
-            Toast.makeText(Citrine.instance, "Port ${Settings.port} is already in use", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Port ${Settings.port} is already in use", Toast.LENGTH_LONG).show()
             null
         }
         if (serverSocket == null) return
         serverSocket.close()
 
-        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             try {
                 GroupManager.load(appDatabase)
             } catch (e: Exception) {
@@ -683,7 +687,7 @@ class CustomWebSocketServer(
                 // Membership changes and metadata regeneration run after the event is
                 // stored and acknowledged.
                 nip29PostSave?.let { callback ->
-                    Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                    appScope.launch(Dispatchers.IO) {
                         try {
                             callback()
                         } catch (e: Exception) {
@@ -836,7 +840,7 @@ class CustomWebSocketServer(
         save(event, connection)
         val ids = appDatabase.eventDao().getOldestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "")
         appDatabase.eventDao().delete(ids, event.pubKey)
-        val history = HistoryDatabase.getDatabase(Citrine.instance)
+        val history = HistoryDatabase.getDatabase(context)
         history.eventDao().insertEventWithTags(history, event.toEventWithTags(), connection = connection)
     }
 
@@ -845,7 +849,7 @@ class CustomWebSocketServer(
         val ids = appDatabase.eventDao().getByKind(event.kind, event.pubKey).drop(1)
         if (ids.isEmpty()) return
         appDatabase.eventDao().delete(ids, event.pubKey)
-        val history = HistoryDatabase.getDatabase(Citrine.instance)
+        val history = HistoryDatabase.getDatabase(context)
         history.eventDao().insertEventWithTags(history, event.toEventWithTags(), connection = connection)
     }
 
@@ -857,7 +861,7 @@ class CustomWebSocketServer(
         val now = System.currentTimeMillis()
         if (now - cachedIsOfflineAt < 5_000L) return cachedIsOffline
 
-        val connectivityManager = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         val offline = if (connectivityManager == null) {
             true
         } else {
@@ -884,7 +888,7 @@ class CustomWebSocketServer(
                 .setInputData(inputData)
                 .build()
 
-            WorkManager.getInstance(Citrine.instance).enqueue(workRequest)
+            WorkManager.getInstance(context).enqueue(workRequest)
             Log.d(Citrine.TAG, "Queued event $eventId for broadcast when connectivity is restored")
         } catch (e: Exception) {
             Log.e(Citrine.TAG, "Failed to queue event for broadcast: ${e.message}", e)
@@ -895,7 +899,7 @@ class CustomWebSocketServer(
         appDatabase.eventDao().insertEventWithTags(appDatabase, event.toEventWithTags(), connection = connection)
 
         if (event.isEphemeral()) {
-            Citrine.instance.scheduleEphemeralCleanup(appDatabase)
+            onEphemeralEventStored()
         }
 
         // Check if offline and broadcast with WorkManager
@@ -942,7 +946,7 @@ class CustomWebSocketServer(
         return current
     }
 
-    val resolver: ContentResolver = Citrine.instance.contentResolver
+    val resolver: ContentResolver = context.contentResolver
 
     private fun cursorToJson(cursor: Cursor?): String {
         if (cursor == null) {
@@ -976,7 +980,7 @@ class CustomWebSocketServer(
         val requestedPath = call.request.uri.trimStart('/')
         Log.d(Citrine.TAG, requestedPath)
 
-        val root = DocumentFile.fromTreeUri(Citrine.instance, rootUri)
+        val root = DocumentFile.fromTreeUri(context, rootUri)
         if (root == null) {
             Log.d(Citrine.TAG, "$requestedPath not found")
             return call.respond(HttpStatusCode.InternalServerError, null)
@@ -1113,7 +1117,7 @@ class CustomWebSocketServer(
 
     /** Hot-adds (or replaces) a running server for an installed nsite without restarting the relay. */
     fun startNsiteServer(nsite: NsiteInfo) {
-        val dir = File(Citrine.instance.filesDir, "nsites/${nsite.folderName}")
+        val dir = File(context.filesDir, "nsites/${nsite.folderName}")
         if (!dir.isDirectory) return
         val key = "/${nsite.folderName}"
         webClientServers.remove(key)?.server?.stop()
@@ -1210,7 +1214,7 @@ class CustomWebSocketServer(
         }
 
         Settings.nsites.forEach { nsite ->
-            val dir = File(Citrine.instance.filesDir, "nsites/${nsite.folderName}")
+            val dir = File(context.filesDir, "nsites/${nsite.folderName}")
             if (dir.isDirectory) {
                 val key = "/${nsite.folderName}"
                 val clientServer = startNsiteServerFor(nsite.folderName, dir)
@@ -1296,7 +1300,7 @@ class CustomWebSocketServer(
                     if (call.request.httpMethod == HttpMethod.Options) {
                         call.respondText("", ContentType.Application.Json, HttpStatusCode.NoContent)
                     } else if (call.request.headers["Accept"] == "application/nostr+json") {
-                        LocalPreferences.loadSettingsFromEncryptedStorage(Citrine.instance)
+                        LocalPreferences.loadSettingsFromEncryptedStorage(context)
 
                         val supportedNips = mutableListOf(1, 2, 9, 11, 29, 40, 42, 45, 50, 59, 65, 70, 77)
                         if (Settings.ownerPubkey.isNotBlank()) supportedNips.add(86)
@@ -1493,7 +1497,7 @@ class CustomWebSocketServer(
 
                 // NIP-86 Relay Management API
                 post("/") {
-                    Nip86Handler.handle(call, appDatabase, Citrine.instance)
+                    Nip86Handler.handle(call, appDatabase, context)
                 }
 
                 // WebSocket endpoint
@@ -1505,7 +1509,7 @@ class CustomWebSocketServer(
                         close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "too many connections"))
                         return@webSocket
                     }
-                    val thisConnection = Connection(this)
+                    val thisConnection = Connection(this, appScope)
                     connections.update { it + thisConnection }
 
                     Log.d(Citrine.TAG, "New connection from ${this.call.request.local.remoteHost} ${thisConnection.name}")

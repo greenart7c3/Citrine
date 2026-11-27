@@ -23,6 +23,7 @@ import kotlinx.coroutines.sync.Mutex
 
 class Connection(
     val session: DefaultWebSocketServerSession,
+    appScope: CoroutineScope,
     var users: MutableSet<HexKey> = mutableSetOf(),
     val authChallenge: String = UUID.randomUUID().toString().substring(0..10),
 ) {
@@ -38,7 +39,7 @@ class Connection(
     val since = System.currentTimeMillis()
 
     private val connectionScope = CoroutineScope(
-        Citrine.instance.applicationScope.coroutineContext + SupervisorJob(),
+        appScope.coroutineContext + SupervisorJob(),
     )
 
     // Outbound frames are staged here and drained by a single writer coroutine using the

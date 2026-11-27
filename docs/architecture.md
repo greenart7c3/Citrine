@@ -134,7 +134,9 @@ container from their context (`Context.citrine`). Shrinks `citrineInstanceUsers`
 
 Done so far: the receivers (`BootBroadcastReceiver`, `ClipboardReceiver`),
 `EventBroadcastWorker`, `CitrineContentProvider` and `WebSocketServerService`
-read `Context.citrine` instead of `Citrine.instance`.
+read `Context.citrine` instead of `Citrine.instance`. `CustomWebSocketServer`
+takes the application context, the app scope and an `onEphemeralEventStored`
+callback through its constructor, and hands the scope to each `Connection`.
 
 ### 2. Give the big screens ViewModels
 
