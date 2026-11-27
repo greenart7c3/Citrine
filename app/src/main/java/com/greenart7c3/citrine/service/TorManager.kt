@@ -12,6 +12,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -30,6 +31,14 @@ import kotlinx.coroutines.withTimeoutOrNull
  * onion service (the relay's .onion address) instead of only a SOCKS proxy.
  */
 object TorManager {
+    private lateinit var appContext: Context
+    private lateinit var appScope: CoroutineScope
+
+    /** Hands the Tor manager the application context (read only once it is attached) and the app scope; called once from the Citrine constructor. */
+    fun install(appContext: Context, appScope: CoroutineScope) {
+        this.appContext = appContext
+        this.appScope = appScope
+    }
     const val ONION_VIRTUAL_PORT: Int = 80
 
     private const val BOOTSTRAP_POLL_MS = 500L
@@ -94,7 +103,7 @@ object TorManager {
             pendingDestroy = null
             job?.cancel()
             val previous = pendingLifecycle
-            val newJob = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            val newJob = appScope.launch(Dispatchers.IO) {
                 previous?.join()
                 run()
             }
@@ -107,7 +116,7 @@ object TorManager {
         val port = lastLocalPort.takeIf { it > 0 } ?: Settings.port
         if (restarting) return
         restarting = true
-        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             try {
                 // Rebuild the client (fresh circuits), as restarting the old tor
                 // daemon did — the UI's Retry button is the way out of Error.
@@ -140,7 +149,7 @@ object TorManager {
             releaseSocksPort()
             if (!nativeReady) return
             previous = pendingLifecycle
-            stopJob = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            stopJob = appScope.launch(Dispatchers.IO) {
                 previous?.join()
                 try {
                     synchronized(proxyLock) { ArtiNative.stopSocksProxy() }
@@ -159,7 +168,7 @@ object TorManager {
             }
             pendingLifecycle = stopJob
             if (!destroyClient) {
-                pendingDestroy = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                pendingDestroy = appScope.launch(Dispatchers.IO) {
                     val self = coroutineContext[Job]
                     delay(DESTROY_AFTER_STOP_DELAY_MS)
                     stopJob.join()
@@ -168,7 +177,7 @@ object TorManager {
                         if (!isActive || job != null || pendingDestroy !== self) return@launch
                         pendingDestroy = null
                         val prev = pendingLifecycle
-                        pendingLifecycle = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                        pendingLifecycle = appScope.launch(Dispatchers.IO) {
                             prev?.join()
                             try {
                                 ArtiNative.destroy()
@@ -194,13 +203,13 @@ object TorManager {
             currentCoroutineContext().ensureActive()
             Log.i(Citrine.TAG, "Starting built-in Tor: ${ArtiNative.getVersion()}")
 
-            val dataDir = File(Citrine.instance.filesDir, "arti").apply { mkdirs() }
+            val dataDir = File(appContext.filesDir, "arti").apply { mkdirs() }
             // kmp-tor's hidden service directory holds the relay's onion
             // identity key: hand it to Arti for the address carry-over before
             // anything can generate a fresh key. kmp-tor's work directory is
             // the app_torservice getDir.
             val legacyHsDir = File(
-                Citrine.instance.getDir("torservice", Context.MODE_PRIVATE),
+                appContext.getDir("torservice", Context.MODE_PRIVATE),
                 "citrine_hs",
             ).takeIf { File(it, "hs_ed25519_secret_key").exists() }
             val result = ArtiNative.initialize(
@@ -221,7 +230,7 @@ object TorManager {
                 // The identity-bearing directory is the native side's to remove
                 // (only after a successful import); the Tor cache holds no
                 // keys and can go as soon as Arti initialized.
-                File(Citrine.instance.cacheDir, "torservice").deleteRecursively()
+                File(appContext.cacheDir, "torservice").deleteRecursively()
             }
 
             val port = bindSocksProxy() ?: return
@@ -259,7 +268,7 @@ object TorManager {
             _state.value = State.Running(hostname)
             if (hostname.isNotBlank() && Settings.onionHostname != hostname) {
                 Settings.onionHostname = hostname
-                LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, appContext)
             }
         } catch (e: CancellationException) {
             throw e
@@ -318,10 +327,10 @@ object TorManager {
      */
     private fun deleteLegacyKmpTorData() {
         listOf(
-            Citrine.instance.getDir("torservice", Context.MODE_PRIVATE),
-            File(Citrine.instance.cacheDir, "torservice"),
-            File(Citrine.instance.filesDir, "kmptor"),
-            File(Citrine.instance.cacheDir, "kmptor"),
+            appContext.getDir("torservice", Context.MODE_PRIVATE),
+            File(appContext.cacheDir, "torservice"),
+            File(appContext.filesDir, "kmptor"),
+            File(appContext.cacheDir, "kmptor"),
         ).forEach { dir ->
             if (dir.exists()) {
                 runCatching { dir.deleteRecursively() }

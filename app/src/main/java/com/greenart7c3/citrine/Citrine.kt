@@ -26,8 +26,11 @@ import com.greenart7c3.citrine.service.EventDownloader
 import com.greenart7c3.citrine.service.EventRebroadcaster
 import com.greenart7c3.citrine.service.ListImporter
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.service.NsiteManager
 import com.greenart7c3.citrine.service.PokeyReceiver
+import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.service.RelayIdentity
+import com.greenart7c3.citrine.service.TorManager
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.service.crashreports.CrashReportCache
 import com.greenart7c3.citrine.service.crashreports.CrashReportSender
@@ -91,6 +94,9 @@ class Citrine :
         EventDownloader.install(this, relayClient, applicationScope)
         RelayIdentity.install(this)
         GroupManager.install(this, applicationScope)
+        NsiteManager.install(this, relayClient)
+        TorManager.install(this, applicationScope)
+        RelayAggregator.install(this, relayClient, exceptionHandler)
     }
 
     private val pokeyReceiver = PokeyReceiver()

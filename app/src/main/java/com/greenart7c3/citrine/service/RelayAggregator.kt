@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.util.LruCache
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.database.EventWithTags
@@ -41,6 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -82,6 +84,20 @@ private data class ChunkSubscription(
 )
 
 object RelayAggregator {
+    private lateinit var context: Context
+    private lateinit var relayClient: RelayClient
+    private lateinit var exceptionHandler: CoroutineExceptionHandler
+
+    /**
+     * Hands the aggregator the application context (read only once it is attached), the
+     * outbound relay client and the exception handler of its scope; called once from the
+     * Citrine constructor.
+     */
+    fun install(context: Context, relayClient: RelayClient, exceptionHandler: CoroutineExceptionHandler) {
+        this.context = context
+        this.relayClient = relayClient
+        this.exceptionHandler = exceptionHandler
+    }
     private const val TAG = "RelayAggregator"
 
     private val FALLBACK_OUTBOX_RELAYS = listOf(
@@ -323,7 +339,7 @@ object RelayAggregator {
         Log.d(TAG, "Starting aggregator for $startLabel")
         currentPubkey = Settings.aggregatorPubkey
         this.database = database
-        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + Citrine.instance.exceptionHandler)
+        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
         scope = newScope
 
         val newEventChannel = Channel<Event>(EVENT_CHANNEL_CAPACITY, BufferOverflow.DROP_OLDEST)
@@ -384,7 +400,7 @@ object RelayAggregator {
 
         val newListener = AggregatorListener()
         listener = newListener
-        Citrine.instance.client.addConnectionListener(newListener)
+        relayClient.client.addConnectionListener(newListener)
 
         installAuthenticatorIfNeeded(newScope)
 
@@ -454,7 +470,7 @@ object RelayAggregator {
     fun stop() {
         val s = scope ?: return
         Log.d(TAG, "Stopping aggregator")
-        listener?.let { Citrine.instance.client.removeConnectionListener(it) }
+        listener?.let { relayClient.client.removeConnectionListener(it) }
         listener = null
 
         // The authenticator's internal client listener stays registered with NostrClient
@@ -470,7 +486,7 @@ object RelayAggregator {
         unregisterNetworkCallback()
 
         trackedSubIds.forEach {
-            runCatching { Citrine.instance.client.unsubscribe(it) }
+            runCatching { relayClient.client.unsubscribe(it) }
         }
         trackedSubIds.clear()
         taggedSubIds.clear()
@@ -543,7 +559,7 @@ object RelayAggregator {
         installedAuthIdentity = null
 
         if (desired == null) return
-        val signer = NostrSignerExternal(pubkey, pkg, Citrine.instance.contentResolver)
+        val signer = NostrSignerExternal(pubkey, pkg, context.contentResolver)
         // Lets the signer fall back to Amber's UI when the background ContentResolver path
         // can't auto-approve. The launcher routes through MainActivity's
         // ActivityResultLauncher (set via [registerActivityLauncher]), which preserves
@@ -574,7 +590,7 @@ object RelayAggregator {
         installedAuthIdentity = desired
         signedAuthCache.clear()
         Log.d(TAG, "Installing RelayAuthenticator for $pubkey via $pkg")
-        authenticator = RelayAuthenticator(Citrine.instance.client, scope) { relay, template, _ ->
+        authenticator = RelayAuthenticator(relayClient.client, scope) { relay, template, _ ->
             val relayUrl = relay.url
             val challenge = template.tags.firstOrNull { it.size > 1 && it[0] == "challenge" }?.get(1)
             if (challenge != null) {
@@ -608,7 +624,7 @@ object RelayAggregator {
         relayAuthSigner?.newResponse(data)
     }
 
-    private fun connectivityManager(): ConnectivityManager? = Citrine.instance.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    private fun connectivityManager(): ConnectivityManager? = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
 
     private fun isOnMeteredNetwork(): Boolean {
         val cm = connectivityManager() ?: return false
@@ -652,7 +668,7 @@ object RelayAggregator {
                 Log.d(TAG, "Network lost: ${network.networkHandle}")
                 if (networkChangeDetector.onLost(network.networkHandle)) {
                     cancelPendingRelayReset()
-                    Citrine.instance.client.disconnect()
+                    relayClient.client.disconnect()
                 }
                 scheduleNetworkEval()
             }
@@ -667,8 +683,8 @@ object RelayAggregator {
         if (reason != null) {
             Log.d(TAG, "Network ${network.networkHandle} change: $reason")
             scheduleRelayReset(reason)
-        } else if (!Citrine.instance.client.isActive()) {
-            Citrine.instance.client.connect()
+        } else if (!relayClient.client.isActive()) {
+            relayClient.client.connect()
         }
     }
 
@@ -701,7 +717,7 @@ object RelayAggregator {
      */
     private fun resetRelayConnections(reason: String) {
         Log.d(TAG, "Resetting relay connections: $reason")
-        val client = Citrine.instance.client
+        val client = relayClient.client
         client.disconnect()
         // disconnect() also clears each relay's backoff; this covers relays without a socket.
         client.resetBackoff()
@@ -752,7 +768,7 @@ object RelayAggregator {
         // Tear down active subscriptions so we stop receiving events. Keep
         // [lastEventByPubkey] and [currentPubkey] in place — when we resume, the next
         // refresh uses them to compute tight per-chunk `since` values.
-        trackedSubIds.forEach { runCatching { Citrine.instance.client.unsubscribe(it) } }
+        trackedSubIds.forEach { runCatching { relayClient.client.unsubscribe(it) } }
         trackedSubIds.clear()
         activeRelaySubs.clear()
         subscribedRelays.clear()
@@ -800,7 +816,7 @@ object RelayAggregator {
                 Log.d(TAG, "Aggregator pubkey changed ($currentPubkey -> $pubkey), restarting")
                 stop()
                 Settings.relayAggregatorLastSync = 0L
-                LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                 start(database)
             }
             enabled && running -> {
@@ -860,9 +876,9 @@ object RelayAggregator {
             }
             val dao = database.eventDao()
 
-            if (!Citrine.instance.client.isActive()) {
+            if (!relayClient.client.isActive()) {
                 Log.d(TAG, "Nostr client is not active; connecting")
-                Citrine.instance.client.connect()
+                relayClient.client.connect()
             }
 
             // When no pubkey is configured, the aggregator becomes a plain relay listener:
@@ -1139,7 +1155,7 @@ object RelayAggregator {
                 if (existing.size > chunks.size) {
                     for (i in chunks.size until existing.size) {
                         val oldId = existing[i].subId
-                        runCatching { Citrine.instance.client.unsubscribe(oldId) }
+                        runCatching { relayClient.client.unsubscribe(oldId) }
                         trackedSubIds.remove(oldId)
                         closedExtraChunkSubs++
                     }
@@ -1150,7 +1166,7 @@ object RelayAggregator {
             for ((relay, entries) in activeRelaySubs) {
                 if (!newActiveSubs.containsKey(relay)) {
                     entries.forEach { entry ->
-                        runCatching { Citrine.instance.client.unsubscribe(entry.subId) }
+                        runCatching { relayClient.client.unsubscribe(entry.subId) }
                         trackedSubIds.remove(entry.subId)
                         closedGoneRelaySubs++
                     }
@@ -1202,7 +1218,7 @@ object RelayAggregator {
                         list
                     }
                     runCatching {
-                        Citrine.instance.client.subscribe(id, mapOf(relay to filters))
+                        relayClient.client.subscribe(id, mapOf(relay to filters))
                     }.onFailure { Log.e(TAG, "tagged subscribe to ${relay.url} failed", it) }
                 }
                 // Drop tagged subs for relays no longer in the desired set so a single relay
@@ -1210,7 +1226,7 @@ object RelayAggregator {
                 val staleTaggedRelays = taggedSubIds.keys - taggedSubRelays
                 for (relay in staleTaggedRelays) {
                     val oldId = taggedSubIds.remove(relay) ?: continue
-                    runCatching { Citrine.instance.client.unsubscribe(oldId) }
+                    runCatching { relayClient.client.unsubscribe(oldId) }
                     trackedSubIds.remove(oldId)
                 }
                 Log.d(
@@ -1223,7 +1239,7 @@ object RelayAggregator {
                 if (taggedSubIds.isNotEmpty()) {
                     Log.d(TAG, "Tagged sub disabled, unsubscribing ${taggedSubIds.size} relay subs")
                     taggedSubIds.forEach { (_, id) ->
-                        runCatching { Citrine.instance.client.unsubscribe(id) }
+                        runCatching { relayClient.client.unsubscribe(id) }
                         trackedSubIds.remove(id)
                     }
                     taggedSubIds.clear()
@@ -1247,7 +1263,7 @@ object RelayAggregator {
             connectedRelays.retainAll(newSubscribedRelays)
 
             Settings.relayAggregatorLastSync = TimeUtils.now()
-            LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
             Log.d(
                 TAG,
                 "Refresh complete in ${System.currentTimeMillis() - refreshStartMs}ms: " +
@@ -1312,7 +1328,7 @@ object RelayAggregator {
 
     private fun sendSubscribe(relay: NormalizedRelayUrl, subId: String, filters: List<Filter>) {
         runCatching {
-            Citrine.instance.client.subscribe(subId, mapOf(relay to filters))
+            relayClient.client.subscribe(subId, mapOf(relay to filters))
         }.onFailure { Log.e(TAG, "subscribe to ${relay.url} failed", it) }
     }
 
@@ -1440,8 +1456,8 @@ object RelayAggregator {
 
     private fun normalizeRemote(raw: String): NormalizedRelayUrl? {
         val n = RelayUrlNormalizer.normalizeOrNull(raw) ?: return null
-        if (Citrine.instance.isPrivateIp(n.url)) return null
-        if (!Settings.useProxy && Citrine.instance.isOnionUrl(n.url)) return null
+        if (relayClient.isPrivateIp(n.url)) return null
+        if (!Settings.useProxy && relayClient.isOnionUrl(n.url)) return null
         return NormalizedRelayUrl(url = n.url)
     }
 
@@ -1505,10 +1521,10 @@ object RelayAggregator {
             ),
         )
         val subId = newSubId()
-        if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
+        if (!relayClient.client.isActive()) relayClient.client.connect()
         return try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                Citrine.instance.client.fetchFirst(subId, relays.associateWith { filters })
+                relayClient.client.fetchFirst(subId, relays.associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e
@@ -1516,7 +1532,7 @@ object RelayAggregator {
             Log.e(TAG, "fetch kind $kind for $pubkey failed", e)
             null
         } finally {
-            runCatching { Citrine.instance.client.unsubscribe(subId) }
+            runCatching { relayClient.client.unsubscribe(subId) }
         }
     }
 
@@ -1565,7 +1581,7 @@ object RelayAggregator {
 
         val daos = listOf(
             database.eventDao(),
-            HistoryDatabase.getDatabase(Citrine.instance).eventDao(),
+            HistoryDatabase.getDatabase(context).eventDao(),
         )
 
         var deleted = 0
@@ -1590,7 +1606,7 @@ object RelayAggregator {
         }
 
         Settings.strangerContactListsPruned = true
-        LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
         Log.d(TAG, "Contact list cleanup: deleted $deleted kind-3 event(s) from authors outside the follow graph")
     }
 
@@ -1667,10 +1683,10 @@ object RelayAggregator {
             ),
         )
         val subId = newSubId()
-        if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
+        if (!relayClient.client.isActive()) relayClient.client.connect()
         val fetched = try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                Citrine.instance.client.fetchFirst(subId, indexerRelays().associateWith { filters })
+                relayClient.client.fetchFirst(subId, indexerRelays().associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e
@@ -1678,7 +1694,7 @@ object RelayAggregator {
             Log.e(TAG, "bootstrap contact list failed for $pubkey", e)
             null
         } finally {
-            runCatching { Citrine.instance.client.unsubscribe(subId) }
+            runCatching { relayClient.client.unsubscribe(subId) }
         }
         fetched?.let { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
         // Prefer whichever copy is newest — a cache hit may still beat a slow/partial fetch.
@@ -1865,10 +1881,10 @@ object RelayAggregator {
             ),
         )
         val subId = newSubId()
-        if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
+        if (!relayClient.client.isActive()) relayClient.client.connect()
         val fetched = try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                Citrine.instance.client.fetchFirst(subId, indexerRelays().associateWith { filters })
+                relayClient.client.fetchFirst(subId, indexerRelays().associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e
@@ -1876,7 +1892,7 @@ object RelayAggregator {
             Log.e(TAG, "bootstrap mute list failed for $pubkey", e)
             null
         } finally {
-            runCatching { Citrine.instance.client.unsubscribe(subId) }
+            runCatching { relayClient.client.unsubscribe(subId) }
         }
         fetched?.let { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
         return when {
@@ -1898,7 +1914,7 @@ object RelayAggregator {
         timeoutMs: Long,
     ): Map<String, AdvertisedRelayListEvent> {
         if (pubkeys.isEmpty() || relays.isEmpty()) return emptyMap()
-        if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
+        if (!relayClient.client.isActive()) relayClient.client.connect()
 
         val results = ConcurrentHashMap<String, AdvertisedRelayListEvent>()
         val subId = newSubId()
@@ -1949,7 +1965,7 @@ object RelayAggregator {
             }
         }
 
-        Citrine.instance.client.addConnectionListener(collector)
+        relayClient.client.addConnectionListener(collector)
         try {
             // Pack every author chunk into a single REQ as multiple filters.
             // Calling subscribe() once per chunk with the same subId would overwrite the
@@ -1961,12 +1977,12 @@ object RelayAggregator {
                 )
             }
             runCatching {
-                Citrine.instance.client.subscribe(subId, relays.associateWith { filters })
+                relayClient.client.subscribe(subId, relays.associateWith { filters })
             }.onFailure { Log.e(TAG, "batch relay-list subscribe failed", it) }
             withTimeoutOrNull(timeoutMs) { done.await() }
         } finally {
-            runCatching { Citrine.instance.client.unsubscribe(subId) }
-            Citrine.instance.client.removeConnectionListener(collector)
+            runCatching { relayClient.client.unsubscribe(subId) }
+            relayClient.client.removeConnectionListener(collector)
         }
 
         // Persist what we learned so future refreshes are a cache hit.
@@ -1988,7 +2004,7 @@ object RelayAggregator {
         timeoutMs: Long,
     ): Map<String, MetadataEvent> {
         if (relayToAuthors.isEmpty()) return emptyMap()
-        if (!Citrine.instance.client.isActive()) Citrine.instance.client.connect()
+        if (!relayClient.client.isActive()) relayClient.client.connect()
 
         val results = ConcurrentHashMap<String, MetadataEvent>()
         val subId = newSubId()
@@ -2039,7 +2055,7 @@ object RelayAggregator {
             }
         }
 
-        Citrine.instance.client.addConnectionListener(collector)
+        relayClient.client.addConnectionListener(collector)
         try {
             // One filter list per relay so each relay only gets asked about the authors that
             // actually advertised it as a write relay. Authors with no NIP-65 are routed to
@@ -2053,12 +2069,12 @@ object RelayAggregator {
                 }
             }
             runCatching {
-                Citrine.instance.client.subscribe(subId, perRelayFilters)
+                relayClient.client.subscribe(subId, perRelayFilters)
             }.onFailure { Log.e(TAG, "batch metadata subscribe failed", it) }
             withTimeoutOrNull(timeoutMs) { done.await() }
         } finally {
-            runCatching { Citrine.instance.client.unsubscribe(subId) }
-            Citrine.instance.client.removeConnectionListener(collector)
+            runCatching { relayClient.client.unsubscribe(subId) }
+            relayClient.client.removeConnectionListener(collector)
         }
 
         results.values.forEach {

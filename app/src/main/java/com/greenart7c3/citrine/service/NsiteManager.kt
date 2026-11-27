@@ -1,6 +1,8 @@
 package com.greenart7c3.citrine.service
 
+import android.content.Context
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.json.JacksonMapper
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
@@ -42,6 +44,14 @@ import okhttp3.Request
  * verified against their path hash before being written to filesDir/nsites/<folderName>.
  */
 object NsiteManager {
+    private lateinit var context: Context
+    private lateinit var relayClient: RelayClient
+
+    /** Hands the nsite store the application context (read only once it is attached) and the outbound relay client; called once from the Citrine constructor. */
+    fun install(context: Context, relayClient: RelayClient) {
+        this.context = context
+        this.relayClient = relayClient
+    }
     private const val TAG = "NsiteManager"
 
     const val KIND_ROOT_SITE = 15128
@@ -105,8 +115,8 @@ object NsiteManager {
 
     private fun normalizeRemote(raw: String): NormalizedRelayUrl? {
         val n = RelayUrlNormalizer.normalizeOrNull(raw) ?: return null
-        if (Citrine.instance.isPrivateIp(n.url)) return null
-        if (!Settings.useProxy && Citrine.instance.isOnionUrl(n.url)) return null
+        if (relayClient.isPrivateIp(n.url)) return null
+        if (!Settings.useProxy && relayClient.isOnionUrl(n.url)) return null
         return NormalizedRelayUrl(url = n.url)
     }
 
@@ -163,7 +173,7 @@ object NsiteManager {
 
     /** The on-disk icon file for an installed nsite, scanning the known icon filenames. */
     fun localIconFile(folderName: String): File? {
-        val dir = File(Citrine.instance.filesDir, "nsites/$folderName")
+        val dir = File(context.filesDir, "nsites/$folderName")
         for (name in ICON_NAMES) {
             val file = File(dir, name)
             if (file.isFile) return file
@@ -258,7 +268,7 @@ object NsiteManager {
     }
 
     private suspend fun collectManifests(relays: List<NormalizedRelayUrl>): List<Event> {
-        val client = Citrine.instance.client
+        val client = relayClient.client
         if (!client.isActive()) client.connect()
 
         val results = ConcurrentHashMap<String, Event>()
@@ -315,7 +325,7 @@ object NsiteManager {
         relays: List<NormalizedRelayUrl>,
     ): Map<String, Event> {
         if (pubkeys.isEmpty()) return emptyMap()
-        val client = Citrine.instance.client
+        val client = relayClient.client
         if (!client.isActive()) client.connect()
 
         val results = ConcurrentHashMap<String, Event>()
@@ -377,7 +387,7 @@ object NsiteManager {
         relays: List<NormalizedRelayUrl>,
     ): Event? {
         if (relays.isEmpty()) return null
-        val client = Citrine.instance.client
+        val client = relayClient.client
         val filters = listOf(
             Filter(
                 kinds = listOf(kind),
@@ -478,8 +488,8 @@ object NsiteManager {
         if (servers.isEmpty()) return Result.failure(IllegalStateException("No blossom servers found"))
 
         val folderName = folderNameFor(address)
-        val rootDir = File(Citrine.instance.filesDir, "nsites/$folderName")
-        val tmpDir = File(Citrine.instance.filesDir, "nsites/$folderName.tmp")
+        val rootDir = File(context.filesDir, "nsites/$folderName")
+        val tmpDir = File(context.filesDir, "nsites/$folderName.tmp")
         tmpDir.deleteRecursively()
         tmpDir.mkdirs()
 
@@ -574,28 +584,28 @@ object NsiteManager {
         val idx = Settings.nsites.indexOfFirst { it.address == address }
         if (idx < 0) return
         Settings.nsites[idx] = Settings.nsites[idx].copy(autoUpdate = enabled)
-        LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
     }
 
     fun delete(address: String) {
         val nsite = Settings.nsites.firstOrNull { it.address == address } ?: return
         Settings.nsites.removeAll { it.address == address }
-        LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
-        File(Citrine.instance.filesDir, "nsites/${nsite.folderName}").deleteRecursively()
+        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+        File(context.filesDir, "nsites/${nsite.folderName}").deleteRecursively()
         CustomWebSocketService.server?.stopNsiteServer(nsite.folderName)
     }
 
     private fun upsert(info: NsiteInfo) {
         val idx = Settings.nsites.indexOfFirst { it.address == info.address }
         if (idx >= 0) Settings.nsites[idx] = info else Settings.nsites.add(info)
-        LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
     }
 
     private fun updateLastChecked(address: String, time: Long) {
         val idx = Settings.nsites.indexOfFirst { it.address == address }
         if (idx < 0) return
         Settings.nsites[idx] = Settings.nsites[idx].copy(lastChecked = time)
-        LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
     }
 
     // endregion

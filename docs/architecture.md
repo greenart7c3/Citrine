@@ -153,7 +153,10 @@ constructor (`install`), like `EventSubscription`: `EventRebroadcaster` and
 `ListImporter` the `RelayClient`, `CrashReportSender` the `RelayClient` and the
 app scope, `EventDownloader` the application context, the `RelayClient` and the
 app scope, `RelayIdentity` the application context and `GroupManager` the
-application context and the app scope. A context handed over from the
+application context and the app scope, `NsiteManager` the application context
+and the `RelayClient`, `TorManager` the application context and the app scope,
+and `RelayAggregator` the application context, the `RelayClient` and the
+exception handler of its scope. A context handed over from the
 constructor is only read once the Application is attached.
 
 ### 2. Give the big screens ViewModels
