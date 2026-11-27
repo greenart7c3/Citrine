@@ -10,6 +10,7 @@ import com.greenart7c3.citrine.json.JacksonMapper
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.nip29.GroupManager
 import com.greenart7c3.citrine.utils.isEphemeral
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -26,13 +27,33 @@ data class Subscription(
     val appDatabase: AppDatabase,
     val objectMapper: ObjectMapper,
     val count: Boolean,
+    private val exceptionHandler: CoroutineExceptionHandler,
 ) {
-    val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + Citrine.instance.exceptionHandler)
+    val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
     val escapedId: String = ENVELOPE_MAPPER.writeValueAsString(id)
 }
 
 object EventSubscription {
     private val subscriptions = LruCache<String, SubscriptionManager>(500)
+
+    private lateinit var appScope: CoroutineScope
+    private lateinit var exceptionHandler: CoroutineExceptionHandler
+    private lateinit var reportOutOfMemory: (OutOfMemoryError) -> Unit
+
+    /**
+     * Hands the registry the app scope, the exception handler of each subscription's
+     * scope and the out-of-memory report sink. Called once from [com.greenart7c3.citrine.Citrine]'s
+     * constructor, before the ContentProvider or the relay can store an event.
+     */
+    fun install(
+        appScope: CoroutineScope,
+        exceptionHandler: CoroutineExceptionHandler,
+        reportOutOfMemory: (OutOfMemoryError) -> Unit,
+    ) {
+        this.appScope = appScope
+        this.exceptionHandler = exceptionHandler
+        this.reportOutOfMemory = reportOutOfMemory
+    }
 
     // NIP-01: subscription ids are managed independently per connection. The wire id
     // stays the client-sent value; only the cache key is connection-scoped.
@@ -42,7 +63,7 @@ object EventSubscription {
 
     @OptIn(DelicateCoroutinesApi::class)
     fun executeAll(dbEvent: EventWithTags, connection: Connection?) {
-        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             val event = dbEvent.toEvent()
             var eventJsonStr: String? = null
             var sentEvent = false
@@ -121,7 +142,9 @@ object EventSubscription {
                 appDatabase,
                 objectMapper,
                 count,
+                exceptionHandler,
             ),
+            reportOutOfMemory,
         )
         // NIP-45: COUNT subscriptions answer once and are never registered, so they
         // neither evict a same-id REQ subscription nor receive live EVENT fanout.

@@ -137,6 +137,10 @@ Done so far: the receivers (`BootBroadcastReceiver`, `ClipboardReceiver`),
 read `Context.citrine` instead of `Citrine.instance`. `CustomWebSocketServer`
 takes the application context, the app scope and an `onEphemeralEventStored`
 callback through its constructor, and hands the scope to each `Connection`.
+`EventSubscription`, which `EventDao` calls statically, gets the app scope, the
+exception handler and the out-of-memory report sink once from `Citrine`'s
+constructor (`install`), before the ContentProvider can store an event, and
+passes them to each `Subscription` and `SubscriptionManager`.
 
 ### 2. Give the big screens ViewModels
 
