@@ -4,6 +4,7 @@ Release notes for Citrine, one file per version. The most recent release is list
 
 | Version | Changelog                        |
 | ------- | -------------------------------- |
+| 3.3.5 | [3.3.5.md](3.3.5.md) |
 | 3.3.4 | [3.3.4.md](3.3.4.md) |
 | 3.3.3 | [3.3.3.md](3.3.3.md) |
 | 3.3.2 | [3.3.2.md](3.3.2.md) |
