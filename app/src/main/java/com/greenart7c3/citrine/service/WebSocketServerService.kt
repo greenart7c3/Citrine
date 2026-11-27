@@ -263,6 +263,9 @@ class WebSocketServerService : Service() {
             host = Settings.host,
             port = Settings.port,
             appDatabase = database,
+            context = citrine,
+            appScope = citrine.applicationScope,
+            onEphemeralEventStored = { citrine.scheduleEphemeralCleanup(database) },
         )
         CustomWebSocketService.server?.start()
 
