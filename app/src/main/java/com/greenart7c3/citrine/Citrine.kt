@@ -12,10 +12,12 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
+import com.greenart7c3.citrine.relays.AppRelayClient
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
@@ -63,28 +65,15 @@ class Citrine :
             Log.e("AmberCoroutine", "Caught exception: ${throwable.message}", throwable)
         }
     val applicationScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
-    val factory = OkHttpWebSocket.Builder { url ->
-        HttpClientManager.getHttpClient(shouldUseProxyFor(url.url))
-    }
+    val relayClient: RelayClient = AppRelayClient(applicationScope)
 
-    fun shouldUseProxyFor(url: String): Boolean {
-        if (!Settings.useProxy) return false
-        if (isPrivateIp(url)) return false
-        if (Settings.proxyAllUrls) return true
-        return isOnionUrl(url)
-    }
+    val factory: OkHttpWebSocket.Builder get() = relayClient.factory
 
-    fun isOnionUrl(url: String): Boolean {
-        val host = url
-            .substringAfter("://", url)
-            .substringBefore('/')
-            .substringBefore('?')
-            .substringBefore('#')
-            .substringBefore(':')
-            .lowercase()
-        return host.endsWith(".onion")
-    }
-    val client: NostrClient = NostrClient(factory, applicationScope)
+    val client: NostrClient get() = relayClient.client
+
+    fun isOnionUrl(url: String): Boolean = relayClient.isOnionUrl(url)
+
+    fun isPrivateIp(url: String): Boolean = relayClient.isPrivateIp(url)
 
     init {
         EventSubscription.install(applicationScope, exceptionHandler) { error ->
@@ -94,26 +83,6 @@ class Citrine :
 
     private val pokeyReceiver = PokeyReceiver()
     private var isPokeyReceiverRegistered = false
-
-    fun isPrivateIp(url: String): Boolean = url.contains("127.0.0.1") ||
-        url.contains("localhost") ||
-        url.contains("192.168.") ||
-        url.contains("172.16.") ||
-        url.contains("172.17.") ||
-        url.contains("172.18.") ||
-        url.contains("172.19.") ||
-        url.contains("172.20.") ||
-        url.contains("172.21.") ||
-        url.contains("172.22.") ||
-        url.contains("172.23.") ||
-        url.contains("172.24.") ||
-        url.contains("172.25.") ||
-        url.contains("172.26.") ||
-        url.contains("172.27.") ||
-        url.contains("172.28.") ||
-        url.contains("172.29.") ||
-        url.contains("172.30.") ||
-        url.contains("172.31.")
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Synchronized

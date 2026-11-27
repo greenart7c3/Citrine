@@ -17,7 +17,6 @@
     <ID>CyclomaticComplexMethod:AccessControlSettingsScreen.kt:@Composable fun AccessControlSettingsScreen</ID>
     <ID>CyclomaticComplexMethod:AggregatorSettingsScreen.kt:@Composable fun AggregatorSettingsScreen</ID>
     <ID>CyclomaticComplexMethod:BrowseNsitesScreen.kt:@Composable fun BrowseNsitesScreen</ID>
-    <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$fun isPrivateIp: Boolean</ID>
     <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$suspend fun eventsToDelete</ID>
     <ID>CyclomaticComplexMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
     <ID>CyclomaticComplexMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
