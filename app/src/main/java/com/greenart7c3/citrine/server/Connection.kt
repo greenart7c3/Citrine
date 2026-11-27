@@ -73,10 +73,12 @@ class Connection(
             }
         }
         connectionScope.launch {
+            // An idle connection can't qualify for closure until 10 minutes have elapsed.
+            // Sleep the initial 10 minutes in one shot, then re-check every 5 minutes
+            // instead of waking the CPU every minute per open connection.
+            delay(10 * 60 * 1000L)
             while (isActive) {
-                delay(60_000)
-                val hasTenMinutesPassed = System.currentTimeMillis() - since > 10 * 60 * 1000
-                if (hasTenMinutesPassed && !EventSubscription.containsConnection(this@Connection)) {
+                if (!EventSubscription.containsConnection(this@Connection)) {
                     Log.d(Citrine.TAG, "Closing session due to inactivity for $name")
                     try {
                         session.cancel()
@@ -84,6 +86,7 @@ class Connection(
                     }
                     break
                 }
+                delay(5 * 60 * 1000L)
             }
         }
     }

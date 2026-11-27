@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -32,6 +33,11 @@ object Log {
     private const val LEVEL_ERROR = "E"
 
     private const val BATCH_SIZE = 200
+
+    // Short coalescing window so sequential log lines (e.g. a startup or event burst)
+    // land in a single SQLite write transaction instead of triggering one disk write
+    // per call. Idle periods park on channel.receive() with zero wakeups.
+    private const val FLUSH_DELAY_MS = 2_000L
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -62,17 +68,28 @@ object Log {
         val buffer = ArrayList<LogEntity>(BATCH_SIZE)
         for (first in channel) {
             buffer.add(first)
-            // Drain anything already queued so we insert in batches instead of one row at a time.
-            while (buffer.size < BATCH_SIZE) {
-                val next = channel.tryReceive().getOrNull() ?: break
-                buffer.add(next)
+            // Coalesce sequential non-error log lines into a single SQLite write
+            // transaction without cancelling receive() (so no log line can be dropped
+            // on a timeout boundary). Error logs flush immediately so fatal context
+            // reaches disk right away. Idle periods park on channel iteration with zero
+            // wakeups.
+            if (first.level != LEVEL_ERROR) {
+                delay(FLUSH_DELAY_MS)
             }
-            try {
-                logDao.insertAll(buffer)
-            } catch (_: Exception) {
-                // Never let logging failures crash or spam the app.
+            while (true) {
+                while (buffer.size < BATCH_SIZE) {
+                    val next = channel.tryReceive().getOrNull() ?: break
+                    buffer.add(next)
+                }
+                try {
+                    logDao.insertAll(buffer)
+                } catch (_: Exception) {
+                    // Never let logging failures crash or spam the app.
+                }
+                buffer.clear()
+                val more = channel.tryReceive().getOrNull() ?: break
+                buffer.add(more)
             }
-            buffer.clear()
         }
     }
 

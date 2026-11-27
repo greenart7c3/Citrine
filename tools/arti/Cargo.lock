@@ -486,6 +486,7 @@ dependencies = [
  "safelog",
  "tokio",
  "tor-cell",
+ "tor-config",
  "tor-hscrypto",
  "tor-hsservice",
  "tor-keymgr",

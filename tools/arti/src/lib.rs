@@ -4,8 +4,9 @@ use jni::objects::{Global, JClass, JObject, JString};
 use jni::sys::jint;
 use jni::JavaVM;
 
-use arti_client::{BootstrapBehavior, TorClient};
+use arti_client::{BootstrapBehavior, DormantMode, TorClient};
 use arti_client::config::TorClientConfigBuilder;
+use tor_config::PaddingLevel;
 // `kind()` is a trait method (tor_error::HasKind), not inherent, so the trait has to be in
 // scope wherever we classify a connect failure. Both are re-exported by arti-client.
 use arti_client::HasKind;
@@ -223,6 +224,10 @@ pub extern "C" fn Java_com_greenart7c3_citrine_tor_ArtiNative_initialize<'caller
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         match tokio::runtime::Builder::new_multi_thread()
+            // Cap the pool on mobile: the default spawns one OS thread per CPU
+            // core (typically 8 on Android phones) for a single Tor client.
+            .worker_threads(2)
+            .thread_name("arti-tokio")
             .enable_all()
             .build()
         {
@@ -255,23 +260,7 @@ pub extern "C" fn Java_com_greenart7c3_citrine_tor_ArtiNative_initialize<'caller
     let outcome: jint = runtime.block_on(async {
         log_info!("Creating Arti client...");
 
-        #[cfg_attr(target_os = "android", allow(unused_mut))]
-        let mut builder = TorClientConfigBuilder::from_directories(state_dir, cache_dir);
-
-        // Arti's fs-mistrust walks every parent of the state dir and rejects any
-        // that has an "unsafe" owner. On Android the app's private filesDir is
-        // sandboxed by the OS, so the default strict check is correct. On the
-        // desktop the data dir is already restricted to its owner by the app
-        // (AppDirs.restrictToOwner), but the ancestor walk trips on setups the
-        // old C tor accepted (group-writable homes, container-style ownership of
-        // `/`, sandboxed packages), which would leave built-in Tor dead. Only
-        // the Android build keeps the strict check.
-        #[cfg(not(target_os = "android"))]
-        {
-            builder.storage().permissions().dangerously_trust_everyone();
-        }
-
-        let config = match builder.build() {
+        let config = match build_tor_config(state_dir, cache_dir) {
             Ok(c) => c,
             Err(e) => {
                 log_error!("Failed to build Tor config: {:?}", e);
@@ -370,6 +359,43 @@ pub extern "C" fn Java_com_greenart7c3_citrine_tor_ArtiNative_initialize<'caller
         log_info!("Arti initialized successfully");
     }
     outcome
+}
+
+/// Builds the Arti client configuration tuned for a mobile foreground relay:
+/// - Reduced channel padding (`PaddingLevel::Reduced`, matching C tor's mobile
+///   `ReducedConnectionPadding 1`): disables inbound guard padding cells that
+///   otherwise wake the cellular/Wi-Fi radio every few seconds when idle.
+/// - Disables preemptive exit circuits (`[80, 443]`): Citrine is a relay and
+///   onion service, not an interactive browser, so waking every 10s to build
+///   and rotate unused 3-hop exit circuits only burns CPU and radio battery.
+///   Outbound streams still build circuits on demand.
+fn build_tor_config(
+    state_dir: PathBuf,
+    cache_dir: PathBuf,
+) -> std::result::Result<arti_client::TorClientConfig, arti_client::config::ConfigBuildError> {
+    let mut builder = TorClientConfigBuilder::from_directories(state_dir, cache_dir);
+
+    builder.channel().padding(PaddingLevel::Reduced);
+    builder
+        .preemptive_circuits()
+        .disable_at_threshold(0)
+        .min_exit_circs_for_port(0)
+        .set_initial_predicted_ports(vec![]);
+
+    // Arti's fs-mistrust walks every parent of the state dir and rejects any
+    // that has an "unsafe" owner. On Android the app's private filesDir is
+    // sandboxed by the OS, so the default strict check is correct. On the
+    // desktop the data dir is already restricted to its owner by the app
+    // (AppDirs.restrictToOwner), but the ancestor walk trips on setups the
+    // old C tor accepted (group-writable homes, container-style ownership of
+    // `/`, sandboxed packages), which would leave built-in Tor dead. Only
+    // the Android build keeps the strict check.
+    #[cfg(not(target_os = "android"))]
+    {
+        builder.storage().permissions().dangerously_trust_everyone();
+    }
+
+    builder.build()
 }
 
 /// Imports the kmp-tor (C tor) hidden service identity key into the Arti
@@ -1041,6 +1067,31 @@ pub extern "C" fn Java_com_greenart7c3_citrine_tor_ArtiNative_isBootstrapped(
     }
 }
 
+/// Put the TorClient into soft dormancy (`dormant != 0`) or wake it back to normal
+/// operation (`dormant == 0`). Soft dormancy pauses periodic background tasks
+/// (preemptive circuits, directory refreshes) and disables channel padding while the
+/// relay is stopped, without throwing away the bootstrapped client across quick restarts.
+#[no_mangle]
+pub extern "C" fn Java_com_greenart7c3_citrine_tor_ArtiNative_setDormant(
+    _env: EnvUnowned,
+    _class: JClass,
+    dormant: jint,
+) -> jint {
+    let mode = if dormant != 0 {
+        DormantMode::Soft
+    } else {
+        DormantMode::Normal
+    };
+    match ARTI_CLIENT.lock().unwrap().as_ref() {
+        Some(client) => {
+            client.set_dormant(mode);
+            log_info!("Arti dormant mode set to {:?}", mode);
+            0
+        }
+        None => -1,
+    }
+}
+
 /// Destroy the TorClient — used by self-heal paths in Kotlin when Tor is
 /// stuck and the in-memory state (guards, circuits) needs to be rebuilt
 /// from scratch. Aborts the SOCKS listener and all in-flight per-connection
@@ -1185,5 +1236,24 @@ mod tests {
         assert!(!constant_time_eq(b"secret", b"secreT"));
         assert!(!constant_time_eq(b"secret", b"secret2"));
         assert!(!constant_time_eq(b"", b"x"));
+    }
+
+    #[test]
+    fn mobile_tor_config_builds_cleanly() {
+        use arti_client::config::circ::{CircMgrConfig, PreemptiveCircuitConfig};
+
+        let base = std::env::temp_dir().join("citrine_arti_config_test");
+        let config = build_tor_config(base.join("state"), base.join("cache"))
+            .expect("mobile TorClientConfig should build cleanly");
+        let mut expected_preemptive = PreemptiveCircuitConfig::builder();
+        expected_preemptive
+            .disable_at_threshold(0)
+            .min_exit_circs_for_port(0)
+            .set_initial_predicted_ports(vec![]);
+        assert_eq!(
+            config.preemptive_circuits(),
+            &expected_preemptive.build().unwrap(),
+            "preemptive exit circuits should be disabled to avoid idle circuit churn"
+        );
     }
 }

@@ -299,9 +299,12 @@ object RelayAggregator {
     private val droppedEvents = AtomicLong(0)
 
     // Set by refreshStatusCounters when relay counts or eventsReceived change; consumed
-    // by the periodic emitter started in `start()` to push at most one StateFlow update
-    // per STATUS_EMIT_INTERVAL_MS.
+    // by the demand-driven emitter started in `start()` to push at most one StateFlow
+    // update per STATUS_EMIT_INTERVAL_MS while parking completely idle with zero wakeups
+    // whenever nothing is changing.
     private val statusDirty = AtomicBoolean(false)
+
+    @Volatile private var statusTrigger: Channel<Unit>? = null
 
     private val refreshing = AtomicBoolean(false)
 
@@ -325,8 +328,10 @@ object RelayAggregator {
 
         val newEventChannel = Channel<Event>(EVENT_CHANNEL_CAPACITY, BufferOverflow.DROP_OLDEST)
         val newBackfillChannel = Channel<String>(EVENT_CHANNEL_CAPACITY, BufferOverflow.DROP_OLDEST)
+        val newStatusTrigger = Channel<Unit>(Channel.CONFLATED)
         eventChannel = newEventChannel
         backfillChannel = newBackfillChannel
+        statusTrigger = newStatusTrigger
 
         // Single consumer for inbound events: persist sequentially instead of spawning a
         // coroutine per event in onIncomingMessage.
@@ -365,12 +370,13 @@ object RelayAggregator {
             }
         }
 
-        // Periodic flusher for counter-only status updates. Coalesces a burst of
-        // refreshStatusCounters() calls (one per received event) into at most one
-        // StateFlow emission per STATUS_EMIT_INTERVAL_MS so Compose collectors don't
-        // recompose on the UI thread for every event.
+        // Demand-driven flusher for counter-only status updates. Parks completely idle
+        // with zero wakeups when nothing is arriving, and coalesces a burst of
+        // refreshStatusCounters() calls into at most one StateFlow emission per
+        // STATUS_EMIT_INTERVAL_MS so Compose collectors don't recompose per event.
         newScope.launch {
-            while (isActive) {
+            @Suppress("UNUSED_VARIABLE")
+            for (signal in newStatusTrigger) {
                 delay(STATUS_EMIT_INTERVAL_MS)
                 flushPendingStatus()
             }
@@ -492,8 +498,10 @@ object RelayAggregator {
 
         eventChannel?.close()
         backfillChannel?.close()
+        statusTrigger?.close()
         eventChannel = null
         backfillChannel = null
+        statusTrigger = null
 
         scope = null
         s.cancel()
@@ -1320,12 +1328,13 @@ object RelayAggregator {
         )
     }
 
-    // Marks the counters as needing publication. The periodic emitter started in `start()`
-    // observes the flag at most once per STATUS_EMIT_INTERVAL_MS and writes a single
-    // snapshot to `_status` if set. Cheap enough to call on the relay listener thread for
-    // every received event.
+    // Marks the counters as needing publication and wakes the demand-driven emitter.
+    // The emitter coalesces bursts over STATUS_EMIT_INTERVAL_MS and parks with zero
+    // wakeups whenever nothing is arriving. Cheap enough to call on the relay listener
+    // thread for every received event.
     private fun refreshStatusCounters() {
         statusDirty.set(true)
+        statusTrigger?.trySend(Unit)
     }
 
     // Publishes the current counter snapshot to `_status` if any counter changed since

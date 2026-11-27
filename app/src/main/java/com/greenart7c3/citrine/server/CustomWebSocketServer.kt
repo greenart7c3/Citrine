@@ -411,34 +411,36 @@ class CustomWebSocketServer(
             return VerificationResult.Valid
         }
 
+        val debugLog = Log.isLoggable(Citrine.TAG, Log.DEBUG)
+
         if (event.isExpired() && connection != null) {
-            Log.d(Citrine.TAG, "event expired ${event.id} ${event.expiration()}")
+            if (debugLog) Log.d(Citrine.TAG, "event expired ${event.id} ${event.expiration()}")
             return VerificationResult.Expired
         }
 
         if (Settings.maxEventSize > 0 && event.content.length > Settings.maxEventSize) {
-            Log.d(Citrine.TAG, "event too large ${event.id} ${event.content.length}")
+            if (debugLog) Log.d(Citrine.TAG, "event too large ${event.id} ${event.content.length}")
             return VerificationResult.EventTooLarge
         }
 
         if (event.kind in Settings.rejectedKinds) {
-            Log.d(Citrine.TAG, "kind rejected ${event.kind}")
+            if (debugLog) Log.d(Citrine.TAG, "kind rejected ${event.kind}")
             return VerificationResult.KindRejected
         }
 
         if (Settings.allowedKinds.isNotEmpty() && event.kind !in Settings.allowedKinds) {
-            Log.d(Citrine.TAG, "kind not allowed ${event.kind}")
+            if (debugLog) Log.d(Citrine.TAG, "kind not allowed ${event.kind}")
             return VerificationResult.KindNotAllowed
         }
 
         // NIP-86 ban lists — apply unconditionally (even to aggregator-fetched events),
         // so a banned author can't sneak in via the relay aggregator.
         if (Settings.bannedPubKeys.containsKey(event.pubKey)) {
-            Log.d(Citrine.TAG, "pubkey banned ${event.pubKey}")
+            if (debugLog) Log.d(Citrine.TAG, "pubkey banned ${event.pubKey}")
             return VerificationResult.BannedPubkey
         }
         if (Settings.bannedEventIds.containsKey(event.id)) {
-            Log.d(Citrine.TAG, "event id banned ${event.id}")
+            if (debugLog) Log.d(Citrine.TAG, "event id banned ${event.id}")
             return VerificationResult.BannedEvent
         }
 
@@ -449,14 +451,14 @@ class CustomWebSocketServer(
             val taggedUsers = event.taggedUsers()
             if (Settings.allowedTaggedPubKeys.isNotEmpty() && taggedUsers.isNotEmpty() && taggedUsers.none { it.pubKey in Settings.allowedTaggedPubKeys }) {
                 if (Settings.allowedPubKeys.isEmpty() || (event.pubKey !in Settings.allowedPubKeys)) {
-                    Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "tagged pubkey not allowed ${event.id}")
                     return VerificationResult.TaggedPubkeyNotAllowed
                 }
             }
 
             if (Settings.allowedPubKeys.isNotEmpty() && event.pubKey !in Settings.allowedPubKeys) {
                 if (Settings.allowedTaggedPubKeys.isEmpty() || taggedUsers.none { it.pubKey in Settings.allowedTaggedPubKeys }) {
-                    Log.d(Citrine.TAG, "pubkey not allowed ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "pubkey not allowed ${event.id}")
                     return VerificationResult.PubkeyNotAllowed
                 }
             }
@@ -467,7 +469,7 @@ class CustomWebSocketServer(
             val isLocalHost = remoteHost in listOf("127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1")
 
             if (!isLocalHost && !connection.users.contains(event.pubKey)) {
-                Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
+                if (debugLog) Log.d(Citrine.TAG, "auth required for protected event ${event.id}")
                 return VerificationResult.AuthRequiredForProtectedEvent
             }
         }
@@ -480,7 +482,7 @@ class CustomWebSocketServer(
                 null
             }
             if (embedded != null && embedded.isProtected()) {
-                Log.d(Citrine.TAG, "rejecting repost ${event.id} that embeds protected event ${embedded.id}")
+                if (debugLog) Log.d(Citrine.TAG, "rejecting repost ${event.id} that embeds protected event ${embedded.id}")
                 return VerificationResult.ProtectedEventEmbeddedInRepost
             }
         }
@@ -488,13 +490,13 @@ class CustomWebSocketServer(
         // Verify the signature before any DB access so invalid events are
         // rejected without paying for the reads below.
         if (!event.verify()) {
-            Log.d(Citrine.TAG, "event ${event.id} does not have a valid id or signature")
+            if (debugLog) Log.d(Citrine.TAG, "event ${event.id} does not have a valid id or signature")
             return VerificationResult.InvalidId
         }
 
         val deletedEvents = appDatabase.eventDao().getDeletedEvents(event.id)
         if (deletedEvents.isNotEmpty()) {
-            Log.d(Citrine.TAG, "Event deleted ${event.id}")
+            if (debugLog) Log.d(Citrine.TAG, "Event deleted ${event.id}")
             return VerificationResult.Deleted
         }
 
@@ -504,7 +506,7 @@ class CustomWebSocketServer(
         if (GroupManager.hasGroups()) {
             val moderationDeleted = appDatabase.eventDao().getModerationDeletedGroups(event.id)
             if (moderationDeleted.any { GroupManager.get(it) != null }) {
-                Log.d(Citrine.TAG, "Event deleted by group moderation ${event.id}")
+                if (debugLog) Log.d(Citrine.TAG, "Event deleted by group moderation ${event.id}")
                 return VerificationResult.Deleted
             }
         }
@@ -513,7 +515,7 @@ class CustomWebSocketServer(
             val events = appDatabase.eventDao().getDeletedEventsByATag(event.address().toValue())
             events.forEach { deletedAt ->
                 if (deletedAt >= event.createdAt) {
-                    Log.d(Citrine.TAG, "Event deleted ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "Event deleted ${event.id}")
                     return VerificationResult.Deleted
                 }
             }
@@ -522,13 +524,13 @@ class CustomWebSocketServer(
         when {
             event.shouldDelete() -> {
                 if (appDatabase.eventDao().existsById(event.id)) {
-                    Log.d(Citrine.TAG, "Event already in database ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
                 event.taggedEvents().forEach { taggedEvent ->
                     val taggedPubkey = appDatabase.eventDao().getPubkeyById(taggedEvent.eventId)
                     if (taggedPubkey != null && taggedPubkey != event.pubKey) {
-                        Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.id}")
+                        if (debugLog) Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.id}")
                         return VerificationResult.TaggedPubKeyMismatch
                     }
                 }
@@ -544,7 +546,7 @@ class CustomWebSocketServer(
                     )
                     taggedEvents.forEach {
                         if (it.event.pubkey != event.pubKey) {
-                            Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.id}")
+                            if (debugLog) Log.d(Citrine.TAG, "Tagged event pubkey mismatch ${event.id}")
                             return VerificationResult.TaggedPubKeyMismatch
                         }
                     }
@@ -552,29 +554,29 @@ class CustomWebSocketServer(
             }
             event.isParameterizedReplaceable() -> {
                 if (appDatabase.eventDao().existsById(event.id)) {
-                    Log.d(Citrine.TAG, "Event already in database ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
                 val newest = appDatabase.eventDao().getNewestReplaceable(event.kind, event.pubKey, event.tags.firstOrNull { it.size > 1 && it[0] == "d" }?.get(1) ?: "", event.createdAt, event.id)
                 if (newest.isNotEmpty()) {
-                    Log.d(Citrine.TAG, "newest event already in database ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "newest event already in database ${event.id}")
                     return VerificationResult.NewestEventAlreadyInDatabase
                 }
             }
             event.shouldOverwrite() -> {
                 if (appDatabase.eventDao().existsById(event.id)) {
-                    Log.d(Citrine.TAG, "Event already in database ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
                 val newest = appDatabase.eventDao().getByKindNewest(event.kind, event.pubKey, event.createdAt, event.id)
                 if (newest.isNotEmpty()) {
-                    Log.d(Citrine.TAG, "newest event already in database ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "newest event already in database ${event.id}")
                     return VerificationResult.NewestEventAlreadyInDatabase
                 }
             }
             else -> {
                 if (!event.isEphemeral() && appDatabase.eventDao().existsById(event.id)) {
-                    Log.d(Citrine.TAG, "Event already in database ${event.id}")
+                    if (debugLog) Log.d(Citrine.TAG, "Event already in database ${event.id}")
                     return VerificationResult.AlreadyInDatabase
                 }
             }
@@ -891,6 +893,10 @@ class CustomWebSocketServer(
 
     private suspend fun save(event: Event, connection: Connection?) {
         appDatabase.eventDao().insertEventWithTags(appDatabase, event.toEventWithTags(), connection = connection)
+
+        if (event.isEphemeral()) {
+            Citrine.instance.scheduleEphemeralCleanup(appDatabase)
+        }
 
         // Check if offline and broadcast with WorkManager
         if (isOffline() && appDatabase.eventDao().existsById(event.id)) {
@@ -1238,8 +1244,11 @@ class CustomWebSocketServer(
             }
 
             install(WebSockets) {
-                pingPeriodMillis = 5000L
-                timeoutMillis = 300000L
+                // 60s keepalive (down from 5s) cuts wakeups by 12x and lets cellular/Wi-Fi
+                // radios enter idle sleep between pings while still detecting dead peers well
+                // within NAT and Tor circuit timeouts.
+                pingPeriodMillis = 60_000L
+                timeoutMillis = 300_000L
                 // Ktor's default is unlimited, so one frame could be read whole into the heap
                 // before the event size check runs. 4x covers JSON escaping of max-size content.
                 maxFrameSize = maxOf(MIN_MAX_FRAME_SIZE, Settings.maxEventSize * 4L)

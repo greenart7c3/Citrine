@@ -400,11 +400,9 @@ fun HomeScreen(
                 }
 
                 if (Settings.relayAggregatorEnabled) {
-                    val currentStatus = RelayAggregator.status.collectAsStateWithLifecycle()
-
                     @OptIn(FlowPreview::class)
                     val aggregatorStatus = remember { RelayAggregator.status.sample(2_000) }
-                        .collectAsStateWithLifecycle(initialValue = currentStatus.value)
+                        .collectAsStateWithLifecycle(initialValue = remember { RelayAggregator.status.value })
                     AggregatorStatusCard(
                         status = aggregatorStatus.value,
                         modifier = Modifier.fillMaxWidth(),

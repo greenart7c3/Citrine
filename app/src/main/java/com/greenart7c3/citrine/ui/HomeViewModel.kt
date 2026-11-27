@@ -211,6 +211,7 @@ class HomeViewModel : ViewModel() {
 
         if (message.isBlank()) {
             notificationManager.cancel(2)
+            Citrine.hasProgressNotification = false
             return
         }
 
@@ -245,5 +246,6 @@ class HomeViewModel : ViewModel() {
             return
         }
         notificationManager.notify(2, notification)
+        Citrine.hasProgressNotification = true
     }
 }
