@@ -142,6 +142,12 @@ exception handler and the out-of-memory report sink once from `Citrine`'s
 constructor (`install`), before the ContentProvider can store an event, and
 passes them to each `Subscription` and `SubscriptionManager`.
 
+The outbound relay connections are `data/RelayClient` (the Quartz client, its
+WebSocket factory and the proxy, onion and private-address decisions),
+implemented by `relays/AppRelayClient` and held by `Citrine` as `relayClient`.
+`Citrine.client`, `factory`, `isOnionUrl` and `isPrivateIp` forward to it until
+their callers take the `RelayClient` themselves; then the forwarders go.
+
 ### 2. Give the big screens ViewModels
 
 `HomeScreen`, `SettingsScreen` and the `settings/` screens,
