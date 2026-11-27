@@ -32,13 +32,23 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Linter (gradle)
-        run: ./gradlew ktlintCheck
+        run: ./gradlew ktlintCheck detektAll --no-daemon
 
       - name: Android Lint (gradle)
         run: ./gradlew lint --no-daemon
 
       - name: Test (gradle)
         run: ./gradlew test --no-daemon
+
+      - name: Coverage (gradle)
+        run: ./gradlew koverXmlReport koverHtmlReport :app:koverVerify --no-daemon
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Coverage report
+          path: build/reports/kover
 
       - name: Android Test Report
         uses: asadmansr/android-test-report-action@v1.2.0

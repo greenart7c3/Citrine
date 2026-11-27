@@ -73,9 +73,7 @@ class WebSocketServerService : Service() {
     @Volatile private var lastAgeRetentionMs: Long = 0L
 
     @Volatile private var lastLogTrimMs: Long = 0L
-    inner class LocalBinder : Binder() {
-        fun getService(): WebSocketServerService = this@WebSocketServerService
-    }
+    inner class LocalBinder : Binder()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(Citrine.TAG, "onStartCommand ${CustomWebSocketService.hasStarted}")
@@ -365,8 +363,6 @@ class WebSocketServerService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     private data class ForegroundNotification(val notification: Notification, val signature: String)
-
-    private fun createNotification(status: AggregatorStatus? = null): Notification = buildForegroundNotification(status).notification
 
     private fun buildForegroundNotification(status: AggregatorStatus? = null): ForegroundNotification {
         val notificationManager = NotificationManagerCompat.from(this)

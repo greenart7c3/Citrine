@@ -59,10 +59,10 @@ class CitrineContentProvider : ContentProvider() {
         private val uriMatcher = UriMatcher(UriMatcher.NO_MATCH).apply {
             addURI(CitrineContract.AUTHORITY, "events", EVENTS)
             addURI(CitrineContract.AUTHORITY, "events/#", EVENT_ID)
-            addURI(CitrineContract.AUTHORITY, "events/by_pubkey", EVENTS_BY_PUBKEY)
-            addURI(CitrineContract.AUTHORITY, "events/by_kind", EVENTS_BY_KIND)
+            addURI(CitrineContract.AUTHORITY, "events/${CitrineContract.Events.PATH_BY_PUBKEY}", EVENTS_BY_PUBKEY)
+            addURI(CitrineContract.AUTHORITY, "events/${CitrineContract.Events.PATH_BY_KIND}", EVENTS_BY_KIND)
             addURI(CitrineContract.AUTHORITY, "tags", TAGS)
-            addURI(CitrineContract.AUTHORITY, "tags/by_event", TAGS_BY_EVENT)
+            addURI(CitrineContract.AUTHORITY, "tags/${CitrineContract.Tags.PATH_BY_EVENT}", TAGS_BY_EVENT)
         }
     }
 

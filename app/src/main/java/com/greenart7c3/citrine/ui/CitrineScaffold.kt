@@ -306,7 +306,6 @@ fun CitrineScaffold(
                     delay(1000)
                     homeViewModel.start(context)
                 }
-                Unit
             }
             val subScreenModifier = Modifier
                 .fillMaxSize()

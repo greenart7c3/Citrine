@@ -7,6 +7,7 @@ import androidx.security.crypto.MasterKey
 object EncryptedStorage {
     private const val PREFERENCES_NAME = "secret_keeper"
 
+    @Suppress("DEPRECATION")
     fun preferences(context: Context): EncryptedSharedPreferences {
         val masterKey: MasterKey =
             MasterKey.Builder(context, MasterKey.DEFAULT_MASTER_KEY_ALIAS)

@@ -30,6 +30,10 @@ pagingCommon = "3.5.3"
 negentropy = "v1.2.1"
 coil = "3.6.3"
 jackson = "2.23.0"
+detekt = "2.0.0-alpha.6"
+detektComposeRules = "0.6.8"
+konsist = "1.0.0-beta.1"
+kover = "0.9.11"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -75,6 +79,10 @@ paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.r
 negentropy = { module = "com.vitorpamplona.negentropy:kmp-negentropy-android", version.ref = "negentropy" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+detekt-compose-rules = { module = "io.nlopez.compose.rules:detekt", version.ref = "detektComposeRules" }
+konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
+detekt-api = { module = "dev.detekt:detekt-api", version.ref = "detekt" }
+kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlin" }
 
 [plugins]
 jetbrainsComposeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
@@ -83,3 +91,6 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kt-lint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

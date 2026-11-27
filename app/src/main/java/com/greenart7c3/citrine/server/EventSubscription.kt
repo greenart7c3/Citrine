@@ -10,7 +10,6 @@ import com.greenart7c3.citrine.json.JacksonMapper
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.nip29.GroupManager
 import com.greenart7c3.citrine.utils.isEphemeral
-import io.ktor.server.websocket.WebSocketServerSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -38,8 +37,6 @@ object EventSubscription {
     // NIP-01: subscription ids are managed independently per connection. The wire id
     // stays the client-sent value; only the cache key is connection-scoped.
     private fun cacheKey(connection: Connection, id: String): String = "${connection.name}:$id"
-
-    fun getConnection(session: WebSocketServerSession): Connection? = subscriptions.snapshot().values.firstOrNull { it.subscription.connection.session == session }?.subscription?.connection
 
     fun count(): Int = subscriptions.size()
 

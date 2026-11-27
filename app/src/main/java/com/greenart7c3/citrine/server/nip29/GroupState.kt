@@ -20,17 +20,6 @@ object Nip29 {
     const val KIND_GROUP_MEMBERS = 39002
     const val KIND_GROUP_ROLES = 39003
 
-    val MODERATION_KINDS = setOf(
-        KIND_PUT_USER,
-        KIND_REMOVE_USER,
-        KIND_EDIT_METADATA,
-        KIND_DELETE_EVENT,
-        KIND_CREATE_GROUP,
-        KIND_DELETE_GROUP,
-        KIND_CREATE_INVITE,
-        KIND_UPDATE_PIN_LIST,
-    )
-
     val METADATA_KINDS = setOf(
         KIND_GROUP_METADATA,
         KIND_GROUP_ADMINS,

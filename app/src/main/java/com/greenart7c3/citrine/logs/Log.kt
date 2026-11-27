@@ -20,10 +20,7 @@ import kotlinx.coroutines.launch
 object Log {
     // Integer priority constants mirroring [android.util.Log] so call sites that pass a level
     // (e.g. isLoggable) keep working unchanged.
-    const val VERBOSE = 2
     const val DEBUG = 3
-    const val INFO = 4
-    const val WARN = 5
     const val ERROR = 6
 
     private const val LEVEL_VERBOSE = "V"
@@ -113,6 +110,7 @@ object Log {
      * Mirrors [android.util.Log.isLoggable]. Since logcat output only happens on debug builds,
      * a level is only "loggable" to logcat on a debug build.
      */
+    @Suppress("UnusedParameter")
     fun isLoggable(tag: String, level: Int): Boolean = BuildConfig.DEBUG
 
     fun v(tag: String, msg: String, tr: Throwable? = null): Int {

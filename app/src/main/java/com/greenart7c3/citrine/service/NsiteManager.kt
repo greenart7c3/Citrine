@@ -178,7 +178,7 @@ object NsiteManager {
             val name = node.get("display_name")?.asText()?.takeIf { it.isNotBlank() }
                 ?: node.get("name")?.asText()?.takeIf { it.isNotBlank() }
             name ?: fallback
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             fallback
         }
     }
@@ -188,7 +188,7 @@ object NsiteManager {
         if (metadata == null) return ""
         return try {
             JacksonMapper.mapper.readTree(metadata.content).get("picture")?.asText().orEmpty()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             ""
         }
     }

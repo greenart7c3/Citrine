@@ -36,9 +36,6 @@ object ArtiNative {
     /** 1 when Tor can carry traffic, 0 while still bootstrapping, -1 without a client. */
     external fun isBootstrapped(): Int
 
-    /** Directory-download progress in per mille (0..1000), or -1 without a client. */
-    external fun bootstrapProgressPermille(): Int
-
     /**
      * Binds the SOCKS5 proxy on 127.0.0.1:[port], replacing any previous listener.
      * Clients must authenticate with [username] / [password] (RFC 1929).
