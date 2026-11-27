@@ -148,6 +148,14 @@ implemented by `relays/AppRelayClient` and held by `Citrine` as `relayClient`.
 `Citrine.client`, `factory`, `isOnionUrl` and `isPrivateIp` forward to it until
 their callers take the `RelayClient` themselves; then the forwarders go.
 
+The `object` helpers get their narrow dependencies once from `Citrine`'s
+constructor (`install`), like `EventSubscription`: `EventRebroadcaster` and
+`ListImporter` the `RelayClient`, `CrashReportSender` the `RelayClient` and the
+app scope, `EventDownloader` the application context, the `RelayClient` and the
+app scope, `RelayIdentity` the application context and `GroupManager` the
+application context and the app scope. A context handed over from the
+constructor is only read once the Application is attached.
+
 ### 2. Give the big screens ViewModels
 
 `HomeScreen`, `SettingsScreen` and the `settings/` screens,

@@ -149,16 +149,10 @@ class ArchitectureTest {
         )
 
         val citrineInstanceUsers = setOf(
-            "server/nip29/GroupManager.kt",
-            "service/EventDownloader.kt",
-            "service/EventRebroadcaster.kt",
-            "service/ListImporter.kt",
             "service/NsiteManager.kt",
             "service/RelayAggregator.kt",
-            "service/RelayIdentity.kt",
             "service/TorManager.kt",
             "service/crashreports/CrashReportScreen.kt",
-            "service/crashreports/CrashReportSender.kt",
             "ui/CitrineScaffold.kt",
             "ui/ContactsScreen.kt",
             "ui/DownloadYourEventsUserScreen.kt",

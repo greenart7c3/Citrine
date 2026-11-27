@@ -21,10 +21,16 @@ import com.greenart7c3.citrine.relays.AppRelayClient
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
+import com.greenart7c3.citrine.server.nip29.GroupManager
+import com.greenart7c3.citrine.service.EventDownloader
+import com.greenart7c3.citrine.service.EventRebroadcaster
+import com.greenart7c3.citrine.service.ListImporter
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.PokeyReceiver
+import com.greenart7c3.citrine.service.RelayIdentity
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.service.crashreports.CrashReportCache
+import com.greenart7c3.citrine.service.crashreports.CrashReportSender
 import com.greenart7c3.citrine.service.crashreports.ExitReasons
 import com.greenart7c3.citrine.service.crashreports.ReportAssembler
 import com.greenart7c3.citrine.service.crashreports.UnexpectedCrashSaver
@@ -79,6 +85,12 @@ class Citrine :
         EventSubscription.install(applicationScope, exceptionHandler) { error ->
             crashReportCache.appendReport(ReportAssembler(this).buildReport(error))
         }
+        EventRebroadcaster.install(relayClient)
+        ListImporter.install(relayClient)
+        CrashReportSender.install(relayClient, applicationScope)
+        EventDownloader.install(this, relayClient, applicationScope)
+        RelayIdentity.install(this)
+        GroupManager.install(this, applicationScope)
     }
 
     private val pokeyReceiver = PokeyReceiver()

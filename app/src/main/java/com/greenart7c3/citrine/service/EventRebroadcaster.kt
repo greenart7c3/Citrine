@@ -2,6 +2,7 @@ package com.greenart7c3.citrine.service
 
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.logs.Log
@@ -30,6 +31,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * batch timeout as a failure.
  */
 object EventRebroadcaster {
+    private lateinit var relayClient: RelayClient
+
+    /** Hands the rebroadcaster the outbound relay client; called once from the Citrine constructor. */
+    fun install(relayClient: RelayClient) {
+        this.relayClient = relayClient
+    }
     enum class Status { IDLE, RUNNING, FINISHED, CANCELLED, FAILED }
 
     data class State(
@@ -74,7 +81,7 @@ object EventRebroadcaster {
             return
         }
 
-        val client = Citrine.instance.client
+        val client = relayClient.client
         val collector = OkCollector()
         client.addConnectionListener(collector)
         if (!client.isActive()) {

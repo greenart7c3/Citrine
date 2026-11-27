@@ -2,6 +2,7 @@ package com.greenart7c3.citrine.service
 
 import android.Manifest
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.SystemClock
@@ -11,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
@@ -34,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -44,6 +47,20 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 
 object EventDownloader {
+    private lateinit var context: Context
+    private lateinit var relayClient: RelayClient
+    private lateinit var appScope: CoroutineScope
+
+    /**
+     * Hands the downloader the application context (read only once it is attached), the
+     * outbound relay client and the app scope; called once from the Citrine constructor.
+     */
+    fun install(context: Context, relayClient: RelayClient, appScope: CoroutineScope) {
+        this.context = context
+        this.relayClient = relayClient
+        this.appScope = appScope
+    }
+
     /**
      * Fetches all events authored by [authorPubKey] from [relayUrl], descending by time,
      * pulling up to [batchSize] (e.g., 500) per request, starting from now and going backwards,
@@ -153,8 +170,8 @@ object EventDownloader {
                 limit = 1,
             ),
         )
-        Citrine.instance.client.connect()
-        val event = Citrine.instance.client.fetchFirst(
+        relayClient.client.connect()
+        val event = relayClient.client.fetchFirst(
             subId,
             relays.associateWith { filters },
         )
@@ -163,7 +180,7 @@ object EventDownloader {
             result = it as AdvertisedRelayListEvent
         }
 
-        Citrine.instance.client.unsubscribe(subId)
+        relayClient.client.unsubscribe(subId)
         return result
     }
 
@@ -187,8 +204,8 @@ object EventDownloader {
             ),
         )
 
-        Citrine.instance.client.connect()
-        val event = Citrine.instance.client.fetchFirst(
+        relayClient.client.connect()
+        val event = relayClient.client.fetchFirst(
             subId,
             relays.associateWith { filters },
         )
@@ -196,7 +213,7 @@ object EventDownloader {
             storeInBackground(it)
             result = it as ContactListEvent
         }
-        Citrine.instance.client.unsubscribe(subId)
+        relayClient.client.unsubscribe(subId)
         return result
     }
 
@@ -207,7 +224,7 @@ object EventDownloader {
      * replaceable-event cleanup, the history database) must not gate the UI that asked for it.
      */
     private fun storeInBackground(event: Event) {
-        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             try {
                 CustomWebSocketService.server?.innerProcessEvent(event, null)
             } catch (e: Exception) {
@@ -222,8 +239,8 @@ object EventDownloader {
         relays: List<NormalizedRelayUrl>,
         downloadTaggedEvents: Boolean,
     ) {
-        if (!Citrine.instance.client.isActive()) {
-            Citrine.instance.client.connect()
+        if (!relayClient.client.isActive()) {
+            relayClient.client.connect()
         }
         val targets = relays.filter { !it.url.contains("127.0.0.1") }
         val progress = DownloadProgress(targets.size)
@@ -236,7 +253,7 @@ object EventDownloader {
                         sem.withPermit {
                             try {
                                 fetchAllEventsByUserPaginated(
-                                    client = Citrine.instance.client,
+                                    client = relayClient.client,
                                     relayUrl = relay.url,
                                     authorPubKey = signer.pubKey,
                                     downloadTaggedEvents = downloadTaggedEvents,
@@ -262,7 +279,7 @@ object EventDownloader {
             setProgress("Failed to load events")
         } finally {
             Citrine.isImportingEvents = false
-            Citrine.instance.client.disconnect()
+            relayClient.client.disconnect()
         }
     }
 
@@ -290,7 +307,7 @@ object EventDownloader {
 
         fun publishFinished() {
             setProgress(
-                Citrine.instance.getString(
+                context.getString(
                     R.string.downloading_events_finished,
                     formatCount(downloaded.get()),
                 ),
@@ -302,7 +319,7 @@ object EventDownloader {
             if (!force && now - lastPublish.get() < PUBLISH_INTERVAL_MS) return
             lastPublish.set(now)
             setProgress(
-                Citrine.instance.getString(
+                context.getString(
                     R.string.downloading_events_progress,
                     formatCount(downloaded.get()),
                     finishedRelays.get(),
@@ -324,7 +341,7 @@ object EventDownloader {
         message: String,
         ongoing: Boolean = false,
     ) {
-        val notificationManager = NotificationManagerCompat.from(Citrine.instance)
+        val notificationManager = NotificationManagerCompat.from(context)
 
         if (message.isBlank()) {
             notificationManager.cancel(2)
@@ -340,17 +357,17 @@ object EventDownloader {
 
         notificationManager.createNotificationChannel(channel)
 
-        val copyIntent = Intent(Citrine.instance, ClipboardReceiver::class.java)
+        val copyIntent = Intent(context, ClipboardReceiver::class.java)
         copyIntent.putExtra("job", "cancel")
 
         val copyPendingIntent = PendingIntent.getBroadcast(
-            Citrine.instance,
+            context,
             0,
             copyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
+        val notification = NotificationCompat.Builder(context, "citrine")
             .setContentTitle("Citrine")
             .setContentText(message)
             .setSmallIcon(R.drawable.ic_notification)
@@ -358,10 +375,10 @@ object EventDownloader {
             .setOngoing(ongoing)
             .setAutoCancel(!ongoing)
             .setProgress(0, 0, ongoing)
-            .addAction(R.drawable.ic_launcher_background, Citrine.instance.getString(R.string.cancel), copyPendingIntent)
+            .addAction(R.drawable.ic_launcher_background, context.getString(R.string.cancel), copyPendingIntent)
             .build()
 
-        if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return
         }
         notificationManager.notify(2, notification)

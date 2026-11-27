@@ -21,6 +21,7 @@
 package com.greenart7c3.citrine.service.crashreports
 
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
@@ -34,6 +35,7 @@ import com.vitorpamplona.quartz.nip17Dm.messages.ChatMessageEvent
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -46,6 +48,15 @@ import kotlinx.coroutines.coroutineScope
  * external signer (the developer can reply) or a throwaway one for an anonymous report.
  */
 object CrashReportSender {
+    private lateinit var relayClient: RelayClient
+    private lateinit var appScope: CoroutineScope
+
+    /** Hands the sender the relay client whose factory it dials with and the app scope; called once from the Citrine constructor. */
+    fun install(relayClient: RelayClient, appScope: CoroutineScope) {
+        this.relayClient = relayClient
+        this.appScope = appScope
+    }
+
     /** The developer's key. Same account as Amber's report inbox. */
     const val DEVELOPER_HEX_KEY = "7579076d9aff0a4cfdefa7e2045f2486c7e5d8bc63bfc6b45397233e1bbfcb19"
 
@@ -65,7 +76,7 @@ object CrashReportSender {
     suspend fun send(report: String, signer: NostrSigner): Boolean {
         if (report.isBlank()) return false
 
-        val client = NostrClient(Citrine.instance.factory, Citrine.instance.applicationScope)
+        val client = NostrClient(relayClient.factory, appScope)
 
         return try {
             client.connect()

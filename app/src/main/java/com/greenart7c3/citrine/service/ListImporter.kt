@@ -1,7 +1,7 @@
 package com.greenart7c3.citrine.service
 
 import com.fasterxml.jackson.module.kotlin.readValue
-import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.json.JacksonMapper
 import com.greenart7c3.citrine.logs.Log
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -28,6 +28,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  * [NostrSignerExternal].
  */
 object ListImporter {
+    private lateinit var relayClient: RelayClient
+
+    /** Hands the importer the outbound relay client; called once from the Citrine constructor. */
+    fun install(relayClient: RelayClient) {
+        this.relayClient = relayClient
+    }
     private const val TAG = "ListImporter"
     private const val TIMEOUT_MS = 15_000L
     private const val PROFILE_CHUNK = 150
@@ -46,7 +52,7 @@ object ListImporter {
     data class Result(val lists: List<UserListEntry>, val profiles: Map<String, ProfileInfo>)
 
     suspend fun fetch(signer: NostrSignerExternal): Result {
-        val client = Citrine.instance.client
+        val client = relayClient.client
         if (!client.isActive()) client.connect()
         val pubKey = signer.pubKey
 
@@ -96,7 +102,7 @@ object ListImporter {
     }
 
     private suspend fun fetchFirstEvent(kinds: List<Int>, pubKey: String): Event? {
-        val client = Citrine.instance.client
+        val client = relayClient.client
         return try {
             withTimeoutOrNull(TIMEOUT_MS) {
                 client.fetchFirst(
@@ -142,7 +148,7 @@ object ListImporter {
 
     private suspend fun fetchProfiles(pubkeys: Set<String>): Map<String, ProfileInfo> {
         if (pubkeys.isEmpty()) return emptyMap()
-        val client = Citrine.instance.client
+        val client = relayClient.client
         val results = mutableMapOf<String, Pair<Long, ProfileInfo>>()
         coroutineScope {
             pubkeys.toList().chunked(PROFILE_CHUNK).map { chunk ->
