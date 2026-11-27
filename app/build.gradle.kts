@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kt.lint)
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
     alias(libs.plugins.jetbrainsComposeCompiler)
 }
 
@@ -142,7 +144,50 @@ composeCompiler {
     reportsDestination = layout.buildDirectory.dir("compose_compiler")
 }
 
+// AGP generates BuildConfig as Java, which detekt cannot read (it parses only
+// Kotlin sources), so its type resolution would see every BuildConfig reference
+// as unresolved. Give each variant's detekt and baseline task the compiled
+// BuildConfig (that variant's javac output) on its classpath. Adding to the
+// classpath would drop the plugin's convention (the variant's libraries), so it
+// is set again in full.
+fun detektVariantClasspath(detektTaskName: String): List<Any>? {
+    val variant = detektTaskName.removePrefix("detekt").removePrefix("Baseline")
+    val kotlinCompile = "compile${variant}Kotlin"
+    val javaCompile = "compile${variant}JavaWithJavac"
+    if (kotlinCompile !in tasks.names || javaCompile !in tasks.names) return null
+    val kotlin = tasks.named<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>(kotlinCompile)
+    return listOf(
+        kotlin.map { it.libraries },
+        tasks.named<JavaCompile>(javaCompile).flatMap { it.destinationDirectory },
+    )
+}
+
+tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
+    detektVariantClasspath(name)?.let { classpath.setFrom(it) }
+}
+tasks.withType<dev.detekt.gradle.DetektCreateBaselineTask>().configureEach {
+    detektVariantClasspath(name)?.let { classpath.setFrom(it) }
+}
+
+kover {
+    reports {
+        total {
+            verify {
+                rule {
+                    // Just below the line coverage the app's unit tests reach (7.5%,
+                    // debug). A ratchet: raise it when coverage improves, never lower
+                    // it to make a change pass.
+                    minBound(7)
+                }
+            }
+        }
+    }
+}
+
 dependencies {
+    // Compose-specific rules (ModifierMissing, ViewModelForwarding, …) on top of
+    // config/detekt/detekt.yml.
+    detektPlugins(libs.detekt.compose.rules)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

@@ -84,6 +84,7 @@ class StoragePickerHelper internal constructor(
         )
 
         fun create(activity: ComponentActivity): StoragePickerHelper {
+            @Suppress("DEPRECATION")
             val simpleStorageHelper = SimpleStorageHelper(activity)
             lateinit var helper: StoragePickerHelper
             val permissionLauncher = activity.registerForActivityResult(

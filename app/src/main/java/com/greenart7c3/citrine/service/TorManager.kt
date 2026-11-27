@@ -57,9 +57,6 @@ object TorManager {
     private val _state = MutableStateFlow<State>(State.Off)
     val state: StateFlow<State> = _state.asStateFlow()
 
-    private val _socksPort = MutableStateFlow<Int?>(null)
-    val socksPort: StateFlow<Int?> = _socksPort.asStateFlow()
-
     /** The start → bootstrap job; non-null and active while Tor is up or coming up. */
     @Volatile
     private var job: Job? = null
@@ -288,7 +285,6 @@ object TorManager {
             if (result == 0) {
                 // Published before the port, so no dial can reach the listener without them.
                 TorSocksAuthenticator.set(port, username, password)
-                _socksPort.value = port
                 HttpClientManager.setDefaultProxyOnPort(port)
                 return port
             }
@@ -305,7 +301,6 @@ object TorManager {
      * that binds it first receives Citrine's proxied dials.
      */
     private fun releaseSocksPort() {
-        _socksPort.value = null
         TorSocksAuthenticator.clear()
         HttpClientManager.setDefaultProxy(null)
     }

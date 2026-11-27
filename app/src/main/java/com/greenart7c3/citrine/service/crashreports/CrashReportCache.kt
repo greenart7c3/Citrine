@@ -84,17 +84,6 @@ class CrashReportCache(
         }
     }
 
-    fun writeReport(report: String) {
-        synchronized(lock) {
-            val capped = combineAndCap(existing = null, incoming = report)
-            if (capped.isBlank()) {
-                deleteReport()
-            } else {
-                writeEncoded(capped)
-            }
-        }
-    }
-
     /**
      * Appends [report] to the cached text instead of replacing it. Used when the process
      * survives the error (a request that ran out of memory, for example) — the report of a

@@ -5,25 +5,37 @@ Compact guide for agent sessions working in this repo. This file is the single s
 ## Toolchain
 
 - **JDK 21 required** (CI uses temurin 21; `compileOptions`/`kotlin.jvmTarget` = 21). Builds fail on older JDKs.
-- Single Gradle module: `:app`. Package `com.greenart7c3.citrine`. App entry is `Citrine.kt` (Application) + `MainActivity.kt`.
+- Product module `:app` (package `com.greenart7c3.citrine`; app entry is `Citrine.kt` (Application) + `MainActivity.kt`), plus three build-time tool modules under `tools/`: `:architecture-tests` (Konsist layering rules), `:unused-code` (the cross-module unused-code checker) and `:detekt-rules` (Citrine's own detekt rules). The target layering and the refactor roadmap are in `docs/architecture.md`.
+- Dependency verification is on: `gradle/verification-metadata.xml` pins the SHA-256 of every dependency and plugin artifact, and the build fails on any artifact that is missing or doesn't match. After adding or bumping a dependency or plugin, regenerate it with `./gradlew --write-verification-metadata sha256 help <the tasks that use it>` (e.g. `assembleDebug assembleRelease bundleRelease test lint detektAll koverXmlReport`) and review the diff.
+- Kotlin warnings are errors (`allWarningsAsErrors` in every module): fix the warning, or suppress a deliberate one at its site (`@Suppress("DEPRECATION")`).
 - Versions: minSdk 26, targetSdk 36, compileSdk 37. Debug build adds `applicationIdSuffix = .debug` → debug applicationId is `com.greenart7c3.citrine.debug` (matters for content-provider authorities / intent filters).
 
 ## Commands
 
 ```bash
-./gradlew ktlintCheck          # lint — runs on pre-commit
+./gradlew ktlintCheck          # Kotlin style — runs on pre-commit
 ./gradlew ktlintFormat         # autofix ktlint issues
-./gradlew lintDebug            # Android Lint — must pass with 0 errors before pushing
+./gradlew detektAll            # complexity, Compose, unused-code and NoComments rules — runs on pre-commit
+./gradlew detektBaselineAll    # regenerate the detekt baselines (they may only shrink)
+./gradlew lint                 # Android Lint, every variant — runs on pre-commit and pre-push
+./gradlew lintDebug            # Android Lint, debug only
 ./gradlew lintFix              # Android Lint — applies safe auto-fixes (may need 2 runs)
-./gradlew test                 # unit tests — runs on pre-push
+./gradlew test                 # unit tests, including :architecture-tests — runs on pre-push
+./gradlew :architecture-tests:test  # the layering rules alone
+./gradlew koverXmlReport koverHtmlReport :app:koverVerify  # coverage report + minimum bound
 ./gradlew assembleDebug        # debug APK
 ./gradlew assembleRelease      # release APK (unsigned unless SIGN_RELEASE set)
 ./gradlew :app:test --tests "com.greenart7c3.citrine.GroupStateTest"  # single test class
 ```
 
-- **CI order is `ktlintCheck -> test -> assembleDebug`** — match it locally before pushing. Also run `./gradlew lintDebug` and fix any errors (warnings are OK).
-- **Always run `ktlintCheck` and `lintDebug` before committing** — `ktlintCheck` enforces Kotlin code style and `lintDebug` catches Android-specific issues (Compose, resources, manifest). Both must report 0 errors.
-- **Git hooks auto-install**: `:app:preBuild` depends on the `installGitHook` task, which runs `git config core.hooksPath <repo>/git-hooks` (works in git worktrees too, where `.git` is a file). So the first build installs hooks; files must stay executable (`git update-index --chmod=+x`). `pre-commit` = `ktlintCheck`; `pre-push` = `test`.
+- **CI order is `ktlintCheck detektAll -> lint -> test -> koverVerify -> assembleDebug`** — match it locally before pushing.
+- **Always run `ktlintCheck`, `detektAll` and `lint` before committing** (the pre-commit hook runs exactly these). All must report 0 errors (Android Lint warnings are OK).
+- `detektAll` runs detekt's type-resolving tasks (`:app:detektDebug`, `:app:detektDebugUnitTest` and the tool modules) with `config/detekt/detekt.yml`, `config/detekt/compose.yml` (app only) and `config/detekt/citrine.yml`, then the `unusedCode` task. Every rule not listed in those files is off; suppress a deliberate finding at its site with `@Suppress("UnusedParameter")` etc. Existing findings are grandfathered in each module's `detekt-baseline.xml`. **Never add an entry by hand.** `./gradlew --no-parallel detektBaselineAll` regenerates the files from the current findings; a `+` line in its diff is a new violation that regenerating would grandfather, so fix the code instead of committing it.
+- `unusedCode` (`tools/unused-code`, no baseline) fails on a non-private function, property, class or typealias whose name nothing references across every module's sources (Kotlin, XML, ProGuard rules, Gradle scripts and `tools/arti/src` for JNI callbacks), and on a catch parameter the block never reads (name it `_`). Mark code that only something outside the sources uses with `@Suppress("unused")`.
+- **No comments** (`NoComments` in `tools/detekt-rules`): say it through names, types and structure instead of a comment. Allowed: KDoc on public or protected declarations of public classes, a license header, tool directives (`noinspection`, `ktlint-disable`, `@formatter:`, `language=`) and links to an issue, an RFC or a NIP. A comment about a constraint outside our code (a platform, vendor or protocol quirk) goes under `@Suppress("NoComments")` on its declaration. Existing comments are grandfathered in the baseline. After changing the rule, run `./gradlew --stop` first: the daemon keeps the old rule classes loaded.
+- **Architecture tests** (`tools/architecture-tests`, Konsist): `ui/` does not import Room or call a DAO (`*ViewModel.kt` exempt), `Citrine.instance` cannot spread to a new file, `service/`/`database/` do not depend on Compose UI, and ViewModel subclasses end in `ViewModel`. The allow-lists in `ArchitectureTest.kt` may only shrink: the test fails when a listed file stops violating the rule, so delete the entry when you fix it.
+- **Coverage**: `:app` has a minimum line-coverage bound (`minBound` in `app/build.gradle.kts`, set just below its measured coverage), enforced by `:app:koverVerify`; raise it when coverage improves, never lower it.
+- **Git hooks auto-install**: `:app:preBuild` depends on the `installGitHook` task, which runs `git config core.hooksPath <repo>/git-hooks` (works in git worktrees too, where `.git` is a file). So the first build installs hooks; files must stay executable (`git update-index --chmod=+x`). `pre-commit` = `ktlintCheck detektAll lint`; `pre-push` = `test lint`.
 - **No instrumented tests exist** (`app/src/androidTest` is absent). `./gradlew connectedAndroidTest` is a no-op; don't rely on it.
 
 ## Components

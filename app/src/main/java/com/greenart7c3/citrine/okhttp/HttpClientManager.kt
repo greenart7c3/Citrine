@@ -47,7 +47,6 @@ object HttpClientManager {
             .build()
 
     val DEFAULT_TIMEOUT_ON_WIFI: Duration = Duration.ofSeconds(10L)
-    val DEFAULT_TIMEOUT_ON_MOBILE: Duration = Duration.ofSeconds(30L)
 
     // Routes connections at an immediately-refused local port so that requests
     // requiring a proxy fail closed (rather than leaking direct) while no real
@@ -55,11 +54,11 @@ object HttpClientManager {
     private val failClosedProxy: Proxy =
         Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", 1))
 
-    private var defaultTimeout = DEFAULT_TIMEOUT_ON_WIFI
+    private val defaultTimeout = DEFAULT_TIMEOUT_ON_WIFI
     private var defaultHttpClient: OkHttpClient? = null
     private var defaultHttpClientWithoutProxy: OkHttpClient? = null
     private var failClosedHttpClient: OkHttpClient? = null
-    private var userAgent: String = "Citrine/${BuildConfig.VERSION_NAME}"
+    private val userAgent: String = "Citrine/${BuildConfig.VERSION_NAME}"
 
     private var currentProxy: Proxy? = null
 
@@ -72,28 +71,6 @@ object HttpClientManager {
 
             // recreates singleton
             defaultHttpClient = buildHttpClient(currentProxy ?: failClosedProxy, defaultTimeout)
-        }
-    }
-
-    fun setDefaultTimeout(timeout: Duration) {
-        Log.d(Citrine.TAG, "Changing timeout to: $timeout")
-        if (defaultTimeout.seconds != timeout.seconds) {
-            defaultTimeout = timeout
-
-            // recreates singleton
-            defaultHttpClient = buildHttpClient(currentProxy ?: failClosedProxy, defaultTimeout)
-            defaultHttpClientWithoutProxy = buildHttpClient(null, defaultTimeout)
-            failClosedHttpClient = buildHttpClient(failClosedProxy, defaultTimeout)
-        }
-    }
-
-    fun setDefaultUserAgent(userAgentHeader: String) {
-        Log.d(Citrine.TAG, "Changing userAgent")
-        if (userAgent != userAgentHeader) {
-            userAgent = userAgentHeader
-            defaultHttpClient = buildHttpClient(currentProxy ?: failClosedProxy, defaultTimeout)
-            defaultHttpClientWithoutProxy = buildHttpClient(null, defaultTimeout)
-            failClosedHttpClient = buildHttpClient(failClosedProxy, defaultTimeout)
         }
     }
 

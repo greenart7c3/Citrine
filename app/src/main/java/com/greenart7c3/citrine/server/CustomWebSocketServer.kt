@@ -651,7 +651,7 @@ class CustomWebSocketServer(
             }
             VerificationResult.Valid -> {
                 var nip29PostSave: (suspend () -> Unit)? = null
-                when (val nip29Result = Nip29Handler.process(event, connection, this, appDatabase)) {
+                when (val nip29Result = Nip29Handler.process(event, this, appDatabase)) {
                     is Nip29Result.Reject -> {
                         connection?.trySend(CommandResult(event.id, false, nip29Result.message).toJson())
                         return VerificationResult.RejectedByNip29

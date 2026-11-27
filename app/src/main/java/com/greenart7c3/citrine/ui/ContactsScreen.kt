@@ -173,7 +173,7 @@ fun ContactsScreen(
                             modifier = Modifier.padding(horizontal = 6.dp),
                         )
                         Text(
-                            "Relays: ${event.relays()?.keys?.size ?: 0}",
+                            "Relays: ${event.relays().keys.size}",
                             modifier = Modifier.padding(horizontal = 6.dp),
                         )
                         Row(
@@ -205,15 +205,13 @@ fun ContactsScreen(
                                                 url = relay,
                                             )
                                         }
-                                        val localRelays = outbox ?: relays?.mapNotNull { relay ->
+                                        val localRelays = outbox ?: relays.mapNotNull { relay ->
                                             if (relay.value.write) {
                                                 relay.key
                                             } else {
                                                 null
                                             }
                                         }
-
-                                        if (localRelays == null) return@launch
 
                                         loading = true
 

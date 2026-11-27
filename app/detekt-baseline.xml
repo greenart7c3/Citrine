@@ -1,0 +1,1082 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:CustomWebSocketServer.kt:CustomWebSocketServer$(filter.since == null || filter.since == 0) &amp;&amp; (filter.until == null || filter.until == 0) &amp;&amp; filter.limit == null</ID>
+    <ID>ComplexCondition:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$Settings.autoBackup &amp;&amp; Settings.autoBackupFolder.isNotBlank() &amp;&amp; Settings.lastBackup &lt; oneWeekAgo &amp;&amp; !Citrine.isImportingEvents</ID>
+    <ID>ComposableParamOrder:BackupSettingsScreen.kt:@Composable fun BackupSettingsScreen</ID>
+    <ID>ComposableParamOrder:DatabaseInfo.kt:@Composable fun DatabaseInfo</ID>
+    <ID>ComposableParamOrder:DownloadYourEventsUserScreen.kt:@Composable fun RelayCard</ID>
+    <ID>ComposableParamOrder:IconRow.kt:@OptIn(ExperimentalFoundationApi::class) @Composable fun IconRow</ID>
+    <ID>ComposableParamOrder:RelayInfo.kt:@Composable fun RelayInfo</ID>
+    <ID>ComposableParamOrder:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
+    <ID>ComposableParamOrder:SwitchSettingRow.kt:@Composable fun SwitchSettingRow</ID>
+    <ID>ComposableParamOrder:TextSpinner.kt:@Composable fun &lt;T&gt; SpinnerSelectionDialog</ID>
+    <ID>ComposableParamOrder:TextSpinner.kt:@Composable fun SpinnerSelectionDialog</ID>
+    <ID>ComposableParamOrder:WebClientsSettingsScreen.kt:@Composable fun WebClientsSettingsScreen</ID>
+    <ID>CyclomaticComplexMethod:AccessControlSettingsScreen.kt:@Composable fun AccessControlSettingsScreen</ID>
+    <ID>CyclomaticComplexMethod:AggregatorSettingsScreen.kt:@Composable fun AggregatorSettingsScreen</ID>
+    <ID>CyclomaticComplexMethod:BrowseNsitesScreen.kt:@Composable fun BrowseNsitesScreen</ID>
+    <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$fun isPrivateIp: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$suspend fun eventsToDelete</ID>
+    <ID>CyclomaticComplexMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
+    <ID>CyclomaticComplexMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
+    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
+    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class) private fun startKtorHttpServer: EmbeddedServer&lt;CIOApplicationEngine, CIOApplicationEngine.Configuration&gt;</ID>
+    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$private fun policyAllows: Boolean</ID>
+    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEvent: VerificationResult</ID>
+    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEventBatch</ID>
+    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
+    <ID>CyclomaticComplexMethod:DownloadYourEventsUserScreen.kt:@Composable fun DownloadYourEventsUserScreen</ID>
+    <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
+    <ID>CyclomaticComplexMethod:GroupState.kt:GroupState$fun applyMetadataTags: GroupState</ID>
+    <ID>CyclomaticComplexMethod:HomeScreen.kt:@Composable fun HomeScreen</ID>
+    <ID>CyclomaticComplexMethod:ImportFromListsDialog.kt:@Composable fun ImportFromListsDialog</ID>
+    <ID>CyclomaticComplexMethod:ListImporter.kt:ListImporter$suspend fun fetch: Result</ID>
+    <ID>CyclomaticComplexMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
+    <ID>CyclomaticComplexMethod:Nip29Handler.kt:Nip29Handler$private fun moderate: Nip29Result</ID>
+    <ID>CyclomaticComplexMethod:Nip29Handler.kt:Nip29Handler$suspend fun process: Nip29Result</ID>
+    <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$fun verifyNip98: String?</ID>
+    <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$private suspend fun dispatch: Any?</ID>
+    <ID>CyclomaticComplexMethod:Nip86SettingsScreen.kt:@Composable fun Nip86SettingsScreen</ID>
+    <ID>CyclomaticComplexMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
+    <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
+    <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
+    <ID>CyclomaticComplexMethod:RelayInfoSettingsScreen.kt:@Composable fun RelayInfoSettingsScreen</ID>
+    <ID>CyclomaticComplexMethod:TagDeduplicator.kt:TagDeduplicator$internal suspend fun cleanDao: Pair&lt;Int, Int&gt;?</ID>
+    <ID>CyclomaticComplexMethod:TorManager.kt:TorManager$private suspend fun run</ID>
+    <ID>LambdaParameterEventTrailing:AccessControlSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:AggregatorSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:BackupSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:DownloadYourEventsUserScreen.kt:onClick: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:NetworkSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:Nip86SettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:RelayInfoSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:RetentionSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:SettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
+    <ID>LambdaParameterEventTrailing:WebClientsSettingsScreen.kt:onNsiteRelays: () -&gt; Unit</ID>
+    <ID>LargeClass:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
+    <ID>LargeClass:RelayAggregator.kt:RelayAggregator</ID>
+    <ID>LongMethod:AccessControlSettingsScreen.kt:@Composable fun AccessControlSettingsScreen</ID>
+    <ID>LongMethod:AggregatorSettingsScreen.kt:@Composable fun AggregatorSettingsScreen</ID>
+    <ID>LongMethod:BrowseNsitesScreen.kt:@Composable fun BrowseNsitesScreen</ID>
+    <ID>LongMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
+    <ID>LongMethod:CitrineScaffold.kt:@SuppressLint("ConfigurationScreenWidthHeight") @Composable fun CitrineScaffold</ID>
+    <ID>LongMethod:ContactsScreen.kt:@Composable fun ContactsScreen</ID>
+    <ID>LongMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
+    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
+    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class) private fun startKtorHttpServer: EmbeddedServer&lt;CIOApplicationEngine, CIOApplicationEngine.Configuration&gt;</ID>
+    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEvent: VerificationResult</ID>
+    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEventBatch</ID>
+    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
+    <ID>LongMethod:DatabaseInfo.kt:@Composable fun DatabaseInfo</ID>
+    <ID>LongMethod:DownloadYourEventsUserScreen.kt:@Composable fun DownloadYourEventsUserScreen</ID>
+    <ID>LongMethod:DownloadYourEventsUserScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun SelectRelayModal</ID>
+    <ID>LongMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
+    <ID>LongMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
+    <ID>LongMethod:HomeScreen.kt:@Composable fun HomeScreen</ID>
+    <ID>LongMethod:HomeViewModel.kt:HomeViewModel$fun importDatabase</ID>
+    <ID>LongMethod:ImportFromListsDialog.kt:@Composable fun ImportFromListsDialog</ID>
+    <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
+    <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun saveSettingsToEncryptedStorage</ID>
+    <ID>LongMethod:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
+    <ID>LongMethod:NetworkSettingsScreen.kt:@Composable fun NetworkSettingsScreen</ID>
+    <ID>LongMethod:Nip86SettingsScreen.kt:@Composable fun Nip86SettingsScreen</ID>
+    <ID>LongMethod:NsiteRelaysSettingsScreen.kt:@Composable fun NsiteRelaysSettingsScreen</ID>
+    <ID>LongMethod:NsiteRow.kt:@Composable fun NsiteRow</ID>
+    <ID>LongMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
+    <ID>LongMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
+    <ID>LongMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
+    <ID>LongMethod:RelayInfoSettingsScreen.kt:@Composable fun RelayInfoSettingsScreen</ID>
+    <ID>LongMethod:RetentionSettingsScreen.kt:@Composable fun RetentionSettingsScreen</ID>
+    <ID>LongMethod:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
+    <ID>LongMethod:TorManager.kt:TorManager$private suspend fun run</ID>
+    <ID>LongMethod:WebClientsSettingsScreen.kt:@Composable fun WebClientsSettingsScreen</ID>
+    <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$@SuppressLint("UnspecifiedRegisterReceiverFlag") override fun onCreate</ID>
+    <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$private fun buildForegroundNotification: ForegroundNotification</ID>
+    <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
+    <ID>LongParameterList:StoragePickerHelper.kt:StoragePickerHelper</ID>
+    <ID>ModifierMissing:AddressRow.kt:@Composable fun AddressRow</ID>
+    <ID>ModifierMissing:CitrineBottomBar.kt:@Composable fun CitrineBottomBar</ID>
+    <ID>ModifierMissing:CitrineScaffold.kt:@SuppressLint("ConfigurationScreenWidthHeight") @Composable fun CitrineScaffold</ID>
+    <ID>ModifierMissing:CitrineTopAppBar.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun CitrineTopAppBar</ID>
+    <ID>ModifierMissing:CloseButton.kt:@Composable fun CloseButton</ID>
+    <ID>ModifierMissing:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
+    <ID>ModifierMissing:EventSection.kt:@Composable fun EventSection</ID>
+    <ID>ModifierMissing:IconRow.kt:@OptIn(ExperimentalFoundationApi::class) @Composable fun IconRow</ID>
+    <ID>ModifierMissing:LogcatScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun LogcatScreen</ID>
+    <ID>ModifierMissing:NsiteRow.kt:@Composable fun NsiteRow</ID>
+    <ID>ModifierMissing:PubkeyInputRow.kt:@Composable fun PubkeyInputRow</ID>
+    <ID>ModifierMissing:PubkeyInputRow.kt:@Composable fun PubkeyListItem</ID>
+    <ID>ModifierMissing:SettingsCommon.kt:@Composable fun EmptyListHint</ID>
+    <ID>ModifierMissing:SettingsCommon.kt:@Composable fun SectionHeader</ID>
+    <ID>ModifierMissing:SettingsCommon.kt:@Composable fun SettingsApplyBar</ID>
+    <ID>ModifierMissing:SettingsRow.kt:@Composable fun SettingsRow</ID>
+    <ID>ModifierMissing:SwitchSettingRow.kt:@Composable fun SwitchSettingRow</ID>
+    <ID>ModifierMissing:TagsSection.kt:@Composable fun TagsSection</ID>
+    <ID>ModifierMissing:TextSpinner.kt:@Composable fun SpinnerSelectionDialog</ID>
+    <ID>ModifierMissing:WebAppInput.kt:@Composable fun WebAppInput</ID>
+    <ID>ModifierMissing:WebAppRow.kt:@Composable fun WebAppRow</ID>
+    <ID>ModifierWithoutDefault:ContactsScreen.kt:modifier: Modifier</ID>
+    <ID>ModifierWithoutDefault:DownloadYourEventsUserScreen.kt:modifier: Modifier</ID>
+    <ID>ModifierWithoutDefault:HomeScreen.kt:modifier: Modifier</ID>
+    <ID>ModifierWithoutDefault:RebroadcastScreen.kt:modifier: Modifier</ID>
+    <ID>MultipleEmitters:RebroadcastScreen.kt:@Composable private fun RebroadcastProgress</ID>
+    <ID>NestedBlockDepth:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
+    <ID>NestedBlockDepth:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
+    <ID>NoComments:AuthGate.kt:Early CLOSED for filters that explicitly target a managed private group's content</ID>
+    <ID>NoComments:BrowseNsitesScreen.kt:Compact relative timestamp ("now", "5m", "1h", "3d", "2w", "4mo", "1y") for the feed-style author he</ID>
+    <ID>NoComments:BrowseNsitesScreen.kt:Refresh the list so the installed item is now flagged.</ID>
+    <ID>NoComments:Citrine.kt:Coil image loader whose network fetches route through the app's OkHttp client so nsite</ID>
+    <ID>NoComments:Citrine.kt:Monotonic generation incremented whenever a new ephemeral event is stored so a</ID>
+    <ID>NoComments:Citrine.kt:Re-arm if an ephemeral event arrived in the narrow window between exiting</ID>
+    <ID>NoComments:Citrine.kt:Record why the previous process died (ANR, native crash, excessive resource usage) while</ID>
+    <ID>NoComments:Citrine.kt:True on startup so the first cleanup sweep catches any ephemeral events left</ID>
+    <ID>NoComments:Citrine.kt:True on startup so the first maintenance tick clears any stale progress</ID>
+    <ID>NoComments:Citrine.kt:Wait slightly past the 1-minute ephemeral TTL so a burst of ephemeral</ID>
+    <ID>NoComments:Citrine.kt:behind before a restart; cleared once the table holds no ephemeral events and</ID>
+    <ID>NoComments:Citrine.kt:events is cleaned in one pass; loop again if newer ones remain.</ID>
+    <ID>NoComments:Citrine.kt:icon downloads honor the relay's Tor/proxy fail-closed policy instead of going direct.</ID>
+    <ID>NoComments:Citrine.kt:it can still be read, and leave it in the in-app log as well as the crash dialog.</ID>
+    <ID>NoComments:Citrine.kt:notification left behind by a prior crash; set whenever notification id 2 is</ID>
+    <ID>NoComments:Citrine.kt:posted and cleared once cancelled, avoiding redundant Binder IPCs when idle.</ID>
+    <ID>NoComments:Citrine.kt:racing cleanup pass never clears [hasEphemeralEvents] after a newer insert.</ID>
+    <ID>NoComments:Citrine.kt:re-set whenever a new ephemeral event is stored.</ID>
+    <ID>NoComments:Citrine.kt:the loop and releasing ephemeralCleanupScheduled.</ID>
+    <ID>NoComments:CitrineBottomBar.kt:no bottom bar</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Already deleted</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Already sorted DESC by DB query</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Apply auth filtering (cannot be done at DB level due to complex logic)</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Can be implemented if needed</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Check if event already exists</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Check if event is a private event kind</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Create Event object</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Event already exists, return existing URI</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Event is valid, proceed with deletion</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Event was successfully validated and inserted by innerProcessEvent</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Extract and validate event data from ContentValues</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Extract tags from ContentValues if provided</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Filters events based on authentication.</ID>
+    <ID>NoComments:CitrineContentProvider.kt:For delete events (kind 5), we need to validate the delete event itself</ID>
+    <ID>NoComments:CitrineContentProvider.kt:For non-private events, check if they have p tags or authors</ID>
+    <ID>NoComments:CitrineContentProvider.kt:For now, we'll create event without tags and let validation handle it</ID>
+    <ID>NoComments:CitrineContentProvider.kt:For private events, require auth and check if user is sender or receiver</ID>
+    <ID>NoComments:CitrineContentProvider.kt:For regular events, we just check authorization</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Has p tags or authors, check if authenticated user is sender or receiver</ID>
+    <ID>NoComments:CitrineContentProvider.kt:If custom sort order is needed, we'd need to add it to the DAO query</ID>
+    <ID>NoComments:CitrineContentProvider.kt:If no auth pubkey provided, exclude private events and events with p tags/authors</ID>
+    <ID>NoComments:CitrineContentProvider.kt:If server is available, validate using server logic</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Load event from database</ID>
+    <ID>NoComments:CitrineContentProvider.kt:No p tags and no specific authors, include it</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Nostr events are generally immutable, so updates are not typically supported</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Note: Sorting is now done at DB level (DESC by default)</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Server not available, do basic validation and insert</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Server not available, just delete if authorized</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Tags are typically queried with events, so this returns empty for now</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Tags would be provided as a separate ContentValues or JSON string</ID>
+    <ID>NoComments:CitrineContentProvider.kt:This could be used for metadata updates if needed</ID>
+    <ID>NoComments:CitrineContentProvider.kt:This matches SubscriptionManager logic for empty kind filters with p tags or authors</ID>
+    <ID>NoComments:CitrineContentProvider.kt:URI matcher codes</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Use optimized database query instead of loading all events into memory</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Use optimized database query with kind filter</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Use optimized database query with pubkey filter</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Validate and process event using the same logic as WebSocket server</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Validate parameters</ID>
+    <ID>NoComments:CitrineContentProvider.kt:Validate that the auth pubkey matches the event author</ID>
+    <ID>NoComments:CitrineContract.kt:Column names matching EventEntity</ID>
+    <ID>NoComments:CitrineContract.kt:Column names matching TagEntity</ID>
+    <ID>NoComments:CitrineContract.kt:Follows the applicationId so debug (.debug) and release builds can be installed side by side.</ID>
+    <ID>NoComments:CitrineContract.kt:Query parameters</ID>
+    <ID>NoComments:CitrineContract.kt:URI paths</ID>
+    <ID>NoComments:ClipboardReceiver.kt:Copy the URL to the clipboard</ID>
+    <ID>NoComments:ClipboardReceiver.kt:Show a toast message</ID>
+    <ID>NoComments:CommandResult.kt:Creating an ObjectMapper is expensive; share one instance for all responses.</ID>
+    <ID>NoComments:Connection.kt:An idle connection can't qualify for closure until 10 minutes have elapsed.</ID>
+    <ID>NoComments:Connection.kt:Characters currently staged in outgoingQueue. The frame-count capacity alone lets a</ID>
+    <ID>NoComments:Connection.kt:Deep enough to absorb bursts (large REQ results, fanout floods) without</ID>
+    <ID>NoComments:Connection.kt:Do not call removeConnection here — the webSocket finally block owns removal.</ID>
+    <ID>NoComments:Connection.kt:Held while one REQ streams its stored events, so a connection streams one subscription at</ID>
+    <ID>NoComments:Connection.kt:Outbound frames are staged here and drained by a single writer coroutine using the</ID>
+    <ID>NoComments:Connection.kt:Over the char budget counts as full too: 1024 frames of large events is hundreds of MB.</ID>
+    <ID>NoComments:Connection.kt:Sleep the initial 10 minutes in one shot, then re-check every 5 minutes</ID>
+    <ID>NoComments:Connection.kt:Soft byte budget (in chars) for staged outbound frames. Sized against the connection</ID>
+    <ID>NoComments:Connection.kt:The client is not reading fast enough to keep up. Disconnect it rather than</ID>
+    <ID>NoComments:Connection.kt:Wait while over budget; a single frame larger than the budget still goes</ID>
+    <ID>NoComments:Connection.kt:a time and takes at most one of the app-wide history permits (EventRepository).</ID>
+    <ID>NoComments:Connection.kt:cap in CustomWebSocketServer: MAX_CONNECTIONS x this must stay well under the heap,</ID>
+    <ID>NoComments:Connection.kt:events than the buffer could hold.</ID>
+    <ID>NoComments:Connection.kt:has fallen this far behind instead of silently corrupting its stream.</ID>
+    <ID>NoComments:Connection.kt:instead of waking the CPU every minute per open connection.</ID>
+    <ID>NoComments:Connection.kt:non-suspending producers use trySend(), which disconnects a consumer that</ID>
+    <ID>NoComments:Connection.kt:silently dropping frames mid-stream, which corrupts REQ/OK semantics.</ID>
+    <ID>NoComments:Connection.kt:since slow clients (e.g. over Tor) keep their queue full.</ID>
+    <ID>NoComments:Connection.kt:slow client pin hundreds of MB when frames are large, so send() also waits on this.</ID>
+    <ID>NoComments:Connection.kt:so writing to it with trySend() silently dropped frames whenever a REQ streamed more</ID>
+    <ID>NoComments:Connection.kt:suspending session.send(). Ktor's session.outgoing only buffers a handful of frames,</ID>
+    <ID>NoComments:Connection.kt:through once the queue has drained.</ID>
+    <ID>NoComments:Connection.kt:unbounded memory growth. Suspending producers use send() for backpressure;</ID>
+    <ID>NoComments:ContactListPolicyTest.kt:No-pubkey mode: nobody is followed, so no contact lists are fetched at all.</ID>
+    <ID>NoComments:CrashReportCache.kt:Cached once at construction (Citrine.onCreate) so emergency writes from</ID>
+    <ID>NoComments:CrashReportCache.kt:Keep the newest complete reports that fit within maxChars.</ID>
+    <ID>NoComments:CrashReportCache.kt:Keeps stack.trace bounded in memory/disk and comfortably under NIP-44's 65,535-byte</ID>
+    <ID>NoComments:CrashReportCache.kt:Legacy file written before update-time stamping: treat as belonging to an older</ID>
+    <ID>NoComments:CrashReportCache.kt:Reads the cached report text only if it belongs to the currently installed APK. Checks the</ID>
+    <ID>NoComments:CrashReportCache.kt:UnexpectedCrashSaver during an OOM never make a PackageManager binder call.</ID>
+    <ID>NoComments:CrashReportCache.kt:double-wrapped NIP-17 plaintext limit (with headroom for ExitReasons text).</ID>
+    <ID>NoComments:CrashReportCache.kt:install whenever we know the current APK's lastUpdateTime.</ID>
+    <ID>NoComments:CrashReportCacheTest.kt:Adding r3 pushes total past 100 chars; oldest (r1) is dropped, r2 + r3 remain intact.</ID>
+    <ID>NoComments:CrashReportScreen.kt:ANRs and native crashes never reach the uncaught-exception handler, so the exit</ID>
+    <ID>NoComments:CrashReportScreen.kt:Covers the case where the user did not tick "remember" in Amber, so every</ID>
+    <ID>NoComments:CrashReportScreen.kt:Kept alive while the send is in flight: it holds the launcher Amber answers through.</ID>
+    <ID>NoComments:CrashReportScreen.kt:NIP-44 encryption of both.</ID>
+    <ID>NoComments:CrashReportScreen.kt:On failure the cache file is already gone, so the screen keeps the only copy.</ID>
+    <ID>NoComments:CrashReportScreen.kt:One Amber prompt covers the whole NIP-17 build: the chat message, the seal and the</ID>
+    <ID>NoComments:CrashReportScreen.kt:Responses to sign requests Amber sent back while the report was being built.</ID>
+    <ID>NoComments:CrashReportScreen.kt:crash screen does not race ahead of Citrine.onCreate()'s background detection.</ID>
+    <ID>NoComments:CrashReportScreen.kt:records are the only trace of them the user can send. Run detect() here too so the</ID>
+    <ID>NoComments:CrashReportScreen.kt:seal and gift wrap needs its own confirmation there.</ID>
+    <ID>NoComments:CrashReportSender.kt:The sender's self-copy is useless here: only the developer's wrap needs to go out.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:"self" field: the owner's key when configured, otherwise the</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:404 fallback.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:60s keepalive (down from 5s) cuts wakeups by 12x and lets cellular/Wi-Fi</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Aggregator-fetched events bypass the author/tagged-pubkey allowlists</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Always clean up, even on cancellation</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Catch-all: /, /index.html, /assets/foo.js, etc</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Check if offline and broadcast with WorkManager</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:ContentProvider test endpoints (for Postman testing)</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Decouple socket reads from message processing: parsing, signature</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Filter headers before sending back to the original client</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:First try requested file</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Forward headers to target, excluding engine-managed ones</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:HTTP endpoints for testing ContentProvider errors</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:HTTP route and the WebSocket upgrade handshake.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:IMPORTANT: Let Ktor manage Transfer-Encoding and Content-Length</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:If this is a client subdomain, proxy instead</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Ktor's default is unlimited, so one frame could be read whole into the heap</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Ktor's outgoing queue is unlimited by default, so session.send() never</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Let already-received messages finish (stores events, sends OKs)</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Membership changes and metadata regeneration run after the event is</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:NIP-29 clients discover the relay's group-signing key via the</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:NIP-29: ids removed by a group admin's kind-9005 moderation event stay deleted,</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:NIP-42: an AUTH event must carry a valid signature, otherwise any</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:NIP-70: reposts of protected events MUST NOT embed the reposted event.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:NIP-86 IP block enforcement — a single chokepoint that covers every</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:NIP-86 Relay Management API</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:NIP-86 ban lists — apply unconditionally (even to aggregator-fetched events),</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:SPA fallback for root or route paths without file extension</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:SPA/index fallback for the root or extension-less routes.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Serves a file from an app-internal [rootDir] (used by installed nsites). Mirrors</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Small: with maxFrameSize at several MB, 256 queued frames per connection</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Streaming happens here</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Tor hidden-service clients all arrive from 127.0.0.1, so blockedIps can't</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Trim leading slash</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:Verify the signature before any DB access so invalid events are</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:WebSocket endpoint</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:With Connection's 2M-char outbound budget, 50 connections bound outbound buffers to ~200 MB.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:and some client deflate implementations (e.g. gorilla/websocket's</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:because the aggregator already validated them against the user's</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:before tearing the connection down.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:before the event size check runs. 4x covers JSON escaping of max-size content.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:but only for groups this relay manages — mirrored 9005s from foreign groups</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:client could authenticate as any pubkey.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:connect over localhost/LAN where compression only burns CPU/battery,</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:connections. A bounded channel keeps per-connection ordering while</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:could pin the heap on their own.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:event delivery. Clients that don't negotiate the extension simply</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:flate reader) have a history of blocking mid-stream, which stalls</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:if the event is ephemeral the response will be sent after the event is sent to subscriptions</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:letting reads continue during processing bursts.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:limit them; cap the total so per-connection buffers can't add up to an OOM.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:must not block re-imports.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:on the network engine's threads, stalling reads for this and other</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:permessage-deflate is intentionally NOT installed. Nearly all clients</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:radios enter idle sleep between pings while still detecting dead peers well</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:receive uncompressed frames either way.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:rejected without paying for the reads below.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:relay's generated identity.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:requested subscription filter before handing them off here.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:so a banned author can't sneak in via the relay aggregator.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:stored and acknowledged.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:suspended and a non-reading client pinned the heap behind Connection's budget.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:verification, and DB checks are CPU/IO heavy and would otherwise run</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:verifyEvent never returns this; NIP-29 rejection happens below.</ID>
+    <ID>NoComments:CustomWebSocketServer.kt:within NAT and Tor circuit timeouts.</ID>
+    <ID>NoComments:DateUtils.kt:Format the LocalDateTime with local format</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:Adds [relayUrl] to the sheet's list unless an equivalent relay is already listed.</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:Both lookups are bounded and fall back to "nothing found": a relay that</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:MutableList would fill up without ever recomposing the list.</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:Runs one relay lookup under a hard deadline.</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:Snapshot list: the lookups below land off the main thread, so a plain</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:TODO: find out why nostr.band keeps downloading events forever</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:Upper bound for one relay lookup in [SelectRelayModal].</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:never answers, or a local query stuck behind a write, must never leave the</ID>
+    <ID>NoComments:DownloadYourEventsUserScreen.kt:sheet spinning with no way out. Results are added as they arrive.</ID>
+    <ID>NoComments:EncryptedBlobInterceptor.kt:Blobs encrypted by implementations that used the hex nonce's UTF-8 bytes as the</ID>
+    <ID>NoComments:EncryptedBlobInterceptor.kt:Log redirections to be able to use the cipher.</ID>
+    <ID>NoComments:EncryptedBlobInterceptor.kt:actual GCM nonce; retried when the standard decryption fails to authenticate.</ID>
+    <ID>NoComments:EphemeralEventCleanupTest.kt:Deleting before 150 removes only the old ephemeral event; the recent one keeps hasEphemeralEvents tr</ID>
+    <ID>NoComments:EphemeralEventCleanupTest.kt:Deleting before 250 clears all remaining ephemeral events while leaving regular events intact.</ID>
+    <ID>NoComments:EphemeralEventCleanupTest.kt:Insert one old ephemeral event and one recent ephemeral event.</ID>
+    <ID>NoComments:EphemeralEventCleanupTest.kt:Non-ephemeral events (kind 1 and kind 30000) do not count as ephemeral.</ID>
+    <ID>NoComments:EventBroadcastWorker.kt:Ensure client is connected</ID>
+    <ID>NoComments:EventBroadcastWorker.kt:Get relays for the event</ID>
+    <ID>NoComments:EventBroadcastWorker.kt:Send event to relays</ID>
+    <ID>NoComments:EventBroadcastWorker.kt:Try to get relays from the user's advertised relay list (kind 10002)</ID>
+    <ID>NoComments:EventDao.kt:Callers pair [getEventRowsByIds] with this instead of [getEvents]: its `@Relation`</ID>
+    <ID>NoComments:EventDao.kt:NIP-29: every event carrying an `h` tag for the given group id (used by kind 9008</ID>
+    <ID>NoComments:EventDao.kt:NIP-29: group ids whose admins deleted the given event id via a stored kind-9005</ID>
+    <ID>NoComments:EventDao.kt:Optimized queries for ContentProvider</ID>
+    <ID>NoComments:EventDao.kt:Primary-key lookups, so sizing a page reads no content into memory.</ID>
+    <ID>NoComments:EventDao.kt:Returns null when the row already exists (IGNORE) — skip tag I/O and</ID>
+    <ID>NoComments:EventDao.kt:TagEntity.pkEvent, which Room enables by default.</ID>
+    <ID>NoComments:EventDao.kt:Tags are removed transactionally via the FK ON DELETE CASCADE on</ID>
+    <ID>NoComments:EventDao.kt:Using sentinel values: Long.MIN_VALUE/MAX_VALUE means "no filter"</ID>
+    <ID>NoComments:EventDao.kt:delete-group to purge the group's content).</ID>
+    <ID>NoComments:EventDao.kt:fan-out in that case rather than orphaning the existing event's tags.</ID>
+    <ID>NoComments:EventDao.kt:loads the tags of every row at once, hundreds of thousands of [TagEntity] objects</ID>
+    <ID>NoComments:EventDao.kt:moderation event. Only ids of groups managed by this relay count as deletions.</ID>
+    <ID>NoComments:EventDao.kt:per page for contact lists, mute lists and follow sets.</ID>
+    <ID>NoComments:EventDownloader.kt:A slow relay that is still streaming events is making progress: keep waiting</ID>
+    <ID>NoComments:EventDownloader.kt:EOSE, so the next REQ would carry the exact same filters and the relay</ID>
+    <ID>NoComments:EventDownloader.kt:How many consecutive unanswered REQs a relay gets before the download gives up on it.</ID>
+    <ID>NoComments:EventDownloader.kt:Minimum gap between two progress notifications, in milliseconds.</ID>
+    <ID>NoComments:EventDownloader.kt:Nothing arrived and the relay never answered the REQ. `until` only moves on</ID>
+    <ID>NoComments:EventDownloader.kt:Stores an event fetched from an indexer without making the caller wait for Room.</ID>
+    <ID>NoComments:EventDownloader.kt:Tracks how many events the download has pulled so far and keeps notification 2 in sync.</ID>
+    <ID>NoComments:EventDownloader.kt:actually sent, and give up on this relay after a few silent rounds.</ID>
+    <ID>NoComments:EventDownloader.kt:client would dedupe it away (or consider the old one still in flight),</ID>
+    <ID>NoComments:EventDownloader.kt:leaving this loop spinning forever. Drop the subscription so the retry is</ID>
+    <ID>NoComments:EventDownloader.kt:on the REQ in flight instead of giving up on it.</ID>
+    <ID>NoComments:EventEntity.kt:Holds 6 columns but can be extended.</ID>
+    <ID>NoComments:EventEntity.kt:marker</ID>
+    <ID>NoComments:EventEntity.kt:tag name</ID>
+    <ID>NoComments:EventEntity.kt:tag value</ID>
+    <ID>NoComments:EventEntity.kt:value</ID>
+    <ID>NoComments:EventFilter.kt:Cheapest checks first: this runs against every active subscription</ID>
+    <ID>NoComments:EventFilter.kt:for every event inserted into the database.</ID>
+    <ID>NoComments:EventRebroadcaster.kt:Collects ["OK", ...] responses and connection failures across all relays.</ID>
+    <ID>NoComments:EventRepository.kt:"[", "]", and trailing ","</ID>
+    <ID>NoComments:EventRepository.kt:--- Add each tag as an AND EXISTS in WHERE ---</ID>
+    <ID>NoComments:EventRepository.kt:--- Build SQL ---</ID>
+    <ID>NoComments:EventRepository.kt:--- EventEntity filters ---</ID>
+    <ID>NoComments:EventRepository.kt:App-wide cap on content chunks loaded at once, whatever the number of connections and</ID>
+    <ID>NoComments:EventRepository.kt:Attaches tags to [rows] and hands them to [onBatch] in order, in chunks holding at</ID>
+    <ID>NoComments:EventRepository.kt:B-tree (native memory, temp_store=MEMORY), and full rows put up to</ID>
+    <ID>NoComments:EventRepository.kt:Content loaded at once per content chunk: one max-size event.</ID>
+    <ID>NoComments:EventRepository.kt:Counts what was sent, not the page: skipped ids must not eat into the client's limit.</ID>
+    <ID>NoComments:EventRepository.kt:DISTINCT over full-width rows (including content) to dedupe them again, which</ID>
+    <ID>NoComments:EventRepository.kt:End (exclusive) of the chunk starting at [start]: as many consecutive events as fit</ID>
+    <ID>NoComments:EventRepository.kt:Estimates the serialized JSON frame length in chars (envelope + event fields + tags +</ID>
+    <ID>NoComments:EventRepository.kt:Events above the chunk budget may carry hundreds of thousands of duplicate tag</ID>
+    <ID>NoComments:EventRepository.kt:Exclude events whose NIP-40 expiration timestamp is in the past.</ID>
+    <ID>NoComments:EventRepository.kt:FTS results are ordered by rowid, so the (createdAt, id) keyset cursor does</ID>
+    <ID>NoComments:EventRepository.kt:Fixed envelope + field names + id(64) + pubkey(64) + sig(128) + numbers ≈ 357 chars.</ID>
+    <ID>NoComments:EventRepository.kt:Hard per-event ceilings so a single pathological event (unusually huge tag list or</ID>
+    <ID>NoComments:EventRepository.kt:Ids only: with an IN list on authors/kinds SQLite sorts the candidates in a temp</ID>
+    <ID>NoComments:EventRepository.kt:Keyset pagination cursor: continues strictly after the previous page's last row</ID>
+    <ID>NoComments:EventRepository.kt:Loads the events of [ids] and hands them to [onBatch] in [ids] order, in chunks of at</ID>
+    <ID>NoComments:EventRepository.kt:NIP-29 private groups: events the connection may not read are filtered per</ID>
+    <ID>NoComments:EventRepository.kt:Never load rows whose content exceeds the size cap: a single multi-MB row can</ID>
+    <ID>NoComments:EventRepository.kt:Note: no JOIN against TagEntity. The EXISTS predicates below do all the tag</ID>
+    <ID>NoComments:EventRepository.kt:QUERY_BATCH_SIZE x maxEventSize of content there, on top of the same in the heap.</ID>
+    <ID>NoComments:EventRepository.kt:Separate frame so the chunk's TagEntity lists and EventWithTags batch are out of scope</ID>
+    <ID>NoComments:EventRepository.kt:Serializes a stored event straight from its database row, skipping the construction</ID>
+    <ID>NoComments:EventRepository.kt:Streams tag rows for [chunk] straight into a per-event map, skipping the intermediate</ID>
+    <ID>NoComments:EventRepository.kt:Subscriptions that are not registered in EventSubscription (or were evicted from it)</ID>
+    <ID>NoComments:EventRepository.kt:Tags loaded at once per content chunk (~3 MB of TagEntity objects).</ID>
+    <ID>NoComments:EventRepository.kt:Tags were counted but are gone: the event was deleted or replaced</ID>
+    <ID>NoComments:EventRepository.kt:The FTS join is 1:1 (rowid = rowid) and the tag filters use EXISTS, so no row</ID>
+    <ID>NoComments:EventRepository.kt:The frame is written once, prefix and suffix included, into a single buffer.</ID>
+    <ID>NoComments:EventRepository.kt:The queries below block uninterruptibly, so this is where a subscription</ID>
+    <ID>NoComments:EventRepository.kt:an event whose id and signature no longer verify.</ID>
+    <ID>NoComments:EventRepository.kt:and eligible for GC before the next chunk's query starts.</ID>
+    <ID>NoComments:EventRepository.kt:any event that still exceeds the hard per-event ceiling.</ID>
+    <ID>NoComments:EventRepository.kt:are not cancelled when their connection goes away, so the streaming loops check.</ID>
+    <ID>NoComments:EventRepository.kt:between the two reads. Sending it without tags would hand the client</ID>
+    <ID>NoComments:EventRepository.kt:event, because a filter (e.g. {"kinds":[9]}) can match group content without</ID>
+    <ID>NoComments:EventRepository.kt:ever naming the group id. The per-event check works on the raw rows, so the</ID>
+    <ID>NoComments:EventRepository.kt:exhaust the heap while being serialized (issue #187).</ID>
+    <ID>NoComments:EventRepository.kt:filtering; a join would multiply each event row by its tag count and force a</ID>
+    <ID>NoComments:EventRepository.kt:frames), ~40 MB, or one oversized event's tags instead of the 10k.</ID>
+    <ID>NoComments:EventRepository.kt:idx_event_created_id. Never combine with searchKeywords (rowid ordering).</ID>
+    <ID>NoComments:EventRepository.kt:in the result is ever duplicated and no DISTINCT is needed in any mode.</ID>
+    <ID>NoComments:EventRepository.kt:is dramatically slower.</ID>
+    <ID>NoComments:EventRepository.kt:multi-MB tag strings) can never exhaust the 512 MB heap on read.</ID>
+    <ID>NoComments:EventRepository.kt:no-quartz-Event fast path below is preserved, and it only runs at all while a</ID>
+    <ID>NoComments:EventRepository.kt:not apply and the matching ids are loaded in one shot; content and tags are</ID>
+    <ID>NoComments:EventRepository.kt:private/hidden managed group exists.</ID>
+    <ID>NoComments:EventRepository.kt:rows from Citrine 3.0.0–3.2.1; repair those in SQLite before loading, and skip</ID>
+    <ID>NoComments:EventRepository.kt:shortcut: a chunk bigger than the room left in the client's queue still waits on it mid-send while h</ID>
+    <ID>NoComments:EventRepository.kt:shortcut: a common search term with no limit holds every matching id (~200 B each), page by rowid if</ID>
+    <ID>NoComments:EventRepository.kt:still loaded in bounded chunks.</ID>
+    <ID>NoComments:EventRepository.kt:subscriptions: about HISTORY_CHUNK_PERMITS x (1M chars of content + 10k tags + their</ID>
+    <ID>NoComments:EventRepository.kt:under the non-search ordering "createdAt DESC, id ASC", index-backed by</ID>
+    <ID>NoComments:EventRepository.kt:whose client sent CLOSE or disconnected stops costing memory and I/O.</ID>
+    <ID>NoComments:EventRepositoryQueryTest.kt:Positional contract: expiry, since, kind, cursor(createdAt, createdAt, id), limit.</ID>
+    <ID>NoComments:EventRepositoryQueryTest.kt:The keyset cursor is only valid under the non-search ordering.</ID>
+    <ID>NoComments:EventRepositoryQueryTest.kt:batchedQuery's page query: SQLite sorts these rows in a temp B-tree for IN filters,</ID>
+    <ID>NoComments:EventRepositoryQueryTest.kt:expiry, kind, size cap, cursor x3, limit</ID>
+    <ID>NoComments:EventRepositoryQueryTest.kt:so it must not carry content.</ID>
+    <ID>NoComments:EventRepositoryStreamTest.kt:100 unique tags duplicated 105 times = 10,500 rows (&gt; CHUNK_TAG_BUDGET = 10,000).</ID>
+    <ID>NoComments:EventRepositoryStreamTest.kt:600K + 600K is over the 1M-char chunk budget, so "b" starts a new chunk.</ID>
+    <ID>NoComments:EventRepositoryStreamTest.kt:Estimate should stay tight (no excessive over-allocation).</ID>
+    <ID>NoComments:EventSubscription.kt:Drop closed subscriptions so future fanouts skip them entirely.</ID>
+    <ID>NoComments:EventSubscription.kt:NIP-01: subscription ids are managed independently per connection. The wire id</ID>
+    <ID>NoComments:EventSubscription.kt:NIP-29: never live-push private-group events to connections that are</ID>
+    <ID>NoComments:EventSubscription.kt:NIP-45: COUNT subscriptions answer once and are never registered, so they</ID>
+    <ID>NoComments:EventSubscription.kt:neither evict a same-id REQ subscription nor receive live EVENT fanout.</ID>
+    <ID>NoComments:EventSubscription.kt:not authenticated as a member (stored-query reads are gated the same</ID>
+    <ID>NoComments:EventSubscription.kt:stays the client-sent value; only the cache key is connection-scoped.</ID>
+    <ID>NoComments:EventSubscription.kt:way in EventRepository.subscribe).</ID>
+    <ID>NoComments:ExecuteAllFanOutBenchmark.kt:Warm-up so the JIT compiles both paths before measurement.</ID>
+    <ID>NoComments:ExitReasons.kt:ANRs ship the full traces file; only its first lines are useful in a chat message.</ID>
+    <ID>NoComments:ExitReasons.kt:Android's lmkd kills foreground services under device-wide memory pressure and provides no</ID>
+    <ID>NoComments:ExitReasons.kt:Earliest exit timestamp that can belong to the current install and has not been seen yet.</ID>
+    <ID>NoComments:ExitReasons.kt:Exit reasons worth showing to a user: all of them mean the process died abnormally without</ID>
+    <ID>NoComments:ExitReasons.kt:Keep earlier unread records from this install: a crash on startup must not</ID>
+    <ID>NoComments:ExitReasons.kt:Prefer the version recorded on the dying process via setProcessStateSummary; fall back</ID>
+    <ID>NoComments:ExitReasons.kt:True when pending records stored under [pendingUpdateTime] still belong to the currently</ID>
+    <ID>NoComments:ExitReasons.kt:erase the ANR that happened before it.</ID>
+    <ID>NoComments:ExitReasons.kt:reaching the uncaught-exception handler. REASON_LOW_MEMORY is deliberately excluded because</ID>
+    <ID>NoComments:ExitReasons.kt:stack trace or actionable diagnostics.</ID>
+    <ID>NoComments:ExitReasons.kt:to the currently installed version when absent.</ID>
+    <ID>NoComments:ExpirationCheckBenchmark.kt:Keeps the sink reachable so the JIT can't eliminate the loops above.</ID>
+    <ID>NoComments:ExpirationCheckBenchmark.kt:Warm-up so JIT compiles both paths before measurement.</ID>
+    <ID>NoComments:ExportDatabaseUtils.kt:Keyset paging over the primary key: one page of event rows at a time, tags</ID>
+    <ID>NoComments:ExportDatabaseUtils.kt:Rows read per backup page. Each page is streamed out and dropped before the next one is read.</ID>
+    <ID>NoComments:ExportDatabaseUtils.kt:a large database's tag rows in the heap all at once.</ID>
+    <ID>NoComments:ExportDatabaseUtils.kt:attached in bounded chunks by the same helper the REQ path uses. The whole</ID>
+    <ID>NoComments:ExportDatabaseUtils.kt:id list and the 1,000-events-with-all-their-tags batches this replaces held</ID>
+    <ID>NoComments:GroupDao.kt:Tombstones the group (blocks id reuse) and clears its membership and invites.</ID>
+    <ID>NoComments:GroupManager.kt:An Amber login/logout changes the relay identity; metadata signed by the</ID>
+    <ID>NoComments:GroupManager.kt:Monotonic created_at for relay-signed metadata so a regenerated 39xxx always</ID>
+    <ID>NoComments:GroupManager.kt:The relay identity: the owner's key when configured (signed via the Amber</ID>
+    <ID>NoComments:GroupManager.kt:allowlists or rejected-kinds configuration.</ID>
+    <ID>NoComments:GroupManager.kt:external signer), otherwise the relay's generated fallback key.</ID>
+    <ID>NoComments:GroupManager.kt:previous identity is a distinct addressable event that would linger next to</ID>
+    <ID>NoComments:GroupManager.kt:replaces the previous version even when several regens land in the same second.</ID>
+    <ID>NoComments:GroupManager.kt:shouldVerify=false: relay-signed events must not be blocked by the owner's</ID>
+    <ID>NoComments:GroupManager.kt:the fresh copies, so drop it once the new set is stored.</ID>
+    <ID>NoComments:GroupState.kt:Group ids are relay-local random strings; cap length and charset so ids stay usable</ID>
+    <ID>NoComments:GroupState.kt:in d-tags, naddr codes, and SQL without escaping surprises.</ID>
+    <ID>NoComments:HomeScreen.kt:Stop the aggregator before wiping the database so its listener</ID>
+    <ID>NoComments:HomeScreen.kt:TODO: Replace this with a setup screen to allow automatic download in background</ID>
+    <ID>NoComments:HomeScreen.kt:The cache the aggregator reuses on restart lives in the DB we just</ID>
+    <ID>NoComments:HomeScreen.kt:afterwards if the setting is still enabled.</ID>
+    <ID>NoComments:HomeScreen.kt:can't ingest new events into tables we're clearing. Restart it</ID>
+    <ID>NoComments:HomeScreen.kt:cold-start network fetch instead of reusing a now-empty cache.</ID>
+    <ID>NoComments:HomeScreen.kt:wiped. Reset the sync marker so the next refresh does a full</ID>
+    <ID>NoComments:HttpClientManager.kt:Default OkHttp dispatcher caps in-flight Calls at 64 (5 per host), which throttles</ID>
+    <ID>NoComments:HttpClientManager.kt:Fail closed: caller asked for proxied traffic but no proxy is up.</ID>
+    <ID>NoComments:HttpClientManager.kt:Give it room for the full fan-out; long-lived WebSocket upgrades each hold a slot.</ID>
+    <ID>NoComments:HttpClientManager.kt:Return a client whose connections fail at connect time rather</ID>
+    <ID>NoComments:HttpClientManager.kt:Routes connections at an immediately-refused local port so that requests</ID>
+    <ID>NoComments:HttpClientManager.kt:proxy is configured.</ID>
+    <ID>NoComments:HttpClientManager.kt:recreates singleton</ID>
+    <ID>NoComments:HttpClientManager.kt:requiring a proxy fail closed (rather than leaking direct) while no real</ID>
+    <ID>NoComments:HttpClientManager.kt:than silently going direct.</ID>
+    <ID>NoComments:HttpClientManager.kt:the aggregator when it tries to open hundreds of relay WebSockets in parallel.</ID>
+    <ID>NoComments:LocalPreferences.kt:Amber (NIP-55) signer package holding the relay owner's key; set together with</ID>
+    <ID>NoComments:LocalPreferences.kt:Hex private key of the relay's generated fallback identity, used to sign NIP-29</ID>
+    <ID>NoComments:LocalPreferences.kt:Migration: pre-existing installs with proxy enabled used to route every URL through Tor.</ID>
+    <ID>NoComments:LocalPreferences.kt:One-shot flag: contact lists of authors the owner does not follow have been deleted.</ID>
+    <ID>NoComments:LocalPreferences.kt:One-shot flag: duplicate TagEntity rows from Citrine 3.0.0–3.2.1 have been cleaned.</ID>
+    <ID>NoComments:LocalPreferences.kt:Persisted even when empty so a user who clears the defaults keeps an empty</ID>
+    <ID>NoComments:LocalPreferences.kt:Preserve that behavior unless the user has explicitly chosen otherwise.</ID>
+    <ID>NoComments:LocalPreferences.kt:RELAY_OWNER_PUBKEY by the Amber login in relay info settings.</ID>
+    <ID>NoComments:LocalPreferences.kt:group metadata when no owner is configured. Read/written only by RelayIdentity.</ID>
+    <ID>NoComments:LocalPreferences.kt:set on reload instead of having DEFAULT_REJECTED_KINDS restored.</ID>
+    <ID>NoComments:Log.kt:(e.g. isLoggable) keep working unchanged.</ID>
+    <ID>NoComments:Log.kt:Bounded buffer so a burst of logging on a hot path can never block callers or grow without</ID>
+    <ID>NoComments:Log.kt:Coalesce sequential non-error log lines into a single SQLite write</ID>
+    <ID>NoComments:Log.kt:Integer priority constants mirroring [android.util.Log] so call sites that pass a level</ID>
+    <ID>NoComments:Log.kt:Never let logging failures crash or spam the app.</ID>
+    <ID>NoComments:Log.kt:Short coalescing window so sequential log lines (e.g. a startup or event burst)</ID>
+    <ID>NoComments:Log.kt:bound. When the consumer falls behind we drop the oldest entries rather than the newest.</ID>
+    <ID>NoComments:Log.kt:land in a single SQLite write transaction instead of triggering one disk write</ID>
+    <ID>NoComments:Log.kt:on a timeout boundary). Error logs flush immediately so fatal context</ID>
+    <ID>NoComments:Log.kt:per call. Idle periods park on channel.receive() with zero wakeups.</ID>
+    <ID>NoComments:Log.kt:reaches disk right away. Idle periods park on channel iteration with zero</ID>
+    <ID>NoComments:Log.kt:transaction without cancelling receive() (so no log line can be dropped</ID>
+    <ID>NoComments:Log.kt:wakeups.</ID>
+    <ID>NoComments:LogDatabase.kt:Logs are disposable; if the schema ever changes just start fresh.</ID>
+    <ID>NoComments:LogEntity.kt:Epoch milliseconds when the log entry was created.</ID>
+    <ID>NoComments:LogEntity.kt:Single-letter level: V, D, I, W or E.</ID>
+    <ID>NoComments:MainActivity.kt:A report left by a previous run takes over the whole window, above the bars.</ID>
+    <ID>NoComments:MainActivity.kt:Launcher used by the aggregator's foreground signer path. Going through</ID>
+    <ID>NoComments:MainActivity.kt:Same mechanism for the relay identity signer (NIP-29 group metadata signing).</ID>
+    <ID>NoComments:MainActivity.kt:alone would leave Amber reading a null callingPackage and rejecting the request.</ID>
+    <ID>NoComments:MainActivity.kt:registerForActivityResult preserves the calling package on the intent — startActivity</ID>
+    <ID>NoComments:NegentropyHandler.kt:Each open session holds a materialized id set plus reconciliation state until</ID>
+    <ID>NoComments:NegentropyHandler.kt:NIP-29: with private groups on the relay, a broad filter's id set could reveal</ID>
+    <ID>NoComments:NegentropyHandler.kt:private-group event ids, so the storage is built from readable events only.</ID>
+    <ID>NoComments:NegentropyHandler.kt:the client finishes or closes it; abandoned sessions must not accumulate.</ID>
+    <ID>NoComments:NetworkChangeDetector.kt:The first report after registering the callback is the network the</ID>
+    <ID>NoComments:NetworkChangeDetector.kt:relays are already connecting on; only a return after a loss is a change.</ID>
+    <ID>NoComments:Nip29Handler.kt:Nothing to remove; store the request and move on.</ID>
+    <ID>NoComments:Nip29Handler.kt:Signs a kind 9000 (add) or 9001 (remove) with the relay's key and runs it through</ID>
+    <ID>NoComments:Nip29Handler.kt:Stored as-is; pin lists are served straight back to clients.</ID>
+    <ID>NoComments:Nip86Handler.kt:---------------------------------------------------------------------</ID>
+    <ID>NoComments:Nip86Handler.kt:Collapse trailing-slash differences (e.g. "http://h/" vs "http://h") so</ID>
+    <ID>NoComments:Nip86Handler.kt:Helpers</ID>
+    <ID>NoComments:Nip86Handler.kt:Method handlers</ID>
+    <ID>NoComments:Nip86Handler.kt:NIP-98 verification</ID>
+    <ID>NoComments:Nip86Handler.kt:clients that omit the root slash in the NIP-98 `u` tag still match.</ID>
+    <ID>NoComments:Nip86Handler.kt:countByKind returns a Flow — sample the first emission.</ID>
+    <ID>NoComments:Nip86SettingsScreen.kt:Apply, so backing out of the screen without applying deletes nothing.</ID>
+    <ID>NoComments:Nip86SettingsScreen.kt:Pubkeys the user opted to purge from the database. Deletion runs on</ID>
+    <ID>NoComments:NsiteManager.kt:"nsite" + first 16 hex chars of sha256(address): a deterministic, hostname-safe slug.</ID>
+    <ID>NoComments:NsiteManager.kt:Builds a Blossom URL for an icon, or null when there's no icon hash.</ID>
+    <ID>NoComments:NsiteManager.kt:Common raster icon filenames, in priority order. Coil can't decode .ico/.svg, so those</ID>
+    <ID>NoComments:NsiteManager.kt:Dedupe by address keeping the newest manifest.</ID>
+    <ID>NoComments:NsiteManager.kt:Downloads a blob, trying each server in order and verifying its sha256.</ID>
+    <ID>NoComments:NsiteManager.kt:Prefer the nsite's own title; fall back to the d tag, then the author's</ID>
+    <ID>NoComments:NsiteManager.kt:Record the check time regardless of whether content changed.</ID>
+    <ID>NoComments:NsiteManager.kt:Returns (urlPath, sha256) for every `path` tag.</ID>
+    <ID>NoComments:NsiteManager.kt:Swap tmp into place.</ID>
+    <ID>NoComments:NsiteManager.kt:The author's avatar URL from their kind-0 metadata `picture` field, if present.</ID>
+    <ID>NoComments:NsiteManager.kt:The nsite's description/summary from the manifest, if present.</ID>
+    <ID>NoComments:NsiteManager.kt:The nsite's own human-readable name from the manifest `title` tag, if present.</ID>
+    <ID>NoComments:NsiteManager.kt:are intentionally excluded — a site with only those simply shows the placeholder.</ID>
+    <ID>NoComments:NsiteManager.kt:endregion</ID>
+    <ID>NoComments:NsiteManager.kt:list falls back to the built-in defaults.</ID>
+    <ID>NoComments:NsiteManager.kt:nsites use their own relay set only — never the aggregator relays. An empty user</ID>
+    <ID>NoComments:NsiteManager.kt:profile name, then a short pubkey.</ID>
+    <ID>NoComments:NsiteManager.kt:region discovery</ID>
+    <ID>NoComments:NsiteManager.kt:region install / update</ID>
+    <ID>NoComments:NsiteManager.kt:region manifest parsing</ID>
+    <ID>NoComments:NsiteManager.kt:region relays</ID>
+    <ID>NoComments:NsiteManager.kt:region single fetches</ID>
+    <ID>NoComments:NsiteManager.kt:region update check</ID>
+    <ID>NoComments:NsiteManager.kt:sha256 of the highest-priority decodable icon file mapped by a `path` tag, if any.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:Always 1000 rather than echoing `code`: close() validates the code it is</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:Called when connecting.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:Claim the session ourselves: OkHttp's cancel() raises no callback when no reader is</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:Claims the session's single terminal report. False if it already ended.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:Launch a coroutine to process messages from the channel.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:Never blocks (unlimited channel): the OkHttp reader</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:OkHttp reports onClosed at once, whether or not the relay still holds the</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:RealWebSocket, and its own WebSocketEcho recipe) is that onClosed fires</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:Set once, by whichever of `onClosed`, `onFailure` or [disconnect] ends the session first.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:TCP session open.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:The relay sent a CLOSE frame. OkHttp's contract (WebSocketListener KDoc,</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:UNLIMITED on purpose — do NOT bound this channel. The app holds</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:a later cancel() is silent too -- so the relay client kept believing it</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:application's job. Left unanswered, the socket sits half-closed: no</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:asked to write and throws on the reserved ones (1005, 1006, 1015), and a</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:downstream.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:failed up to two intervals later. Answering completes the handshake and</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:failure arrives later on its own thread. The relay client needs the answer now.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:left to fail (the state a relay-initiated close leaves behind), and when it does the</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:many relay connections; a bounded buffer under a slow consumer</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:onClosed, no onFailure, send() still accepted and silently discarded, and</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:only once BOTH peers have sent a close, and sending ours is the</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:relay may send anything.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:relay's outbound buffers — infrastructure that isn't ours. Drain</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:the remote as fast as it can send; consumer speed is handled</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:thread must stay free to keep draining the socket.</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:was connected, with its REQs live, until OkHttp's 120s ping path finally</ID>
+    <ID>NoComments:OkHttpWebSocket.kt:would block OkHttp reader threads and park the backlog on the</ID>
+    <ID>NoComments:RelayAggregator.kt:(contact list, mute list, metadata) and skip the proactive network fetches.</ID>
+    <ID>NoComments:RelayAggregator.kt:(no cache short-circuit), so the new user's follows are picked</ID>
+    <ID>NoComments:RelayAggregator.kt:(warm-loaded on start() or applied by a prior refresh) and skip the network fetch.</ID>
+    <ID>NoComments:RelayAggregator.kt:(when the aggregator's own kind-10000 arrives via the regular subscription) skip</ID>
+    <ID>NoComments:RelayAggregator.kt:= better redundancy if any one relay drops events. The greedy picker (capRelaysPerAuthor)</ID>
+    <ID>NoComments:RelayAggregator.kt:Activity-scoped Intent launcher set by MainActivity. Uses registerForActivityResult</ID>
+    <ID>NoComments:RelayAggregator.kt:ActivityResultLauncher (set via [registerActivityLauncher]), which preserves</ID>
+    <ID>NoComments:RelayAggregator.kt:Always tear down the previous authenticator before installing a new one — its</ID>
+    <ID>NoComments:RelayAggregator.kt:Amber rejects. When MainActivity isn't alive, the foreground path can't</ID>
+    <ID>NoComments:RelayAggregator.kt:Amber's stored auto-approve.</ID>
+    <ID>NoComments:RelayAggregator.kt:An empty configured-kinds set means "subscribe to all kinds":</ID>
+    <ID>NoComments:RelayAggregator.kt:An empty kinds list means "all kinds": seed from the latest stored event of any</ID>
+    <ID>NoComments:RelayAggregator.kt:Authors in scope for the current subscription topology; empty in no-pubkey</ID>
+    <ID>NoComments:RelayAggregator.kt:Authors whose contact list the owner actually consumes: their own follows plus</ID>
+    <ID>NoComments:RelayAggregator.kt:Bootstrap `since` used when there is no per-author history to draw from</ID>
+    <ID>NoComments:RelayAggregator.kt:Bounded buffer for events handed off from the relay listener to the consumer</ID>
+    <ID>NoComments:RelayAggregator.kt:Build each author's candidate write-relay list (with the per-author</ID>
+    <ID>NoComments:RelayAggregator.kt:Cache of (relay → last challenge string, signed AUTH event) so a relay re-sending</ID>
+    <ID>NoComments:RelayAggregator.kt:Calling subscribe() once per chunk with the same subId would overwrite the</ID>
+    <ID>NoComments:RelayAggregator.kt:Cap on how many configured intervals we'll skip after consecutive refresh failures.</ID>
+    <ID>NoComments:RelayAggregator.kt:Cap on how often counter-only status updates (relay count, event count) are pushed</ID>
+    <ID>NoComments:RelayAggregator.kt:Cap on the total number of distinct outbound relays across all authors. Each relay</ID>
+    <ID>NoComments:RelayAggregator.kt:ConnectivityManager callback so a burst of changes only triggers one evaluation.</ID>
+    <ID>NoComments:RelayAggregator.kt:Construct a [RelayAuthenticator] bound to [scope] when a signer identity is configured.</ID>
+    <ID>NoComments:RelayAggregator.kt:Contact lists are only fetched for authors the owner follows: strangers met through</ID>
+    <ID>NoComments:RelayAggregator.kt:Cursors for authors that left scope (unfollowed, or strangers merged in by the</ID>
+    <ID>NoComments:RelayAggregator.kt:Debounced re-evaluation of network state. Cancelled and rescheduled by every</ID>
+    <ID>NoComments:RelayAggregator.kt:Decrypt the encrypted private mute entries via the configured external signer and merge</ID>
+    <ID>NoComments:RelayAggregator.kt:Delete every kind-3 event whose author is neither the owner, followed by the owner, nor</ID>
+    <ID>NoComments:RelayAggregator.kt:Demand-driven flusher for counter-only status updates. Parks completely idle</ID>
+    <ID>NoComments:RelayAggregator.kt:Drop liveness entries for relays we no longer track</ID>
+    <ID>NoComments:RelayAggregator.kt:Drop tagged subs for relays no longer in the desired set so a single relay</ID>
+    <ID>NoComments:RelayAggregator.kt:Empty author set is a marker the subscribe loop recognizes to</ID>
+    <ID>NoComments:RelayAggregator.kt:Empty author set → single unfiltered chunk (no-pubkey mode).</ID>
+    <ID>NoComments:RelayAggregator.kt:External signer used by the authenticator. Held so [deliverSignerResponse] can route</ID>
+    <ID>NoComments:RelayAggregator.kt:Fetch the freshest kind-10000 for [pubkey] from cache + indexer relays and apply its</ID>
+    <ID>NoComments:RelayAggregator.kt:Fetches a single replaceable event of [kind] for [pubkey] from [relays] with no `since`</ID>
+    <ID>NoComments:RelayAggregator.kt:First time we see this author in the live stream, kick off a one-shot</ID>
+    <ID>NoComments:RelayAggregator.kt:Floor on time between two refreshes regardless of trigger (loop tick, network resume,</ID>
+    <ID>NoComments:RelayAggregator.kt:Follows resolved this refresh, or empty when the owner's contact list could not</ID>
+    <ID>NoComments:RelayAggregator.kt:For an author we just saw an event from but who has no profile / contact list / NIP-65</ID>
+    <ID>NoComments:RelayAggregator.kt:Give writers (and the UI) a chance between chunks on a multi-thousand row delete.</ID>
+    <ID>NoComments:RelayAggregator.kt:Hand the event off to the consumer coroutine instead of launching a fresh</ID>
+    <ID>NoComments:RelayAggregator.kt:Hand-off queues from AggregatorListener to single consumer coroutines. Replacing</ID>
+    <ID>NoComments:RelayAggregator.kt:Held so stop() / pubkey-change can cancel an in-flight decrypt before the signer</ID>
+    <ID>NoComments:RelayAggregator.kt:Hot-path mute check used by the consumer coroutine before [innerProcessEvent].</ID>
+    <ID>NoComments:RelayAggregator.kt:How long to let a network change settle before rebuilding the relay sockets.</ID>
+    <ID>NoComments:RelayAggregator.kt:How long to wait after the last connectivity callback before re-evaluating the</ID>
+    <ID>NoComments:RelayAggregator.kt:IN-lists in the same query.</ID>
+    <ID>NoComments:RelayAggregator.kt:Identity (pubkey + packageName) of the signer the currently-installed authenticator</ID>
+    <ID>NoComments:RelayAggregator.kt:Identity changed: drop every existing subscription and rebuild from</ID>
+    <ID>NoComments:RelayAggregator.kt:Initial check: if we're already on a metered network and the user wants</ID>
+    <ID>NoComments:RelayAggregator.kt:Issues a single subscription that asks each relay in [relayToAuthors] for kind-0 events</ID>
+    <ID>NoComments:RelayAggregator.kt:Issues one subscription to all [relays] asking for kind-10002 events authored by any</ID>
+    <ID>NoComments:RelayAggregator.kt:Keep the larger of (DB seed, in-memory live update). A live update that arrived</ID>
+    <ID>NoComments:RelayAggregator.kt:Keep the relays covering the most authors; drop the long tail.</ID>
+    <ID>NoComments:RelayAggregator.kt:Keep well under the per-filter author cap that stricter relays enforce (often 100–200).</ID>
+    <ID>NoComments:RelayAggregator.kt:Kinds 0 (metadata) and 3 (contact list) are fetched via dedicated unfiltered</ID>
+    <ID>NoComments:RelayAggregator.kt:Latest event createdAt observed per pubkey. Seeded from the local DB at the start of</ID>
+    <ID>NoComments:RelayAggregator.kt:Lets the signer fall back to Amber's UI when the background ContentResolver path</ID>
+    <ID>NoComments:RelayAggregator.kt:MAX_FAILURE_BACKOFF_MULTIPLIER, then resets on success.</ID>
+    <ID>NoComments:RelayAggregator.kt:Marks the counters as needing publication and wakes the demand-driven emitter.</ID>
+    <ID>NoComments:RelayAggregator.kt:Metadata (kind 0) is only stored, never used to build subscriptions, so</ID>
+    <ID>NoComments:RelayAggregator.kt:Must go through the ActivityResultLauncher MainActivity registered with us —</ID>
+    <ID>NoComments:RelayAggregator.kt:NIP-51 (kind 10000) mute list — author pubkeys to drop and content words to drop.</ID>
+    <ID>NoComments:RelayAggregator.kt:NIP-65 (below) is intentionally left cache-first-but-fetch-misses since it</ID>
+    <ID>NoComments:RelayAggregator.kt:Network changes arrive as a burst of callbacks (the new network, then its</ID>
+    <ID>NoComments:RelayAggregator.kt:No default fallback: an empty user list means "no aggregator overlay", which is a</ID>
+    <ID>NoComments:RelayAggregator.kt:NostrSignerExternal.decrypt routes to NIP-04 or NIP-44 based on the</ID>
+    <ID>NoComments:RelayAggregator.kt:Number of consecutive refresh failures. Multiplies the loop sleep by 2^n up to</ID>
+    <ID>NoComments:RelayAggregator.kt:Off-main job running the optional NIP-04/44 decryption of the private mute entries.</ID>
+    <ID>NoComments:RelayAggregator.kt:One filter list per relay so each relay only gets asked about the authors that</ID>
+    <ID>NoComments:RelayAggregator.kt:One subId per relay for the tagged sub so a single relay's tagged sub can be closed</ID>
+    <ID>NoComments:RelayAggregator.kt:One-shot cleanup of contact lists stored for authors the owner does not follow.</ID>
+    <ID>NoComments:RelayAggregator.kt:Owner has no published mute list yet — clear any stale state from a previous pubkey.</ID>
+    <ID>NoComments:RelayAggregator.kt:Owner's mute-list update arriving live (kind 10000) refreshes the in-memory</ID>
+    <ID>NoComments:RelayAggregator.kt:Pack every author chunk into a single REQ as multiple filters.</ID>
+    <ID>NoComments:RelayAggregator.kt:Paged so a huge database never holds every kind-3 row in the heap at once. Deleting</ID>
+    <ID>NoComments:RelayAggregator.kt:Per-author cap on how many of the author's NIP-65 write relays we'll actually</ID>
+    <ID>NoComments:RelayAggregator.kt:Per-chunk `since`: the oldest lastSeen of any author in [chunk] minus an overlap window.</ID>
+    <ID>NoComments:RelayAggregator.kt:Per-relay bookkeeping of active subscriptions so subIds stay stable across refreshes.</ID>
+    <ID>NoComments:RelayAggregator.kt:Periodic progress heartbeat so we can see the stream without per-event spam.</ID>
+    <ID>NoComments:RelayAggregator.kt:Persist what we learned so future refreshes are a cache hit.</ID>
+    <ID>NoComments:RelayAggregator.kt:Picks at most [cap] relays per author from each author's candidate write-relay list,</ID>
+    <ID>NoComments:RelayAggregator.kt:Prefer whichever copy is newest — a cache hit may still beat a slow/partial fetch.</ID>
+    <ID>NoComments:RelayAggregator.kt:Pubkey the currently-running aggregator was started for. Used by onConfigChanged</ID>
+    <ID>NoComments:RelayAggregator.kt:Pubkeys we've already considered for opportunistic kind-0 / kind-3 backfill in this</ID>
+    <ID>NoComments:RelayAggregator.kt:Publish into live state BEFORE the subscribe call, same race fix as</ID>
+    <ID>NoComments:RelayAggregator.kt:Publish the new entries to activeRelaySubs BEFORE issuing any REQ for this</ID>
+    <ID>NoComments:RelayAggregator.kt:Publishes the current counter snapshot to `_status` if any counter changed since</ID>
+    <ID>NoComments:RelayAggregator.kt:Quartz re-sends every desired REQ on reconnect via syncFilters(), so we don't track</ID>
+    <ID>NoComments:RelayAggregator.kt:Quartz's NostrClient.onConnected() calls syncFilters() on reconnect, which</ID>
+    <ID>NoComments:RelayAggregator.kt:Read whatever kind-10000 the local DB already has for [pubkey] and apply its public</ID>
+    <ID>NoComments:RelayAggregator.kt:Reconciles the current network state against the wifi-only and pause-on-limited</ID>
+    <ID>NoComments:RelayAggregator.kt:Refresh the owner's NIP-51 mute list before opening the main subscriptions.</ID>
+    <ID>NoComments:RelayAggregator.kt:RelayAuthenticator listens for NIP-42 AUTH challenges from upstream relays and signs</ID>
+    <ID>NoComments:RelayAggregator.kt:Replace lists for relays that survived to make sure the in-memory state matches</ID>
+    <ID>NoComments:RelayAggregator.kt:Resolve NIP-65 for all authors in one batch instead of N sequential fetches.</ID>
+    <ID>NoComments:RelayAggregator.kt:Resolves the user-configured NIP-65 indexer relays. An empty user set falls back to</ID>
+    <ID>NoComments:RelayAggregator.kt:Resolves the user-configured aggregator-source relays (e.g. wss://aggr.nostr.land).</ID>
+    <ID>NoComments:RelayAggregator.kt:Returns [pubkey]'s NIP-65 write relays as a normalized list, or null when no relay list</ID>
+    <ID>NoComments:RelayAggregator.kt:Returns false when the refresh was skipped without running, so the loop can retry soon.</ID>
+    <ID>NoComments:RelayAggregator.kt:Rows deleted per statement by the one-shot contact-list cleanup. Small enough that no</ID>
+    <ID>NoComments:RelayAggregator.kt:Runs on the aggregator scope so a large delete never delays the subscriptions</ID>
+    <ID>NoComments:RelayAggregator.kt:SQLite caps bound parameters at ~999; chunk to stay well under that with two</ID>
+    <ID>NoComments:RelayAggregator.kt:STATUS_EMIT_INTERVAL_MS so Compose collectors don't recompose per event.</ID>
+    <ID>NoComments:RelayAggregator.kt:Same cap-then-overlay-sources strategy for kind-0 metadata fetches: take</ID>
+    <ID>NoComments:RelayAggregator.kt:Same rationale as above: when there's no internet capability at all, don't claim</ID>
+    <ID>NoComments:RelayAggregator.kt:Set by refreshStatusCounters when relay counts or eventsReceived change; consumed</ID>
+    <ID>NoComments:RelayAggregator.kt:Settle delay for [resetRelayConnections]; replaced by every network change.</ID>
+    <ID>NoComments:RelayAggregator.kt:Single consumer for inbound events: persist sequentially instead of spawning a</ID>
+    <ID>NoComments:RelayAggregator.kt:Single consumer for opportunistic kind-0 / kind-3 backfill of newly-seen authors.</ID>
+    <ID>NoComments:RelayAggregator.kt:Skip the tear-down/rebuild if the signer identity matches what we already have</ID>
+    <ID>NoComments:RelayAggregator.kt:Skipped, e.g. a cancelled refresh from before a restart still holds</ID>
+    <ID>NoComments:RelayAggregator.kt:Sockets opened on the previous network keep looking connected until a ping times</ID>
+    <ID>NoComments:RelayAggregator.kt:Sort by lastSeen DESC so chunks group authors with similar `since`</ID>
+    <ID>NoComments:RelayAggregator.kt:Tear down active subscriptions so we stop receiving events. Keep</ID>
+    <ID>NoComments:RelayAggregator.kt:The AUTH toggle / signer identity may have changed. Reinstall the</ID>
+    <ID>NoComments:RelayAggregator.kt:The authenticator's internal client listener stays registered with NostrClient</ID>
+    <ID>NoComments:RelayAggregator.kt:The database the aggregator was started with — saved so the network callback can</ID>
+    <ID>NoComments:RelayAggregator.kt:The emitter coalesces bursts over STATUS_EMIT_INTERVAL_MS and parks with zero</ID>
+    <ID>NoComments:RelayAggregator.kt:The public portion is applied synchronously; the (optional) private portion</ID>
+    <ID>NoComments:RelayAggregator.kt:The refresh loop checks this flag and skips its body until [resumeFromNetwork] resets</ID>
+    <ID>NoComments:RelayAggregator.kt:The wifi-only toggle may have just changed; re-evaluate before</ID>
+    <ID>NoComments:RelayAggregator.kt:This is what makes an app restart or a network change cheap: subscriptions</ID>
+    <ID>NoComments:RelayAggregator.kt:Track lastSeen by author so the next refresh can compute a tighter</ID>
+    <ID>NoComments:RelayAggregator.kt:Tracks the default network so a switch (Wi-Fi &lt;-&gt; mobile, VPN up/down, regaining</ID>
+    <ID>NoComments:RelayAggregator.kt:Treat "no internet capability" as not-metered for our purposes — we'll have</ID>
+    <ID>NoComments:RelayAggregator.kt:Trigger an async refresh from the live-event consumer when the owner publishes a new</ID>
+    <ID>NoComments:RelayAggregator.kt:True while subscriptions are torn down because the active network triggered a pause</ID>
+    <ID>NoComments:RelayAggregator.kt:Validate that [ev] matches the filter we asked [relayUrl] for under [subId]. Misbehaving or</ID>
+    <ID>NoComments:RelayAggregator.kt:Wall-clock time of the last refreshAndSubscribe completion. Used to throttle</ID>
+    <ID>NoComments:RelayAggregator.kt:Warm the mute-list cache from the local DB before the refresh loop kicks off the</ID>
+    <ID>NoComments:RelayAggregator.kt:When a successful refresh happened recently (within one refresh interval),</ID>
+    <ID>NoComments:RelayAggregator.kt:When no pubkey is configured, the aggregator becomes a plain relay listener:</ID>
+    <ID>NoComments:RelayAggregator.kt:When the cache is fresh and a mute list is already stored, keep the in-memory sets</ID>
+    <ID>NoComments:RelayAggregator.kt:When the cache is fresh and we already have a copy, skip the indexer round-trip and</ID>
+    <ID>NoComments:RelayAggregator.kt:Words are pre-lowercased so the hot-path check can match against a single lowercase</ID>
+    <ID>NoComments:RelayAggregator.kt:[Settings.preservedKindsFromDeletion] so retention never prunes them, and they are</ID>
+    <ID>NoComments:RelayAggregator.kt:[deliverSignerResponse] so the suspended sign() resumes.</ID>
+    <ID>NoComments:RelayAggregator.kt:[lastEventByPubkey] and [currentPubkey] in place — when we resume, the next</ID>
+    <ID>NoComments:RelayAggregator.kt:`createdAt` of the last kind-10000 we parsed. Lets the live-event refresh path</ID>
+    <ID>NoComments:RelayAggregator.kt:`refreshing` or just stamped the floor. Sleeping the full interval</ID>
+    <ID>NoComments:RelayAggregator.kt:`since` so a newly-followed pubkey gets backfilled while caught-up authors don't refetch</ID>
+    <ID>NoComments:RelayAggregator.kt:a kind-22242 event using the external signer. Held so the start/stop lifecycle ties</ID>
+    <ID>NoComments:RelayAggregator.kt:a redundant decryption round-trip when the event is older than what we already have.</ID>
+    <ID>NoComments:RelayAggregator.kt:a tagged entry.</ID>
+    <ID>NoComments:RelayAggregator.kt:activeRelaySubs has been populated incrementally during the main-sub and</ID>
+    <ID>NoComments:RelayAggregator.kt:actually advertised it as a write relay. Authors with no NIP-65 are routed to</ID>
+    <ID>NoComments:RelayAggregator.kt:already unsubscribed in the closedGoneRelaySubs loop above.</ID>
+    <ID>NoComments:RelayAggregator.kt:always falling back to the cold-start window.</ID>
+    <ID>NoComments:RelayAggregator.kt:an Intent result received by MainActivity into the same instance whose suspended</ID>
+    <ID>NoComments:RelayAggregator.kt:and a second authenticator with the same listener would answer the same AUTH</ID>
+    <ID>NoComments:RelayAggregator.kt:and for diagnosing which authors / since each chunk covers.</ID>
+    <ID>NoComments:RelayAggregator.kt:and from then on the ContentResolver background path also works thanks to</ID>
+    <ID>NoComments:RelayAggregator.kt:anything from here — doing so on every disconnect / onCannotConnect turns</ID>
+    <ID>NoComments:RelayAggregator.kt:are rebuilt from cache instead of re-pulling everything from indexer relays.</ID>
+    <ID>NoComments:RelayAggregator.kt:authenticator against the running scope so the new settings take effect</ID>
+    <ID>NoComments:RelayAggregator.kt:author set, so they act as a backstop mirror for every followed pubkey.</ID>
+    <ID>NoComments:RelayAggregator.kt:authors), cap per-author, then add the aggregator-source relays.</ID>
+    <ID>NoComments:RelayAggregator.kt:back-to-back refresh requests (start, network resume, config change).</ID>
+    <ID>NoComments:RelayAggregator.kt:backfill of their kind 0 / kind 3 from the indexer relays so unknown users</ID>
+    <ID>NoComments:RelayAggregator.kt:backfillUserIfMissing().</ID>
+    <ID>NoComments:RelayAggregator.kt:backfilled — they are the largest events on the network, kind 3 is in</ID>
+    <ID>NoComments:RelayAggregator.kt:be loaded (nothing is deleted in that case — see pruneStrangerContactLists).</ID>
+    <ID>NoComments:RelayAggregator.kt:bigger problems than bandwidth if there's no internet at all.</ID>
+    <ID>NoComments:RelayAggregator.kt:bucket into the tail chunk that pulls the cold-start window.</ID>
+    <ID>NoComments:RelayAggregator.kt:by the demand-driven emitter started in `start()` to push at most one StateFlow</ID>
+    <ID>NoComments:RelayAggregator.kt:cached, so authors covered by the periodic batch fetch are a no-op.</ID>
+    <ID>NoComments:RelayAggregator.kt:caller. A bare activity.startActivity() leaves callingPackage null and</ID>
+    <ID>NoComments:RelayAggregator.kt:callingPackage on the intent and feeds Amber's reply back into this signer via</ID>
+    <ID>NoComments:RelayAggregator.kt:can be removed without tearing down the whole tagged sub.</ID>
+    <ID>NoComments:RelayAggregator.kt:can't auto-approve. The launcher routes through MainActivity's</ID>
+    <ID>NoComments:RelayAggregator.kt:case it does not, so a new default network is never missed.</ID>
+    <ID>NoComments:RelayAggregator.kt:challenge twice.</ID>
+    <ID>NoComments:RelayAggregator.kt:ciphertext format, so a single call covers both encoding eras of</ID>
+    <ID>NoComments:RelayAggregator.kt:condition — either it is metered with [Settings.relayAggregatorWifiOnly] enabled, or</ID>
+    <ID>NoComments:RelayAggregator.kt:config change). Prevents back-to-back full bootstraps from a flapping connection.</ID>
+    <ID>NoComments:RelayAggregator.kt:configured with DROP_OLDEST so a chatty relay degrades gracefully.</ID>
+    <ID>NoComments:RelayAggregator.kt:context startActivity() makes it null.</ID>
+    <ID>NoComments:RelayAggregator.kt:copy of the event content without per-word allocation. Both sets are swapped as a</ID>
+    <ID>NoComments:RelayAggregator.kt:coroutine per event in onIncomingMessage.</ID>
+    <ID>NoComments:RelayAggregator.kt:coroutine per event. trySend is non-blocking; the bounded channel is</ID>
+    <ID>NoComments:RelayAggregator.kt:coroutine. DROP_OLDEST means a chatty relay can't OOM the IO pool; the next refresh</ID>
+    <ID>NoComments:RelayAggregator.kt:cost outweighs the marginal per-author coverage, so keep the relays that cover the</ID>
+    <ID>NoComments:RelayAggregator.kt:costs a full OkHttp TLS WebSocket: hundreds of KB of JVM + native memory plus kernel</ID>
+    <ID>NoComments:RelayAggregator.kt:diff-vs-activeRelaySubs + cleanup logic as the pubkey path by representing</ID>
+    <ID>NoComments:RelayAggregator.kt:disconnect() also clears each relay's backoff; this covers relays without a socket.</ID>
+    <ID>NoComments:RelayAggregator.kt:dispatching a refresh so a flip to any network-based pause condition</ID>
+    <ID>NoComments:RelayAggregator.kt:doesn't kick off a doomed refresh that we'd immediately tear down.</ID>
+    <ID>NoComments:RelayAggregator.kt:dropped as "unknown relay (no active subs)".</ID>
+    <ID>NoComments:RelayAggregator.kt:dropping the references. A subsequent start() will install a fresh one against</ID>
+    <ID>NoComments:RelayAggregator.kt:each author's NIP-65 write relays (indexers as the fallback for unknown</ID>
+    <ID>NoComments:RelayAggregator.kt:each relay as a single empty-author "chunk".</ID>
+    <ID>NoComments:RelayAggregator.kt:emit immediately. Without this, the StateFlow fires on every received event and</ID>
+    <ID>NoComments:RelayAggregator.kt:entries we already saved on a previous run; no network round-trip on this path.</ID>
+    <ID>NoComments:RelayAggregator.kt:events from main subs are exactly what we want to record.</ID>
+    <ID>NoComments:RelayAggregator.kt:every Compose collector recomposes hundreds of times per second on the UI thread.</ID>
+    <ID>NoComments:RelayAggregator.kt:every refresh and updated as events arrive on tracked subs. Used to compute a per-chunk</ID>
+    <ID>NoComments:RelayAggregator.kt:existence check inside backfillUserIfMissing skips the network call) for never</ID>
+    <ID>NoComments:RelayAggregator.kt:fallback for missing NIP-65), then cap each author at MAX_RELAYS_PER_AUTHOR</ID>
+    <ID>NoComments:RelayAggregator.kt:feeds relay routing. The periodic loop fires after the interval elapses, so</ID>
+    <ID>NoComments:RelayAggregator.kt:final swap). Just drop relays that vanished this refresh — their subIds were</ID>
+    <ID>NoComments:RelayAggregator.kt:fresh. Newly-seen authors on the live stream still get their metadata via</ID>
+    <ID>NoComments:RelayAggregator.kt:greedily preferring relays that already cover many other authors. The popularity</ID>
+    <ID>NoComments:RelayAggregator.kt:here left the status on "Fetching…" for an hour, so retry soon.</ID>
+    <ID>NoComments:RelayAggregator.kt:here so they aren't also subscribed with a `since` ceiling on the main and</ID>
+    <ID>NoComments:RelayAggregator.kt:hold up the rest of the refresh.</ID>
+    <ID>NoComments:RelayAggregator.kt:in-flight AUTH state.</ID>
+    <ID>NoComments:RelayAggregator.kt:inside backfillUserIfMissing skips the network call when both are already</ID>
+    <ID>NoComments:RelayAggregator.kt:installed. onConfigChanged fires for every settings tweak (kind add, refresh</ID>
+    <ID>NoComments:RelayAggregator.kt:internal client listener stays registered with NostrClient until destroy() runs,</ID>
+    <ID>NoComments:RelayAggregator.kt:internet access) rebuilds the relay sockets instead of leaving them on dead routes.</ID>
+    <ID>NoComments:RelayAggregator.kt:interval, etc.); without this guard each one would briefly leave the relay</ID>
+    <ID>NoComments:RelayAggregator.kt:into a single evaluation.</ID>
+    <ID>NoComments:RelayAggregator.kt:issue a filter without the `authors` field.</ID>
+    <ID>NoComments:RelayAggregator.kt:it is restricted/limited with [Settings.relayAggregatorPauseOnLimitedNetwork] enabled.</ID>
+    <ID>NoComments:RelayAggregator.kt:it sees cacheFresh == false and still does a full network refresh that picks</ID>
+    <ID>NoComments:RelayAggregator.kt:it.</ID>
+    <ID>NoComments:RelayAggregator.kt:kind per author so the per-chunk `since` cursor resumes correctly instead of</ID>
+    <ID>NoComments:RelayAggregator.kt:kind-10000 events.</ID>
+    <ID>NoComments:RelayAggregator.kt:legitimate configuration (rely entirely on per-author NIP-65 routing).</ID>
+    <ID>NoComments:RelayAggregator.kt:letting the seen-set grow with every stranger surfaced by the tagged subs.</ID>
+    <ID>NoComments:RelayAggregator.kt:mid-refresh shouldn't be rolled back by a slightly older DB read.</ID>
+    <ID>NoComments:RelayAggregator.kt:mode. Used to prune lastEventByPubkey cursors that nothing consumes.</ID>
+    <ID>NoComments:RelayAggregator.kt:most authors.</ID>
+    <ID>NoComments:RelayAggregator.kt:network fetch. Ensures the first events admitted after start() respect any mute</ID>
+    <ID>NoComments:RelayAggregator.kt:network state. Collapses bursts of `onCapabilitiesChanged` during signal flapping</ID>
+    <ID>NoComments:RelayAggregator.kt:newActiveSubs exactly (e.g., picks up tagged-sub-only relays uniformly).</ID>
+    <ID>NoComments:RelayAggregator.kt:no author filter, no NIP-65 lookups, no tagged sub. This path uses the same</ID>
+    <ID>NoComments:RelayAggregator.kt:of relays. Aggregator-source relays are then layered on top with the full</ID>
+    <ID>NoComments:RelayAggregator.kt:on that callingPackage to identify which app is asking, and a plain Application-</ID>
+    <ID>NoComments:RelayAggregator.kt:onCapabilitiesChanged follows right away, but read them here too in</ID>
+    <ID>NoComments:RelayAggregator.kt:pair so a partial load never produces an inconsistent view.</ID>
+    <ID>NoComments:RelayAggregator.kt:pass null so the field is omitted from the REQ instead of</ID>
+    <ID>NoComments:RelayAggregator.kt:paths above (loadOrBootstrapContactList, batchFetchMetadata) — exclude them</ID>
+    <ID>NoComments:RelayAggregator.kt:per author.</ID>
+    <ID>NoComments:RelayAggregator.kt:per-chunk `since`. Update for every received event — events from</ID>
+    <ID>NoComments:RelayAggregator.kt:per-event `scope.launch { ... }` cuts coroutine creation under heavy event load.</ID>
+    <ID>NoComments:RelayAggregator.kt:periodic refresh tick.</ID>
+    <ID>NoComments:RelayAggregator.kt:prefers relays that already cover other authors so the chosen set converges to a</ID>
+    <ID>NoComments:RelayAggregator.kt:previous filter set in Quartz, leaving only the last chunk actually queried.</ID>
+    <ID>NoComments:RelayAggregator.kt:prompts — returns the previously-signed event without re-invoking the signer.</ID>
+    <ID>NoComments:RelayAggregator.kt:re-issues every REQ stored in desiredSubs for that relay. We don't re-send</ID>
+    <ID>NoComments:RelayAggregator.kt:re-queries with a `since` derived from the DB so any dropped event is recoverable.</ID>
+    <ID>NoComments:RelayAggregator.kt:recreate the authenticator, briefly leaving zero listeners and discarding any</ID>
+    <ID>NoComments:RelayAggregator.kt:refresh uses them to compute tight per-chunk `since` values.</ID>
+    <ID>NoComments:RelayAggregator.kt:refreshStatusCounters() calls into at most one StateFlow emission per</ID>
+    <ID>NoComments:RelayAggregator.kt:relay. Otherwise the listener races: an event response arrives between</ID>
+    <ID>NoComments:RelayAggregator.kt:resolves on its own coroutine via the signer so a slow Amber prompt does not</ID>
+    <ID>NoComments:RelayAggregator.kt:resumes against a stale identity.</ID>
+    <ID>NoComments:RelayAggregator.kt:reuse it. A null cache (e.g. a wiped DB) always falls through to the network fetch.</ID>
+    <ID>NoComments:RelayAggregator.kt:rows already behind the cursor does not disturb the keyset.</ID>
+    <ID>NoComments:RelayAggregator.kt:run; the user must open Citrine once so onCreate registers the launcher,</ID>
+    <ID>NoComments:RelayAggregator.kt:score is computed across all authors once, then each author independently picks its</ID>
+    <ID>NoComments:RelayAggregator.kt:scratch. Reset lastSync so the new user gets the full cold-start</ID>
+    <ID>NoComments:RelayAggregator.kt:sendSubscribe() and the final swap below, lookup misses, and the event is</ID>
+    <ID>NoComments:RelayAggregator.kt:serializing as "kinds":[] which relays treat as match-nothing.</ID>
+    <ID>NoComments:RelayAggregator.kt:session. The LruCache bound trades a rare duplicate backfill (idempotent: the DAO</ID>
+    <ID>NoComments:RelayAggregator.kt:sets so subsequent events use the new list without waiting for the next</ID>
+    <ID>NoComments:RelayAggregator.kt:sign() call is awaiting it.</ID>
+    <ID>NoComments:RelayAggregator.kt:signer hasn't changed — every onConfigChanged call would otherwise tear down and</ID>
+    <ID>NoComments:RelayAggregator.kt:silently break when the user clears the list.</ID>
+    <ID>NoComments:RelayAggregator.kt:single transaction holds the database long enough to stall the relay's writers.</ID>
+    <ID>NoComments:RelayAggregator.kt:skip both the relay-map construction and the network fetch when the cache is</ID>
+    <ID>NoComments:RelayAggregator.kt:small number of well-shared relays even with a large follow list.</ID>
+    <ID>NoComments:RelayAggregator.kt:socket buffers and a file descriptor. Beyond ~200 relays the per-connection RSS/FD</ID>
+    <ID>NoComments:RelayAggregator.kt:stays bounded; in-scope cursors are re-seeded from the DB on the next line.</ID>
+    <ID>NoComments:RelayAggregator.kt:subscribe to every extra relay with the configured kinds and the sync window,</ID>
+    <ID>NoComments:RelayAggregator.kt:subscribe to. Lower = fewer concurrent WebSockets and less battery drain; higher</ID>
+    <ID>NoComments:RelayAggregator.kt:surfaced via the tagged sub get a profile + follow list. The DAO check</ID>
+    <ID>NoComments:RelayAggregator.kt:tagged subs (random pubkeys) cost a bit of memory but are harmless;</ID>
+    <ID>NoComments:RelayAggregator.kt:tagged subs) are never consumed by computeChunkSince — drop them so the map</ID>
+    <ID>NoComments:RelayAggregator.kt:tagged subs, which would risk masking newer copies behind the cursor.</ID>
+    <ID>NoComments:RelayAggregator.kt:tagged-sub passes (so the listener can resolve responses without racing the</ID>
+    <ID>NoComments:RelayAggregator.kt:that were just opened.</ID>
+    <ID>NoComments:RelayAggregator.kt:that's what populates Intent.callingPackage so Amber can authenticate the</ID>
+    <ID>NoComments:RelayAggregator.kt:the authenticator's lifespan to the aggregator's scope; it stops listening on cancel.</ID>
+    <ID>NoComments:RelayAggregator.kt:the built-in defaults so NIP-65 / contact-list / mute-list bootstrap lookups never</ID>
+    <ID>NoComments:RelayAggregator.kt:the indexer relays by the caller.</ID>
+    <ID>NoComments:RelayAggregator.kt:the last emission. Phase changes go through `publishStatus` directly and bypass</ID>
+    <ID>NoComments:RelayAggregator.kt:the main-sub loop above.</ID>
+    <ID>NoComments:RelayAggregator.kt:the network is "limited" — let other failure paths handle it.</ID>
+    <ID>NoComments:RelayAggregator.kt:the new scope.</ID>
+    <ID>NoComments:RelayAggregator.kt:the same challenge — common on reconnect, and what was driving the duplicate Amber</ID>
+    <ID>NoComments:RelayAggregator.kt:the tagged subs would otherwise pile up thousands of large, never-pruned kind-3 events.</ID>
+    <ID>NoComments:RelayAggregator.kt:the throttle so UI/notification reflect transitions promptly.</ID>
+    <ID>NoComments:RelayAggregator.kt:their full window.</ID>
+    <ID>NoComments:RelayAggregator.kt:themselves. Contact lists of strangers surfaced by the tagged subs are no longer</ID>
+    <ID>NoComments:RelayAggregator.kt:these for resub purposes — only for preserving the subId set across refresh cycles</ID>
+    <ID>NoComments:RelayAggregator.kt:thread for every received event.</ID>
+    <ID>NoComments:RelayAggregator.kt:through `_status`. Phase changes (BOOTSTRAPPING/REFRESHING/LISTENING/PAUSED) still</ID>
+    <ID>NoComments:RelayAggregator.kt:to detect identity changes and trigger a full restart.</ID>
+    <ID>NoComments:RelayAggregator.kt:together: caught-up authors share recent `since`, never-seen authors</ID>
+    <ID>NoComments:RelayAggregator.kt:top-[cap] relays by that score with ties broken by candidate-list order. This keeps</ID>
+    <ID>NoComments:RelayAggregator.kt:total open WebSocket count low while still spreading coverage across multiple relays</ID>
+    <ID>NoComments:RelayAggregator.kt:treat the DB cache as authoritative for the rarely-changing owner data</ID>
+    <ID>NoComments:RelayAggregator.kt:trigger a refresh on resume without the caller threading it through.</ID>
+    <ID>NoComments:RelayAggregator.kt:under the hood, which preserves the caller's identity on the intent — Amber relies</ID>
+    <ID>NoComments:RelayAggregator.kt:unprotected and discard in-flight AUTH state.</ID>
+    <ID>NoComments:RelayAggregator.kt:unreachable relays into a resub storm.</ID>
+    <ID>NoComments:RelayAggregator.kt:until destroy() is called, so explicitly tear it down here in addition to</ID>
+    <ID>NoComments:RelayAggregator.kt:up from the network on the first refresh after restart.</ID>
+    <ID>NoComments:RelayAggregator.kt:up new follows.</ID>
+    <ID>NoComments:RelayAggregator.kt:update per STATUS_EMIT_INTERVAL_MS while parking completely idle with zero wakeups</ID>
+    <ID>NoComments:RelayAggregator.kt:using a greedy popularity-based picker to converge on a small shared set</ID>
+    <ID>NoComments:RelayAggregator.kt:wakeups whenever nothing is arriving. Cheap enough to call on the relay listener</ID>
+    <ID>NoComments:RelayAggregator.kt:was built for. Used by installAuthenticatorIfNeeded to skip a rebuild when the</ID>
+    <ID>NoComments:RelayAggregator.kt:what drove the REQ path into an OutOfMemoryError.</ID>
+    <ID>NoComments:RelayAggregator.kt:whenever nothing is changing.</ID>
+    <ID>NoComments:RelayAggregator.kt:wifi-only, start in the paused state instead of opening subs.</ID>
+    <ID>NoComments:RelayAggregator.kt:window. The contact list is always re-fetched on every refresh</ID>
+    <ID>NoComments:RelayAggregator.kt:with zero wakeups when nothing is arriving, and coalesces a burst of</ID>
+    <ID>NoComments:RelayAggregator.kt:without a full restart.</ID>
+    <ID>NoComments:RelayAggregator.kt:without disturbing the others. Keys mirror the relays in activeRelaySubs that carry</ID>
+    <ID>NoComments:RelayIdentity.kt:Activity-scoped Intent launcher set by MainActivity. Uses registerForActivityResult</ID>
+    <ID>NoComments:RelayIdentity.kt:ActivityResultLauncher (set via [registerActivityLauncher]), which preserves</ID>
+    <ID>NoComments:RelayIdentity.kt:Identity (pubkey + packageName) the cached signer was built for — blank pair for</ID>
+    <ID>NoComments:RelayIdentity.kt:Lets the signer fall back to Amber's UI when the background ContentResolver</ID>
+    <ID>NoComments:RelayIdentity.kt:[deliverSignerResponse] so the suspended sign() resumes.</ID>
+    <ID>NoComments:RelayIdentity.kt:callingPackage on the intent and feeds Amber's reply back into this signer via</ID>
+    <ID>NoComments:RelayIdentity.kt:context startActivity() makes it null.</ID>
+    <ID>NoComments:RelayIdentity.kt:instead of signing with a stale identity.</ID>
+    <ID>NoComments:RelayIdentity.kt:on that callingPackage to identify which app is asking, and a plain Application-</ID>
+    <ID>NoComments:RelayIdentity.kt:path can't auto-approve. The launcher routes through MainActivity's</ID>
+    <ID>NoComments:RelayIdentity.kt:the internal fallback signer — so an Amber login/logout rebuilds the signer</ID>
+    <ID>NoComments:RelayIdentity.kt:under the hood, which preserves the caller's identity on the intent — Amber relies</ID>
+    <ID>NoComments:RelayInfoSettingsScreen.kt:Hex.decode("") yields an empty array rather than throwing, and bech32</ID>
+    <ID>NoComments:RelayInfoSettingsScreen.kt:Kinds the relay signs with the owner's key: relay-issued membership changes and the</ID>
+    <ID>NoComments:RelayInfoSettingsScreen.kt:NIP-29 group metadata events. Requested at login so Amber can auto-approve them.</ID>
+    <ID>NoComments:RelayInfoSettingsScreen.kt:happily encodes zero bytes into a stub like "npub106246s" — so an</ID>
+    <ID>NoComments:RelayInfoSettingsScreen.kt:unconfigured owner must be caught before decoding.</ID>
+    <ID>NoComments:ReportAssembler.kt:Device and Product Information</ID>
+    <ID>NoComments:ReportAssembler.kt:Hardware Information</ID>
+    <ID>NoComments:ReportAssembler.kt:OS Information</ID>
+    <ID>NoComments:ReportAssembler.kt:Other Useful Information</ID>
+    <ID>NoComments:ReportAssembler.kt:Thread and heap snapshot. For an `OutOfMemoryError` these are the numbers that say which</ID>
+    <ID>NoComments:ReportAssembler.kt:Who held the heap: connections, live subscriptions and frames queued to slow clients.</ID>
+    <ID>NoComments:Settings.kt:(see RelayIdentity). Foreign group ids always pass through unmanaged.</ID>
+    <ID>NoComments:Settings.kt:- 13 NIP-59 seal (inner layer, only valid wrapped in a gift wrap)</ID>
+    <ID>NoComments:Settings.kt:- 22242 NIP-42 client auth (carried only in ["AUTH", ...] frames)</ID>
+    <ID>NoComments:Settings.kt:- 24242 Blossom (NIP-B7) blob auth (HTTP Authorization header artifact)</ID>
+    <ID>NoComments:Settings.kt:- 27235 NIP-98 HTTP auth (HTTP Authorization header artifact)</ID>
+    <ID>NoComments:Settings.kt:- 9734 NIP-57 zap request (sent to the LNURL callback, not relays)</ID>
+    <ID>NoComments:Settings.kt:100s service timer only runs the check roughly once per day.</ID>
+    <ID>NoComments:Settings.kt:3.0.0–3.2.1 has completed over both databases (see TagDeduplicator.cleanDatabases).</ID>
+    <ID>NoComments:Settings.kt:Amber (NIP-55) signer package that holds the relay owner's key. Set together with</ID>
+    <ID>NoComments:Settings.kt:Epoch seconds of the last daily nsite update check. Gated like [lastBackup] so the</ID>
+    <ID>NoComments:Settings.kt:Event kinds that are signed artifacts never meant to be published to a relay as</ID>
+    <ID>NoComments:Settings.kt:Events whose kind is in this set are rejected at ingestion before any storage.</ID>
+    <ID>NoComments:Settings.kt:External aggregator-style relays (e.g. wss://aggr.nostr.land) that mirror events</ID>
+    <ID>NoComments:Settings.kt:External signer used by the aggregator to answer NIP-42 AUTH challenges from upstream</ID>
+    <ID>NoComments:Settings.kt:Installed nsites (NIP-5A static websites). Downloaded to filesDir/nsites/&lt;folderName&gt;</ID>
+    <ID>NoComments:Settings.kt:NET_CAPABILITY_NOT_RESTRICTED — i.e., a "limited"/restricted network such as a</ID>
+    <ID>NoComments:Settings.kt:NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so</ID>
+    <ID>NoComments:Settings.kt:NIP-86 (Relay Management API) state. Maps are kept as ConcurrentHashMap</ID>
+    <ID>NoComments:Settings.kt:Relays consulted only to look up NIP-65 (kind 10002), contact-list (kind 3), and</ID>
+    <ID>NoComments:Settings.kt:Relays queried to discover nsites. nsites use only this set (never the aggregator</ID>
+    <ID>NoComments:Settings.kt:Relays the aggregator listens to when no pubkey is configured — plain kinds+since</ID>
+    <ID>NoComments:Settings.kt:Signed artifacts that must never be stored as standalone events (see DEFAULT_REJECTED_KINDS).</ID>
+    <ID>NoComments:Settings.kt:Suggested relays for discovering nsites (NIP-5A). Used by the "reset to default" action</ID>
+    <ID>NoComments:Settings.kt:True once the one-shot cleanup of contact lists belonging to authors the owner does</ID>
+    <ID>NoComments:Settings.kt:True once the one-shot cleanup of duplicate TagEntity rows left behind by Citrine</ID>
+    <ID>NoComments:Settings.kt:UI preference for the "Show events" screen: when false the per-kind pie chart</ID>
+    <ID>NoComments:Settings.kt:When true, ephemeral events that no open subscription was listening to receive a</ID>
+    <ID>NoComments:Settings.kt:When true, the aggregator suspends subscriptions whenever the active network is</ID>
+    <ID>NoComments:Settings.kt:When true, the aggregator suspends subscriptions whenever the active network lacks</ID>
+    <ID>NoComments:Settings.kt:[ownerPubkey] by the "login with Amber" flow in relay info settings — the owner</ID>
+    <ID>NoComments:Settings.kt:addition to each author's per-relay NIP-65 routing.</ID>
+    <ID>NoComments:Settings.kt:and legend are hidden, leaving only the kind list.</ID>
+    <ID>NoComments:Settings.kt:and never stored:</ID>
+    <ID>NoComments:Settings.kt:and served through the same localhost web-client mechanism as [webClients].</ID>
+    <ID>NoComments:Settings.kt:available again. Default-on because the aggregator holds many WebSockets open and</ID>
+    <ID>NoComments:Settings.kt:because they are mutated by the HTTP RPC route and read concurrently by</ID>
+    <ID>NoComments:Settings.kt:captive-portal hotspot or an enterprise network that blocks general internet</ID>
+    <ID>NoComments:Settings.kt:challenges via the configured Amber-compatible signer.</ID>
+    <ID>NoComments:Settings.kt:fields are set, the aggregator installs a RelayAuthenticator and signs kind-22242</ID>
+    <ID>NoComments:Settings.kt:from many upstreams. Subscribed for the full author set on every refresh, in</ID>
+    <ID>NoComments:Settings.kt:groups are always managed: when an owner is configured their key is the relay</ID>
+    <ID>NoComments:Settings.kt:identity, otherwise a locally generated key signs the group metadata</ID>
+    <ID>NoComments:Settings.kt:in the nsite relay editor; an empty user list falls back to the aggregator relays.</ID>
+    <ID>NoComments:Settings.kt:is the dominant battery cost on cellular.</ID>
+    <ID>NoComments:Settings.kt:metered (mobile data or metered Wi-Fi) and resumes once an unmetered network is</ID>
+    <ID>NoComments:Settings.kt:mute-list (kind 10000) records when not already cached locally. An empty user</ID>
+    <ID>NoComments:Settings.kt:never silently break.</ID>
+    <ID>NoComments:Settings.kt:not follow has run (see RelayAggregator.pruneStrangerContactLists). Persisted so a</ID>
+    <ID>NoComments:Settings.kt:pubkey can only be configured through that login, never typed manually. NIP-29</ID>
+    <ID>NoComments:Settings.kt:relays); an empty list falls back to [DEFAULT_NSITE_RELAYS].</ID>
+    <ID>NoComments:Settings.kt:relays. Populated by the "Log in with external signer" flow in settings. When both</ID>
+    <ID>NoComments:Settings.kt:restart does not re-scan the whole kind-3 set.</ID>
+    <ID>NoComments:Settings.kt:standalone events. They are rejected at ingestion with an OK false "blocked:" response</ID>
+    <ID>NoComments:Settings.kt:subscription, no author filter. Also usable as an explicit extra relay set.</ID>
+    <ID>NoComments:Settings.kt:traffic. Resumes automatically once an unrestricted network is available.</ID>
+    <ID>NoComments:Settings.kt:unhandled ephemeral events are simply acknowledged with a plain OK.</ID>
+    <ID>NoComments:Settings.kt:value falls back to DEFAULT_NIP65_INDEXER_RELAYS at read time so NIP-65 lookups</ID>
+    <ID>NoComments:Settings.kt:verifyEvent() on the WebSocket dispatcher.</ID>
+    <ID>NoComments:StoragePickerHelperTest.kt:A later unrelated permission result must not reopen the picker.</ID>
+    <ID>NoComments:SubscriptionManager.kt:An `OutOfMemoryError` in one request must not take the whole relay down: the process</ID>
+    <ID>NoComments:SubscriptionManager.kt:NIP-45: filters are OR'd into a single aggregated count result. No EOSE and no</ID>
+    <ID>NoComments:SubscriptionManager.kt:Returns true when a CLOSED denial was sent and the caller must stop.</ID>
+    <ID>NoComments:SubscriptionManager.kt:live registration: a COUNT subscription never receives EVENT fanout.</ID>
+    <ID>NoComments:TagDeduplicator.kt:Catch any duplicate with pk &lt;= maxKeepPk (e.g. interleaved inserts).</ID>
+    <ID>NoComments:TagDeduplicator.kt:Replaceable kinds hit hardest by hourly refreshes — repair these first so contact lists,</ID>
+    <ID>NoComments:TagDeduplicator.kt:Scans [dao] in two passes: priority replaceable kinds first, then all events by primary</ID>
+    <ID>NoComments:TagDeduplicator.kt:mute lists, relay lists and profiles are clean right away.</ID>
+    <ID>NoComments:TagDeduplicatorTest.kt:Simulate 5 duplicate re-ingestions of a 4-tag contact list.</ID>
+    <ID>NoComments:TagDeduplicatorTest.kt:pos 0 duplicated BEFORE pos 1's first appearance, so its duplicate has pk &lt; maxKeepPk.</ID>
+    <ID>NoComments:Theme.kt:Dynamic color is available on Android 12+</ID>
+    <ID>NoComments:Theme.kt:Other default colors to override</ID>
+    <ID>NoComments:TorManager.kt:(UnsatisfiedLinkError, ExceptionInInitializerError).</ID>
+    <ID>NoComments:TorManager.kt:(only after a successful import); the Tor cache holds no</ID>
+    <ID>NoComments:TorManager.kt:A new start() or stop() arrived while we were waiting.</ID>
+    <ID>NoComments:TorManager.kt:A settings "Apply" restarts WebSocketServerService within ~1s, so keeping</ID>
+    <ID>NoComments:TorManager.kt:Binds the SOCKS listener on a free loopback port; null (and Error) when none could be bound.</ID>
+    <ID>NoComments:TorManager.kt:Check cancellation after publishing nativeReady: if stop() ran before</ID>
+    <ID>NoComments:TorManager.kt:Delayed full teardown scheduled by [stop]; cancelled if [start] runs again promptly.</ID>
+    <ID>NoComments:TorManager.kt:Drops the SOCKS port and, while OkHttp still dials through it, replaces</ID>
+    <ID>NoComments:TorManager.kt:Grace window after stop() before tearing down the TorClient completely.</ID>
+    <ID>NoComments:TorManager.kt:Pending stop/destroy cleanup job, chained so lifecycle calls never race.</ID>
+    <ID>NoComments:TorManager.kt:Published before the port, so no dial can reach the listener without them.</ID>
+    <ID>NoComments:TorManager.kt:Rebuild the client (fresh circuits), as restarting the old tor</ID>
+    <ID>NoComments:TorManager.kt:Serializes binding and releasing the SOCKS listener against [stop].</ID>
+    <ID>NoComments:TorManager.kt:The SOCKS listener accepts connections right away (each one waits</ID>
+    <ID>NoComments:TorManager.kt:The identity key is generated right after startOnionService, so the</ID>
+    <ID>NoComments:TorManager.kt:The identity-bearing directory is the native side's to remove</ID>
+    <ID>NoComments:TorManager.kt:The start → bootstrap job; non-null and active while Tor is up or coming up.</ID>
+    <ID>NoComments:TorManager.kt:Throwable: a missing/broken native library surfaces as an Error</ID>
+    <ID>NoComments:TorManager.kt:True once the native library loaded; native calls are skipped until then.</ID>
+    <ID>NoComments:TorManager.kt:Wake the client if a previous stop() placed it in DormantMode::Soft.</ID>
+    <ID>NoComments:TorManager.kt:anything can generate a fresh key. kmp-tor's work directory is</ID>
+    <ID>NoComments:TorManager.kt:daemon did — the UI's Retry button is the way out of Error.</ID>
+    <ID>NoComments:TorManager.kt:for its circuit), but report Running only once Arti can carry</ID>
+    <ID>NoComments:TorManager.kt:hostname normally shows up with the first poll. The deadline only</ID>
+    <ID>NoComments:TorManager.kt:identity key: hand it to Arti for the address carry-over before</ID>
+    <ID>NoComments:TorManager.kt:keys and can go as soon as Arti initialized.</ID>
+    <ID>NoComments:TorManager.kt:kmp-tor leftovers without a hidden service identity.</ID>
+    <ID>NoComments:TorManager.kt:kmp-tor's hidden service directory holds the relay's onion</ID>
+    <ID>NoComments:TorManager.kt:kmp-tor's working directories from before the switch to Arti (the</ID>
+    <ID>NoComments:TorManager.kt:matters if the keystore write fails or the launch silently stalls.</ID>
+    <ID>NoComments:TorManager.kt:nativeReady became true it cancelled our job without queuing a stopJob,</ID>
+    <ID>NoComments:TorManager.kt:onion service, once the hostname is readable from the keystore.</ID>
+    <ID>NoComments:TorManager.kt:setting edits while still freeing all Tor background tasks and sockets</ID>
+    <ID>NoComments:TorManager.kt:so we must bail out before initialize() creates a live TorClient.</ID>
+    <ID>NoComments:TorManager.kt:stop() may have run while initialize() was blocking.</ID>
+    <ID>NoComments:TorManager.kt:the app_torservice getDir.</ID>
+    <ID>NoComments:TorManager.kt:the client dormant briefly avoids a 15-30s re-bootstrap on unrelated</ID>
+    <ID>NoComments:TorManager.kt:traffic — like the old daemon's bootstrap did — and, for the</ID>
+    <ID>NoComments:TorManager.kt:when the relay is actually stopped.</ID>
+    <ID>NoComments:Type.kt:Other default text styles to override</ID>
+    <ID>NoComments:Type.kt:Set of Material typography styles to start with</ID>
+    <ID>NoComments:UnexpectedCrashSaver.kt:Written synchronously: the default handler terminates the process immediately after</ID>
+    <ID>NoComments:UnexpectedCrashSaver.kt:the field, and the try/catch below keeps the write itself from failing.</ID>
+    <ID>NoComments:UnexpectedCrashSaver.kt:this returns, so a report launched on a scope is usually lost. OOMs are included too</ID>
+    <ID>NoComments:UnexpectedCrashSaver.kt:— a real user's heap report is the only way to see which query exhausted memory in</ID>
+    <ID>NoComments:UserAgentTest.kt:Runs after DefaultContentTypeInterceptor and answers locally, so no network is touched.</ID>
+    <ID>NoComments:WebSocketServerService.kt:Add the intent, which inflates the back stack.</ID>
+    <ID>NoComments:WebSocketServerService.kt:Always read the latest value so a delayed sample() emission cannot</ID>
+    <ID>NoComments:WebSocketServerService.kt:Daily nsite update check. Gated by lastNsiteCheck like the weekly backup,</ID>
+    <ID>NoComments:WebSocketServerService.kt:FLAG_UPDATE_CURRENT would have them all share the most recently set URL.</ID>
+    <ID>NoComments:WebSocketServerService.kt:Get the PendingIntent containing the entire back stack.</ID>
+    <ID>NoComments:WebSocketServerService.kt:Notification id for "nsite update available" prompts. Ids 1/2/3 are already used by the</ID>
+    <ID>NoComments:WebSocketServerService.kt:Outside the timed block below: this only enqueues the Tor stop on the</ID>
+    <ID>NoComments:WebSocketServerService.kt:Refresh the notification when Tor finishes bootstrapping so the Copy Tor</ID>
+    <ID>NoComments:WebSocketServerService.kt:Signature of the last backup-progress notification we posted to id 2.</ID>
+    <ID>NoComments:WebSocketServerService.kt:Signature of the last notification we posted to id 1, used to skip re-posting</ID>
+    <ID>NoComments:WebSocketServerService.kt:Start the WebSocket server</ID>
+    <ID>NoComments:WebSocketServerService.kt:The aggregator publishes status on every burst of received events and every</ID>
+    <ID>NoComments:WebSocketServerService.kt:Tor is disabled: tear down any running client immediately so Arti's</ID>
+    <ID>NoComments:WebSocketServerService.kt:Unique requestCode per address so concurrent nsite notifications don't collide.</ID>
+    <ID>NoComments:WebSocketServerService.kt:action appears with the resolved onion hostname.</ID>
+    <ID>NoComments:WebSocketServerService.kt:and persisted before the async work so the next maintenance tick doesn't re-trigger.</ID>
+    <ID>NoComments:WebSocketServerService.kt:application scope, and it must always run so the SOCKS listener and</ID>
+    <ID>NoComments:WebSocketServerService.kt:background tasks and guard channels don't keep burning battery.</ID>
+    <ID>NoComments:WebSocketServerService.kt:device and refresh the system UI, even with setOnlyAlertOnce.</ID>
+    <ID>NoComments:WebSocketServerService.kt:foreground service, backup/download progress, and database-upgrade notifications.</ID>
+    <ID>NoComments:WebSocketServerService.kt:identical content. Re-posting an unchanged notification can still wake the</ID>
+    <ID>NoComments:WebSocketServerService.kt:immediately and throttle counter-only refreshes to [NOTIFICATION_THROTTLE_MS].</ID>
+    <ID>NoComments:WebSocketServerService.kt:often wakes SystemUI and racks up binder IPCs. Emit phase/enabled transitions</ID>
+    <ID>NoComments:WebSocketServerService.kt:overwrite a newer phase/enabled transition with stale state.</ID>
+    <ID>NoComments:WebSocketServerService.kt:relay connect/disconnect. Updating the foreground-service notification that</ID>
+    <ID>NoComments:WebSocketServerService.kt:requestCode is used to disambiguate each PendingIntent's extras, otherwise</ID>
+    <ID>NoComments:WebSocketServerService.kt:the onion service go away even if the server shutdown times out.</ID>
+    <ID>ReturnCount:AuthGate.kt:AuthGate$fun check: Denial?</ID>
+    <ID>ReturnCount:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
+    <ID>ReturnCount:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
+    <ID>ReturnCount:Nip29Handler.kt:Nip29Handler$suspend fun process: Nip29Result</ID>
+    <ID>ReturnCount:Nip86Handler.kt:Nip86Handler$fun verifyNip98: String?</ID>
+    <ID>ReturnCount:NsiteManager.kt:NsiteManager$private suspend fun downloadAndStore: Result&lt;NsiteInfo&gt;</ID>
+    <ID>ReturnCount:RelayAggregator.kt:RelayAggregator$private fun filterMismatchReason: String?</ID>
+    <ID>ReturnCount:TorManager.kt:TorManager$private suspend fun run</ID>
+    <ID>ThrowsCount:CitrineContentProvider.kt:CitrineContentProvider$private fun deleteEventById: Int</ID>
+    <ID>ThrowsCount:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
+    <ID>ThrowsCount:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
+    <ID>ThrowsCount:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
+    <ID>TooManyFunctions:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
+    <ID>TooManyFunctions:EventDao.kt:EventDao</ID>
+    <ID>TooManyFunctions:EventRepository.kt:EventRepository</ID>
+    <ID>TooManyFunctions:GroupManager.kt:GroupManager</ID>
+    <ID>ViewModelInjection:CitrineScaffold.kt:val homeViewModel: HomeViewModel = viewModel()</ID>
+  </CurrentIssues>
+</SmellBaseline>

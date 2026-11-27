@@ -256,7 +256,7 @@ object EventRebroadcaster {
             }
         }
 
-        override fun onConnected(relay: IRelayClient, pingInMs: Int, usingCompression: Boolean) {
+        override fun onConnected(relay: IRelayClient, pingMillis: Int, compressed: Boolean) {
             failures.remove(relay.url)
         }
 

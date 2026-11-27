@@ -259,17 +259,9 @@ interface EventDao {
     @Transaction
     suspend fun getContactList(pubkey: String): EventWithTags?
 
-    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 0 ORDER BY createdAt DESC, id ASC LIMIT 1")
-    @Transaction
-    suspend fun getMetadata(pubkey: String): EventWithTags?
-
     @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10002 ORDER BY createdAt DESC, id ASC LIMIT 1")
     @Transaction
     suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?
-
-    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10000 ORDER BY createdAt DESC, id ASC LIMIT 1")
-    @Transaction
-    suspend fun getMuteList(pubkey: String): EventWithTags?
 
     @Query(
         """
@@ -315,14 +307,6 @@ interface EventDao {
     @Query("DELETE FROM EventEntity WHERE id in (:ids)")
     @Transaction
     suspend fun delete(ids: List<String>)
-
-    @Query("DELETE FROM TagEntity WHERE pkEvent = :id")
-    @Transaction
-    suspend fun deletetags(id: String)
-
-    @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind AND createdAt < (SELECT MAX(createdAt) FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind)")
-    @Transaction
-    suspend fun deleteOldestByKind(kind: Int, pubkey: String)
 
     @Query("DELETE FROM EventEntity WHERE kind = :kind")
     @Transaction

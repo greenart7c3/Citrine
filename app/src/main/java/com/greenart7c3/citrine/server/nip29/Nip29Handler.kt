@@ -1,7 +1,6 @@
 package com.greenart7c3.citrine.server.nip29
 
 import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.server.Connection
 import com.greenart7c3.citrine.server.CustomWebSocketServer
 import com.greenart7c3.citrine.service.RelayIdentity
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -27,7 +26,7 @@ sealed class Nip29Result {
 object Nip29Handler {
     private val HEX_KEY_REGEX = Regex("^[0-9a-f]{64}$")
 
-    suspend fun process(event: Event, connection: Connection?, server: CustomWebSocketServer, db: AppDatabase): Nip29Result {
+    suspend fun process(event: Event, server: CustomWebSocketServer, db: AppDatabase): Nip29Result {
         if (event.kind in Nip29.METADATA_KINDS) {
             if (event.pubKey == GroupManager.relayPubKey) return Nip29Result.NotApplicable
             GroupManager.get(GroupManager.groupIdOf(event)) ?: return Nip29Result.NotApplicable

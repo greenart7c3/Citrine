@@ -18,7 +18,6 @@ object CitrineContract {
      * Events table contract
      */
     object Events : BaseColumns {
-        const val TABLE_NAME = "EventEntity"
         val CONTENT_URI: Uri = Uri.withAppendedPath(BASE_URI, "events")
         const val CONTENT_TYPE = "vnd.android.cursor.dir/vnd.citrine.event"
         const val CONTENT_ITEM_TYPE = "vnd.android.cursor.item/vnd.citrine.event"
@@ -30,7 +29,6 @@ object CitrineContract {
         const val COLUMN_KIND = "kind"
         const val COLUMN_CONTENT = "content"
         const val COLUMN_SIG = "sig"
-        const val COLUMN_AUTH_PUBKEY = "auth_pubkey"
 
         // Query parameters
         const val PARAM_PUBKEY = "pubkey"
@@ -50,7 +48,6 @@ object CitrineContract {
      * Tags table contract
      */
     object Tags : BaseColumns {
-        const val TABLE_NAME = "TagEntity"
         val CONTENT_URI: Uri = Uri.withAppendedPath(BASE_URI, "tags")
         const val CONTENT_TYPE = "vnd.android.cursor.dir/vnd.citrine.tag"
         const val CONTENT_ITEM_TYPE = "vnd.android.cursor.item/vnd.citrine.tag"

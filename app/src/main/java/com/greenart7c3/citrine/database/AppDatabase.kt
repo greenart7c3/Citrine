@@ -8,7 +8,6 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.greenart7c3.citrine.BuildConfig
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.logs.Log
 import java.util.concurrent.Executors
@@ -62,7 +61,6 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "citrine_database",
             )
-//                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
                 .setQueryExecutor(executor)
                 .setTransactionExecutor(transactionExecutor)
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
@@ -113,7 +111,6 @@ abstract class HistoryDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "citrine_history_database",
             )
-//                .setQueryCallback(AppDatabaseCallback(), Executors.newSingleThreadExecutor())
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
@@ -266,16 +263,5 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
             """.trimIndent(),
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS `idx_event_expires_at` ON `EventEntity` (`expiresAt`)")
-    }
-}
-
-class AppDatabaseCallback : RoomDatabase.QueryCallback {
-    override fun onQuery(sqlQuery: String, bindArgs: List<Any?>) {
-        if (BuildConfig.DEBUG) {
-            Log.d(Citrine.TAG, "Query: $sqlQuery")
-            bindArgs.forEach {
-                Log.d(Citrine.TAG, "BindArg: $it")
-            }
-        }
     }
 }
