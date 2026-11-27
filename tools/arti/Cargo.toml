@@ -66,3 +66,9 @@ panic = "abort"
 # in patches/saturating-time/src/internal.rs. Drop this once upstream fixes it.
 [patch.crates-io]
 saturating-time = { path = "patches/saturating-time" }
+# tor-guardmgr 0.47.0 re-scans the whole consensus every second for as long as
+# Tor runs ("TODO: Too aggressive." in GuardMgrInner::run_periodic_events),
+# ~4% of a core on a Pixel 6a. The patch idles at 15 s and wakes early when a
+# request needs the 1 s cadence: see the "Citrine patch" comments in
+# patches/tor-guardmgr/src/{lib,daemon}.rs. Drop this once upstream fixes it.
+tor-guardmgr = { path = "patches/tor-guardmgr" }

@@ -34,8 +34,12 @@ import com.vitorpamplona.quartz.nip17Dm.messages.ChatMessageEvent
 import com.vitorpamplona.quartz.nip40Expiration.expiration
 import com.vitorpamplona.quartz.utils.TimeUtils
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 
 /**
@@ -65,7 +69,14 @@ object CrashReportSender {
     suspend fun send(report: String, signer: NostrSigner): Boolean {
         if (report.isBlank()) return false
 
-        val client = NostrClient(Citrine.instance.factory, Citrine.instance.applicationScope)
+        // NostrClient starts an Eagerly-shared relay-state flow sampled every 300 ms in the scope
+        // it is given, and disconnect() does not stop it. A child scope, cancelled in `finally`,
+        // keeps that ticker from outliving the send and waking the process forever.
+        val clientScope = CoroutineScope(
+            Citrine.instance.applicationScope.coroutineContext +
+                SupervisorJob(Citrine.instance.applicationScope.coroutineContext[Job]),
+        )
+        val client = NostrClient(Citrine.instance.factory, clientScope)
 
         return try {
             client.connect()
@@ -96,6 +107,7 @@ object CrashReportSender {
             false
         } finally {
             client.disconnect()
+            clientScope.cancel()
         }
     }
 

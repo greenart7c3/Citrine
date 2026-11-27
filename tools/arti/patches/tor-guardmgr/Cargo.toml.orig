@@ -1,0 +1,115 @@
+[package]
+name = "tor-guardmgr"
+version = "0.47.0"
+authors = ["The Tor Project, Inc.", "Nick Mathewson <nickm@torproject.org>"]
+edition = "2024"
+rust-version = "1.92"
+license = "MIT OR Apache-2.0"
+homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
+description = "Manage a set of guard relays for Tor network"
+keywords = ["tor", "arti", "async"]
+categories = ["network-programming", "cryptography"]
+repository = "https://gitlab.torproject.org/tpo/core/arti.git/"
+
+[features]
+default = []
+full = [
+    "bridge-client",
+    "pt-client",
+    "vanguards",
+    "safelog/full",
+    "tor-basic-utils/full",
+    "tor-config/full",
+    "tor-error/full",
+    "tor-linkspec/full",
+    "tor-llcrypto/full",
+    "tor-netdir/full",
+    "tor-netdoc/full",
+    "tor-persist/full",
+    "tor-proto/full",
+    "tor-protover?/full",
+    "tor-rtcompat/full",
+    "tor-units/full",
+    "tor-async-utils/full",
+    "tor-relay-selection/full",
+    "tor-rtmock?/full",
+    "oneshot-fused-workaround/full",
+    "tor-dircommon/full",
+    "web-time-compat/full",
+]
+experimental = ["testing"]
+
+# Support for using bridges as a client. Note that this is not the same as
+# the pt-client feature, since here we are not concerned with
+# pluggable transports necessarily.
+bridge-client = ["tor-protover"]
+# Support for pluggable transports.
+pt-client = ["bridge-client", "tor-linkspec/pt-client"]
+# Vanguards support
+vanguards = ["tor-relay-selection/vanguards"]
+
+# Enable testing-only APIs.  APIs under this feature are not
+# covered by semver.
+testing = [
+    "tor-netdir/testing",
+    "tor-persist/testing",
+    "tor-rtmock",
+    "__is_experimental",
+]
+
+__is_experimental = []
+
+[dependencies]
+amplify = { version = "4", default-features = false, features = ["derive"] }
+base64ct = "1.5.1"
+derive-deftly = { version = "~1.12.0", features = ["full", "beta"] }
+derive_builder = { version = "0.11", package = "derive_builder_fork_arti" }
+derive_more = { version = "2.0.1", features = ["full"] }
+dyn-clone = "1.0.4"
+educe = "0.4.22"
+futures = "0.3.14"
+humantime = "2"
+humantime-serde = "1.1.1"
+itertools = "0.15.0"
+num_enum = "0.7"
+oneshot-fused-workaround = { path = "../oneshot-fused-workaround", version = "0.8.0" }
+pin-project = "1"
+postage = { version = "0.5.0", default-features = false, features = ["futures-traits"] }
+rand = "0.10.1"
+safelog = { path = "../safelog", version = "0.10.0" }
+serde = { version = "1.0.103", features = ["derive"] }
+strum = { version = "0.28.0", features = ["derive"] }
+thiserror = "2"
+tor-async-utils = { version = "0.47.0", path = "../tor-async-utils" }
+tor-basic-utils = { path = "../tor-basic-utils", version = "0.47.0" }
+tor-config = { path = "../tor-config", version = "0.47.0" }
+tor-dircommon = { path = "../tor-dircommon", version = "0.47.0" }
+tor-error = { path = "../tor-error", version = "0.47.0" }
+tor-linkspec = { path = "../tor-linkspec", version = "0.47.0" }
+tor-llcrypto = { path = "../tor-llcrypto", version = "0.47.0" }
+tor-netdir = { path = "../tor-netdir", version = "0.47.0" }
+tor-netdoc = { path = "../tor-netdoc", version = "0.47.0" }                              # for address pattern
+tor-persist = { path = "../tor-persist", version = "0.47.0" }
+tor-proto = { path = "../tor-proto", version = "0.47.0" }
+tor-protover = { path = "../tor-protover", version = "0.47.0", optional = true }
+tor-relay-selection = { path = "../tor-relay-selection", version = "0.47.0" }
+tor-rtcompat = { path = "../tor-rtcompat", version = "0.47.0" }
+tor-rtmock = { path = "../tor-rtmock", version = "0.47.0", optional = true }
+tor-units = { path = "../tor-units", version = "0.47.0" }
+tracing = "0.1.36"
+web-time-compat = { path = "../web-time-compat", version = "0.3.0" }
+
+[dev-dependencies]
+float_eq = "1.0.0"
+fs-mistrust = { path = "../fs-mistrust", version = "0.16.0" }
+serde_json = "1.0.50"
+tempfile = "3"
+toml = "1.0.3"
+tor-netdir = { path = "../tor-netdir", version = "0.47.0", features = ["testing"] }
+tor-netdoc = { path = "../tor-netdoc", version = "0.47.0" }
+tor-persist = { path = "../tor-persist", version = "0.47.0", features = ["testing"] }
+tor-rtcompat = { path = "../tor-rtcompat", version = "0.47.0", features = ["tokio", "native-tls"] }
+tor-rtmock = { path = "../tor-rtmock", version = "0.47.0" }
+
+[package.metadata.docs.rs]
+all-features = true

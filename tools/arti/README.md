@@ -65,6 +65,20 @@ first time it parses a consensus. The patch is kept from Amber for parity; it
 only matters on Windows, which Citrine does not target today. Drop it once a
 fixed release is out.
 
+## Patched dependency: `tor-guardmgr`
+
+`Cargo.toml` also replaces `tor-guardmgr` 0.47.0 with the copy in
+`patches/tor-guardmgr`. Upstream's `GuardMgrInner::run_periodic_events` returns
+a 1 s delay unconditionally (`// TODO: Too aggressive.`), and each run walks the
+whole consensus: on a Pixel 6a that was ~4% of a core and a wakeup per second
+for as long as Tor was on (dormant mode does not pause it). The patch idles at
+15 s, keeps the 1 s cadence while a request is parked in `waiting`, and wakes the
+loop early (`periodic_wakeup` channel) when `handle_msg` parks one. Guard status
+reports and new consensuses were already event-driven, and guard retries are
+scheduled 30 s+ apart. Changes are marked `Citrine patch` in `src/lib.rs` and
+`src/daemon.rs`. When bumping Arti, re-copy the new `tor-guardmgr` release and
+re-apply them, or drop the patch once upstream fixes it.
+
 ## Updating Arti
 
 1. Bump `arti-client` and `tor-rtcompat` in `Cargo.toml` (and `version`, which

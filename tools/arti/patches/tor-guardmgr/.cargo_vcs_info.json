@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "ce8bc6e0998bd5a4efdf06dd62dce53c98ea1087"
+  },
+  "path_in_vcs": "crates/tor-guardmgr"
+}
