@@ -3,6 +3,7 @@ package com.greenart7c3.citrine.service
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.logs.Log
@@ -46,13 +47,14 @@ class EventBroadcastWorker(
             }
 
             // Ensure client is connected
-            if (!Citrine.instance.client.isActive()) {
-                Citrine.instance.client.connect()
+            val client = applicationContext.citrine.client
+            if (!client.isActive()) {
+                client.connect()
             }
 
             // Send event to relays
-            val result = Citrine.instance.client.publishAndConfirm(event, relayList = relays)
-            Citrine.instance.client.disconnect()
+            val result = client.publishAndConfirm(event, relayList = relays)
+            client.disconnect()
             Log.d(Citrine.TAG, "EventBroadcastWorker: Success: $result broadcast event $eventId to relays")
             if (result) {
                 Result.success()

@@ -21,6 +21,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.MainActivity
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.TagDeduplicator
 import com.greenart7c3.citrine.logs.Log
@@ -58,7 +59,7 @@ private const val ONE_DAY_SECONDS = 24L * 60 * 60
 const val NSITE_UPDATE_NOTIFICATION_ID = 4
 
 class WebSocketServerService : Service() {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + Citrine.instance.exceptionHandler)
+    private val scope by lazy { CoroutineScope(Dispatchers.IO + SupervisorJob() + citrine.exceptionHandler) }
     private val binder = LocalBinder()
     private var timer: Timer? = null
 
@@ -96,7 +97,7 @@ class WebSocketServerService : Service() {
                     val nowMs = System.currentTimeMillis()
                     if ((Citrine.job == null || Citrine.job?.isCompleted == true) && !Citrine.isImportingEvents) {
                         if (lastBackupProgressText != null || Citrine.hasProgressNotification) {
-                            NotificationManagerCompat.from(Citrine.instance).cancel(2)
+                            NotificationManagerCompat.from(citrine).cancel(2)
                             lastBackupProgressText = null
                             Citrine.hasProgressNotification = false
                         }
@@ -107,14 +108,14 @@ class WebSocketServerService : Service() {
                         if (runAgeRetention) {
                             lastAgeRetentionMs = nowMs
                         }
-                        Citrine.instance.applicationScope.launch {
-                            Citrine.instance.eventsToDelete(database, runAgeRetention = runAgeRetention)
+                        citrine.applicationScope.launch {
+                            citrine.eventsToDelete(database, runAgeRetention = runAgeRetention)
                         }
                     }
 
                     if (lastLogTrimMs == 0L || (nowMs - lastLogTrimMs) >= LOG_TRIM_INTERVAL_MS) {
                         lastLogTrimMs = nowMs
-                        Citrine.instance.applicationScope.launch {
+                        citrine.applicationScope.launch {
                             try {
                                 LogDatabase.getDatabase(this@WebSocketServerService)
                                     .logDao()
@@ -135,17 +136,17 @@ class WebSocketServerService : Service() {
                                 Log.d(Citrine.TAG, "Backing up database")
 
                                 Settings.lastBackup = TimeUtils.now()
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
 
                                 Citrine.job?.cancel()
-                                Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                                Citrine.job = citrine.applicationScope.launch(Dispatchers.IO) {
                                     ExportDatabaseUtils.exportDatabase(
                                         database = database,
                                         context = this@WebSocketServerService,
                                         folder = it,
                                         deleteOldFiles = true,
                                         onProgress = {
-                                            val notificationManager = NotificationManagerCompat.from(Citrine.instance)
+                                            val notificationManager = NotificationManagerCompat.from(citrine)
                                             if (it.isBlank()) {
                                                 notificationManager.cancel(2)
                                                 lastBackupProgressText = null
@@ -160,25 +161,25 @@ class WebSocketServerService : Service() {
 
                                                 notificationManager.createNotificationChannel(channel)
 
-                                                val copyIntent = Intent(Citrine.instance, ClipboardReceiver::class.java)
+                                                val copyIntent = Intent(citrine, ClipboardReceiver::class.java)
                                                 copyIntent.putExtra("job", "cancel")
 
                                                 val copyPendingIntent = PendingIntent.getBroadcast(
-                                                    Citrine.instance,
+                                                    citrine,
                                                     0,
                                                     copyIntent,
                                                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
                                                 )
 
-                                                val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
+                                                val notification = NotificationCompat.Builder(citrine, "citrine")
                                                     .setContentTitle("Citrine")
                                                     .setContentText(it)
                                                     .setSmallIcon(R.drawable.ic_notification)
                                                     .setOnlyAlertOnce(true)
-                                                    .addAction(R.drawable.ic_launcher_background, Citrine.instance.getString(R.string.cancel), copyPendingIntent)
+                                                    .addAction(R.drawable.ic_launcher_background, citrine.getString(R.string.cancel), copyPendingIntent)
                                                     .build()
 
-                                                if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                                                if (ActivityCompat.checkSelfPermission(citrine, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                                                     notificationManager.notify(2, notification)
                                                     lastBackupProgressText = it
                                                     Citrine.hasProgressNotification = true
@@ -202,8 +203,8 @@ class WebSocketServerService : Service() {
                         val oneDayAgo = TimeUtils.now() - ONE_DAY_SECONDS
                         if (Settings.lastNsiteCheck < oneDayAgo) {
                             Settings.lastNsiteCheck = TimeUtils.now()
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
-                            Citrine.instance.applicationScope.launch {
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
+                            citrine.applicationScope.launch {
                                 try {
                                     val updates = NsiteManager.checkForUpdates()
                                     updates.forEach { update ->
@@ -477,8 +478,8 @@ class WebSocketServerService : Service() {
     }
 
     private fun postNsiteUpdateNotification(address: String, displayName: String) {
-        val notificationManager = NotificationManagerCompat.from(Citrine.instance)
-        if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        val notificationManager = NotificationManagerCompat.from(citrine)
+        if (ActivityCompat.checkSelfPermission(citrine, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return
         }
 
@@ -500,7 +501,7 @@ class WebSocketServerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
+        val notification = NotificationCompat.Builder(citrine, "citrine")
             .setContentTitle(getString(R.string.app_name_release))
             .setContentText(getString(R.string.nsite_update_available_notification, displayName))
             .setSmallIcon(R.drawable.ic_notification)
