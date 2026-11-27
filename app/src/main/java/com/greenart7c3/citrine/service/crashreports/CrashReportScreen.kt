@@ -58,6 +58,8 @@ import androidx.core.net.toUri
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.logs.Log
+import com.greenart7c3.citrine.ui.LocalAppScope
+import com.greenart7c3.citrine.ui.LocalCrashReportCache
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
@@ -76,6 +78,9 @@ import kotlinx.coroutines.withContext
 @Composable
 fun CrashReportScreen() {
     val context = LocalContext.current
+    val appContext = context.applicationContext
+    val appScope = LocalAppScope.current
+    val crashReportCache = LocalCrashReportCache.current
     val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
     val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
     val sentMsg = stringResource(R.string.crash_report_sent)
@@ -89,12 +94,12 @@ fun CrashReportScreen() {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val stack = Citrine.instance.crashReportCache.loadAndDelete()
+            val stack = crashReportCache.loadAndDelete()
             // ANRs and native crashes never reach the uncaught-exception handler, so the exit
             // records are the only trace of them the user can send. Run detect() here too so the
             // crash screen does not race ahead of Citrine.onCreate()'s background detection.
-            ExitReasons.detect(Citrine.instance)
-            val exits = ExitReasons.pending(Citrine.instance)
+            ExitReasons.detect(appContext)
+            val exits = ExitReasons.pending(appContext)
             val joined = listOfNotNull(stack?.takeIf { it.isNotBlank() }, exits?.takeIf { it.isNotBlank() })
                 .joinToString("\n\n")
             if (joined.isNotBlank()) {
@@ -107,14 +112,14 @@ fun CrashReportScreen() {
     }
 
     fun forgetReport() {
-        ExitReasons.clearPending(Citrine.instance)
+        ExitReasons.clearPending(appContext)
         showScreen = false
     }
 
     fun sendReport(with: NostrSigner) {
         val snapshot = reportText
         sending = true
-        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             val sent = CrashReportSender.send(snapshot, with)
             withContext(Dispatchers.Main) {
                 sending = false
@@ -133,7 +138,7 @@ fun CrashReportScreen() {
                 Toast.makeText(context, signRequestRejectedMsg, Toast.LENGTH_SHORT).show()
             } else {
                 result.data?.let { data ->
-                    Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                    appScope.launch(Dispatchers.IO) {
                         signer?.newResponse(data)
                     }
                 }
@@ -162,7 +167,7 @@ fun CrashReportScreen() {
                     val externalSigner = NostrSignerExternal(
                         hexKey,
                         packageName,
-                        Citrine.instance.contentResolver,
+                        appContext.contentResolver,
                     )
                     // Covers the case where the user did not tick "remember" in Amber, so every
                     // seal and gift wrap needs its own confirmation there.

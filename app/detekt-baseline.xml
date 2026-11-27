@@ -1076,6 +1076,6 @@
     <ID>TooManyFunctions:EventDao.kt:EventDao</ID>
     <ID>TooManyFunctions:EventRepository.kt:EventRepository</ID>
     <ID>TooManyFunctions:GroupManager.kt:GroupManager</ID>
-    <ID>ViewModelInjection:CitrineScaffold.kt:val homeViewModel: HomeViewModel = viewModel()</ID>
+    <ID>ViewModelInjection:CitrineScaffold.kt:val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.factory(appContext, appScope))</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -28,7 +28,7 @@ class ClipboardReceiver : BroadcastReceiver() {
             Citrine.cancelJob()
             NotificationManagerCompat.from(context).cancel(2)
             citrine.applicationScope.launch {
-                citrine.client.disconnect()
+                citrine.relayClient.client.disconnect()
             }
         } else if (intent != null && intent.hasExtra("nsite_update")) {
             val address = intent.getStringExtra("nsite_update") ?: return
