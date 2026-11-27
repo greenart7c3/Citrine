@@ -28,7 +28,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -101,7 +100,7 @@ fun WebClientsSettingsScreen(
                                 "http://${item.removePrefix("/")}.localhost:${Settings.port}".toUri(),
                             )
                             browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            Citrine.instance.startActivity(browserIntent)
+                            context.startActivity(browserIntent)
                         },
                         onDelete = { webClients = webClients - item },
                         item = item,
@@ -149,7 +148,7 @@ fun WebClientsSettingsScreen(
                                 "http://${nsite.folderName}.localhost:${Settings.port}".toUri(),
                             )
                             browserIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            Citrine.instance.startActivity(browserIntent)
+                            context.startActivity(browserIntent)
                         },
                         onToggleAutoUpdate = { enabled ->
                             NsiteManager.setAutoUpdate(nsite.address, enabled)

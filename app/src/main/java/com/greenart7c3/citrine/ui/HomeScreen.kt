@@ -218,7 +218,7 @@ fun HomeScreen(
                 },
                 onConfirm = {
                     deleteAllDialog = false
-                    Citrine.instance.cancelJob()
+                    Citrine.cancelJob()
                     Citrine.instance.applicationScope.launch(Dispatchers.IO) {
                         Citrine.job?.join()
                         // Stop the aggregator before wiping the database so its listener

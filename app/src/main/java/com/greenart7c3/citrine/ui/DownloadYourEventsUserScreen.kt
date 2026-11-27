@@ -331,7 +331,7 @@ fun DownloadYourEventsUserScreen(
                 shouldShowDialog = false
 
                 Citrine.isImportingEvents = true
-                Citrine.instance.cancelJob()
+                Citrine.cancelJob()
                 Citrine.job = Citrine.instance.applicationScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
 

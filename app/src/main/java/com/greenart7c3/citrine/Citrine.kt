@@ -1,13 +1,10 @@
 package com.greenart7c3.citrine
 
-import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.os.Build
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -27,7 +24,7 @@ import com.greenart7c3.citrine.service.EventRebroadcaster
 import com.greenart7c3.citrine.service.ListImporter
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.NsiteManager
-import com.greenart7c3.citrine.service.PokeyReceiver
+import com.greenart7c3.citrine.service.PokeyListener
 import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.service.RelayIdentity
 import com.greenart7c3.citrine.service.TorManager
@@ -99,40 +96,7 @@ class Citrine :
         RelayAggregator.install(this, relayClient, exceptionHandler)
     }
 
-    private val pokeyReceiver = PokeyReceiver()
-    private var isPokeyReceiverRegistered = false
-
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    @Synchronized
-    fun registerPokeyReceiver() {
-        if (isPokeyReceiverRegistered) return
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(
-                pokeyReceiver,
-                IntentFilter(PokeyReceiver.POKEY_ACTION),
-                RECEIVER_EXPORTED,
-            )
-        } else {
-            registerReceiver(
-                pokeyReceiver,
-                IntentFilter(PokeyReceiver.POKEY_ACTION),
-            )
-        }
-        isPokeyReceiverRegistered = true
-    }
-
-    @Synchronized
-    fun unregisterPokeyReceiver() {
-        if (!isPokeyReceiverRegistered) return
-
-        try {
-            unregisterReceiver(pokeyReceiver)
-        } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "PokeyReceiver was not registered", e)
-        }
-        isPokeyReceiverRegistered = false
-    }
+    val pokeyListener = PokeyListener(this)
 
     override fun onCreate() {
         super.onCreate()
@@ -157,13 +121,8 @@ class Citrine :
 
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
         if (Settings.listenToPokeyBroadcasts) {
-            registerPokeyReceiver()
+            pokeyListener.register()
         }
-    }
-
-    fun cancelJob() {
-        job?.cancelChildren()
-        job?.cancel()
     }
 
     private val ephemeralCleanupScheduled = AtomicBoolean(false)
@@ -309,6 +268,11 @@ class Citrine :
         var hasProgressNotification = true
 
         const val TAG = "Citrine"
+
+        fun cancelJob() {
+            job?.cancelChildren()
+            job?.cancel()
+        }
 
         @Volatile
         lateinit var instance: Citrine

@@ -84,6 +84,8 @@ fun RebroadcastScreen(
     modifier: Modifier,
 ) {
     val context = LocalContext.current
+    val relayClient = LocalRelayClient.current
+    val appScope = LocalAppScope.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val state by EventRebroadcaster.state.collectAsStateWithLifecycle()
 
@@ -115,7 +117,7 @@ fun RebroadcastScreen(
 
     fun addRelays(found: List<NormalizedRelayUrl>) {
         found.forEach { url ->
-            if (!Citrine.instance.isPrivateIp(url.url) && relays.none { it.displayUrl() == url.displayUrl() }) {
+            if (!relayClient.isPrivateIp(url.url) && relays.none { it.displayUrl() == url.displayUrl() }) {
                 relays.add(url)
             }
         }
@@ -319,8 +321,8 @@ fun RebroadcastScreen(
                     onClick = {
                         pendingRequest = null
                         val database = AppDatabase.getDatabase(context)
-                        Citrine.instance.cancelJob()
-                        Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                        Citrine.cancelJob()
+                        Citrine.job = appScope.launch(Dispatchers.IO) {
                             EventRebroadcaster.rebroadcast(
                                 database = database,
                                 relays = request.relays,
@@ -455,7 +457,7 @@ fun RebroadcastScreen(
         if (running) {
             ElevatedButton(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = { Citrine.instance.cancelJob() },
+                onClick = { Citrine.cancelJob() },
             ) {
                 Text(stringResource(R.string.cancel))
             }

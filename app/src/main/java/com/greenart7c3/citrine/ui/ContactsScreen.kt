@@ -31,7 +31,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.HistoryDatabase
@@ -60,6 +59,7 @@ fun ContactsScreen(
         mutableStateOf(true)
     }
     val context = LocalContext.current
+    val relayClient = LocalRelayClient.current
     val coroutineScope = rememberCoroutineScope()
 
     val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
@@ -216,9 +216,9 @@ fun ContactsScreen(
                                         loading = true
 
                                         delay(1000)
-                                        Citrine.instance.client.publishAndConfirm(signedEvent, relayList = localRelays.toSet())
+                                        relayClient.client.publishAndConfirm(signedEvent, relayList = localRelays.toSet())
                                         CustomWebSocketService.server?.innerProcessEvent(signedEvent, null)
-                                        Citrine.instance.client.disconnect()
+                                        relayClient.client.disconnect()
                                         loading = false
                                         coroutineScope.launch(Dispatchers.Main) {
                                             navController.navigateUp()

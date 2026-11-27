@@ -51,7 +51,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.Settings
@@ -126,6 +125,7 @@ fun SettingsScreen(
     onApplyChanges: () -> Unit,
 ) {
     val context = LocalContext.current
+    val pokeyListener = LocalPokeyListener.current
     val settingsResetCompleteMsg = stringResource(R.string.settings_reset_complete)
     val scope = rememberCoroutineScope()
     var showResetDialog by remember { mutableStateOf(false) }
@@ -181,9 +181,9 @@ fun SettingsScreen(
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                             RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
                             if (Settings.listenToPokeyBroadcasts) {
-                                Citrine.instance.registerPokeyReceiver()
+                                pokeyListener.register()
                             } else {
-                                Citrine.instance.unregisterPokeyReceiver()
+                                pokeyListener.unregister()
                             }
                             onApplyChanges()
                             scope.launch {
