@@ -149,8 +149,6 @@ class ArchitectureTest {
         )
 
         val citrineInstanceUsers = setOf(
-            "server/EventSubscription.kt",
-            "server/SubscriptionManager.kt",
             "server/nip29/GroupManager.kt",
             "service/EventDownloader.kt",
             "service/EventRebroadcaster.kt",

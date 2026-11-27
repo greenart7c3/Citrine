@@ -16,6 +16,7 @@ import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
 import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
+import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.OlderThan
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -23,6 +24,7 @@ import com.greenart7c3.citrine.service.PokeyReceiver
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.service.crashreports.CrashReportCache
 import com.greenart7c3.citrine.service.crashreports.ExitReasons
+import com.greenart7c3.citrine.service.crashreports.ReportAssembler
 import com.greenart7c3.citrine.service.crashreports.UnexpectedCrashSaver
 import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -83,6 +85,12 @@ class Citrine :
         return host.endsWith(".onion")
     }
     val client: NostrClient = NostrClient(factory, applicationScope)
+
+    init {
+        EventSubscription.install(applicationScope, exceptionHandler) { error ->
+            crashReportCache.appendReport(ReportAssembler(this).buildReport(error))
+        }
+    }
 
     private val pokeyReceiver = PokeyReceiver()
     private var isPokeyReceiverRegistered = false

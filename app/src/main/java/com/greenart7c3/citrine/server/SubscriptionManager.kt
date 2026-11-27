@@ -3,7 +3,6 @@ package com.greenart7c3.citrine.server
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.nip29.GroupManager
-import com.greenart7c3.citrine.service.crashreports.ReportAssembler
 import kotlin.time.measureTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -14,6 +13,7 @@ import kotlinx.coroutines.sync.withLock
 @OptIn(DelicateCoroutinesApi::class)
 class SubscriptionManager(
     val subscription: Subscription,
+    private val reportOutOfMemory: (OutOfMemoryError) -> Unit,
 ) {
     suspend fun execute() {
         subscription.scope.launch(Dispatchers.IO) {
@@ -116,11 +116,7 @@ class SubscriptionManager(
      */
     private suspend fun failForOutOfMemory(e: OutOfMemoryError) {
         Log.e(Citrine.TAG, "Out of memory answering subscription ${subscription.id}", e)
-        runCatching {
-            Citrine.instance.crashReportCache.appendReport(
-                ReportAssembler(Citrine.instance).buildReport(e),
-            )
-        }
+        runCatching { reportOutOfMemory(e) }
         runCatching {
             subscription.connection.send(
                 ClosedResult(subscription.id, "error: relay out of memory").toJson(),
