@@ -1,9 +1,8 @@
-// Architecture rules the compiler cannot check: which package may import what
-// and the static-accessor ratchets (Citrine.instance, the Settings object,
-// CustomWebSocketService.server). Konsist reads the repository from the file
-// system, so these run under `./gradlew test` (or `:architecture-tests:test`)
-// without touching the app's test classpath. See docs/architecture.md for the
-// target layering.
+// Architecture rules the compiler cannot check: which package may import what,
+// the Citrine.instance ratchet, and the shape of the service/database layers.
+// Konsist reads the repository from the file system, so these run under
+// `./gradlew test` (or `:architecture-tests:test`) without touching the app's
+// test classpath. See docs/architecture.md for the target layering.
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kt.lint)
