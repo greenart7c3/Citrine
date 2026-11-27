@@ -88,7 +88,7 @@ class HomeViewModel : ViewModel() {
         database: AppDatabase,
         context: Context,
     ) {
-        Citrine.instance.cancelJob()
+        Citrine.cancelJob()
         Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             ExportDatabaseUtils.exportDatabase(
                 database,
@@ -107,7 +107,7 @@ class HomeViewModel : ViewModel() {
         context: Context,
         onFinished: () -> Unit,
     ) {
-        Citrine.instance.cancelJob()
+        Citrine.cancelJob()
         Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {

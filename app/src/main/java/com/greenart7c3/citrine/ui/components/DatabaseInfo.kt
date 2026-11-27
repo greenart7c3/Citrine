@@ -43,12 +43,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.ui.LocalAppScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
@@ -177,6 +177,7 @@ fun DatabaseInfo(
     var wantsToDeleteKind by remember { mutableStateOf<Int?>(null) }
 
     val context = LocalContext.current
+    val appScope = LocalAppScope.current
     var showGraph by remember { mutableStateOf(Settings.showEventGraph) }
 
     if (wantsToDeleteKind != null) {
@@ -196,7 +197,7 @@ fun DatabaseInfo(
                         Text(stringResource(R.string.yes))
                     },
                     onClick = {
-                        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                        appScope.launch(Dispatchers.IO) {
                             database.eventDao().deleteByKind(wantsToDeleteKind!!)
                             wantsToDeleteKind = null
                         }
@@ -237,7 +238,7 @@ fun DatabaseInfo(
                 onClick = {
                     showGraph = !showGraph
                     Settings.showEventGraph = showGraph
-                    Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                    appScope.launch(Dispatchers.IO) {
                         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                     }
                 },

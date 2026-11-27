@@ -156,7 +156,13 @@ app scope, `RelayIdentity` the application context and `GroupManager` the
 application context and the app scope, `NsiteManager` the application context
 and the `RelayClient`, `TorManager` the application context and the app scope,
 and `RelayAggregator` the application context, the `RelayClient` and the
-exception handler of its scope. A context handed over from the
+exception handler of its scope. Composables get the narrow dependencies from
+CompositionLocals in `ui/AppDependencies.kt` (`LocalRelayClient`,
+`LocalAppScope`, `LocalPokeyListener`, `LocalCrashReportCache`, each listed under
+`allowedCompositionLocals` in `config/detekt/compose.yml`), which `MainActivity`
+provides with `appDependencies(citrine)`, or a plain `LocalContext` where that is
+all they need. `Citrine.cancelJob()` is a companion function (it only touches the
+static `job`), and the Pokey receiver registration is `service/PokeyListener`. A context handed over from the
 constructor is only read once the Application is attached.
 
 ### 2. Give the big screens ViewModels

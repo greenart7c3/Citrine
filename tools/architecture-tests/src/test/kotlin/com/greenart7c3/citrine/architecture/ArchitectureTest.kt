@@ -150,20 +150,14 @@ class ArchitectureTest {
 
         val citrineInstanceUsers = setOf(
             "service/crashreports/CrashReportScreen.kt",
-            "ui/CitrineScaffold.kt",
-            "ui/ContactsScreen.kt",
             "ui/DownloadYourEventsUserScreen.kt",
             "ui/HomeScreen.kt",
             "ui/HomeViewModel.kt",
             "ui/LogcatViewModel.kt",
-            "ui/RebroadcastScreen.kt",
-            "ui/SettingsScreen.kt",
-            "ui/components/DatabaseInfo.kt",
-            "ui/settings/NetworkSettingsScreen.kt",
-            "ui/settings/WebClientsSettingsScreen.kt",
         )
 
         val contextCitrineUsers = setOf(
+            "MainActivity.kt",
             "provider/CitrineContentProvider.kt",
             "service/BootBroadcastReceiver.kt",
             "service/ClipboardReceiver.kt",

@@ -20,11 +20,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.TorManager
+import com.greenart7c3.citrine.ui.LocalPokeyListener
 import com.greenart7c3.citrine.ui.components.SwitchSettingRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -38,6 +38,7 @@ fun NetworkSettingsScreen(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val pokeyListener = LocalPokeyListener.current
 
     Surface(modifier) {
         var startOnBoot by remember { mutableStateOf(Settings.startOnBoot) }
@@ -59,9 +60,9 @@ fun NetworkSettingsScreen(
                 Settings.useTor = useTor
                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
                 if (listenToPokeyBroadcasts) {
-                    Citrine.instance.registerPokeyReceiver()
+                    pokeyListener.register()
                 } else {
-                    Citrine.instance.unregisterPokeyReceiver()
+                    pokeyListener.unregister()
                 }
                 onApplyChanges()
                 delay(1500)

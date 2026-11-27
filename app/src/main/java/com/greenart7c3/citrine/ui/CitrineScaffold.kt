@@ -37,7 +37,6 @@ import androidx.paging.LoadState
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.compose.collectAsLazyPagingItems
-import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventPagingSource
@@ -62,12 +61,13 @@ import com.greenart7c3.citrine.ui.settings.RetentionSettingsScreen
 import com.greenart7c3.citrine.ui.settings.WebClientsSettingsScreen
 import com.greenart7c3.citrine.ui.settings.toShortenHex
 import com.greenart7c3.citrine.utils.formatEpochSecondsToCustomDateTimeWithSeconds
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-fun copyToClipboard(clipboard: Clipboard, text: String) {
-    Citrine.instance.applicationScope.launch(Dispatchers.Main) {
+fun copyToClipboard(scope: CoroutineScope, clipboard: Clipboard, text: String) {
+    scope.launch(Dispatchers.Main) {
         clipboard.setClipEntry(
             ClipEntry(
                 ClipData.newPlainText("Tags", text),
@@ -82,6 +82,8 @@ fun CitrineScaffold(
     storageHelper: StoragePickerHelper,
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val appScope = LocalAppScope.current
+    val appContext = LocalContext.current.applicationContext
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val destinationRoute = navBackStackEntry?.destination?.route ?: ""
@@ -175,21 +177,21 @@ fun CitrineScaffold(
                                             label = stringResource(R.string.kind),
                                             displayValue = "${event.kind}",
                                             onCopy = {
-                                                copyToClipboard(clipboard, "${event.kind}")
+                                                copyToClipboard(appScope, clipboard, "${event.kind}")
                                             },
                                         )
                                         EventSection(
                                             label = stringResource(R.string.pubkey),
                                             displayValue = event.pubKey.toShortenHex(),
                                             onCopy = {
-                                                copyToClipboard(clipboard, event.pubKey)
+                                                copyToClipboard(appScope, clipboard, event.pubKey)
                                             },
                                         )
                                         EventSection(
                                             label = stringResource(R.string.date),
                                             displayValue = event.createdAt.formatEpochSecondsToCustomDateTimeWithSeconds(),
                                             onCopy = {
-                                                copyToClipboard(clipboard, "${event.createdAt}")
+                                                copyToClipboard(appScope, clipboard, "${event.createdAt}")
                                             },
                                         )
                                         if (event.content.isNotEmpty()) {
@@ -197,7 +199,7 @@ fun CitrineScaffold(
                                                 label = stringResource(R.string.content),
                                                 displayValue = event.content,
                                                 onCopy = {
-                                                    copyToClipboard(clipboard, event.content)
+                                                    copyToClipboard(appScope, clipboard, event.content)
                                                 },
                                             )
                                         }
@@ -207,6 +209,7 @@ fun CitrineScaffold(
                                                 tags = event.tags,
                                                 onCopy = {
                                                     copyToClipboard(
+                                                        appScope,
                                                         clipboard,
                                                         event.tags.joinToString(separator = ", ") { mainTag -> "[${mainTag.joinToString(separator = ", ") { tag -> "\"${tag}\"" }}]" },
                                                     )
@@ -218,7 +221,7 @@ fun CitrineScaffold(
                                                 .fillMaxWidth()
                                                 .padding(8.dp),
                                             onClick = {
-                                                copyToClipboard(clipboard, event.toJson())
+                                                copyToClipboard(appScope, clipboard, event.toJson())
                                             },
                                             content = {
                                                 Text(stringResource(R.string.copy_raw_json))
@@ -289,22 +292,20 @@ fun CitrineScaffold(
                         .padding(16.dp),
                     navController = navController,
                     onApplyChanges = {
-                        val context = Citrine.instance
                         coroutineScope.launch(Dispatchers.IO) {
-                            homeViewModel.stop(context)
+                            homeViewModel.stop(appContext)
                             delay(1000)
-                            homeViewModel.start(context)
+                            homeViewModel.start(appContext)
                         }
                     },
                 )
             }
 
             val restartRelay: () -> Unit = {
-                val context = Citrine.instance
                 coroutineScope.launch(Dispatchers.IO) {
-                    homeViewModel.stop(context)
+                    homeViewModel.stop(appContext)
                     delay(1000)
-                    homeViewModel.start(context)
+                    homeViewModel.start(appContext)
                 }
             }
             val subScreenModifier = Modifier

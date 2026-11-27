@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.core.app.NotificationManagerCompat
+import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.citrine
 import kotlinx.coroutines.launch
 
@@ -24,7 +25,7 @@ class ClipboardReceiver : BroadcastReceiver() {
             Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
         } else if (intent != null && intent.hasExtra("job")) {
             val citrine = context.citrine
-            citrine.cancelJob()
+            Citrine.cancelJob()
             NotificationManagerCompat.from(context).cancel(2)
             citrine.applicationScope.launch {
                 citrine.client.disconnect()
