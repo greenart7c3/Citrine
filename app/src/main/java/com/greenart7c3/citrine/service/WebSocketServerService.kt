@@ -259,13 +259,14 @@ class WebSocketServerService : Service() {
 
         Log.d(Citrine.TAG, "Starting WebSocket server")
         // Start the WebSocket server
+        val app = citrine
         CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
             port = Settings.port,
             appDatabase = database,
-            context = citrine,
-            appScope = citrine.applicationScope,
-            onEphemeralEventStored = { citrine.scheduleEphemeralCleanup(database) },
+            context = app,
+            appScope = app.applicationScope,
+            onEphemeralEventStored = { app.scheduleEphemeralCleanup(database) },
         )
         CustomWebSocketService.server?.start()
 
