@@ -101,7 +101,8 @@ reproducible-build and dependency-verification footprint small.
   deliberate one at its site.
 - **Architecture tests** (`tools/architecture-tests`, Konsist) — `ui/` does not
   import Room or call a DAO (ViewModels exempt), `Citrine.instance` cannot spread
-  to a new file, `service/` and `database/` do not depend on Compose UI, and
+  to a new file, `Context.citrine` stays in the entry points the system
+  constructs, `service/` and `database/` do not depend on Compose UI, and
   ViewModels are named `ViewModel`. The
   allow-lists at the bottom of `ArchitectureTest.kt` are ratchets too: they fail
   when an entry no longer violates the rule, so they cannot silently rot.
@@ -129,7 +130,11 @@ outbound relay client) and have `Citrine` implement or hold them. Pass them in
 through constructors (the server, the services, the provider's query code) or as
 parameters of the `object` helpers. Entry points the system constructs
 (activities, services, receivers, workers, the provider) keep reading the
-container from their context. Shrinks `citrineInstanceUsers`.
+container from their context (`Context.citrine`). Shrinks `citrineInstanceUsers`.
+
+Done so far: the receivers (`BootBroadcastReceiver`, `ClipboardReceiver`),
+`EventBroadcastWorker`, `CitrineContentProvider` and `WebSocketServerService`
+read `Context.citrine` instead of `Citrine.instance`.
 
 ### 2. Give the big screens ViewModels
 

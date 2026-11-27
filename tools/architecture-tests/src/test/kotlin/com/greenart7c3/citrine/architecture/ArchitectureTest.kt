@@ -81,6 +81,31 @@ class ArchitectureTest {
     }
 
     @Test
+    fun `Context citrine usage can only shrink`() {
+        val unimportedCitrineExtensionNotInAHyphenatedName = Regex("""(?<![\w-])citrine(?![\w-])""")
+        val containerCastWithoutTheExtension = Regex("""\bas\??\s+(com\.greenart7c3\.citrine\.)?Citrine\b""")
+        val actual = appMain
+            .filter { it.relativePath() != "Citrine.kt" }
+            .filter { file ->
+                file.imports.any { it.name == "com.greenart7c3.citrine.citrine" } ||
+                    containerCastWithoutTheExtension.containsMatchIn(file.text) ||
+                    (
+                        file.packagee?.name == "com.greenart7c3.citrine" &&
+                            unimportedCitrineExtensionNotInAHyphenatedName.containsMatchIn(file.text.lines().filterNot { it.startsWith("import ") || it.startsWith("package ") }.joinToString("\n"))
+                        )
+            }
+            .map { it.relativePath() }
+            .toSet()
+
+        assertRatchet(
+            "Context.citrine (or a cast to Citrine) hands out the whole container: take the dependency through a constructor " +
+                "or parameter instead. Entry points the system constructs are the exception.",
+            actual,
+            contextCitrineUsers,
+        )
+    }
+
+    @Test
     fun `service and database do not render UI`() {
         val actual = appMain
             .filter { file -> file.relativePath().startsWith("service/") || file.relativePath().startsWith("database/") }
@@ -124,15 +149,11 @@ class ArchitectureTest {
         )
 
         val citrineInstanceUsers = setOf(
-            "provider/CitrineContentProvider.kt",
             "server/Connection.kt",
             "server/CustomWebSocketServer.kt",
             "server/EventSubscription.kt",
             "server/SubscriptionManager.kt",
             "server/nip29/GroupManager.kt",
-            "service/BootBroadcastReceiver.kt",
-            "service/ClipboardReceiver.kt",
-            "service/EventBroadcastWorker.kt",
             "service/EventDownloader.kt",
             "service/EventRebroadcaster.kt",
             "service/ListImporter.kt",
@@ -140,7 +161,6 @@ class ArchitectureTest {
             "service/RelayAggregator.kt",
             "service/RelayIdentity.kt",
             "service/TorManager.kt",
-            "service/WebSocketServerService.kt",
             "service/crashreports/CrashReportScreen.kt",
             "service/crashreports/CrashReportSender.kt",
             "ui/CitrineScaffold.kt",
@@ -154,6 +174,14 @@ class ArchitectureTest {
             "ui/components/DatabaseInfo.kt",
             "ui/settings/NetworkSettingsScreen.kt",
             "ui/settings/WebClientsSettingsScreen.kt",
+        )
+
+        val contextCitrineUsers = setOf(
+            "provider/CitrineContentProvider.kt",
+            "service/BootBroadcastReceiver.kt",
+            "service/ClipboardReceiver.kt",
+            "service/EventBroadcastWorker.kt",
+            "service/WebSocketServerService.kt",
         )
 
         val composeUiInService = setOf(

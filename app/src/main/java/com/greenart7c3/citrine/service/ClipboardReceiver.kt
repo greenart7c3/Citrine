@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.core.app.NotificationManagerCompat
-import com.greenart7c3.citrine.Citrine
+import com.greenart7c3.citrine.citrine
 import kotlinx.coroutines.launch
 
 class ClipboardReceiver : BroadcastReceiver() {
@@ -23,15 +23,16 @@ class ClipboardReceiver : BroadcastReceiver() {
             // Show a toast message
             Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
         } else if (intent != null && intent.hasExtra("job")) {
-            Citrine.instance.cancelJob()
+            val citrine = context.citrine
+            citrine.cancelJob()
             NotificationManagerCompat.from(context).cancel(2)
-            Citrine.instance.applicationScope.launch {
-                Citrine.instance.client.disconnect()
+            citrine.applicationScope.launch {
+                citrine.client.disconnect()
             }
         } else if (intent != null && intent.hasExtra("nsite_update")) {
             val address = intent.getStringExtra("nsite_update") ?: return
             NotificationManagerCompat.from(context).cancel(NSITE_UPDATE_NOTIFICATION_ID)
-            Citrine.instance.applicationScope.launch {
+            context.citrine.applicationScope.launch {
                 NsiteManager.applyUpdateByAddress(address)
             }
         }
