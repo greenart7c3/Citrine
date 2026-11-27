@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.service
 
+import android.content.Context
 import android.content.Intent
 import androidx.core.content.edit
 import com.greenart7c3.citrine.Citrine
@@ -23,6 +24,13 @@ import com.vitorpamplona.quartz.utils.Hex
  *    and signs with [NostrSignerInternal] — so group management always works.
  */
 object RelayIdentity {
+    private lateinit var context: Context
+
+    /** Hands the identity store the application context (read only once it is attached); called once from the Citrine constructor. */
+    fun install(context: Context) {
+        this.context = context
+    }
+
     @Volatile
     private var cachedSigner: NostrSigner? = null
 
@@ -73,7 +81,7 @@ object RelayIdentity {
     }
 
     private fun loadOrCreateKeyPair(): KeyPair {
-        val prefs = EncryptedStorage.preferences(Citrine.instance)
+        val prefs = EncryptedStorage.preferences(context)
         val stored = prefs.getString(PrefKeys.RELAY_PRIVATE_KEY, null)
         if (!stored.isNullOrBlank()) {
             return KeyPair(privKey = Hex.decode(stored))
@@ -85,7 +93,7 @@ object RelayIdentity {
     }
 
     private fun buildExternalSigner(pubkey: String, pkg: String): NostrSignerExternal {
-        val signer = NostrSignerExternal(pubkey, pkg, Citrine.instance.contentResolver)
+        val signer = NostrSignerExternal(pubkey, pkg, context.contentResolver)
         // Lets the signer fall back to Amber's UI when the background ContentResolver
         // path can't auto-approve. The launcher routes through MainActivity's
         // ActivityResultLauncher (set via [registerActivityLauncher]), which preserves

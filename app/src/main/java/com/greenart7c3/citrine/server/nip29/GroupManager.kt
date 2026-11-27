@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.server.nip29
 
+import android.content.Context
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
@@ -18,6 +19,7 @@ import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +32,14 @@ import kotlinx.coroutines.sync.withLock
  * the cache — h-tagged events for any other group id are stored unmanaged.
  */
 object GroupManager {
+    private lateinit var context: Context
+    private lateinit var appScope: CoroutineScope
+
+    /** Hands the group store the application context (read only once it is attached) and the app scope; called once from the Citrine constructor. */
+    fun install(context: Context, appScope: CoroutineScope) {
+        this.context = context
+        this.appScope = appScope
+    }
     private val groups = ConcurrentHashMap<String, GroupState>()
     private val locks = ConcurrentHashMap<String, Mutex>()
 
@@ -216,7 +226,7 @@ object GroupManager {
      * notified. Fire-and-forget; failures only log.
      */
     fun scheduleRegen(server: CustomWebSocketServer, groupId: String) {
-        Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             try {
                 regenerateMetadataEvents(server, groupId)
             } catch (e: Exception) {
@@ -279,7 +289,7 @@ object GroupManager {
         // An Amber login/logout changes the relay identity; metadata signed by the
         // previous identity is a distinct addressable event that would linger next to
         // the fresh copies, so drop it once the new set is stored.
-        val db = AppDatabase.getDatabase(Citrine.instance)
+        val db = AppDatabase.getDatabase(context)
         val staleIds = EventRepository.query(
             db,
             EventFilter(
