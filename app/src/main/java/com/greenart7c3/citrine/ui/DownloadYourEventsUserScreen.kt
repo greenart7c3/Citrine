@@ -1,6 +1,7 @@
 package com.greenart7c3.citrine.ui
 
 import android.app.Activity.RESULT_OK
+import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,6 +61,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.service.EventDownloader
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
@@ -77,6 +79,7 @@ import com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.utils.Hex
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -161,86 +164,23 @@ fun SelectRelayModal(
                 }
             }
 
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-            ) {
-                if (loading) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.loading_relays),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+            RelaySheetBody(
+                loading = loading,
+                relayText = relayText,
+                onRelayTextChange = { relayText = it },
+                onAddTypedRelay = {
+                    if (relays.addTyped(relayText.text)) {
+                        relayText = TextFieldValue()
+                        keyboardController?.hide()
                     }
-                }
-                OutlinedTextField(
-                    keyboardOptions = KeyboardOptions.Default.copy(
-                        autoCorrectEnabled = false,
-                        imeAction = ImeAction.Done,
-                        capitalization = KeyboardCapitalization.None,
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            if (relayText.text.isBlank()) return@KeyboardActions
-                            val url = RelayUrlNormalizer.normalizeOrNull(relayText.text) ?: return@KeyboardActions
-                            if (relays.any { value -> value.displayUrl() == url.displayUrl() }) {
-                                return@KeyboardActions
-                            }
-
-                            relays.add(url)
-                            relayText = TextFieldValue()
-                            keyboardController?.hide()
-                        },
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    value = relayText,
-                    onValueChange = {
-                        relayText = it
-                    },
-                    label = {
-                        Text(stringResource(R.string.wss))
-                    },
-                )
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.9f)
-                        .padding(top = 4.dp),
-                ) {
-                    itemsIndexed(relays) { index, relay ->
-                        RelayCard(
-                            relay = relay.url,
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                relays.removeAt(index)
-                            },
-                        )
-                    }
-                }
-                ElevatedButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 4.dp),
-                    content = {
-                        Text(stringResource(R.string.fetch_events))
-                    },
-                    onClick = {
-                        // TODO: find out why nostr.band keeps downloading events forever
-                        onDone(relays)
-                    },
-                )
-            }
+                },
+                relays = relays,
+                onRemoveRelay = { index -> relays.removeAt(index) },
+                onFetch = {
+                    // TODO: find out why nostr.band keeps downloading events forever
+                    onDone(relays)
+                },
+            )
         },
         sheetState = sheetState,
         onDismissRequest = {
@@ -252,22 +192,170 @@ fun SelectRelayModal(
     )
 }
 
+private fun MutableList<NormalizedRelayUrl>.addTyped(relayText: String): Boolean {
+    if (relayText.isBlank()) return false
+    val url = RelayUrlNormalizer.normalizeOrNull(relayText) ?: return false
+    if (any { value -> value.displayUrl() == url.displayUrl() }) {
+        return false
+    }
+
+    add(url)
+    return true
+}
+
+@Composable
+private fun RelaySheetBody(
+    loading: Boolean,
+    relayText: TextFieldValue,
+    onRelayTextChange: (TextFieldValue) -> Unit,
+    onAddTypedRelay: () -> Unit,
+    relays: List<NormalizedRelayUrl>,
+    onRemoveRelay: (Int) -> Unit,
+    onFetch: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+    ) {
+        if (loading) {
+            RelayLookupProgress()
+        }
+        OutlinedTextField(
+            keyboardOptions = KeyboardOptions.Default.copy(
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.Done,
+                capitalization = KeyboardCapitalization.None,
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { onAddTypedRelay() },
+            ),
+            modifier = Modifier.fillMaxWidth(),
+            value = relayText,
+            onValueChange = onRelayTextChange,
+            label = {
+                Text(stringResource(R.string.wss))
+            },
+        )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+                .padding(top = 4.dp),
+        ) {
+            itemsIndexed(relays) { index, relay ->
+                RelayCard(
+                    relay = relay.url,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        onRemoveRelay(index)
+                    },
+                )
+            }
+        }
+        ElevatedButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 4.dp),
+            content = {
+                Text(stringResource(R.string.fetch_events))
+            },
+            onClick = onFetch,
+        )
+    }
+}
+
+@Composable
+private fun RelayLookupProgress() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = stringResource(R.string.loading_relays),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
 @Composable
 fun DownloadYourEventsUserScreen(
     navController: NavController,
     modifier: Modifier = Modifier,
 ) {
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val relayClient = LocalRelayClient.current
     val appScope = LocalAppScope.current
-    val appContext = context.applicationContext
-    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
-    val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
     var shouldShowDialog by remember { mutableStateOf(false) }
     var npub by remember { mutableStateOf(TextFieldValue()) }
     var signer by remember { mutableStateOf<NostrSigner?>(null) }
     var downloadTaggedEvents by remember { mutableStateOf(true) }
+
+    val loginWithExternalSigner = rememberDownloadLogin { login ->
+        signer = login.signer
+        npub = TextFieldValue(login.npub)
+    }
+
+    if (shouldShowDialog) {
+        SelectRelayModal(
+            signer = signer!!,
+            onDone = {
+                shouldShowDialog = false
+                startDownload(
+                    signer = signer!!,
+                    relays = it,
+                    downloadTaggedEvents = downloadTaggedEvents,
+                    relayClient = relayClient,
+                    appScope = appScope,
+                )
+                navController.navigateUp()
+            },
+            onDismiss = {
+                shouldShowDialog = false
+            },
+        )
+    }
+
+    DownloadForm(
+        npub = npub,
+        onNpubChange = { npub = it },
+        downloadTaggedEvents = downloadTaggedEvents,
+        onDownloadTaggedEventsChange = { downloadTaggedEvents = it },
+        onLogin = loginWithExternalSigner,
+        onFetch = {
+            if (signer == null && npub.text.isNotBlank()) {
+                signer = npubSigner(npub.text)
+            }
+
+            if (signer == null) {
+                Toast.makeText(
+                    context,
+                    "Invalid account",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return@DownloadForm
+            }
+
+            shouldShowDialog = true
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun rememberDownloadLogin(onLogin: (LoginResult) -> Unit): () -> Unit {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val appContext = context.applicationContext
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
 
     val launcherLogin = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -280,67 +368,131 @@ fun DownloadYourEventsUserScreen(
                 ).show()
             } else {
                 result.data?.let {
-                    try {
-                        val key = it.getStringExtra("signature") ?: ""
-                        val packageName = it.getStringExtra("package") ?: ""
-
-                        val returnedKey = if (key.startsWith("npub")) {
-                            when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
-                                is NPub -> parsed.hex
-                                else -> ""
-                            }
-                        } else {
-                            key
-                        }
-
-                        val localNpub = Hex.decode(returnedKey).toNpub()
-
-                        signer = NostrSignerExternal(
-                            returnedKey,
-                            packageName,
-                            appContext.contentResolver,
-                        )
-
-                        npub = TextFieldValue(localNpub)
-                    } catch (e: Exception) {
-                        Log.d(Citrine.TAG, e.message ?: "", e)
-                    }
+                    loginResult(it, appContext)?.let(onLogin)
                 }
             }
         },
     )
 
-    if (shouldShowDialog) {
-        SelectRelayModal(
-            signer = signer!!,
-            onDone = {
-                shouldShowDialog = false
+    return {
+        try {
+            launcherLogin.launch(downloadLoginIntent())
+        } catch (e: Exception) {
+            Log.d(Citrine.TAG, e.message ?: "", e)
+            scope.launch(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    noExternalSignerMsg,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            val intent = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
+            launcherLogin.launch(intent)
+        }
+    }
+}
 
-                Citrine.isImportingEvents = true
-                Citrine.cancelJob()
-                Citrine.job = appScope.launch {
-                    EventDownloader.setProgress("Connecting to ${it.size} relays")
+private class LoginResult(val signer: NostrSigner, val npub: String)
 
-                    RelayAuthenticator(relayClient.client, appScope) { _, template, _ ->
-                        val signer = if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair())
-                        val event = signer.sign(template)
-                        listOf(event)
-                    }
+private fun loginResult(data: Intent, appContext: Context): LoginResult? = try {
+    val key = data.getStringExtra("signature") ?: ""
+    val packageName = data.getStringExtra("package") ?: ""
 
-                    EventDownloader.fetchEvents(
-                        signer = signer!!,
-                        relays = it,
-                        downloadTaggedEvents = downloadTaggedEvents,
-                    )
-                }
-                navController.navigateUp()
-            },
-            onDismiss = {
-                shouldShowDialog = false
-            },
-        )
+    val returnedKey = if (key.startsWith("npub")) {
+        when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+            is NPub -> parsed.hex
+            else -> ""
+        }
+    } else {
+        key
     }
 
+    val localNpub = Hex.decode(returnedKey).toNpub()
+
+    LoginResult(
+        signer = NostrSignerExternal(
+            returnedKey,
+            packageName,
+            appContext.contentResolver,
+        ),
+        npub = localNpub,
+    )
+} catch (e: Exception) {
+    Log.d(Citrine.TAG, e.message ?: "", e)
+    null
+}
+
+private fun downloadLoginIntent(): Intent {
+    val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+    val signerType = "get_public_key"
+    intent.putExtra("type", signerType)
+
+    val permissions =
+        listOf(
+            Permission(
+                CommandType.SIGN_EVENT,
+                22242,
+            ),
+        )
+    val jsonArray = StringBuilder("[")
+    permissions.forEachIndexed { index, permission ->
+        jsonArray.append(permission.toJson())
+        if (index < permissions.size - 1) {
+            jsonArray.append(",")
+        }
+    }
+    jsonArray.append("]")
+
+    intent.putExtra("permissions", jsonArray.toString())
+    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    return intent
+}
+
+private fun npubSigner(text: String): NostrSigner? {
+    val entity = Nip19Parser.uriToRoute(text)?.entity as? NPub ?: return null
+    return NostrSignerInternal(
+        KeyPair(
+            pubKey = Hex.decode(entity.hex),
+        ),
+    )
+}
+
+private fun startDownload(
+    signer: NostrSigner,
+    relays: List<NormalizedRelayUrl>,
+    downloadTaggedEvents: Boolean,
+    relayClient: RelayClient,
+    appScope: CoroutineScope,
+) {
+    Citrine.isImportingEvents = true
+    Citrine.cancelJob()
+    Citrine.job = appScope.launch {
+        EventDownloader.setProgress("Connecting to ${relays.size} relays")
+
+        RelayAuthenticator(relayClient.client, appScope) { _, template, _ ->
+            val authSigner = if (signer is NostrSignerExternal) signer else NostrSignerInternal(KeyPair())
+            val event = authSigner.sign(template)
+            listOf(event)
+        }
+
+        EventDownloader.fetchEvents(
+            signer = signer,
+            relays = relays,
+            downloadTaggedEvents = downloadTaggedEvents,
+        )
+    }
+}
+
+@Composable
+private fun DownloadForm(
+    npub: TextFieldValue,
+    onNpubChange: (TextFieldValue) -> Unit,
+    downloadTaggedEvents: Boolean,
+    onDownloadTaggedEventsChange: (Boolean) -> Unit,
+    onLogin: () -> Unit,
+    onFetch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -349,9 +501,7 @@ fun DownloadYourEventsUserScreen(
         OutlinedTextField(
             modifier = Modifier.fillMaxWidth(),
             value = npub,
-            onValueChange = {
-                npub = it
-            },
+            onValueChange = onNpubChange,
             label = {
                 Text(stringResource(R.string.npub1))
             },
@@ -360,15 +510,13 @@ fun DownloadYourEventsUserScreen(
             Modifier
                 .fillMaxWidth()
                 .clickable {
-                    downloadTaggedEvents = !downloadTaggedEvents
+                    onDownloadTaggedEventsChange(!downloadTaggedEvents)
                 },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(
                 checked = downloadTaggedEvents,
-                onCheckedChange = {
-                    downloadTaggedEvents = it
-                },
+                onCheckedChange = onDownloadTaggedEventsChange,
             )
             Text(stringResource(R.string.download_tagged_events))
         }
@@ -376,89 +524,13 @@ fun DownloadYourEventsUserScreen(
             content = {
                 Text(stringResource(R.string.login_with_external_signer))
             },
-            onClick = {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
-                    val signerType = "get_public_key"
-                    intent.putExtra("type", signerType)
-
-                    val permissions =
-                        listOf(
-                            Permission(
-                                CommandType.SIGN_EVENT,
-                                22242,
-                            ),
-                        )
-                    val jsonArray = StringBuilder("[")
-                    permissions.forEachIndexed { index, permission ->
-                        jsonArray.append(permission.toJson())
-                        if (index < permissions.size - 1) {
-                            jsonArray.append(",")
-                        }
-                    }
-                    jsonArray.append("]")
-
-                    intent.putExtra("permissions", jsonArray.toString())
-                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    launcherLogin.launch(intent)
-                } catch (e: Exception) {
-                    Log.d(Citrine.TAG, e.message ?: "", e)
-                    scope.launch(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            noExternalSignerMsg,
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                    val intent = Intent(Intent.ACTION_VIEW, "https://github.com/greenart7c3/Amber/releases".toUri())
-                    launcherLogin.launch(intent)
-                }
-            },
+            onClick = onLogin,
         )
         ElevatedButton(
             content = {
                 Text(stringResource(R.string.fetch_events))
             },
-            onClick = {
-                if (signer == null && npub.text.isNotBlank()) {
-                    val entity = Nip19Parser.uriToRoute(npub.text)
-
-                    if (entity == null) {
-                        Toast.makeText(
-                            context,
-                            "Invalid account",
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                        return@ElevatedButton
-                    }
-
-                    if (entity.entity !is NPub) {
-                        Toast.makeText(
-                            context,
-                            "Invalid account",
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                        return@ElevatedButton
-                    }
-
-                    signer = NostrSignerInternal(
-                        KeyPair(
-                            pubKey = Hex.decode((entity.entity as NPub).hex),
-                        ),
-                    )
-                }
-
-                if (signer == null) {
-                    Toast.makeText(
-                        context,
-                        "Invalid account",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    return@ElevatedButton
-                }
-
-                shouldShowDialog = true
-            },
+            onClick = onFetch,
         )
     }
 }

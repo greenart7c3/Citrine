@@ -22,46 +22,41 @@ import com.greenart7c3.citrine.R
  * on the `ComponentActivity` path.
  */
 class StoragePickerHelper internal constructor(
-    private val sdkInt: Int,
-    private val hasLegacyStoragePermissions: () -> Boolean,
-    private val requestLegacyStoragePermissions: (Array<String>) -> Unit,
-    private val launchFolderPicker: () -> Unit,
-    private val launchFilePicker: () -> Unit,
+    private val legacyPermissions: LegacyStoragePermissions,
+    private val pickers: StoragePickers,
     private val onPermissionDenied: () -> Unit,
-    private val setFolderSelectedCallback: (((requestCode: Int, folder: DocumentFile) -> Unit)?) -> Unit,
-    private val setFileSelectedCallback: (((requestCode: Int, files: List<DocumentFile>) -> Unit)?) -> Unit,
 ) {
     private var pendingFolderPicker = false
 
     var onFolderSelected: ((requestCode: Int, folder: DocumentFile) -> Unit)? = null
         set(value) {
             field = value
-            setFolderSelectedCallback(value)
+            pickers.setFolderSelectedCallback(value)
         }
 
     var onFileSelected: ((requestCode: Int, files: List<DocumentFile>) -> Unit)? = null
         set(value) {
             field = value
-            setFileSelectedCallback(value)
+            pickers.setFileSelectedCallback(value)
         }
 
     fun openFolderPicker() {
-        if (sdkInt <= Build.VERSION_CODES.P && !hasLegacyStoragePermissions()) {
+        if (legacyPermissions.sdkInt <= Build.VERSION_CODES.P && !legacyPermissions.hasLegacyStoragePermissions()) {
             pendingFolderPicker = true
-            requestLegacyStoragePermissions(LEGACY_STORAGE_PERMISSIONS)
+            legacyPermissions.requestLegacyStoragePermissions(LEGACY_STORAGE_PERMISSIONS)
             return
         }
         launchFolderPickerSafely()
     }
 
     fun openFilePicker() {
-        launchFilePicker()
+        pickers.launchFilePicker()
     }
 
     internal fun onPermissionsResult(results: Map<String, Boolean>) {
         if (!pendingFolderPicker) return
         pendingFolderPicker = false
-        val allGranted = LEGACY_STORAGE_PERMISSIONS.all { results[it] == true } && hasLegacyStoragePermissions()
+        val allGranted = LEGACY_STORAGE_PERMISSIONS.all { results[it] == true } && legacyPermissions.hasLegacyStoragePermissions()
         if (allGranted) {
             launchFolderPickerSafely()
         } else {
@@ -71,7 +66,7 @@ class StoragePickerHelper internal constructor(
 
     private fun launchFolderPickerSafely() {
         try {
-            launchFolderPicker()
+            pickers.launchFolderPicker()
         } catch (_: StoragePermissionDeniedException) {
             onPermissionDenied()
         }
@@ -93,21 +88,31 @@ class StoragePickerHelper internal constructor(
                 helper.onPermissionsResult(results)
             }
             helper = StoragePickerHelper(
-                sdkInt = Build.VERSION.SDK_INT,
-                hasLegacyStoragePermissions = {
-                    LEGACY_STORAGE_PERMISSIONS.all { permission ->
-                        ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
-                    }
-                },
-                requestLegacyStoragePermissions = { permissions ->
-                    permissionLauncher.launch(permissions)
-                },
-                launchFolderPicker = {
-                    simpleStorageHelper.openFolderPicker()
-                },
-                launchFilePicker = {
-                    simpleStorageHelper.openFilePicker()
-                },
+                legacyPermissions = LegacyStoragePermissions(
+                    sdkInt = Build.VERSION.SDK_INT,
+                    hasLegacyStoragePermissions = {
+                        LEGACY_STORAGE_PERMISSIONS.all { permission ->
+                            ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
+                        }
+                    },
+                    requestLegacyStoragePermissions = { permissions ->
+                        permissionLauncher.launch(permissions)
+                    },
+                ),
+                pickers = StoragePickers(
+                    launchFolderPicker = {
+                        simpleStorageHelper.openFolderPicker()
+                    },
+                    launchFilePicker = {
+                        simpleStorageHelper.openFilePicker()
+                    },
+                    setFolderSelectedCallback = { callback ->
+                        simpleStorageHelper.onFolderSelected = callback
+                    },
+                    setFileSelectedCallback = { callback ->
+                        simpleStorageHelper.onFileSelected = callback
+                    },
+                ),
                 onPermissionDenied = {
                     Toast.makeText(
                         activity,
@@ -115,14 +120,21 @@ class StoragePickerHelper internal constructor(
                         Toast.LENGTH_SHORT,
                     ).show()
                 },
-                setFolderSelectedCallback = { callback ->
-                    simpleStorageHelper.onFolderSelected = callback
-                },
-                setFileSelectedCallback = { callback ->
-                    simpleStorageHelper.onFileSelected = callback
-                },
             )
             return helper
         }
     }
 }
+
+internal class LegacyStoragePermissions(
+    val sdkInt: Int,
+    val hasLegacyStoragePermissions: () -> Boolean,
+    val requestLegacyStoragePermissions: (Array<String>) -> Unit,
+)
+
+internal class StoragePickers(
+    val launchFolderPicker: () -> Unit,
+    val launchFilePicker: () -> Unit,
+    val setFolderSelectedCallback: (((requestCode: Int, folder: DocumentFile) -> Unit)?) -> Unit,
+    val setFileSelectedCallback: (((requestCode: Int, files: List<DocumentFile>) -> Unit)?) -> Unit,
+)
