@@ -90,9 +90,8 @@ object CrashReportSender {
             }
 
             val wraps = NIP17Factory().createMessageNIP17(template, signer).wraps
-            // The sender's self-copy is useless here: only the developer's wrap needs to go out.
-            val addressed = wraps.filter { it.recipientPubKey() == DEVELOPER_HEX_KEY }
-            val outbox = addressed.ifEmpty { wraps }
+            val developerWrapsWithoutSenderSelfCopy = wraps.filter { it.recipientPubKey() == DEVELOPER_HEX_KEY }
+            val outbox = developerWrapsWithoutSenderSelfCopy.ifEmpty { wraps }
 
             coroutineScope {
                 outbox

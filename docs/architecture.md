@@ -65,9 +65,10 @@ There are two ViewModels (`HomeViewModel`, `LogcatViewModel`) plus the one insid
   files), so almost nothing could be constructed in a test without the
   Application; step 1 removed it.
 - `ui/` reached Room DAOs directly in 9 files; since step 3 it does not.
-- The detekt baseline holds 1076 grandfathered findings in the app: 936
+- The detekt baseline held 1076 grandfathered findings in the app: 936
   `NoComments`, 38 `LongMethod`, 32 `CyclomaticComplexMethod` and about 70
-  mechanical Compose and small logic findings.
+  mechanical Compose and small logic findings. After step 7 every module's
+  baseline is empty.
 - Line coverage of the app's unit tests is 7.5%.
 
 ## Target layering
@@ -95,10 +96,11 @@ reproducible-build and dependency-verification footprint small.
   `ThrowsCount`), `ForbiddenMethodCall` (Compose's locale-dependent
   `toLowerCase`/`toUpperCase`), the Compose rules (`ModifierMissing`,
   `ViewModelForwarding`, `ViewModelInjection`, `MutableParams`, …), the unused-code
-  rules and `NoComments` (`tools/detekt-rules`). Existing violations are in each
-  module's `detekt-baseline.xml`; regenerate with `./gradlew detektBaselineAll`,
-  which rewrites the files from the current findings, so fixed code disappears
-  from them. Never add an entry by hand.
+  rules and `NoComments` (`tools/detekt-rules`). Every module's
+  `detekt-baseline.xml` is empty: nothing is grandfathered, so a finding is fixed
+  in the code (split the function, rename, or suppress a deliberate one at its
+  site). Never add an entry by hand; `./gradlew detektBaselineAll` regenerates the
+  files, and a `+` line in its diff is a new violation to fix instead.
 - **Unused code** (`tools/unused-code`, the `unusedCode` task run by
   `detektAll`) — non-private declarations nothing references and unused catch
   parameters, across every module. It has no baseline.
@@ -307,7 +309,7 @@ callbacks come before the optional ones (10 `ComposableParamOrder`, 10
 `HomeViewModel` stays until step 2 hoists `HomeScreen`'s state: as a default
 parameter it would only become a `ViewModelForwarding` finding.
 
-### 7. Clear the remaining baseline findings
+### 7. Clear the remaining baseline findings (done)
 
 `ReturnCount`, `ThrowsCount`, `ComplexCondition`, `NestedBlockDepth`,
 `LongParameterList`, `TooManyFunctions`, then `CyclomaticComplexMethod` and
@@ -327,3 +329,13 @@ grouped DAO interfaces (`EventQueryDao`, `EventLookupDao`, `EventInsertDao`,
 instead of declaring every query itself, so call sites and the generated Room code
 stay the same, and `GroupManager`'s write side is `GroupWrites.kt`. What is left
 is the `NoComments` grandfathering.
+
+The `NoComments` grandfathering (926 comments) was cleared package by package
+(the aggregator, `server/`, then the rest): each comment was deleted, said
+through a name or a constant, moved into public KDoc (what each `Settings`
+property means, the `CitrineContract` columns and paths, the repository's
+contracts), kept as a NIP or issue link, or kept under `@Suppress("NoComments")`
+on its declaration when it documents a constraint outside our code (Quartz,
+Ktor, OkHttp, Arti/Tor, Android, Coil, SQLite and NIP behaviour). Every module's
+baseline is now empty, so the roadmap is done; new code is held to the rules
+without exceptions.

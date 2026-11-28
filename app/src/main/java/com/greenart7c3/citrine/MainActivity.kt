@@ -19,16 +19,12 @@ import com.greenart7c3.citrine.ui.theme.CitrineTheme
 class MainActivity : ComponentActivity() {
     private val storageHelper = StoragePickerHelper.create(this@MainActivity)
 
-    // Launcher used by the aggregator's foreground signer path. Going through
-    // registerForActivityResult preserves the calling package on the intent — startActivity
-    // alone would leave Amber reading a null callingPackage and rejecting the request.
     private val aggregatorSignerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         result.data?.let { RelayAggregator.deliverSignerResponse(it) }
     }
 
-    // Same mechanism for the relay identity signer (NIP-29 group metadata signing).
     private val relaySignerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -53,7 +49,6 @@ class MainActivity : ComponentActivity() {
                         CitrineScaffold(
                             storageHelper = storageHelper,
                         )
-                        // A report left by a previous run takes over the whole window, above the bars.
                         CrashReportScreen()
                     }
                 }

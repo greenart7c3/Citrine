@@ -51,13 +51,15 @@ interface EventQueryDao {
     @RawQuery
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
-    // Callers pair [getEventRowsByIds] with this instead of [getEvents]: its `@Relation`
-    // loads the tags of every row at once, hundreds of thousands of [TagEntity] objects
-    // per page for contact lists, mute lists and follow sets.
+    /**
+     * Callers pair [getEventRowsByIds] with this instead of [getEvents]: its `@Relation`
+     * loads the tags of every row at once, hundreds of thousands of [TagEntity] objects
+     * per page for contact lists, mute lists and follow sets.
+     */
     @Query("SELECT pkEvent, COUNT(*) AS count FROM TagEntity WHERE pkEvent IN (:ids) GROUP BY pkEvent")
     fun countTagsByEvent(ids: List<String>): List<EventDao.TagCount>
 
-    // Primary-key lookups, so sizing a page reads no content into memory.
+    /** Primary-key lookups, so sizing a page reads no content into memory. */
     @Query("SELECT id, length(content) AS length FROM EventEntity WHERE id IN (:ids)")
     fun contentLengths(ids: List<String>): List<EventDao.ContentLength>
 
@@ -274,14 +276,17 @@ interface EventInsertDao {
         if (tags.isNotEmpty()) insertTags(tags)
     }
 
+    /**
+     * Stores [dbEvent] and its tags and fans it out to live subscriptions. An event already
+     * stored is skipped entirely, tag I/O and fan-out included, rather than orphaning the
+     * existing event's tags.
+     */
     @Transaction
     suspend fun insertEventWithTags(
         database: RoomDatabase,
         dbEvent: EventWithTags,
         connection: Connection?,
     ) {
-        // Returns null when the row already exists (IGNORE) — skip tag I/O and
-        // fan-out in that case rather than orphaning the existing event's tags.
         insertEventIfNew(database, dbEvent.event)?.let {
             dbEvent.tags.forEach {
                 it.pkEvent = dbEvent.event.id
@@ -393,8 +398,11 @@ interface EventMatchDao {
     @Transaction
     suspend fun getDeletedEventsByATag(aTagValue: String): List<Long>
 
-    // NIP-29: group ids whose admins deleted the given event id via a stored kind-9005
-    // moderation event. Only ids of groups managed by this relay count as deletions.
+    /**
+     * Group ids whose admins deleted the given event id via a stored kind-9005 moderation
+     * event (NIP-29, https://github.com/nostr-protocol/nips/blob/master/29.md). Only ids of
+     * groups managed by this relay count as deletions.
+     */
     @Query(
         """
         SELECT DISTINCT HTag.col1Value
@@ -411,8 +419,11 @@ interface EventMatchDao {
     @Transaction
     suspend fun getModerationDeletedGroups(eTagValue: String): List<String>
 
-    // NIP-29: every event carrying an `h` tag for the given group id (used by kind 9008
-    // delete-group to purge the group's content).
+    /**
+     * Every event carrying an `h` tag for the given group id, used by the kind 9008
+     * delete-group of NIP-29 (https://github.com/nostr-protocol/nips/blob/master/29.md) to
+     * purge the group's content.
+     */
     @Query(
         """
         SELECT DISTINCT TagEntity.pkEvent
@@ -427,8 +438,10 @@ interface EventMatchDao {
 }
 
 interface EventDeleteDao {
-    // Tags are removed transactionally via the FK ON DELETE CASCADE on
-    // TagEntity.pkEvent, which Room enables by default.
+    /**
+     * Tags are removed transactionally via the FK ON DELETE CASCADE on
+     * TagEntity.pkEvent, which Room enables by default.
+     */
     @Query("DELETE FROM EventEntity WHERE id IN (:ids) AND pubkey = :pubkey")
     @Transaction
     suspend fun delete(ids: List<String>, pubkey: String)
@@ -529,8 +542,10 @@ interface EventPageDao {
         limit: Int,
     ): List<EventWithTags>
 
-    // Optimized queries for ContentProvider
-    // Using sentinel values: Long.MIN_VALUE/MAX_VALUE means "no filter"
+    /**
+     * Serves the ContentProvider, like [getEventsByPubkey] and [getEventsByKind]: a
+     * [createdAtFrom] of Long.MIN_VALUE or a [createdAtTo] of Long.MAX_VALUE means "no filter".
+     */
     @Query(
         """
         SELECT * FROM EventEntity

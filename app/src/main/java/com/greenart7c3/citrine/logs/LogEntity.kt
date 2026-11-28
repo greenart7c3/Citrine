@@ -7,6 +7,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * @property timestamp Epoch milliseconds when the log entry was created.
+ * @property level Single-letter level: V, D, I, W or E.
+ */
 @Entity(
     tableName = "logs",
     indices = [
@@ -15,9 +19,7 @@ import java.util.Locale
 )
 data class LogEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    // Epoch milliseconds when the log entry was created.
     val timestamp: Long,
-    // Single-letter level: V, D, I, W or E.
     val level: String,
     val tag: String,
     val message: String,

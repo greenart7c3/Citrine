@@ -12,7 +12,6 @@ fun Long.toDateString(): String {
         ZoneId.systemDefault(),
     )
 
-    // Format the LocalDateTime with local format
     val formatter = DateTimeFormatter.ofLocalizedDateTime(
         FormatStyle.SHORT,
     )

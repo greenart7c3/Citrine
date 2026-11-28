@@ -10,19 +10,24 @@ import com.greenart7c3.citrine.BuildConfig
  * Defines URIs and column names for accessing Nostr events and tags.
  */
 object CitrineContract {
-    // Follows the applicationId so debug (.debug) and release builds can be installed side by side.
+    /**
+     * Follows the applicationId so debug (.debug) and release builds can be installed side by side.
+     */
     const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.provider"
     private val BASE_URI = "content://$AUTHORITY".toUri()
 
     /**
-     * Events table contract
+     * Events table contract.
+     *
+     * Column names (`COLUMN_*`) match [com.greenart7c3.citrine.database.EventEntity]; query
+     * parameters are the `PARAM_*` constants and sub-paths of [CONTENT_URI] the `PATH_*` ones.
+     * An insert takes the event columns only: the stored event has no tags.
      */
     object Events : BaseColumns {
         val CONTENT_URI: Uri = Uri.withAppendedPath(BASE_URI, "events")
         const val CONTENT_TYPE = "vnd.android.cursor.dir/vnd.citrine.event"
         const val CONTENT_ITEM_TYPE = "vnd.android.cursor.item/vnd.citrine.event"
 
-        // Column names matching EventEntity
         const val COLUMN_ID = "id"
         const val COLUMN_PUBKEY = "pubkey"
         const val COLUMN_CREATED_AT = "createdAt"
@@ -30,7 +35,6 @@ object CitrineContract {
         const val COLUMN_CONTENT = "content"
         const val COLUMN_SIG = "sig"
 
-        // Query parameters
         const val PARAM_PUBKEY = "pubkey"
         const val PARAM_KIND = "kind"
         const val PARAM_CREATED_AT_FROM = "createdAt_from"
@@ -39,20 +43,21 @@ object CitrineContract {
         const val PARAM_OFFSET = "offset"
         const val PARAM_AUTH_PUBKEY = "auth_pubkey"
 
-        // URI paths
         const val PATH_BY_PUBKEY = "by_pubkey"
         const val PATH_BY_KIND = "by_kind"
     }
 
     /**
-     * Tags table contract
+     * Tags table contract.
+     *
+     * Column names (`COLUMN_*`) match [com.greenart7c3.citrine.database.TagEntity]. Tags are read
+     * per event through [PATH_BY_EVENT] with [PARAM_EVENT_ID]; [CONTENT_URI] itself returns no rows.
      */
     object Tags : BaseColumns {
         val CONTENT_URI: Uri = Uri.withAppendedPath(BASE_URI, "tags")
         const val CONTENT_TYPE = "vnd.android.cursor.dir/vnd.citrine.tag"
         const val CONTENT_ITEM_TYPE = "vnd.android.cursor.item/vnd.citrine.tag"
 
-        // Column names matching TagEntity
         const val COLUMN_PK = "pk"
         const val COLUMN_PK_EVENT = "pkEvent"
         const val COLUMN_POSITION = "position"
@@ -63,10 +68,8 @@ object CitrineContract {
         const val COLUMN_COL4_PLUS = "col4Plus"
         const val COLUMN_KIND = "kind"
 
-        // Query parameters
         const val PARAM_EVENT_ID = "event_id"
 
-        // URI paths
         const val PATH_BY_EVENT = "by_event"
     }
 }

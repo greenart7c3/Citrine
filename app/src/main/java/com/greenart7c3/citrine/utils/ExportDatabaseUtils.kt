@@ -17,10 +17,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-// Rows read per backup page. Each page is streamed out and dropped before the next one is read.
 private const val EXPORT_PAGE_SIZE = 500
 
 object ExportDatabaseUtils {
+    /**
+     * Writes every event to a new JSONL file in [folder]. Events are read in keyset pages over
+     * the primary key, with tags attached in bounded chunks by the same helper the REQ path uses;
+     * each page is streamed out and dropped before the next one is read, so a large database's
+     * tag rows are never held in the heap all at once.
+     */
     suspend fun exportDatabase(
         database: AppDatabase,
         context: Context,
@@ -39,10 +44,6 @@ object ExportDatabaseUtils {
             )
             val op = file?.openOutputStream(context)
             op?.writer()?.use { writer ->
-                // Keyset paging over the primary key: one page of event rows at a time, tags
-                // attached in bounded chunks by the same helper the REQ path uses. The whole
-                // id list and the 1,000-events-with-all-their-tags batches this replaces held
-                // a large database's tag rows in the heap all at once.
                 var exported = 0
                 var lastId = ""
                 while (true) {

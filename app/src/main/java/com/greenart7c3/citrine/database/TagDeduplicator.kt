@@ -20,14 +20,16 @@ import kotlinx.coroutines.yield
  *
  * Deduplication keeps the earliest row (`MIN(pk)`) per `(pkEvent, position)`, restoring the
  * original tag list so the event verifies again and stays within memory bounds.
+ *
+ * Each database is scanned in two passes: first the replaceable kinds hit hardest by hourly
+ * refreshes, so contact lists, mute lists, relay lists and profiles are clean right away, then
+ * all events by primary key.
  */
 object TagDeduplicator {
     internal const val DELETE_CHUNK_SIZE = 10_000
     private const val SCAN_PAGE_SIZE = 50
 
-    // Replaceable kinds hit hardest by hourly refreshes — repair these first so contact lists,
-    // mute lists, relay lists and profiles are clean right away.
-    private val PRIORITY_KINDS = intArrayOf(3, 10000, 10002, 0)
+    private val KINDS_HIT_HARDEST_BY_HOURLY_REFRESH = intArrayOf(3, 10000, 10002, 0)
 
     private val running = AtomicBoolean(false)
 
@@ -37,7 +39,8 @@ object TagDeduplicator {
      *
      * Deletes in bounded SQLite chunks using `tags_by_pk_event` + rowid (`pk`) ordering so
      * even an event with millions of duplicate rows is repaired with O(1) Java heap and
-     * without holding a long write lock.
+     * without holding a long write lock. A final pass removes duplicates left at or below the
+     * last kept `pk`, e.g. by interleaved inserts.
      */
     suspend fun deduplicateEvent(
         dao: EventDao,
@@ -56,7 +59,6 @@ object TagDeduplicator {
             if (deleted < deleteChunkSize) break
             yield()
         }
-        // Catch any duplicate with pk <= maxKeepPk (e.g. interleaved inserts).
         removed += dao.deleteRemainingDuplicateTags(eventId)
         if (removed > 0) {
             Log.d(Citrine.TAG, "Deduplicated $removed duplicate tag row(s) for event $eventId (kept ${stats.distinctCount})")
@@ -103,14 +105,10 @@ object TagDeduplicator {
         }
     }
 
-    /**
-     * Scans [dao] in two passes: priority replaceable kinds first, then all events by primary
-     * key. Returns `(eventsRepaired, rowsRemoved)`, or `null` if deferred by an active import.
-     */
     internal suspend fun cleanDao(dao: EventDao): Pair<Int, Int>? {
         val tally = RepairTally()
 
-        for (kind in PRIORITY_KINDS) {
+        for (kind in KINDS_HIT_HARDEST_BY_HOURLY_REFRESH) {
             if (!scanKind(dao, kind, tally)) return null
         }
 

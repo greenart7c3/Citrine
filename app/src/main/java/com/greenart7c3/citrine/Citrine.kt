@@ -69,21 +69,23 @@ class Citrine : Application() {
         Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache))
         SingletonImageLoader.setSafe(ImageLoaderFactory())
 
-        // Record why the previous process died (ANR, native crash, excessive resource usage) while
-        // it can still be read, and leave it in the in-app log as well as the crash dialog.
-        applicationScope.launch(Dispatchers.IO) {
-            try {
-                ExitReasons.detect(this@Citrine)
-            } catch (e: Exception) {
-                Log.e(TAG, "Could not read previous exit reasons", e)
-            }
-        }
+        recordWhyThePreviousProcessDied()
 
         relayClient.client.connect()
 
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
         if (Settings.listenToPokeyBroadcasts) {
             pokeyListener.register()
+        }
+    }
+
+    private fun recordWhyThePreviousProcessDied() {
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                ExitReasons.detect(this@Citrine)
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not read previous exit reasons", e)
+            }
         }
     }
 
@@ -95,9 +97,11 @@ class Citrine : Application() {
         @Volatile
         var isImportingEvents = false
 
-        // True on startup so the first maintenance tick clears any stale progress
-        // notification left behind by a prior crash; set whenever notification id 2 is
-        // posted and cleared once cancelled, avoiding redundant Binder IPCs when idle.
+        /**
+         * True on startup so the first maintenance tick clears any stale progress
+         * notification left behind by a prior crash; set whenever notification id 2 is
+         * posted and cleared once cancelled, avoiding redundant Binder IPCs when idle.
+         */
         @Volatile
         var hasProgressNotification = true
 

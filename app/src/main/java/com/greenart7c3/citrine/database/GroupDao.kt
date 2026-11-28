@@ -35,7 +35,7 @@ interface GroupDao {
     @Query("DELETE FROM GroupInviteEntity WHERE groupId = :groupId")
     suspend fun deleteInvites(groupId: String)
 
-    // Tombstones the group (blocks id reuse) and clears its membership and invites.
+    /** Tombstones the group (blocks id reuse) and clears its membership and invites. */
     @Transaction
     suspend fun tombstoneGroup(group: GroupEntity) {
         upsertGroup(group.copy(isDeleted = true))

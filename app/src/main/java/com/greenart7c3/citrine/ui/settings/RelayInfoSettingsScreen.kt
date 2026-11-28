@@ -38,9 +38,7 @@ import com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType
 import com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission
 import com.vitorpamplona.quartz.utils.Hex
 
-// Kinds the relay signs with the owner's key: relay-issued membership changes and the
-// NIP-29 group metadata events. Requested at login so Amber can auto-approve them.
-private val RELAY_SIGNER_KINDS = listOf(
+private val KINDS_THE_RELAY_SIGNS_WITH_THE_OWNER_KEY = listOf(
     Nip29.KIND_PUT_USER,
     Nip29.KIND_REMOVE_USER,
     Nip29.KIND_GROUP_METADATA,
@@ -59,16 +57,7 @@ fun RelayInfoSettingsScreen(
 
     Surface(modifier) {
         val relayOwnerPubkey = viewModel.relayOwnerPubkey
-        val ownerNpub = remember(relayOwnerPubkey) {
-            // Hex.decode("") yields an empty array rather than throwing, and bech32
-            // happily encodes zero bytes into a stub like "npub106246s" — so an
-            // unconfigured owner must be caught before decoding.
-            if (relayOwnerPubkey.isBlank()) {
-                ""
-            } else {
-                runCatching { Hex.decode(relayOwnerPubkey).toNpub() }.getOrDefault("")
-            }
-        }
+        val ownerNpub = remember(relayOwnerPubkey) { npubOrBlank(relayOwnerPubkey) }
 
         val loginWithRelaySigner = rememberRelaySignerLogin(onLogin = viewModel::loginWithExternalSigner)
 
@@ -154,10 +143,22 @@ private fun rememberRelaySignerLogin(onLogin: (key: String, packageName: String)
     }
 }
 
+@Suppress("NoComments")
+private fun npubOrBlank(hexPubkey: String): String {
+    // Hex.decode("") yields an empty array rather than throwing, and bech32
+    // happily encodes zero bytes into a stub like "npub106246s" — so an
+    // unconfigured owner must be caught before decoding.
+    return if (hexPubkey.isBlank()) {
+        ""
+    } else {
+        runCatching { Hex.decode(hexPubkey).toNpub() }.getOrDefault("")
+    }
+}
+
 private fun relaySignerLoginIntent(): Intent {
     val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
     intent.putExtra("type", "get_public_key")
-    val permissions = RELAY_SIGNER_KINDS.joinToString(",") {
+    val permissions = KINDS_THE_RELAY_SIGNS_WITH_THE_OWNER_KEY.joinToString(",") {
         Permission(CommandType.SIGN_EVENT, it).toJson()
     }
     intent.putExtra("permissions", "[$permissions]")

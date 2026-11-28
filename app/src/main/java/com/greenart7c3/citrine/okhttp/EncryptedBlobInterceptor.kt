@@ -47,6 +47,7 @@ class EncryptedBlobInterceptor(
 
     // Blobs encrypted by implementations that used the hex nonce's UTF-8 bytes as the
     // actual GCM nonce; retried when the standard decryption fails to authenticate.
+    @Suppress("NoComments")
     private fun AESGCM.copyUsingUTF8Nonce(): AESGCM = AESGCM(
         keyBytes,
         nonce.toHexKey().toByteArray(Charsets.UTF_8),
@@ -69,9 +70,8 @@ class EncryptedBlobInterceptor(
         if (response.isSuccessful) {
             return response.decryptOrNullWithErrorCorrection(cipher) ?: response
         } else {
-            // Log redirections to be able to use the cipher.
-            response.header("Location")?.let {
-                cache.add(it, cipher)
+            response.header("Location")?.let { redirectTarget ->
+                cache.add(redirectTarget, cipher)
             }
         }
         return response

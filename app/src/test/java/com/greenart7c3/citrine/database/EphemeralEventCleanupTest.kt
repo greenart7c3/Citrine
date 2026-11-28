@@ -35,7 +35,6 @@ class EphemeralEventCleanupTest {
         val dao = db.eventDao()
         assertFalse(dao.hasEphemeralEvents())
 
-        // Non-ephemeral events (kind 1 and kind 30000) do not count as ephemeral.
         dao.insertEvents(
             listOf(
                 EventEntity(id = "note1", pubkey = "pk", createdAt = 100L, kind = 1, content = "hi", sig = "s"),
@@ -44,7 +43,6 @@ class EphemeralEventCleanupTest {
         )
         assertFalse(dao.hasEphemeralEvents())
 
-        // Insert one old ephemeral event and one recent ephemeral event.
         dao.insertEvents(
             listOf(
                 EventEntity(id = "eph_old", pubkey = "pk", createdAt = 100L, kind = 20000, content = "", sig = "s"),
@@ -53,12 +51,12 @@ class EphemeralEventCleanupTest {
         )
         assertTrue(dao.hasEphemeralEvents())
 
-        // Deleting before 150 removes only the old ephemeral event; the recent one keeps hasEphemeralEvents true.
-        dao.deleteEphemeralEvents(150L)
+        val betweenOldAndRecentEphemeral = 150L
+        dao.deleteEphemeralEvents(betweenOldAndRecentEphemeral)
         assertTrue(dao.hasEphemeralEvents())
 
-        // Deleting before 250 clears all remaining ephemeral events while leaving regular events intact.
-        dao.deleteEphemeralEvents(250L)
+        val afterEveryEphemeral = 250L
+        dao.deleteEphemeralEvents(afterEveryEphemeral)
         assertFalse(dao.hasEphemeralEvents())
         assertTrue(dao.existsById("note1"))
         assertTrue(dao.existsById("addr1"))

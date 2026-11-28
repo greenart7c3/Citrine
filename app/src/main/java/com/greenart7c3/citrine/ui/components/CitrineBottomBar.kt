@@ -43,7 +43,7 @@ fun CitrineBottomBar(
                 )
             }
         }
-        isHiddenRoute -> { /* no bottom bar */ }
+        isHiddenRoute -> Unit
         else -> {
             NavigationBar(modifier = modifier, tonalElevation = 0.dp) {
                 navigationItems.forEach {

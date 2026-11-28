@@ -86,10 +86,9 @@ class CrashReportCacheTest {
         val afterTwo = CrashReportCache.combineAndCap(r1, r2, maxChars = 100)
         assertEquals("$r1$sep$r2", afterTwo)
 
-        // Adding r3 pushes total past 100 chars; oldest (r1) is dropped, r2 + r3 remain intact.
-        val afterThree = CrashReportCache.combineAndCap(afterTwo, r3, maxChars = 100)
-        assertEquals("$r2$sep$r3", afterThree)
-        assertTrue(afterThree.length <= 100)
+        val afterThreeDroppingTheOldest = CrashReportCache.combineAndCap(afterTwo, r3, maxChars = 100)
+        assertEquals("$r2$sep$r3", afterThreeDroppingTheOldest)
+        assertTrue(afterThreeDroppingTheOldest.length <= 100)
     }
 
     @Test

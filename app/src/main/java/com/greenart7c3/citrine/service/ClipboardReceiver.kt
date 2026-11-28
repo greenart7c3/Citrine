@@ -16,12 +16,10 @@ class ClipboardReceiver : BroadcastReceiver() {
         if (intent != null && intent.hasExtra("url")) {
             val url = intent.getStringExtra("url")
 
-            // Copy the URL to the clipboard
             val clipboard: ClipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("Copied URL", url)
             clipboard.setPrimaryClip(clip)
 
-            // Show a toast message
             Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
         } else if (intent != null && intent.hasExtra("job")) {
             val citrine = context.citrine

@@ -67,6 +67,7 @@ object NsiteManager {
 
     // Common raster icon filenames, in priority order. Coil can't decode .ico/.svg, so those
     // are intentionally excluded — a site with only those simply shows the placeholder.
+    @Suppress("NoComments")
     private val ICON_NAMES = listOf(
         "favicon.png",
         "icon.png",
@@ -111,8 +112,6 @@ object NsiteManager {
     private val _discoveryState = MutableStateFlow<DiscoveryState>(DiscoveryState.Idle)
     val discoveryState: StateFlow<DiscoveryState> = _discoveryState.asStateFlow()
 
-    // region relays
-
     private fun normalizeRemote(raw: String): NormalizedRelayUrl? {
         val n = RelayUrlNormalizer.normalizeOrNull(raw) ?: return null
         if (relayClient.isPrivateIp(n.url)) return null
@@ -120,16 +119,10 @@ object NsiteManager {
         return NormalizedRelayUrl(url = n.url)
     }
 
-    private fun discoveryRelays(): List<NormalizedRelayUrl> {
-        // nsites use their own relay set only — never the aggregator relays. An empty user
-        // list falls back to the built-in defaults.
+    private fun nsiteOnlyRelaysOrDefaults(): List<NormalizedRelayUrl> {
         val raw = Settings.nsiteRelays.ifEmpty { Settings.DEFAULT_NSITE_RELAYS }
         return raw.mapNotNull { normalizeRemote(it) }.ifEmpty { Settings.DEFAULT_NSITE_RELAYS.mapNotNull { normalizeRemote(it) } }
     }
-
-    // endregion
-
-    // region manifest parsing
 
     private fun dTagOf(ev: Event): String = ev.tags.firstOrNull { it.size >= 2 && it[0] == "d" }?.get(1) ?: ""
 
@@ -141,21 +134,17 @@ object NsiteManager {
 
     private fun aggregateHashOf(ev: Event): String = ev.tags.firstOrNull { it.size >= 3 && it[0] == "x" && it[2] == "aggregate" }?.get(1) ?: ""
 
-    /** The nsite's own human-readable name from the manifest `title` tag, if present. */
     private fun titleOf(ev: Event): String = ev.tags.firstOrNull { it.size >= 2 && it[0] == "title" }?.get(1)?.takeIf { it.isNotBlank() } ?: ""
 
-    /** The nsite's description/summary from the manifest, if present. */
     private fun descriptionOf(ev: Event): String = ev.tags.firstOrNull { it.size >= 2 && it[0] == "description" }?.get(1)?.takeIf { it.isNotBlank() }
         ?: ev.tags.firstOrNull { it.size >= 2 && it[0] == "summary" }?.get(1)?.takeIf { it.isNotBlank() } ?: ""
 
-    /** Returns (urlPath, sha256) for every `path` tag. */
-    private fun pathTagsOf(ev: Event): List<Pair<String, String>> = ev.tags.filter { it.size >= 3 && it[0] == "path" }.map { it[1] to it[2] }
+    private fun urlPathToSha256TagsOf(ev: Event): List<Pair<String, String>> = ev.tags.filter { it.size >= 3 && it[0] == "path" }.map { it[1] to it[2] }
 
     private fun serverHintsOf(ev: Event): List<String> = ev.tags.filter { it.size >= 2 && it[0] == "server" }.map { it[1] }
 
-    /** sha256 of the highest-priority decodable icon file mapped by a `path` tag, if any. */
-    private fun iconHashOf(ev: Event): String? {
-        val paths = pathTagsOf(ev)
+    private fun highestPriorityIconHashOf(ev: Event): String? {
+        val paths = urlPathToSha256TagsOf(ev)
         for (name in ICON_NAMES) {
             val match = paths.firstOrNull { (urlPath, _) -> urlPath.substringAfterLast('/').lowercase() == name }
             if (match != null) return match.second
@@ -163,9 +152,8 @@ object NsiteManager {
         return null
     }
 
-    /** Builds a Blossom URL for an icon, or null when there's no icon hash. */
-    private fun iconUrlOf(ev: Event): String? {
-        val hash = iconHashOf(ev) ?: return null
+    private fun blossomIconUrlOf(ev: Event): String? {
+        val hash = highestPriorityIconHashOf(ev) ?: return null
         val server = serverHintsOf(ev).mapNotNull { normalizeServerUrl(it) }.firstOrNull()
             ?: DEFAULT_BLOSSOM_SERVERS.first()
         return "$server/$hash"
@@ -193,7 +181,6 @@ object NsiteManager {
         }
     }
 
-    /** The author's avatar URL from their kind-0 metadata `picture` field, if present. */
     private fun pictureUrlOf(metadata: Event?): String {
         if (metadata == null) return ""
         return try {
@@ -203,31 +190,30 @@ object NsiteManager {
         }
     }
 
-    /** "nsite" + first 16 hex chars of sha256(address): a deterministic, hostname-safe slug. */
-    private fun folderNameFor(address: String): String = "nsite" + sha256Hex(address.toByteArray()).take(16)
+    private fun hostnameSafeFolderNameFor(address: String): String = "nsite" + sha256Hex(address.toByteArray()).take(16)
 
     private fun shortPubkey(pubkey: String): String = if (pubkey.length > 12) "${pubkey.take(8)}…${pubkey.takeLast(4)}" else pubkey
 
-    // endregion
-
-    // region discovery
+    private fun newestManifestPerAddress(manifests: List<Event>): HashMap<String, Event> {
+        val byAddress = HashMap<String, Event>()
+        for (ev in manifests) {
+            val addr = addressOf(ev)
+            val prev = byAddress[addr]
+            if (prev == null || prev.createdAt < ev.createdAt) byAddress[addr] = ev
+        }
+        return byAddress
+    }
 
     suspend fun discover(): List<DiscoveredNsite> {
         _discoveryState.value = DiscoveryState.Loading
         return try {
-            val relays = discoveryRelays()
+            val relays = nsiteOnlyRelaysOrDefaults()
             if (relays.isEmpty()) {
                 _discoveryState.value = DiscoveryState.Loaded(emptyList())
                 return emptyList()
             }
             val manifests = collectManifests(relays)
-            // Dedupe by address keeping the newest manifest.
-            val byAddress = HashMap<String, Event>()
-            for (ev in manifests) {
-                val addr = addressOf(ev)
-                val prev = byAddress[addr]
-                if (prev == null || prev.createdAt < ev.createdAt) byAddress[addr] = ev
-            }
+            val byAddress = newestManifestPerAddress(manifests)
 
             val names = fetchDisplayNames(byAddress.values.map { it.pubKey }.toSet(), relays)
             val installedAddresses = Settings.nsites.map { it.address }.toSet()
@@ -236,8 +222,6 @@ object NsiteManager {
                 val addr = addressOf(ev)
                 val dTag = if (ev.kind == KIND_NAMED_SITE) dTagOf(ev) else ""
                 val authorName = displayNameOf(names[ev.pubKey], "")
-                // Prefer the nsite's own title; fall back to the d tag, then the author's
-                // profile name, then a short pubkey.
                 val name = titleOf(ev).ifBlank { dTag.ifBlank { authorName.ifBlank { shortPubkey(ev.pubKey) } } }
                 DiscoveredNsite(
                     address = addr,
@@ -250,7 +234,7 @@ object NsiteManager {
                     authorPicture = pictureUrlOf(names[ev.pubKey]),
                     aggregateHash = aggregateHashOf(ev),
                     serverHints = serverHintsOf(ev),
-                    iconUrl = iconUrlOf(ev),
+                    iconUrl = blossomIconUrlOf(ev),
                     lastUpdated = ev.createdAt,
                     alreadyInstalled = installedAddresses.contains(addr),
                 )
@@ -376,10 +360,6 @@ object NsiteManager {
         return results
     }
 
-    // endregion
-
-    // region single fetches
-
     private suspend fun fetchManifest(
         pubkey: String,
         kind: Int,
@@ -427,10 +407,6 @@ object NsiteManager {
         return trimmed
     }
 
-    // endregion
-
-    // region install / update
-
     /** Installs an nsite discovered via [discover]. Returns the stored [NsiteInfo] or a failure. */
     suspend fun install(
         discovered: DiscoveredNsite,
@@ -439,7 +415,7 @@ object NsiteManager {
         if (Citrine.isImportingEvents) return@withContext Result.failure(IllegalStateException("Busy importing events"))
         if (!installing.compareAndSet(false, true)) return@withContext Result.failure(IllegalStateException("Another nsite operation is running"))
         try {
-            val relays = discoveryRelays()
+            val relays = nsiteOnlyRelaysOrDefaults()
             val manifest = fetchManifest(discovered.pubkey, discovered.kind, discovered.dTag, relays)
                 ?: return@withContext Result.failure(IllegalStateException("Could not fetch manifest"))
             downloadAndStore(discovered.address, discovered.pubkey, discovered.kind, discovered.dTag, discovered.displayName, manifest, relays, onProgress = onProgress)
@@ -454,7 +430,7 @@ object NsiteManager {
         if (!installing.compareAndSet(false, true)) return@withContext Result.failure(IllegalStateException("Another nsite operation is running"))
         try {
             val nsite = update.nsite
-            val relays = discoveryRelays()
+            val relays = nsiteOnlyRelaysOrDefaults()
             downloadAndStore(nsite.address, nsite.pubkey, nsite.kind, nsite.dTag, nsite.displayName, update.newManifest, relays, nsite.autoUpdate)
         } finally {
             installing.set(false)
@@ -464,7 +440,7 @@ object NsiteManager {
     suspend fun applyUpdateByAddress(address: String): Result<NsiteInfo> {
         val nsite = Settings.nsites.firstOrNull { it.address == address }
             ?: return Result.failure(IllegalStateException("nsite not installed"))
-        val relays = discoveryRelays()
+        val relays = nsiteOnlyRelaysOrDefaults()
         val manifest = fetchManifest(nsite.pubkey, nsite.kind, nsite.dTag, relays)
             ?: return Result.failure(IllegalStateException("Could not fetch manifest"))
         return applyUpdate(NsiteUpdate(nsite, manifest, aggregateHashOf(manifest)))
@@ -481,13 +457,13 @@ object NsiteManager {
         autoUpdate: Boolean = false,
         onProgress: ((downloaded: Int, total: Int) -> Unit)? = null,
     ): Result<NsiteInfo> {
-        val paths = pathTagsOf(manifest)
+        val paths = urlPathToSha256TagsOf(manifest)
         if (paths.isEmpty()) return Result.failure(IllegalStateException("Manifest has no files"))
 
         val servers = resolveServers(pubkey, manifest, relays)
         if (servers.isEmpty()) return Result.failure(IllegalStateException("No blossom servers found"))
 
-        val folderName = folderNameFor(address)
+        val folderName = hostnameSafeFolderNameFor(address)
         return installFolder(folderName, paths, servers, onProgress).map {
             val info = NsiteInfo(
                 address = address,
@@ -520,7 +496,6 @@ object NsiteManager {
 
         downloadInto(tmpDir, paths, servers, onProgress)?.let { return Result.failure(it) }
 
-        // Swap tmp into place.
         rootDir.deleteRecursively()
         if (!tmpDir.renameTo(rootDir)) {
             tmpDir.deleteRecursively()
@@ -555,7 +530,7 @@ object NsiteManager {
         if (!isInside(outFile, tmpCanonical)) {
             return IllegalStateException("Illegal path in manifest: $urlPath")
         }
-        val bytes = downloadBlob(servers, sha256)
+        val bytes = downloadSha256VerifiedBlob(servers, sha256)
             ?: return IllegalStateException("Failed to download $urlPath")
         outFile.parentFile?.mkdirs()
         outFile.writeBytes(bytes)
@@ -564,8 +539,7 @@ object NsiteManager {
 
     private fun isInside(file: File, dir: File): Boolean = file.path == dir.path || file.path.startsWith(dir.path + File.separator)
 
-    /** Downloads a blob, trying each server in order and verifying its sha256. */
-    private fun downloadBlob(servers: List<String>, sha256: String): ByteArray? {
+    private fun downloadSha256VerifiedBlob(servers: List<String>, sha256: String): ByteArray? {
         val client = HttpClientManager.getHttpClient(Settings.proxyAllUrls)
         for (server in servers) {
             try {
@@ -586,19 +560,14 @@ object NsiteManager {
         return null
     }
 
-    // endregion
-
-    // region update check
-
     /** Re-fetches every installed manifest and returns the ones whose aggregate hash changed. */
     suspend fun checkForUpdates(): List<NsiteUpdate> {
-        val relays = discoveryRelays()
+        val relays = nsiteOnlyRelaysOrDefaults()
         val updates = mutableListOf<NsiteUpdate>()
         val current = Settings.nsites.toList()
         for (nsite in current) {
             val manifest = fetchManifest(nsite.pubkey, nsite.kind, nsite.dTag, relays) ?: continue
             val newHash = aggregateHashOf(manifest)
-            // Record the check time regardless of whether content changed.
             updateLastChecked(nsite.address, TimeUtils.now())
             if (newHash.isNotBlank() && newHash != nsite.aggregateHash) {
                 updates.add(NsiteUpdate(nsite, manifest, newHash))
@@ -634,8 +603,6 @@ object NsiteManager {
         Settings.nsites[idx] = Settings.nsites[idx].copy(lastChecked = time)
         LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
     }
-
-    // endregion
 
     private fun sha256Hex(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)

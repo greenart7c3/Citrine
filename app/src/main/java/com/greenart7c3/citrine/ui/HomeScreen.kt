@@ -616,7 +616,6 @@ private fun ColumnScope.ToolButtons(
     ElevatedButton(
         modifier = Modifier.fillMaxWidth(),
         onClick = {
-            // TODO: Replace this with a setup screen to allow automatic download in background
             onNavigate(Route.DownloadYourEventsUserScreen.route)
         },
         content = {
