@@ -221,11 +221,22 @@ job and the crash report cache each move into a class of their own that
 `Citrine` constructs and holds, so `Citrine` is left with wiring and the
 Application callbacks.
 
-### 6. Clear the mechanical Compose findings
+### 6. Clear the mechanical Compose findings (done)
 
 `ModifierMissing`, `ModifierWithoutDefault`, `ComposableParamOrder`,
 `LambdaParameterEventTrailing`, `MultipleEmitters`, `ViewModelInjection`: one rule
 per change, regenerating the baseline each time.
+
+Done: every composable that emits UI takes `modifier: Modifier = Modifier` and
+applies it at its root (21 `ModifierMissing`, 4 `ModifierWithoutDefault`; callers
+keep the default, so nothing renders differently), required parameters and event
+callbacks come before the optional ones (10 `ComposableParamOrder`, 10
+`LambdaParameterEventTrailing`; trailing-lambda callers name the callback), and
+`RebroadcastProgress` is a `ColumnScope` extension rather than wrapping its rows in a
+`Column` of its own, which would drop the parent's spacing (`MultipleEmitters`).
+46 entries in one change. The `ViewModelInjection` entry for `CitrineScaffold`'s
+`HomeViewModel` stays until step 2 hoists `HomeScreen`'s state: as a default
+parameter it would only become a `ViewModelForwarding` finding.
 
 ### 7. Clear the remaining baseline findings
 
