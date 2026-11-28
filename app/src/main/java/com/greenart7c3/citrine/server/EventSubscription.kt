@@ -55,8 +55,7 @@ object EventSubscription {
         this.reportOutOfMemory = reportOutOfMemory
     }
 
-    // NIP-01: subscription ids are managed independently per connection. The wire id
-    // stays the client-sent value; only the cache key is connection-scoped.
+    // NIP-01 (https://github.com/nostr-protocol/nips/blob/master/01.md): subscription ids are per connection; the wire id stays the client-sent one.
     private fun cacheKey(connection: Connection, id: String): String = "${connection.name}:$id"
 
     fun count(): Int = subscriptions.size()
@@ -71,13 +70,9 @@ object EventSubscription {
                 val sub = manager.subscription
                 if (sub.count) continue
                 if (sub.connection.session.outgoing.isClosedForSend) {
-                    // Drop closed subscriptions so future fanouts skip them entirely.
                     close(sub.connection, sub.id)
                     continue
                 }
-                // NIP-29: never live-push private-group events to connections that are
-                // not authenticated as a member (stored-query reads are gated the same
-                // way in EventRepository.subscribe).
                 if (sub.filters.any { it.test(event) } && GroupManager.canRead(event, sub.connection)) {
                     val json = eventJsonStr ?: ENVELOPE_MAPPER.writeValueAsString(event.toJsonObject()).also { eventJsonStr = it }
                     sub.connection.trySend("[\"EVENT\",${sub.escapedId},$json]")
@@ -123,6 +118,12 @@ object EventSubscription {
     @OptIn(DelicateCoroutinesApi::class)
     fun containsConnection(connection: Connection): Boolean = subscriptions.snapshot().values.any { it.subscription.connection.name == connection.name && !it.subscription.connection.session.outgoing.isClosedForSend }
 
+    /**
+     * Runs [filters] for [connection] and, for a REQ, registers the subscription for live
+     * fanout, replacing the connection's subscription with the same id. NIP-45 COUNT
+     * subscriptions ([count]) answer once and are never registered, so they neither evict a
+     * same-id REQ subscription nor receive live EVENT fanout.
+     */
     suspend fun subscribe(
         subscriptionId: String,
         filters: Set<EventFilter>,
@@ -146,8 +147,6 @@ object EventSubscription {
             ),
             reportOutOfMemory,
         )
-        // NIP-45: COUNT subscriptions answer once and are never registered, so they
-        // neither evict a same-id REQ subscription nor receive live EVENT fanout.
         if (!count) {
             subscriptions.put(
                 cacheKey(connection, subscriptionId),

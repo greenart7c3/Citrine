@@ -7,14 +7,16 @@ import com.greenart7c3.citrine.json.JacksonMapper
 const val DEFAULT_MAX_EVENT_SIZE = 1_048_576
 
 object Settings {
-    // Event kinds that are signed artifacts never meant to be published to a relay as
-    // standalone events. They are rejected at ingestion with an OK false "blocked:" response
-    // and never stored:
-    //   - 13    NIP-59 seal (inner layer, only valid wrapped in a gift wrap)
-    //   - 9734  NIP-57 zap request (sent to the LNURL callback, not relays)
-    //   - 22242 NIP-42 client auth (carried only in ["AUTH", ...] frames)
-    //   - 24242 Blossom (NIP-B7) blob auth (HTTP Authorization header artifact)
-    //   - 27235 NIP-98 HTTP auth (HTTP Authorization header artifact)
+    /**
+     * Event kinds that are signed artifacts never meant to be published to a relay as
+     * standalone events. They are rejected at ingestion with an OK false "blocked:" response
+     * and never stored:
+     *   - 13    NIP-59 seal (inner layer, only valid wrapped in a gift wrap)
+     *   - 9734  NIP-57 zap request (sent to the LNURL callback, not relays)
+     *   - 22242 NIP-42 client auth (carried only in ["AUTH", ...] frames)
+     *   - 24242 Blossom (NIP-B7) blob auth (HTTP Authorization header artifact)
+     *   - 27235 NIP-98 HTTP auth (HTTP Authorization header artifact)
+     */
     val DEFAULT_REJECTED_KINDS = setOf(13, 9734, 22242, 24242, 27235)
 
     val DEFAULT_AGGREGATOR_KINDS = setOf(0, 1, 3, 5, 6, 7, 1111, 10000, 10002, 30023)
@@ -30,8 +32,10 @@ object Settings {
         "wss://directory.yabu.me/",
     )
 
-    // Suggested relays for discovering nsites (NIP-5A). Used by the "reset to default" action
-    // in the nsite relay editor; an empty user list falls back to the aggregator relays.
+    /**
+     * Suggested relays for discovering nsites (NIP-5A). Used by the "reset to default" action
+     * in the nsite relay editor; an empty user list falls back to the aggregator relays.
+     */
     val DEFAULT_NSITE_RELAYS = setOf(
         "wss://nsite.run/",
         "wss://nos.lol/",
@@ -40,8 +44,10 @@ object Settings {
 
     var allowedKinds: Set<Int> = emptySet()
 
-    // Signed artifacts that must never be stored as standalone events (see DEFAULT_REJECTED_KINDS).
-    // Events whose kind is in this set are rejected at ingestion before any storage.
+    /**
+     * Signed artifacts that must never be stored as standalone events (see [DEFAULT_REJECTED_KINDS]).
+     * Events whose kind is in this set are rejected at ingestion before any storage.
+     */
     var rejectedKinds: Set<Int> = DEFAULT_REJECTED_KINDS
     var allowedPubKeys: Set<String> = emptySet()
     var allowedTaggedPubKeys: Set<String> = emptySet()
@@ -60,17 +66,21 @@ object Settings {
     var autoBackup = false
     var autoBackupFolder = ""
 
-    // Amber (NIP-55) signer package that holds the relay owner's key. Set together with
-    // [ownerPubkey] by the "login with Amber" flow in relay info settings — the owner
-    // pubkey can only be configured through that login, never typed manually. NIP-29
-    // groups are always managed: when an owner is configured their key is the relay
-    // identity, otherwise a locally generated key signs the group metadata
-    // (see RelayIdentity). Foreign group ids always pass through unmanaged.
+    /**
+     * Amber (NIP-55) signer package that holds the relay owner's key. Set together with
+     * [ownerPubkey] by the "login with Amber" flow in relay info settings — the owner
+     * pubkey can only be configured through that login, never typed manually. NIP-29
+     * groups are always managed: when an owner is configured their key is the relay
+     * identity, otherwise a locally generated key signs the group metadata
+     * (see RelayIdentity). Foreign group ids always pass through unmanaged.
+     */
     var relaySignerPackageName = ""
 
-    // When true, ephemeral events that no open subscription was listening to receive a
-    // NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so
-    // unhandled ephemeral events are simply acknowledged with a plain OK.
+    /**
+     * When true, ephemeral events that no open subscription was listening to receive a
+     * NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so
+     * unhandled ephemeral events are simply acknowledged with a plain OK.
+     */
     var sendMuteResponse = false
     var listenToPokeyBroadcasts = true
     var startOnBoot = true
@@ -81,23 +91,36 @@ object Settings {
     var onionHostname = ""
     var webClients = mutableMapOf<String, String>()
 
-    // Installed nsites (NIP-5A static websites). Downloaded to filesDir/nsites/<folderName>
-    // and served through the same localhost web-client mechanism as [webClients].
+    /**
+     * Installed nsites (NIP-5A static websites). Downloaded to filesDir/nsites/<folderName>
+     * and served through the same localhost web-client mechanism as [webClients].
+     */
     var nsites: MutableList<NsiteInfo> = mutableListOf()
 
-    // Epoch seconds of the last daily nsite update check. Gated like [lastBackup] so the
-    // 100s service timer only runs the check roughly once per day.
+    /**
+     * Epoch seconds of the last daily nsite update check. Gated like [lastBackup] so the
+     * 100s service timer only runs the check roughly once per day.
+     */
     var lastNsiteCheck: Long = 0L
 
-    // Relays queried to discover nsites. nsites use only this set (never the aggregator
-    // relays); an empty list falls back to [DEFAULT_NSITE_RELAYS].
+    /**
+     * Relays queried to discover nsites. nsites use only this set (never the aggregator
+     * relays); an empty list falls back to [DEFAULT_NSITE_RELAYS].
+     */
     var nsiteRelays: Set<String> = DEFAULT_NSITE_RELAYS
 
-    // NIP-86 (Relay Management API) state. Maps are kept as ConcurrentHashMap
-    // because they are mutated by the HTTP RPC route and read concurrently by
-    // verifyEvent() on the WebSocket dispatcher.
+    /**
+     * NIP-86 (Relay Management API) banned pubkeys. The NIP-86 maps are ConcurrentHashMaps
+     * because they are mutated by the HTTP RPC route and read concurrently by
+     * verifyEvent() on the WebSocket dispatcher. The bans apply to every event the relay
+     * stores, including the ones the relay aggregator mirrors in.
+     */
     var bannedPubKeys: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+
+    /** NIP-86 banned event ids, concurrent like [bannedPubKeys]. */
     var bannedEventIds: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
+
+    /** NIP-86 blocked IPs, concurrent like [bannedPubKeys]. */
     var blockedIps: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
 
     var relayAggregatorEnabled = false
@@ -107,51 +130,71 @@ object Settings {
     var relayAggregatorIncludeTagged = true
     var relayAggregatorLastSync: Long = 0L
 
-    // Relays the aggregator listens to when no pubkey is configured — plain kinds+since
-    // subscription, no author filter. Also usable as an explicit extra relay set.
+    /**
+     * Relays the aggregator listens to when no pubkey is configured — plain kinds+since
+     * subscription, no author filter. Also usable as an explicit extra relay set.
+     */
     var relayAggregatorExtraRelays: Set<String> = emptySet()
 
-    // External aggregator-style relays (e.g. wss://aggr.nostr.land) that mirror events
-    // from many upstreams. Subscribed for the full author set on every refresh, in
-    // addition to each author's per-relay NIP-65 routing.
+    /**
+     * External aggregator-style relays (e.g. wss://aggr.nostr.land) that mirror events
+     * from many upstreams. Subscribed for the full author set on every refresh, in
+     * addition to each author's per-relay NIP-65 routing.
+     */
     var relayAggregatorSourceRelays: Set<String> = DEFAULT_AGGREGATOR_SOURCE_RELAYS
 
-    // Relays consulted only to look up NIP-65 (kind 10002), contact-list (kind 3), and
-    // mute-list (kind 10000) records when not already cached locally. An empty user
-    // value falls back to DEFAULT_NIP65_INDEXER_RELAYS at read time so NIP-65 lookups
-    // never silently break.
+    /**
+     * Relays consulted only to look up NIP-65 (kind 10002), contact-list (kind 3), and
+     * mute-list (kind 10000) records when not already cached locally. An empty user
+     * value falls back to [DEFAULT_NIP65_INDEXER_RELAYS] at read time so NIP-65 lookups
+     * never silently break.
+     */
     var relayAggregatorIndexerRelays: Set<String> = DEFAULT_NIP65_INDEXER_RELAYS
 
-    // When true, the aggregator suspends subscriptions whenever the active network is
-    // metered (mobile data or metered Wi-Fi) and resumes once an unmetered network is
-    // available again. Default-on because the aggregator holds many WebSockets open and
-    // is the dominant battery cost on cellular.
+    /**
+     * When true, the aggregator suspends subscriptions whenever the active network is
+     * metered (mobile data or metered Wi-Fi) and resumes once an unmetered network is
+     * available again. Default-on because the aggregator holds many WebSockets open and
+     * is the dominant battery cost on cellular.
+     */
     var relayAggregatorWifiOnly: Boolean = true
 
-    // When true, the aggregator suspends subscriptions whenever the active network lacks
-    // NET_CAPABILITY_NOT_RESTRICTED — i.e., a "limited"/restricted network such as a
-    // captive-portal hotspot or an enterprise network that blocks general internet
-    // traffic. Resumes automatically once an unrestricted network is available.
+    /**
+     * When true, the aggregator suspends subscriptions whenever the active network lacks
+     * NET_CAPABILITY_NOT_RESTRICTED — i.e., a "limited"/restricted network such as a
+     * captive-portal hotspot or an enterprise network that blocks general internet
+     * traffic. Resumes automatically once an unrestricted network is available.
+     */
     var relayAggregatorPauseOnLimitedNetwork: Boolean = true
 
-    // True once the one-shot cleanup of contact lists belonging to authors the owner does
-    // not follow has run (see RelayAggregator.pruneStrangerContactLists). Persisted so a
-    // restart does not re-scan the whole kind-3 set.
+    /**
+     * True once the one-shot cleanup of contact lists belonging to authors the owner does
+     * not follow has run (see pruneStrangerContactLists). Persisted so a
+     * restart does not re-scan the whole kind-3 set.
+     */
     var strangerContactListsPruned: Boolean = false
 
-    // True once the one-shot cleanup of duplicate TagEntity rows left behind by Citrine
-    // 3.0.0–3.2.1 has completed over both databases (see TagDeduplicator.cleanDatabases).
+    /**
+     * True once the one-shot cleanup of duplicate TagEntity rows left behind by Citrine
+     * 3.0.0–3.2.1 has completed over both databases (see TagDeduplicator.cleanDatabases).
+     */
     var duplicateTagsCleaned: Boolean = false
 
-    // External signer used by the aggregator to answer NIP-42 AUTH challenges from upstream
-    // relays. Populated by the "Log in with external signer" flow in settings. When both
-    // fields are set, the aggregator installs a RelayAuthenticator and signs kind-22242
-    // challenges via the configured Amber-compatible signer.
+    /**
+     * Pubkey of the external signer the aggregator uses to answer NIP-42 AUTH challenges from
+     * upstream relays. Populated, with [aggregatorSignerPackageName], by the "Log in with external
+     * signer" flow in settings. When both are set, the aggregator installs a RelayAuthenticator
+     * and signs kind-22242 challenges via the configured Amber-compatible signer.
+     */
     var aggregatorSignerPubkey: String = ""
+
+    /** Package of the signer behind [aggregatorSignerPubkey]. */
     var aggregatorSignerPackageName: String = ""
 
-    // UI preference for the "Show events" screen: when false the per-kind pie chart
-    // and legend are hidden, leaving only the kind list.
+    /**
+     * UI preference for the "Show events" screen: when false the per-kind pie chart
+     * and legend are hidden, leaving only the kind list.
+     */
     var showEventGraph: Boolean = true
 
     fun defaultValues() {

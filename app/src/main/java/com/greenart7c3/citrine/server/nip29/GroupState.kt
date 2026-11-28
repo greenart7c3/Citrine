@@ -30,8 +30,6 @@ object Nip29 {
     const val ROLE_ADMIN = "admin"
     const val ROLE_MEMBER = "member"
 
-    // Group ids are relay-local random strings; cap length and charset so ids stay usable
-    // in d-tags, naddr codes, and SQL without escaping surprises.
     private val GROUP_ID_REGEX = Regex("^[a-zA-Z0-9-_]{1,64}$")
 
     fun isValidGroupId(id: String?): Boolean = id != null && GROUP_ID_REGEX.matches(id)

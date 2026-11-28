@@ -254,7 +254,6 @@ internal class EventStore(
             onEphemeralEventStored()
         }
 
-        // Check if offline and broadcast with WorkManager
         if (isOffline() && appDatabase.eventDao().existsById(event.id)) {
             broadcastWithWorkManager(event.id)
         }

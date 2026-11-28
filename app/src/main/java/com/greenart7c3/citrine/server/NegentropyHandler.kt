@@ -61,19 +61,15 @@ object NegentropyHandler {
             listOf("NEG-ERR", subId, "blocked: query too big", MAX_EVENTS),
         )
 
-        // Each open session holds a materialized id set plus reconciliation state until
-        // the client finishes or closes it; abandoned sessions must not accumulate.
         connection.negentropySessions.size >= MAX_SESSIONS_PER_CONNECTION -> negError(objectMapper, subId, "blocked: too many concurrent sessions")
 
         else -> null
     }
 
     private suspend fun buildStorage(connection: Connection, filter: EventFilter, appDatabase: AppDatabase): StorageVector {
-        // NIP-29: with private groups on the relay, a broad filter's id set could reveal
-        // private-group event ids, so the storage is built from readable events only.
-        val nip29Gate = GroupManager.hasPrivateGroups()
+        val idSetCouldRevealPrivateGroupEvents = GroupManager.hasPrivateGroups()
         return StorageVector().apply {
-            if (nip29Gate) {
+            if (idSetCouldRevealPrivateGroupEvents) {
                 EventRepository.batchedQuery(appDatabase, filter, null) { batch ->
                     for (row in batch) {
                         val event = row.toEvent()

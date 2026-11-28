@@ -34,8 +34,10 @@ object GroupManager {
     internal val groups = ConcurrentHashMap<String, GroupState>()
     internal val locks = ConcurrentHashMap<String, Mutex>()
 
-    // The relay identity: the owner's key when configured (signed via the Amber
-    // external signer), otherwise the relay's generated fallback key.
+    /**
+     * The relay identity: the owner's key when configured (signed via the Amber
+     * external signer), otherwise the relay's generated fallback key.
+     */
     val relayPubKey: String
         get() = RelayIdentity.pubKeyHex()
 

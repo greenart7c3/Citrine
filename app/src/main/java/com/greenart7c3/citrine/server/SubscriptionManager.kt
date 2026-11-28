@@ -15,6 +15,12 @@ class SubscriptionManager(
     val subscription: Subscription,
     private val reportOutOfMemory: (OutOfMemoryError) -> Unit,
 ) {
+    /**
+     * Answers the subscription's filters in its own scope. An `OutOfMemoryError` in one
+     * request must not take the whole relay down: the process would die and every other
+     * client would lose its subscription. Instead a copyable diagnostics report is cached,
+     * the client is told why, and only this subscription stops.
+     */
     suspend fun execute() {
         subscription.scope.launch(Dispatchers.IO) {
             if (subscription.connection.session.outgoing.isClosedForSend) {
@@ -58,8 +64,7 @@ class SubscriptionManager(
         }
     }
 
-    // NIP-45: filters are OR'd into a single aggregated count result. No EOSE and no
-    // live registration: a COUNT subscription never receives EVENT fanout.
+    // NIP-45 (https://github.com/nostr-protocol/nips/blob/master/45.md): filters are OR'd into a single count result, with no EOSE.
     private suspend fun executeCount() {
         var total = 0
         for (filter in subscription.filters) {
@@ -94,7 +99,6 @@ class SubscriptionManager(
         subscription.connection.send("[\"COUNT\",${subscription.escapedId},{\"count\":$total}]")
     }
 
-    // Returns true when a CLOSED denial was sent and the caller must stop.
     private suspend fun sendClosedIfDenied(filter: EventFilter): Boolean = when (AuthGate.check(filter, subscription.connection)) {
         AuthGate.Denial.AUTH_REQUIRED -> {
             Log.d(Citrine.TAG, "cancelling subscription auth-required: ${subscription.id}")
@@ -109,11 +113,6 @@ class SubscriptionManager(
         null -> false
     }
 
-    /**
-     * An `OutOfMemoryError` in one request must not take the whole relay down: the process
-     * would die and every other client would lose its subscription. Instead cache a copyable
-     * diagnostics report, tell the client why, and stop only this subscription.
-     */
     private suspend fun failForOutOfMemory(e: OutOfMemoryError) {
         Log.e(Citrine.TAG, "Out of memory answering subscription ${subscription.id}", e)
         runCatching { reportOutOfMemory(e) }

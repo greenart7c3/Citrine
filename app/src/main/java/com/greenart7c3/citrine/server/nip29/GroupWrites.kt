@@ -18,9 +18,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-// Monotonic created_at for relay-signed metadata so a regenerated 39xxx always
-// replaces the previous version even when several regens land in the same second.
 private val lastMetadataStamp = AtomicLong(0)
+
+private fun nextStrictlyIncreasingMetadataCreatedAt(): Long = lastMetadataStamp.updateAndGet { previous -> maxOf(TimeUtils.now(), previous + 1) }
 
 private fun GroupManager.lockFor(groupId: String): Mutex = locks.getOrPut(groupId) { Mutex() }
 
@@ -129,7 +129,7 @@ private suspend fun GroupManager.regenerateMetadataEvents(server: CustomWebSocke
     if (group.isDeleted) return
 
     val signer = RelayIdentity.signer()
-    val createdAt = lastMetadataStamp.updateAndGet { previous -> maxOf(TimeUtils.now(), previous + 1) }
+    val createdAt = nextStrictlyIncreasingMetadataCreatedAt()
 
     listOf(
         Nip29.KIND_GROUP_METADATA to metadataTags(group),
@@ -143,14 +143,13 @@ private suspend fun GroupManager.regenerateMetadataEvents(server: CustomWebSocke
             tags = tags.toTypedArray(),
             content = "",
         )
-        // shouldVerify=false: relay-signed events must not be blocked by the owner's
-        // allowlists or rejected-kinds configuration.
         server.innerProcessEvent(signed, connection = null, shouldVerify = false)
     }
 
-    // An Amber login/logout changes the relay identity; metadata signed by the
-    // previous identity is a distinct addressable event that would linger next to
-    // the fresh copies, so drop it once the new set is stored.
+    deleteMetadataSignedByPreviousRelayIdentity(group)
+}
+
+private suspend fun GroupManager.deleteMetadataSignedByPreviousRelayIdentity(group: GroupState) {
     val db = AppDatabase.getDatabase(context)
     val staleIds = EventRepository.query(
         db,

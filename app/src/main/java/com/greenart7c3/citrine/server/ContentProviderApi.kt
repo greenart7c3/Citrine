@@ -18,7 +18,6 @@ import io.ktor.server.routing.get
 internal fun Route.contentProviderApiRoutes(resolver: ContentResolver, objectMapper: ObjectMapper) {
     val api = ContentProviderApi(resolver, objectMapper)
 
-    // ContentProvider test endpoints (for Postman testing)
     get("/api/events") {
         api.respondEvents(call)
     }
@@ -31,7 +30,6 @@ internal fun Route.contentProviderApiRoutes(resolver: ContentResolver, objectMap
         api.respondEventsByKind(call)
     }
 
-    // HTTP endpoints for testing ContentProvider errors
     get("/api/test/errors/invalid_offset") {
         api.respondRawQuery(call, "content://${CitrineContract.AUTHORITY}/events?offset=-1")
     }

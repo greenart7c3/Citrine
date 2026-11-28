@@ -106,7 +106,6 @@ object Nip29Handler {
 
             Nip29.KIND_CREATE_INVITE -> createInvite(event, group, db)
 
-            // Stored as-is; pin lists are served straight back to clients.
             Nip29.KIND_UPDATE_PIN_LIST -> Nip29Result.Accept()
 
             else -> Nip29Result.NotApplicable
@@ -163,26 +162,20 @@ object Nip29Handler {
             }
         }
         return Nip29Result.Accept {
-            issueMembershipEvent(server, group.id, event.pubKey, add = true)
+            issueRelaySignedMembershipEvent(server, group.id, event.pubKey, add = true)
         }
     }
 
     private fun leaveRequest(event: Event, group: GroupState, server: CustomWebSocketServer): Nip29Result {
         if (!group.isMember(event.pubKey)) {
-            // Nothing to remove; store the request and move on.
             return Nip29Result.Accept()
         }
         return Nip29Result.Accept {
-            issueMembershipEvent(server, group.id, event.pubKey, add = false)
+            issueRelaySignedMembershipEvent(server, group.id, event.pubKey, add = false)
         }
     }
 
-    /**
-     * Signs a kind 9000 (add) or 9001 (remove) with the relay's key and runs it through
-     * the normal pipeline: its own moderation flow (the relay key is always privileged)
-     * applies the membership change and regenerates the 39xxx metadata.
-     */
-    private suspend fun issueMembershipEvent(server: CustomWebSocketServer, groupId: String, pubkey: String, add: Boolean) {
+    private suspend fun issueRelaySignedMembershipEvent(server: CustomWebSocketServer, groupId: String, pubkey: String, add: Boolean) {
         val signer = RelayIdentity.signer()
         val kind = if (add) Nip29.KIND_PUT_USER else Nip29.KIND_REMOVE_USER
         val tags = if (add) {

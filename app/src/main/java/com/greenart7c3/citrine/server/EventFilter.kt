@@ -15,9 +15,11 @@ data class EventFilter(
 ) : Predicate<Event> {
     val searchKeywords: Set<String> = search?.let { tokenizeSearchString(it) } ?: emptySet()
 
+    /**
+     * Whether [event] matches. Cheapest checks first: this runs against every active
+     * subscription for every event inserted into the database.
+     */
     override fun test(event: Event): Boolean {
-        // Cheapest checks first: this runs against every active subscription
-        // for every event inserted into the database.
         if (kinds.isNotEmpty() && event.kind !in kinds) {
             return false
         }

@@ -88,8 +88,6 @@ internal class EventVerifier(private val appDatabase: AppDatabase) {
     }
 
     private fun banRefusal(event: Event, debugLog: Boolean): VerificationResult? {
-        // NIP-86 ban lists — apply unconditionally (even to aggregator-fetched events),
-        // so a banned author can't sneak in via the relay aggregator.
         if (Settings.bannedPubKeys.containsKey(event.pubKey)) {
             if (debugLog) Log.d(Citrine.TAG, "pubkey banned ${event.pubKey}")
             return VerificationResult.BannedPubkey
@@ -102,10 +100,8 @@ internal class EventVerifier(private val appDatabase: AppDatabase) {
     }
 
     private fun allowlistRefusal(event: Event, fromAggregator: Boolean, debugLog: Boolean): VerificationResult? {
-        // Aggregator-fetched events bypass the author/tagged-pubkey allowlists
-        // because the aggregator already validated them against the user's
-        // requested subscription filter before handing them off here.
-        if (!fromAggregator && (Settings.allowedTaggedPubKeys.isNotEmpty() || Settings.allowedPubKeys.isNotEmpty())) {
+        val aggregatorAlreadyMatchedUserFilter = fromAggregator
+        if (!aggregatorAlreadyMatchedUserFilter && (Settings.allowedTaggedPubKeys.isNotEmpty() || Settings.allowedPubKeys.isNotEmpty())) {
             val taggedUsers = event.taggedUsers()
             return taggedPubkeyRefusal(event, taggedUsers, debugLog) ?: authorRefusal(event, taggedUsers, debugLog)
         }
@@ -146,7 +142,7 @@ internal class EventVerifier(private val appDatabase: AppDatabase) {
     }
 
     private fun repostRefusal(event: Event, debugLog: Boolean): VerificationResult? {
-        // NIP-70: reposts of protected events MUST NOT embed the reposted event.
+        // NIP-70 (https://github.com/nostr-protocol/nips/blob/master/70.md): reposts of protected events MUST NOT embed the reposted event.
         if (event.kind == RepostEvent.KIND || event.kind == GenericRepostEvent.KIND) {
             val embedded = try {
                 Event.fromJson(event.content)
@@ -162,8 +158,6 @@ internal class EventVerifier(private val appDatabase: AppDatabase) {
     }
 
     private fun signatureRefusal(event: Event, debugLog: Boolean): VerificationResult? {
-        // Verify the signature before any DB access so invalid events are
-        // rejected without paying for the reads below.
         if (!event.verify()) {
             if (debugLog) Log.d(Citrine.TAG, "event ${event.id} does not have a valid id or signature")
             return VerificationResult.InvalidId
@@ -181,12 +175,10 @@ internal class EventVerifier(private val appDatabase: AppDatabase) {
     }
 
     private suspend fun moderationRefusal(event: Event, debugLog: Boolean): VerificationResult? {
-        // NIP-29: ids removed by a group admin's kind-9005 moderation event stay deleted,
-        // but only for groups this relay manages — mirrored 9005s from foreign groups
-        // must not block re-imports.
         if (GroupManager.hasGroups()) {
             val moderationDeleted = appDatabase.eventDao().getModerationDeletedGroups(event.id)
-            if (moderationDeleted.any { GroupManager.get(it) != null }) {
+            val deletedByModeratorOfManagedGroup = moderationDeleted.any { GroupManager.get(it) != null }
+            if (deletedByModeratorOfManagedGroup) {
                 if (debugLog) Log.d(Citrine.TAG, "Event deleted by group moderation ${event.id}")
                 return VerificationResult.Deleted
             }
