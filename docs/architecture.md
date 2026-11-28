@@ -251,6 +251,16 @@ HTTP/NIP-86/NIP-11 routes, validation) and `CitrineContentProvider` (one functio
 per URI). Removes their `LargeClass`, `LongMethod` and `CyclomaticComplexMethod`
 entries.
 
+Done so far: `CustomWebSocketServer` (1583 → about 380 lines) keeps the
+constructor, `start`/`stop`, the route wiring, the session loop and the
+`innerProcessEvent` orchestration; the rest lives beside it in `server/`, one file
+per job: `RelayMessageHandler` (one function per verb), `EventVerifier` (the
+checks as named functions, chained in the original order), `EventStore`,
+`RefusalReplies`, `RelayInfoDocument`, `ContentProviderApi` and
+`WebClientHosting`. Each `VerificationResult` refusal carries its OK reply as a
+constructor argument, so a new result cannot compile without one
+(`VerificationResultRefusalTest` pins the texts). All 17 of its entries are gone.
+
 ### 5. Split `Citrine`
 
 The outbound client and its WebSocket factory, the ephemeral/expired cleanup
