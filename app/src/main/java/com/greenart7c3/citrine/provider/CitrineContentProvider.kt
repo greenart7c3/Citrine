@@ -524,113 +524,9 @@ class CitrineContentProvider : ContentProvider() {
                 // Extract and validate event data from ContentValues
                 val eventId = values.getAsString(CitrineContract.Events.COLUMN_ID)
                     ?: return@runBlocking QueryResult.error<Uri>("Event ID is required")
-                val pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
-                    ?: return@runBlocking QueryResult.error<Uri>("Pubkey is required")
-                val createdAt = values.getAsLong(CitrineContract.Events.COLUMN_CREATED_AT)
-                    ?: return@runBlocking QueryResult.error<Uri>("CreatedAt is required")
-                val kind = values.getAsInteger(CitrineContract.Events.COLUMN_KIND)
-                    ?: return@runBlocking QueryResult.error<Uri>("Kind is required")
-                val content = values.getAsString(CitrineContract.Events.COLUMN_CONTENT) ?: ""
-                val sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
-                    ?: return@runBlocking QueryResult.error<Uri>("Signature is required")
-
-                // Extract tags from ContentValues if provided
-                // Tags would be provided as a separate ContentValues or JSON string
-                // For now, we'll create event without tags and let validation handle it
-                val tags = emptyArray<Array<String>>()
-
-                // Create Event object
-                val event: Event = EventFactory.create(
-                    id = eventId,
-                    pubKey = pubkey,
-                    createdAt = createdAt,
-                    kind = kind,
-                    content = content,
-                    sig = sig,
-                    tags = tags,
-                )
-
-                // Validate and process event using the same logic as WebSocket server
-                val server = CustomWebSocketService.server
-                if (server != null) {
-                    val verificationResult = server.innerProcessEvent(event, null, shouldVerify = true)
-
-                    when (verificationResult) {
-                        CustomWebSocketServer.VerificationResult.Valid -> {
-                            // Event was successfully validated and inserted by innerProcessEvent
-                            QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
-                        }
-                        CustomWebSocketServer.VerificationResult.InvalidId -> {
-                            QueryResult.error<Uri>("Event ID hash verification failed")
-                        }
-                        CustomWebSocketServer.VerificationResult.InvalidSignature -> {
-                            QueryResult.error<Uri>("Event signature verification failed")
-                        }
-                        CustomWebSocketServer.VerificationResult.Expired -> {
-                            QueryResult.error<Uri>("Event expired")
-                        }
-                        CustomWebSocketServer.VerificationResult.KindNotAllowed -> {
-                            QueryResult.error<Uri>("Kind not allowed")
-                        }
-                        CustomWebSocketServer.VerificationResult.KindRejected -> {
-                            QueryResult.error<Uri>("Kind ${event.kind} is not accepted by this relay")
-                        }
-                        CustomWebSocketServer.VerificationResult.PubkeyNotAllowed -> {
-                            QueryResult.error<Uri>("Pubkey not allowed")
-                        }
-                        CustomWebSocketServer.VerificationResult.TaggedPubkeyNotAllowed -> {
-                            QueryResult.error<Uri>("Tagged pubkey not allowed")
-                        }
-                        CustomWebSocketServer.VerificationResult.Deleted -> {
-                            QueryResult.error<Uri>("Event deleted")
-                        }
-                        CustomWebSocketServer.VerificationResult.AlreadyInDatabase -> {
-                            // Event already exists, return existing URI
-                            QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
-                        }
-                        CustomWebSocketServer.VerificationResult.TaggedPubKeyMismatch -> {
-                            QueryResult.error<Uri>("Tagged event pubkey mismatch")
-                        }
-                        CustomWebSocketServer.VerificationResult.NewestEventAlreadyInDatabase -> {
-                            QueryResult.error<Uri>("Newest event already in database")
-                        }
-                        CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent -> {
-                            QueryResult.error<Uri>("Authentication required for protected event")
-                        }
-                        CustomWebSocketServer.VerificationResult.ProtectedEventEmbeddedInRepost -> {
-                            QueryResult.error<Uri>("Reposts of protected events must not embed the reposted event")
-                        }
-                        CustomWebSocketServer.VerificationResult.RejectedByNip29 -> {
-                            QueryResult.error<Uri>("Rejected by this relay's NIP-29 group rules")
-                        }
-                        CustomWebSocketServer.VerificationResult.BannedPubkey -> {
-                            QueryResult.error<Uri>("Pubkey is banned")
-                        }
-                        CustomWebSocketServer.VerificationResult.BannedEvent -> {
-                            QueryResult.error<Uri>("Event is banned")
-                        }
-                        CustomWebSocketServer.VerificationResult.EventTooLarge -> {
-                            QueryResult.error<Uri>("Event too large")
-                        }
-                    }
-                } else {
-                    // Server not available, do basic validation and insert
-                    if (!event.verify()) {
-                        return@runBlocking QueryResult.error<Uri>("Event ID hash or signature verification failed")
-                    }
-
-                    // Check if event already exists
-                    val existing = eventDao.getById(eventId)
-                    if (existing != null) {
-                        return@runBlocking QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
-                    }
-
-                    val eventWithTags = event.toEventWithTags()
-                    eventDao.insertEventWithTags(database, eventWithTags, null)
-                    if (event.isEphemeral()) {
-                        context?.citrine?.scheduleEphemeralCleanup(database)
-                    }
-                    QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
+                when (val parsed = eventFromValues(values, eventId)) {
+                    is QueryResult.Error -> parsed
+                    is QueryResult.Success -> storeEvent(parsed.data, eventId)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error inserting event", e)
@@ -645,6 +541,118 @@ class CitrineContentProvider : ContentProvider() {
                 null
             }
         }
+    }
+
+    private fun eventFromValues(values: ContentValues, eventId: String): QueryResult<Event> {
+        val pubkey = values.getAsString(CitrineContract.Events.COLUMN_PUBKEY)
+            ?: return QueryResult.error("Pubkey is required")
+        val createdAt = values.getAsLong(CitrineContract.Events.COLUMN_CREATED_AT)
+            ?: return QueryResult.error("CreatedAt is required")
+        val kind = values.getAsInteger(CitrineContract.Events.COLUMN_KIND)
+            ?: return QueryResult.error("Kind is required")
+        val content = values.getAsString(CitrineContract.Events.COLUMN_CONTENT) ?: ""
+        val sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
+            ?: return QueryResult.error("Signature is required")
+
+        // Extract tags from ContentValues if provided
+        // Tags would be provided as a separate ContentValues or JSON string
+        // For now, we'll create event without tags and let validation handle it
+        val tags = emptyArray<Array<String>>()
+
+        // Create Event object
+        val event: Event = EventFactory.create(
+            id = eventId,
+            pubKey = pubkey,
+            createdAt = createdAt,
+            kind = kind,
+            content = content,
+            sig = sig,
+            tags = tags,
+        )
+        return QueryResult.Success(event)
+    }
+
+    private suspend fun storeEvent(event: Event, eventId: String): QueryResult<Uri> {
+        // Validate and process event using the same logic as WebSocket server
+        val server = CustomWebSocketService.server
+        return if (server != null) {
+            val verificationResult = server.innerProcessEvent(event, null, shouldVerify = true)
+
+            val refusal = verificationFailure(verificationResult) ?: policyRefusal(verificationResult, event)
+            if (refusal == null) {
+                // Event was successfully validated and inserted by innerProcessEvent
+                // Event already exists, return existing URI
+                QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
+            } else {
+                QueryResult.error<Uri>(refusal)
+            }
+        } else {
+            storeWithoutServer(event, eventId)
+        }
+    }
+
+    private fun verificationFailure(result: CustomWebSocketServer.VerificationResult): String? = when (result) {
+        CustomWebSocketServer.VerificationResult.InvalidId -> "Event ID hash verification failed"
+        CustomWebSocketServer.VerificationResult.InvalidSignature -> "Event signature verification failed"
+        CustomWebSocketServer.VerificationResult.Expired -> "Event expired"
+        CustomWebSocketServer.VerificationResult.Deleted -> "Event deleted"
+        CustomWebSocketServer.VerificationResult.TaggedPubKeyMismatch -> "Tagged event pubkey mismatch"
+        CustomWebSocketServer.VerificationResult.NewestEventAlreadyInDatabase -> "Newest event already in database"
+        CustomWebSocketServer.VerificationResult.ProtectedEventEmbeddedInRepost -> "Reposts of protected events must not embed the reposted event"
+        CustomWebSocketServer.VerificationResult.EventTooLarge -> "Event too large"
+        CustomWebSocketServer.VerificationResult.Valid,
+        CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
+        CustomWebSocketServer.VerificationResult.KindNotAllowed,
+        CustomWebSocketServer.VerificationResult.KindRejected,
+        CustomWebSocketServer.VerificationResult.PubkeyNotAllowed,
+        CustomWebSocketServer.VerificationResult.TaggedPubkeyNotAllowed,
+        CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent,
+        CustomWebSocketServer.VerificationResult.RejectedByNip29,
+        CustomWebSocketServer.VerificationResult.BannedPubkey,
+        CustomWebSocketServer.VerificationResult.BannedEvent,
+        -> null
+    }
+
+    private fun policyRefusal(result: CustomWebSocketServer.VerificationResult, event: Event): String? = when (result) {
+        CustomWebSocketServer.VerificationResult.KindNotAllowed -> "Kind not allowed"
+        CustomWebSocketServer.VerificationResult.KindRejected -> "Kind ${event.kind} is not accepted by this relay"
+        CustomWebSocketServer.VerificationResult.PubkeyNotAllowed -> "Pubkey not allowed"
+        CustomWebSocketServer.VerificationResult.TaggedPubkeyNotAllowed -> "Tagged pubkey not allowed"
+        CustomWebSocketServer.VerificationResult.AuthRequiredForProtectedEvent -> "Authentication required for protected event"
+        CustomWebSocketServer.VerificationResult.RejectedByNip29 -> "Rejected by this relay's NIP-29 group rules"
+        CustomWebSocketServer.VerificationResult.BannedPubkey -> "Pubkey is banned"
+        CustomWebSocketServer.VerificationResult.BannedEvent -> "Event is banned"
+        CustomWebSocketServer.VerificationResult.Valid,
+        CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
+        CustomWebSocketServer.VerificationResult.InvalidId,
+        CustomWebSocketServer.VerificationResult.InvalidSignature,
+        CustomWebSocketServer.VerificationResult.Expired,
+        CustomWebSocketServer.VerificationResult.Deleted,
+        CustomWebSocketServer.VerificationResult.TaggedPubKeyMismatch,
+        CustomWebSocketServer.VerificationResult.NewestEventAlreadyInDatabase,
+        CustomWebSocketServer.VerificationResult.ProtectedEventEmbeddedInRepost,
+        CustomWebSocketServer.VerificationResult.EventTooLarge,
+        -> null
+    }
+
+    private suspend fun storeWithoutServer(event: Event, eventId: String): QueryResult<Uri> {
+        // Server not available, do basic validation and insert
+        if (!event.verify()) {
+            return QueryResult.error("Event ID hash or signature verification failed")
+        }
+
+        // Check if event already exists
+        val existing = eventDao.getById(eventId)
+        if (existing != null) {
+            return QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
+        }
+
+        val eventWithTags = event.toEventWithTags()
+        eventDao.insertEventWithTags(database, eventWithTags, null)
+        if (event.isEphemeral()) {
+            context?.citrine?.scheduleEphemeralCleanup(database)
+        }
+        return QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
     }
 
     override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
@@ -672,46 +680,54 @@ class CitrineContentProvider : ContentProvider() {
                 return@runBlocking 0
             }
 
-            // Validate that the auth pubkey matches the event author
-            if (authPubkey == null) {
-                Log.d(TAG, "Delete denied: no auth pubkey provided")
-                throw SecurityException("Authentication required to delete events")
-            }
-
-            if (authPubkey != eventWithTags.event.pubkey) {
-                Log.d(TAG, "Delete denied: auth pubkey $authPubkey does not match event author ${eventWithTags.event.pubkey}")
-                throw SecurityException("Only the event author can delete this event")
-            }
+            requireEventAuthor(authPubkey, eventWithTags)
 
             // If server is available, validate using server logic
             val server = CustomWebSocketService.server
             if (server != null) {
-                val event = eventWithTags.toEvent()
-                // For delete events (kind 5), we need to validate the delete event itself
-                // For regular events, we just check authorization
-                when (val result = server.verifyEvent(event, null, shouldVerify = true)) {
-                    CustomWebSocketServer.VerificationResult.Valid,
-                    CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
-                    -> {
-                        // Event is valid, proceed with deletion
-                        eventDao.delete(listOf(eventId))
-                        1
-                    }
-                    CustomWebSocketServer.VerificationResult.InvalidId -> {
-                        throw SecurityException("Event ID hash verification failed")
-                    }
-                    CustomWebSocketServer.VerificationResult.Deleted -> {
-                        // Already deleted
-                        return@runBlocking 0
-                    }
-                    else -> {
-                        throw SecurityException("Event validation failed: $result")
-                    }
-                }
+                deleteVerified(server, eventWithTags, eventId)
             } else {
                 // Server not available, just delete if authorized
                 eventDao.delete(listOf(eventId))
                 1
+            }
+        }
+    }
+
+    private fun requireEventAuthor(authPubkey: String?, eventWithTags: EventWithTags) {
+        // Validate that the auth pubkey matches the event author
+        if (authPubkey == null) {
+            Log.d(TAG, "Delete denied: no auth pubkey provided")
+            throw SecurityException("Authentication required to delete events")
+        }
+
+        if (authPubkey != eventWithTags.event.pubkey) {
+            Log.d(TAG, "Delete denied: auth pubkey $authPubkey does not match event author ${eventWithTags.event.pubkey}")
+            throw SecurityException("Only the event author can delete this event")
+        }
+    }
+
+    private suspend fun deleteVerified(server: CustomWebSocketServer, eventWithTags: EventWithTags, eventId: String): Int {
+        val event = eventWithTags.toEvent()
+        // For delete events (kind 5), we need to validate the delete event itself
+        // For regular events, we just check authorization
+        return when (val result = server.verifyEvent(event, null, shouldVerify = true)) {
+            CustomWebSocketServer.VerificationResult.Valid,
+            CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
+            -> {
+                // Event is valid, proceed with deletion
+                eventDao.delete(listOf(eventId))
+                1
+            }
+            CustomWebSocketServer.VerificationResult.InvalidId -> {
+                throw SecurityException("Event ID hash verification failed")
+            }
+            CustomWebSocketServer.VerificationResult.Deleted -> {
+                // Already deleted
+                0
+            }
+            else -> {
+                throw SecurityException("Event validation failed: $result")
             }
         }
     }
