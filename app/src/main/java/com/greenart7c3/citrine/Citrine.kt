@@ -13,7 +13,6 @@ import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.okhttp.HttpClientManager
-import com.greenart7c3.citrine.okhttp.OkHttpWebSocket
 import com.greenart7c3.citrine.relays.AppRelayClient
 import com.greenart7c3.citrine.server.EventSubscription
 import com.greenart7c3.citrine.server.OlderThan
@@ -34,7 +33,6 @@ import com.greenart7c3.citrine.service.crashreports.CrashReportSender
 import com.greenart7c3.citrine.service.crashreports.ExitReasons
 import com.greenart7c3.citrine.service.crashreports.ReportAssembler
 import com.greenart7c3.citrine.service.crashreports.UnexpectedCrashSaver
-import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
 import com.vitorpamplona.quartz.utils.TimeUtils
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -73,14 +71,6 @@ class Citrine :
     val applicationScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
     val relayClient: RelayClient = AppRelayClient(applicationScope)
 
-    val factory: OkHttpWebSocket.Builder get() = relayClient.factory
-
-    val client: NostrClient get() = relayClient.client
-
-    fun isOnionUrl(url: String): Boolean = relayClient.isOnionUrl(url)
-
-    fun isPrivateIp(url: String): Boolean = relayClient.isPrivateIp(url)
-
     init {
         EventSubscription.install(applicationScope, exceptionHandler) { error ->
             crashReportCache.appendReport(ReportAssembler(this).buildReport(error))
@@ -101,8 +91,6 @@ class Citrine :
     override fun onCreate() {
         super.onCreate()
 
-        instance = this
-
         Log.init(this)
 
         Thread.setDefaultUncaughtExceptionHandler(UnexpectedCrashSaver(crashReportCache))
@@ -117,7 +105,7 @@ class Citrine :
             }
         }
 
-        client.connect()
+        relayClient.client.connect()
 
         LocalPreferences.loadSettingsFromEncryptedStorage(this)
         if (Settings.listenToPokeyBroadcasts) {
@@ -273,10 +261,6 @@ class Citrine :
             job?.cancelChildren()
             job?.cancel()
         }
-
-        @Volatile
-        lateinit var instance: Citrine
-            private set
     }
 }
 

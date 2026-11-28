@@ -81,6 +81,8 @@ fun HomeScreen(
     storageHelper: StoragePickerHelper,
 ) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
+    val appScope = LocalAppScope.current
     val coroutineScope = rememberCoroutineScope()
     val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
     val noSignerMsg = stringResource(R.string.no_external_signer_installed)
@@ -92,7 +94,7 @@ fun HomeScreen(
         val requestPermissionLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission(),
         ) { _ ->
-            Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+            appScope.launch(Dispatchers.IO) {
                 homeViewModel.start(context)
             }
         }
@@ -172,7 +174,7 @@ fun HomeScreen(
                             homeViewModel.signer = NostrSignerExternal(
                                 returnedKey,
                                 packageName,
-                                Citrine.instance.contentResolver,
+                                appContext.contentResolver,
                             )
 
                             homeViewModel.setPubKey(returnedKey)
@@ -219,7 +221,7 @@ fun HomeScreen(
                 onConfirm = {
                     deleteAllDialog = false
                     Citrine.cancelJob()
-                    Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                    appScope.launch(Dispatchers.IO) {
                         Citrine.job?.join()
                         // Stop the aggregator before wiping the database so its listener
                         // can't ingest new events into tables we're clearing. Restart it
@@ -236,7 +238,7 @@ fun HomeScreen(
                         // cold-start network fetch instead of reusing a now-empty cache.
                         if (resumeAggregator) {
                             Settings.relayAggregatorLastSync = 0L
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, Citrine.instance)
+                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, appContext)
                             RelayAggregator.start(database)
                         }
                     }

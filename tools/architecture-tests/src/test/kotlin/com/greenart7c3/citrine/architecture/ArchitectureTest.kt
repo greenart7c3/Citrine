@@ -65,22 +65,6 @@ class ArchitectureTest {
     }
 
     @Test
-    fun `Citrine instance usage can only shrink`() {
-        val actual = appMain
-            .filter { it.relativePath() != "Citrine.kt" }
-            .filter { citrineInstance.containsMatchIn(it.text) }
-            .map { it.relativePath() }
-            .toSet()
-
-        assertRatchet(
-            "Citrine.instance hands out the whole container: take the dependency through a constructor or parameter " +
-                "instead. Entry points the system constructs are the exception.",
-            actual,
-            citrineInstanceUsers,
-        )
-    }
-
-    @Test
     fun `Context citrine usage can only shrink`() {
         val unimportedCitrineExtensionNotInAHyphenatedName = Regex("""(?<![\w-])citrine(?![\w-])""")
         val containerCastWithoutTheExtension = Regex("""\bas\??\s+(com\.greenart7c3\.citrine\.)?Citrine\b""")
@@ -134,7 +118,6 @@ class ArchitectureTest {
 
     private companion object {
         val databaseOrDaoCallEvenWithoutImport = Regex("""\.(\w*D|d)aos?\(|\bget(History|Log)?Database\(""")
-        val citrineInstance = Regex("""\bCitrine\.instance\b""")
 
         val databaseInUi = setOf(
             "ui/CitrineScaffold.kt",
@@ -146,14 +129,6 @@ class ArchitectureTest {
             "ui/components/DatabaseInfo.kt",
             "ui/settings/AggregatorSettingsScreen.kt",
             "ui/settings/Nip86SettingsScreen.kt",
-        )
-
-        val citrineInstanceUsers = setOf(
-            "service/crashreports/CrashReportScreen.kt",
-            "ui/DownloadYourEventsUserScreen.kt",
-            "ui/HomeScreen.kt",
-            "ui/HomeViewModel.kt",
-            "ui/LogcatViewModel.kt",
         )
 
         val contextCitrineUsers = setOf(

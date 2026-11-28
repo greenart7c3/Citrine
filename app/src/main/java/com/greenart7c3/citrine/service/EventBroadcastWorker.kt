@@ -47,7 +47,7 @@ class EventBroadcastWorker(
             }
 
             // Ensure client is connected
-            val client = applicationContext.citrine.client
+            val client = applicationContext.citrine.relayClient.client
             if (!client.isActive()) {
                 client.connect()
             }

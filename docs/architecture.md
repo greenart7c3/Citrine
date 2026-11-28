@@ -44,12 +44,16 @@ Reads go through `EventRepository` (raw SQL from `EventFilter`s, by design) for
 ### The dependency container
 
 `Citrine` is the Application class and the container: `applicationScope`,
-`client` (the outbound `NostrClient`), the crash report cache and the cleanup
-job. Code reaches it through the static `Citrine.instance`, from 30 files
-(`ui/` included). Two more globals do the same job: the `Settings` object
-(read and written from about 30 files) and the nullable
-`CustomWebSocketService.server`. There are two ViewModels (`HomeViewModel`,
-`LogcatViewModel`) plus the one inside `ui/components/DatabaseInfo.kt`.
+`relayClient` (the `RelayClient`, `data/`), the crash report cache, the Pokey
+listener and the cleanup job. There is no static accessor (step 1 removed
+`Citrine.instance`): code takes its dependencies through its constructor, the
+`object` helpers get them once from `Citrine`'s constructor (`install`), Android
+entry points read the container from their own context (`Context.citrine`) and
+composables read the CompositionLocals `MainActivity` provides
+(`ui/AppDependencies.kt`). Two globals remain: the `Settings` object (read and
+written from about 30 files) and the nullable `CustomWebSocketService.server`.
+There are two ViewModels (`HomeViewModel`, `LogcatViewModel`) plus the one inside
+`ui/components/DatabaseInfo.kt`.
 
 ### Where the pain is
 
@@ -57,8 +61,9 @@ job. Code reaches it through the static `Citrine.instance`, from 30 files
   `server/CustomWebSocketServer.kt` (1579). Next are
   `provider/CitrineContentProvider.kt` (729), `server/EventRepository.kt` (686),
   `database/EventDao.kt` (622) and `service/NsiteManager.kt` (607).
-- `Citrine.instance` is the only way most code gets its dependencies, so almost
-  nothing can be constructed in a test without the Application.
+- `Citrine.instance` was the only way most code got its dependencies (30
+  files), so almost nothing could be constructed in a test without the
+  Application; step 1 removed it.
 - `ui/` reaches Room DAOs directly in 9 files.
 - The detekt baseline holds 1076 grandfathered findings in the app: 936
   `NoComments`, 38 `LongMethod`, 32 `CyclomaticComplexMethod` and about 70
@@ -100,9 +105,8 @@ reproducible-build and dependency-verification footprint small.
 - **Warnings are errors** — `allWarningsAsErrors` in every module; suppress a
   deliberate one at its site.
 - **Architecture tests** (`tools/architecture-tests`, Konsist) — `ui/` does not
-  import Room or call a DAO (ViewModels exempt), `Citrine.instance` cannot spread
-  to a new file, `Context.citrine` stays in the entry points the system
-  constructs, `service/` and `database/` do not depend on Compose UI, and
+  import Room or call a DAO (ViewModels exempt), `Context.citrine` (or a cast to
+  `Citrine`) stays in the entry points the system constructs, `service/` and `database/` do not depend on Compose UI, and
   ViewModels are named `ViewModel`. The
   allow-lists at the bottom of `ArchitectureTest.kt` are ratchets too: they fail
   when an entry no longer violates the rule, so they cannot silently rot.
@@ -123,7 +127,7 @@ baseline), applied to Citrine's own debt.
 Each step is a small, separately mergeable change, and each one should delete
 the baseline or allow-list lines it makes obsolete. Do not add to them.
 
-### 1. Replace `Citrine.instance` with constructor injection
+### 1. Replace `Citrine.instance` with constructor injection (done)
 
 Define the narrow interfaces in `data/` (the settings, the event store, the
 outbound relay client) and have `Citrine` implement or hold them. Pass them in
@@ -145,8 +149,7 @@ passes them to each `Subscription` and `SubscriptionManager`.
 The outbound relay connections are `data/RelayClient` (the Quartz client, its
 WebSocket factory and the proxy, onion and private-address decisions),
 implemented by `relays/AppRelayClient` and held by `Citrine` as `relayClient`.
-`Citrine.client`, `factory`, `isOnionUrl` and `isPrivateIp` forward to it until
-their callers take the `RelayClient` themselves; then the forwarders go.
+Every caller takes the `RelayClient` itself; `Citrine` has no forwarders to it.
 
 The `object` helpers get their narrow dependencies once from `Citrine`'s
 constructor (`install`), like `EventSubscription`: `EventRebroadcaster` and
@@ -163,7 +166,14 @@ CompositionLocals in `ui/AppDependencies.kt` (`LocalRelayClient`,
 provides with `appDependencies(citrine)`, or a plain `LocalContext` where that is
 all they need. `Citrine.cancelJob()` is a companion function (it only touches the
 static `job`), and the Pokey receiver registration is `service/PokeyListener`. A context handed over from the
-constructor is only read once the Application is attached.
+constructor is only read once the Application is attached. The ViewModels take
+their dependencies through a `factory` used as the screen's `viewModel(...)`
+argument (`HomeViewModel.factory(appContext, appScope)`,
+`LogcatViewModel.factory(appContext)`).
+
+Step 1 is done: `Citrine.instance` is gone, and with it its allow-list. What is
+left of the container on the Application is reached only through
+`Context.citrine` in the entry points, which `contextCitrineUsers` pins.
 
 ### 2. Give the big screens ViewModels
 

@@ -12,6 +12,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.anggrayudi.storage.file.extension
 import com.anggrayudi.storage.file.openInputStream
 import com.greenart7c3.citrine.Citrine
@@ -26,6 +29,7 @@ import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +41,10 @@ data class HomeState(
     val pubKey: String = "",
 )
 
-class HomeViewModel : ViewModel() {
+class HomeViewModel(
+    private val appContext: Context,
+    private val appScope: CoroutineScope,
+) : ViewModel() {
     init {
         Log.d(Citrine.TAG, "HomeViewModel init")
     }
@@ -47,7 +54,7 @@ class HomeViewModel : ViewModel() {
     var signer = NostrSignerExternal(
         "",
         "",
-        Citrine.instance.contentResolver,
+        appContext.contentResolver,
     )
 
     suspend fun stop(context: Context) {
@@ -89,7 +96,7 @@ class HomeViewModel : ViewModel() {
         context: Context,
     ) {
         Citrine.cancelJob()
-        Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        Citrine.job = appScope.launch(Dispatchers.IO) {
             ExportDatabaseUtils.exportDatabase(
                 database,
                 context,
@@ -108,10 +115,10 @@ class HomeViewModel : ViewModel() {
         onFinished: () -> Unit,
     ) {
         Citrine.cancelJob()
-        Citrine.job = Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+        Citrine.job = appScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {
-                Citrine.instance.applicationScope.launch(Dispatchers.Main) {
+                appScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.invalid_file_extension),
@@ -177,7 +184,7 @@ class HomeViewModel : ViewModel() {
                 setProgress(context.getString(R.string.imported_events_successfully, linesRead))
                 Citrine.isImportingEvents = false
                 onFinished()
-                Citrine.instance.applicationScope.launch(Dispatchers.Main) {
+                appScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.imported_events_successfully, linesRead),
@@ -188,7 +195,7 @@ class HomeViewModel : ViewModel() {
                 Citrine.isImportingEvents = false
                 if (e is CancellationException) throw e
                 Log.d(Citrine.TAG, e.message ?: "", e)
-                Citrine.instance.applicationScope.launch(Dispatchers.Main) {
+                appScope.launch(Dispatchers.Main) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.import_failed),
@@ -206,8 +213,14 @@ class HomeViewModel : ViewModel() {
         Log.d(Citrine.TAG, "HomeViewModel cleared")
     }
 
+    companion object {
+        fun factory(appContext: Context, appScope: CoroutineScope): ViewModelProvider.Factory = viewModelFactory {
+            initializer { HomeViewModel(appContext, appScope) }
+        }
+    }
+
     fun setProgress(message: String) {
-        val notificationManager = NotificationManagerCompat.from(Citrine.instance)
+        val notificationManager = NotificationManagerCompat.from(appContext)
 
         if (message.isBlank()) {
             notificationManager.cancel(2)
@@ -224,25 +237,25 @@ class HomeViewModel : ViewModel() {
 
         notificationManager.createNotificationChannel(channel)
 
-        val copyIntent = Intent(Citrine.instance, ClipboardReceiver::class.java)
+        val copyIntent = Intent(appContext, ClipboardReceiver::class.java)
         copyIntent.putExtra("job", "cancel")
 
         val copyPendingIntent = PendingIntent.getBroadcast(
-            Citrine.instance,
+            appContext,
             0,
             copyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(Citrine.instance, "citrine")
+        val notification = NotificationCompat.Builder(appContext, "citrine")
             .setContentTitle("Citrine")
             .setContentText(message)
             .setSmallIcon(R.drawable.ic_notification)
             .setOnlyAlertOnce(true)
-            .addAction(R.drawable.ic_launcher_background, Citrine.instance.getString(R.string.cancel), copyPendingIntent)
+            .addAction(R.drawable.ic_launcher_background, appContext.getString(R.string.cancel), copyPendingIntent)
             .build()
 
-        if (ActivityCompat.checkSelfPermission(Citrine.instance, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return
         }
         notificationManager.notify(2, notification)

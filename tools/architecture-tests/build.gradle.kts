@@ -1,5 +1,5 @@
 // Architecture rules the compiler cannot check: which package may import what,
-// the Citrine.instance ratchet, and the shape of the service/database layers.
+// the Context.citrine ratchet, and the shape of the service/database layers.
 // Konsist reads the repository from the file system, so these run under
 // `./gradlew test` (or `:architecture-tests:test`) without touching the app's
 // test classpath. See docs/architecture.md for the target layering.

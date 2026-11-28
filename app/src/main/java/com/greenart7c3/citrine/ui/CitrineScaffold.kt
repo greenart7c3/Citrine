@@ -105,7 +105,7 @@ fun CitrineScaffold(
         val screenWidthDp = configuration.screenWidthDp.dp
         val percentage = (screenWidthDp * 0.93f)
         val verticalPadding = (screenWidthDp - percentage)
-        val homeViewModel: HomeViewModel = viewModel()
+        val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.factory(appContext, appScope))
 
         NavHost(
             navController = navController,

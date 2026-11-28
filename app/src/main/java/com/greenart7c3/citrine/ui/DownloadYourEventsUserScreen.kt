@@ -124,6 +124,8 @@ fun SelectRelayModal(
         skipPartiallyExpanded = true,
     )
     val scope = rememberCoroutineScope()
+    val relayClient = LocalRelayClient.current
+    val appContext = LocalContext.current.applicationContext
 
     ModalBottomSheet(
         modifier = Modifier
@@ -141,8 +143,8 @@ fun SelectRelayModal(
                 try {
                     withTimeoutOrNull(RELAY_LOOKUP_TIMEOUT_MS) {
                         withContext(Dispatchers.IO) {
-                            if (!Citrine.instance.client.isActive()) {
-                                Citrine.instance.client.connect()
+                            if (!relayClient.client.isActive()) {
+                                relayClient.client.connect()
                             }
                         }
                     }
@@ -152,7 +154,7 @@ fun SelectRelayModal(
                     // sheet spinning with no way out. Results are added as they arrive.
                     lookupRelays("contact list for ${signer.pubKey}") {
                         withContext(Dispatchers.IO) {
-                            val stored = AppDatabase.getDatabase(Citrine.instance)
+                            val stored = AppDatabase.getDatabase(appContext)
                                 .eventDao()
                                 .getContactList(signer.pubKey)
                                 ?.toEvent() as? ContactListEvent
@@ -164,7 +166,7 @@ fun SelectRelayModal(
 
                     lookupRelays("relay list for ${signer.pubKey}") {
                         withContext(Dispatchers.IO) {
-                            val stored = AppDatabase.getDatabase(Citrine.instance)
+                            val stored = AppDatabase.getDatabase(appContext)
                                 .eventDao()
                                 .getAdvertisedRelayList(signer.pubKey)
                                 ?.toEvent() as? AdvertisedRelayListEvent
@@ -276,6 +278,9 @@ fun DownloadYourEventsUserScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val relayClient = LocalRelayClient.current
+    val appScope = LocalAppScope.current
+    val appContext = context.applicationContext
     val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
     val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
     var shouldShowDialog by remember { mutableStateOf(false) }
@@ -312,7 +317,7 @@ fun DownloadYourEventsUserScreen(
                         signer = NostrSignerExternal(
                             returnedKey,
                             packageName,
-                            Citrine.instance.contentResolver,
+                            appContext.contentResolver,
                         )
 
                         npub = TextFieldValue(localNpub)
@@ -332,10 +337,10 @@ fun DownloadYourEventsUserScreen(
 
                 Citrine.isImportingEvents = true
                 Citrine.cancelJob()
-                Citrine.job = Citrine.instance.applicationScope.launch {
+                Citrine.job = appScope.launch {
                     EventDownloader.setProgress("Connecting to ${it.size} relays")
 
-                    RelayAuthenticator(Citrine.instance.client, Citrine.instance.applicationScope) { _, template, _ ->
+                    RelayAuthenticator(relayClient.client, appScope) { _, template, _ ->
                         val signer = if (signer is NostrSignerExternal) signer!! else NostrSignerInternal(KeyPair())
                         val event = signer.sign(template)
                         listOf(event)
