@@ -468,8 +468,6 @@ class WebSocketServerService : Service() {
         lastForegroundSignature = built.signature
     }
 
-    fun isStarted(): Boolean = CustomWebSocketService.server != null
-
     private fun copyPendingIntent(url: String, requestCode: Int): PendingIntent {
         val intent = Intent(this, ClipboardReceiver::class.java)
         intent.putExtra("url", url)

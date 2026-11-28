@@ -182,6 +182,18 @@ left of the container on the Application is reached only through
 into a `…ViewModel` and keep a stateless content composable. Removes their
 `LongMethod`/`ComposableParamOrder` baseline entries.
 
+Done so far: `HomeScreen` keeps the ViewModel, the activity launchers and the
+scopes, and lays out stateless sections (`RunningRelaySection`,
+`StoppedRelaySection`, `AggregatorSection`, `DatabaseButtons`, `ToolButtons`,
+`ConnectionsSection` and the dialogs) that take plain values and callbacks; the
+external-signer login is `HomeViewModel.loginWithExternalSigner`. The dialog flags
+stay in composition (`HomeDialogState`) so they reset as before. `CitrineScaffold`
+splits into `CitrineNavHost`, nav-graph builders and `FeedScreen`, and takes
+`HomeViewModel` as a default parameter; it provides its own `ViewModelStoreOwner`
+around `HomeScreen`, whose default `viewModel(...)` then resolves the same instance,
+so the ViewModel is never forwarded (the Home route's back-stack entry would
+otherwise own a second one, since the bottom bar pops it on every tab switch).
+
 ### 3. Keep `ui/` off the database (done)
 
 Move each screen's loading and writing into its ViewModel and hand the screen

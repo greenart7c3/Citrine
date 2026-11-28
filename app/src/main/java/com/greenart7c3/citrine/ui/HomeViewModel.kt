@@ -30,6 +30,8 @@ import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
+import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -54,11 +56,41 @@ class HomeViewModel(
 
     private val _state = MutableStateFlow(HomeState())
     val state = _state
-    var signer = NostrSignerExternal(
+    private var signer = NostrSignerExternal(
         "",
         "",
         appContext.contentResolver,
     )
+
+    val isRunning = CustomWebSocketService.running
+
+    fun registerSignerLauncher(launcher: (Intent) -> Unit) {
+        signer.registerForegroundLauncher(launcher)
+    }
+
+    fun onSignerResponse(data: Intent) {
+        signer.newResponse(data)
+    }
+
+    fun loginWithExternalSigner(key: String, packageName: String): String {
+        val returnedKey = if (key.startsWith("npub")) {
+            when (val parsed = Nip19Parser.uriToRoute(key)?.entity) {
+                is NPub -> parsed.hex
+                else -> ""
+            }
+        } else {
+            key
+        }
+
+        signer = NostrSignerExternal(
+            returnedKey,
+            packageName,
+            appContext.contentResolver,
+        )
+
+        setPubKey(returnedKey)
+        return returnedKey
+    }
 
     suspend fun stop(context: Context) {
         try {
