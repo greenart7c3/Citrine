@@ -30,8 +30,10 @@ class Connection(
 
     val negentropySessions: MutableMap<String, Negentropy> = ConcurrentHashMap()
 
-    // Held while one REQ streams its stored events, so a connection streams one subscription at
-    // a time and takes at most one of the app-wide history permits (EventRepository).
+    /**
+     * Held while one REQ streams its stored events, so a connection streams one subscription at
+     * a time and takes at most one of the app-wide history permits (EventRepository).
+     */
     val historyQueryLock = Mutex()
 
     val closed = AtomicBoolean(false)
@@ -46,12 +48,16 @@ class Connection(
     // suspending session.send(). Ktor's session.outgoing only buffers a handful of frames,
     // so writing to it with trySend() silently dropped frames whenever a REQ streamed more
     // events than the buffer could hold.
+    @Suppress("NoComments")
     private val outgoingQueue = Channel<String>(capacity = OUTGOING_QUEUE_CAPACITY)
 
-    // Characters currently staged in outgoingQueue. The frame-count capacity alone lets a
-    // slow client pin hundreds of MB when frames are large, so send() also waits on this.
     private val queuedChars = AtomicLong(0)
 
+    /**
+     * Characters currently staged for the writer. The frame-count capacity alone would let a
+     * slow client pin hundreds of MB when frames are large, so [send] and [trySend] also hold
+     * the queue to a char budget.
+     */
     fun queuedChars(): Long = queuedChars.get()
 
     init {
@@ -70,10 +76,7 @@ class Connection(
             }
         }
         connectionScope.launch {
-            // An idle connection can't qualify for closure until 10 minutes have elapsed.
-            // Sleep the initial 10 minutes in one shot, then re-check every 5 minutes
-            // instead of waking the CPU every minute per open connection.
-            delay(10 * 60 * 1000L)
+            delay(IDLE_CLOSE_EARLIEST_MS)
             while (isActive) {
                 if (!EventSubscription.containsConnection(this@Connection)) {
                     Log.d(Citrine.TAG, "Closing session due to inactivity for $name")
@@ -83,7 +86,7 @@ class Connection(
                     }
                     break
                 }
-                delay(5 * 60 * 1000L)
+                delay(IDLE_RECHECK_INTERVAL_MS)
             }
         }
     }
@@ -91,16 +94,10 @@ class Connection(
     companion object {
         val lastId = AtomicInteger(0)
 
-        // Deep enough to absorb bursts (large REQ results, fanout floods) without
-        // unbounded memory growth. Suspending producers use send() for backpressure;
-        // non-suspending producers use trySend(), which disconnects a consumer that
-        // has fallen this far behind instead of silently corrupting its stream.
         private const val OUTGOING_QUEUE_CAPACITY = 1024
-
-        // Soft byte budget (in chars) for staged outbound frames. Sized against the connection
-        // cap in CustomWebSocketServer: MAX_CONNECTIONS x this must stay well under the heap,
-        // since slow clients (e.g. over Tor) keep their queue full.
         private const val OUTGOING_QUEUE_MAX_CHARS = 2L * 1024 * 1024
+        private const val IDLE_CLOSE_EARLIEST_MS = 10 * 60 * 1000L
+        private const val IDLE_RECHECK_INTERVAL_MS = 5 * 60 * 1000L
     }
     val name = "user${lastId.getAndIncrement()}"
 
@@ -122,12 +119,14 @@ class Connection(
      * Enqueues a frame, suspending when the outbound queue is full so slow clients apply
      * backpressure to the producer instead of dropping frames. Use on high-volume paths
      * (REQ result streaming, per-EVENT command results).
+     *
+     * Also waits while the queue is over its char budget; a single frame larger than the
+     * budget still goes through once the queue has drained. A closed session is only logged:
+     * the server's session loop owns removing the connection.
      */
     suspend fun send(data: String) {
         if (closed.get()) return
         try {
-            // Wait while over budget; a single frame larger than the budget still goes
-            // through once the queue has drained.
             while (queuedChars.get() > OUTGOING_QUEUE_MAX_CHARS && !closed.get()) {
                 delay(5)
             }
@@ -141,7 +140,6 @@ class Connection(
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
-            // Do not call removeConnection here — the webSocket finally block owns removal.
         }
     }
 
@@ -156,9 +154,15 @@ class Connection(
         }
     }
 
+    /**
+     * Enqueues a frame without suspending, for producers that cannot suspend. The queue is
+     * deep enough to absorb bursts (large REQ results, fanout floods); a client that has
+     * fallen further behind, by frame count or by the char budget, is not reading fast enough
+     * and is disconnected rather than silently losing frames mid-stream, which would corrupt
+     * REQ/OK semantics. A closed session is only logged, as in [send].
+     */
     fun trySend(data: String) {
         if (closed.get()) return
-        // Over the char budget counts as full too: 1024 frames of large events is hundreds of MB.
         val overBudget = queuedChars.get() > OUTGOING_QUEUE_MAX_CHARS
         val result = if (overBudget) {
             null
@@ -168,10 +172,7 @@ class Connection(
         }
         if (result?.isClosed == true) {
             Log.d(Citrine.TAG, "Session is closed for connection $name $remoteAddress")
-            // Do not call removeConnection here — the webSocket finally block owns removal.
         } else if (result == null || result.isFailure) {
-            // The client is not reading fast enough to keep up. Disconnect it rather than
-            // silently dropping frames mid-stream, which corrupts REQ/OK semantics.
             Log.w(Citrine.TAG, "Outgoing queue full for connection $name $remoteAddress, closing slow consumer")
             try {
                 session.cancel()

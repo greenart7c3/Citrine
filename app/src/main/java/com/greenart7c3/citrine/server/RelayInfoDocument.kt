@@ -42,9 +42,7 @@ private fun relayInformationDocument(): ObjectNode {
     val supportedNips = mutableListOf(1, 2, 9, 11, 29, 40, 42, 45, 50, 59, 65, 70, 77)
     if (Settings.ownerPubkey.isNotBlank()) supportedNips.add(86)
 
-    // NIP-29 clients discover the relay's group-signing key via the
-    // "self" field: the owner's key when configured, otherwise the
-    // relay's generated identity.
+    // NIP-29 (https://github.com/nostr-protocol/nips/blob/master/29.md) clients find the relay's group-signing key in "self".
     val relayPubkey = RelayIdentity.pubKeyHex()
 
     return JacksonMapper.mapper.createObjectNode().apply {

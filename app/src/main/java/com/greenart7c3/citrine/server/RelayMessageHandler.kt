@@ -85,8 +85,7 @@ internal class RelayMessageHandler(
             connection?.send(CommandResult.invalid(event, exception.message!!).toJson())
             return
         }
-        // NIP-42: an AUTH event must carry a valid signature, otherwise any
-        // client could authenticate as any pubkey.
+        // NIP-42 (https://github.com/nostr-protocol/nips/blob/master/42.md): without a valid signature any client could authenticate as any pubkey.
         if (!event.verify()) {
             connection?.send(CommandResult.invalid(event, "auth event signature verification failed").toJson())
             return

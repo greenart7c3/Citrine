@@ -51,9 +51,14 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-// With Connection's 2M-char outbound budget, 50 connections bound outbound buffers to ~200 MB.
+// Tor hidden-service clients all arrive from 127.0.0.1, so blockedIps can't limit them;
+// cap the total so per-connection buffers can't add up to an OOM (with Connection's 2M-char
+// outbound budget, 50 connections bound outbound buffers to ~200 MB).
+@Suppress("NoComments")
 private const val MAX_CONNECTIONS = 50
 private const val MIN_MAX_FRAME_SIZE = 4L * 1024 * 1024
+private const val MAX_QUEUED_FRAMES_PER_CONNECTION = 16
+private const val FINISH_RECEIVED_MESSAGES_TIMEOUT_MS = 10_000L
 
 class CustomWebSocketServer(
     private val host: String,
@@ -163,9 +168,7 @@ class CustomWebSocketServer(
     suspend fun innerProcessEvent(event: Event, connection: Connection?, shouldVerify: Boolean = true, fromAggregator: Boolean = false): VerificationResult {
         val result = verifyEvent(event, connection, shouldVerify, fromAggregator)
         when (result) {
-            VerificationResult.RejectedByNip29 -> {
-                // verifyEvent never returns this; NIP-29 rejection happens below.
-            }
+            VerificationResult.RejectedByNip29 -> Unit
             VerificationResult.Valid -> {
                 if (!storeVerified(event, connection)) return VerificationResult.RejectedByNip29
             }
@@ -187,13 +190,11 @@ class CustomWebSocketServer(
 
         eventStore.store(event, connection)
 
-        // if the event is ephemeral the response will be sent after the event is sent to subscriptions
-        if (!event.isEphemeral()) {
+        val okFollowsSubscriptionFanout = event.isEphemeral()
+        if (!okFollowsSubscriptionFanout) {
             connection?.send(CommandResult.ok(event).toJson())
         }
 
-        // Membership changes and metadata regeneration run after the event is
-        // stored and acknowledged.
         nip29PostSave?.let { callback ->
             appScope.launch(Dispatchers.IO) {
                 try {
@@ -240,15 +241,13 @@ class CustomWebSocketServer(
             port = port,
             host = host,
         ) {
-            installIpBlock()
+            installNip86IpBlockOnEveryCall()
             installRelayWebSockets()
             installRelayRoutes()
         }
     }
 
-    private fun Application.installIpBlock() {
-        // NIP-86 IP block enforcement — a single chokepoint that covers every
-        // HTTP route and the WebSocket upgrade handshake.
+    private fun Application.installNip86IpBlockOnEveryCall() {
         intercept(ApplicationCallPipeline.Plugins) {
             val ip = call.request.local.remoteHost
             if (Settings.blockedIps.containsKey(ip)) {
@@ -258,6 +257,7 @@ class CustomWebSocketServer(
         }
     }
 
+    @Suppress("NoComments")
     private fun Application.installRelayWebSockets() {
         install(WebSockets) {
             // 60s keepalive (down from 5s) cuts wakeups by 12x and lets cellular/Wi-Fi
@@ -296,12 +296,10 @@ class CustomWebSocketServer(
 
             contentProviderApiRoutes(context.contentResolver, objectMapper)
 
-            // NIP-86 Relay Management API
             post("/") {
                 Nip86Handler.handle(call, appDatabase, context)
             }
 
-            // WebSocket endpoint
             webSocket("/") {
                 serveRelaySession()
             }
@@ -309,8 +307,6 @@ class CustomWebSocketServer(
     }
 
     private suspend fun DefaultWebSocketServerSession.serveRelaySession() {
-        // Tor hidden-service clients all arrive from 127.0.0.1, so blockedIps can't
-        // limit them; cap the total so per-connection buffers can't add up to an OOM.
         if (connections.value.size >= MAX_CONNECTIONS) {
             Log.w(Citrine.TAG, "Refusing connection: $MAX_CONNECTIONS connections already open")
             close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "too many connections"))
@@ -323,15 +319,8 @@ class CustomWebSocketServer(
 
         thisConnection.trySend(AuthResult(thisConnection.authChallenge).toJson())
 
-        // Decouple socket reads from message processing: parsing, signature
-        // verification, and DB checks are CPU/IO heavy and would otherwise run
-        // on the network engine's threads, stalling reads for this and other
-        // connections. A bounded channel keeps per-connection ordering while
-        // letting reads continue during processing bursts.
-        // Small: with maxFrameSize at several MB, 256 queued frames per connection
-        // could pin the heap on their own.
-        val messageChannel = Channel<String>(capacity = 16)
-        val processor = launchMessageProcessor(messageChannel, thisConnection)
+        val messageChannel = Channel<String>(capacity = MAX_QUEUED_FRAMES_PER_CONNECTION)
+        val processorOffEngineThreads = launchMessageProcessor(messageChannel, thisConnection)
 
         try {
             for (message in incoming) {
@@ -339,12 +328,9 @@ class CustomWebSocketServer(
                 messageChannel.send(message.readText())
             }
         } finally {
-            // Always clean up, even on cancellation
             messageChannel.close()
             withContext(NonCancellable) {
-                // Let already-received messages finish (stores events, sends OKs)
-                // before tearing the connection down.
-                withTimeoutOrNull(10_000) { processor.join() }
+                withTimeoutOrNull(FINISH_RECEIVED_MESSAGES_TIMEOUT_MS) { processorOffEngineThreads.join() }
                 removeConnection(thisConnection)
             }
             Log.d(Citrine.TAG, "Connection closed from ${thisConnection.name}")

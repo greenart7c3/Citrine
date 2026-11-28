@@ -7,6 +7,15 @@ import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
 object AuthGate {
     enum class Denial { AUTH_REQUIRED, RESTRICTED }
 
+    /**
+     * Why [connection] may not run [filter], or null when it may.
+     *
+     * Filters that explicitly target a managed private group's content (`#h`) or a hidden
+     * group's metadata (`#d` + 39xxx kinds) without being authenticated as a member are
+     * denied early, regardless of the global auth toggle. That is a courtesy signal: the
+     * per-event [GroupManager.canRead] filter in [EventRepository.subscribe] and the live
+     * fanout remain the actual boundary for filters that never mention the group id.
+     */
     fun check(filter: EventFilter, connection: Connection): Denial? = nip29Check(filter, connection)
         ?: if (targetsPersonalEvents(filter)) participantCheck(filter, connection) else null
 
@@ -26,14 +35,6 @@ object AuthGate {
             receivers.any { entry -> entry.value.any { receiver -> connection.users.contains(receiver) } }
     }
 
-    /**
-     * Early CLOSED for filters that explicitly target a managed private group's content
-     * (`#h`) or a hidden group's metadata (`#d` + 39xxx kinds) without being
-     * authenticated as a member. Active regardless of the global auth toggle. This is a
-     * courtesy signal — the per-event [GroupManager.canRead] filter in
-     * [EventRepository.subscribe] and the live fanout remain the actual boundary for
-     * filters that never mention the group id.
-     */
     private fun nip29Check(filter: EventFilter, connection: Connection): Denial? {
         if (!GroupManager.hasGroups()) return null
 

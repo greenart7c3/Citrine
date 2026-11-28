@@ -106,7 +106,6 @@ internal class WebClientHosting(private val context: Context) {
     suspend fun proxiedClientSubdomain(call: ApplicationCall): Boolean {
         val clientName = extractClientName(call.request.host())
 
-        // If this is a client subdomain, proxy instead
         if (clientName != null && webClientServers.containsKey("/$clientName")) {
             proxyHttp(call, clientName)
             return true
@@ -118,7 +117,6 @@ internal class WebClientHosting(private val context: Context) {
         call: ApplicationCall,
         rootUri: Uri,
     ) {
-        // Trim leading slash
         val requestedPath = call.request.uri.trimStart('/')
         Log.d(Citrine.TAG, requestedPath)
 
@@ -128,10 +126,10 @@ internal class WebClientHosting(private val context: Context) {
             return call.respond(HttpStatusCode.InternalServerError, null)
         }
 
-        // First try requested file
-        val targetFile = root.findFileRecursive(requestedPath)?.takeIf { it.exists() && it.isFile }
-            // SPA fallback for root or route paths without file extension
-            ?: if (requestedPath.isEmpty() || !requestedPath.contains('.')) {
+        val requestedFile = root.findFileRecursive(requestedPath)?.takeIf { it.exists() && it.isFile }
+        val isSpaRoute = requestedPath.isEmpty() || !requestedPath.contains('.')
+        val targetFile = requestedFile
+            ?: if (isSpaRoute) {
                 root.findFile("index.html")?.takeIf { it.exists() && it.isFile }
             } else {
                 null
@@ -167,7 +165,6 @@ internal class WebClientHosting(private val context: Context) {
             port = port,
         ) {
             routing {
-                // Catch-all: /, /index.html, /assets/foo.js, etc
                 get("{...}") {
                     serveIndex(call, rootUri)
                 }
@@ -183,20 +180,17 @@ internal class WebClientHosting(private val context: Context) {
     }
 
     /**
-     * Serves a file from an app-internal [rootDir] (used by installed nsites). Mirrors
-     * [serveIndex] but reads from a plain [File] tree instead of a SAF DocumentFile. Paths
-     * are canonicalized and rejected if they escape [rootDir] (path-traversal guard). Falls
-     * back to index.html for extension-less routes and to 404.html (with a 404 status) when
-     * nothing matches, per NIP-5A.
+     * Falls back to index.html for extension-less routes and to 404.html (with a 404 status)
+     * when nothing matches, per NIP-5A (https://github.com/nostr-protocol/nips/blob/master/5A.md).
      */
-    private suspend fun serveFromDir(
+    private suspend fun serveNsiteFileFromDir(
         call: ApplicationCall,
         rootDir: File,
     ) {
         val requestedPath = call.request.uri.substringBefore('?').trimStart('/')
         val rootCanonical = rootDir.canonicalFile
 
-        fun resolveSafe(path: String): File? {
+        fun resolveInsideRoot(path: String): File? {
             if (path.isEmpty()) return null
             val candidate = File(rootCanonical, path).canonicalFile
             return if (candidate.path == rootCanonical.path || candidate.path.startsWith(rootCanonical.path + File.separator)) {
@@ -206,14 +200,12 @@ internal class WebClientHosting(private val context: Context) {
             }
         }
 
-        var target = resolveSafe(requestedPath)?.takeIf { it.isFile }
-        // SPA/index fallback for the root or extension-less routes.
+        var target = resolveInsideRoot(requestedPath)?.takeIf { it.isFile }
         if (target == null && (requestedPath.isEmpty() || !requestedPath.substringAfterLast('/').contains('.'))) {
-            target = resolveSafe("index.html")?.takeIf { it.isFile }
+            target = resolveInsideRoot("index.html")?.takeIf { it.isFile }
         }
-        // 404 fallback.
         if (target == null) {
-            target = resolveSafe("404.html")?.takeIf { it.isFile }
+            target = resolveInsideRoot("404.html")?.takeIf { it.isFile }
         }
 
         if (target == null) {
@@ -242,7 +234,7 @@ internal class WebClientHosting(private val context: Context) {
         ) {
             routing {
                 get("{...}") {
-                    serveFromDir(call, rootDir)
+                    serveNsiteFileFromDir(call, rootDir)
                 }
             }
         }.start(wait = false)
@@ -268,6 +260,7 @@ internal class WebClientHosting(private val context: Context) {
         webClientServers.remove("/$folderName")?.server?.stop()
     }
 
+    @Suppress("NoComments")
     private suspend fun proxyHttp(
         call: ApplicationCall,
         clientName: String,
@@ -280,7 +273,6 @@ internal class WebClientHosting(private val context: Context) {
         proxyClient.prepareRequest(targetUrl) {
             method = call.request.httpMethod
 
-            // Forward headers to target, excluding engine-managed ones
             headers {
                 call.request.headers.forEach { key, values ->
                     val lowerKey = key.lowercase()
@@ -295,7 +287,6 @@ internal class WebClientHosting(private val context: Context) {
                 setBody(call.receiveChannel())
             }
         }.execute { response ->
-            // Filter headers before sending back to the original client
             response.headers.forEach { key, values ->
                 val lowerKey = key.lowercase()
                 // IMPORTANT: Let Ktor manage Transfer-Encoding and Content-Length
@@ -308,7 +299,6 @@ internal class WebClientHosting(private val context: Context) {
                 contentType = response.contentType(),
                 status = response.status,
             ) {
-                // Streaming happens here
                 response.bodyAsChannel().copyTo(this)
             }
         }

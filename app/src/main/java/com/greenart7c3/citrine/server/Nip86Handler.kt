@@ -152,10 +152,6 @@ object Nip86Handler {
         else -> throw UnknownMethodException(rpc.method)
     }
 
-    // ---------------------------------------------------------------------
-    // Method handlers
-    // ---------------------------------------------------------------------
-
     private suspend fun banPubkey(params: List<JsonNode>, db: AppDatabase, ctx: Context): Boolean {
         val pubkey = stringParam(params, 0, "pubkey")
         val reason = stringParamOrEmpty(params, 1)
@@ -259,7 +255,6 @@ object Nip86Handler {
     private fun listBlockedIps(): List<Map<String, String>> = Settings.blockedIps.map { (ip, reason) -> mapOf("ip" to ip, "reason" to reason) }
 
     private suspend fun stats(db: AppDatabase): Map<String, Any> {
-        // countByKind returns a Flow — sample the first emission.
         val snapshot = db.eventDao().countByKind().first()
         val total = snapshot.sumOf { it.count.toLong() }
         return mapOf(
@@ -267,10 +262,6 @@ object Nip86Handler {
             "kinds" to snapshot.associate { it.kind.toString() to it.count },
         )
     }
-
-    // ---------------------------------------------------------------------
-    // NIP-98 verification
-    // ---------------------------------------------------------------------
 
     fun verifyNip98(authHeader: String?, method: String, fullUrl: String, body: ByteArray): String? {
         val event = decodeNip98Event(authHeader) ?: return null
@@ -306,7 +297,7 @@ object Nip86Handler {
         return when {
             event.kind != AUTH_KIND -> "NIP-98 wrong kind ${event.kind}"
             isOutsideAuthWindow(event.createdAt, now) -> "NIP-98 timestamp out of window: createdAt=${event.createdAt} now=$now"
-            uTag == null || !normalizeUrl(uTag).equals(normalizeUrl(fullUrl), ignoreCase = true) -> "NIP-98 u tag mismatch expected=$fullUrl got=$uTag"
+            uTag == null || !withoutTrailingSlash(uTag).equals(withoutTrailingSlash(fullUrl), ignoreCase = true) -> "NIP-98 u tag mismatch expected=$fullUrl got=$uTag"
             mTag == null || !mTag.equals(method, ignoreCase = true) -> "NIP-98 method tag mismatch expected=$method got=$mTag"
             else -> payloadRefusal(event, body) ?: signatureRefusal(event)
         }
@@ -325,10 +316,6 @@ object Nip86Handler {
 
     private fun signatureRefusal(event: Event): String? = if (event.verify()) null else "NIP-98 signature verify failed"
 
-    // ---------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------
-
     private fun buildFullUrl(call: ApplicationCall): String {
         val scheme = call.request.origin.scheme
         val rawHost = call.request.host()
@@ -339,9 +326,9 @@ object Nip86Handler {
         return "$scheme://$authority${call.request.uri}"
     }
 
-    // Collapse trailing-slash differences (e.g. "http://h/" vs "http://h") so
-    // clients that omit the root slash in the NIP-98 `u` tag still match.
-    private fun normalizeUrl(url: String): String {
+    // Clients may omit the root slash in the NIP-98 `u` tag ("http://h" for "http://h/").
+    @Suppress("NoComments")
+    private fun withoutTrailingSlash(url: String): String {
         val q = url.indexOf('?')
         val path = if (q >= 0) url.substring(0, q) else url
         val rest = if (q >= 0) url.substring(q) else ""

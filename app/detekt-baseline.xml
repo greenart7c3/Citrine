@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>NoComments:AuthGate.kt:Early CLOSED for filters that explicitly target a managed private group's content</ID>
     <ID>NoComments:BrowseNsitesScreen.kt:Compact relative timestamp ("now", "5m", "1h", "3d", "2w", "4mo", "1y") for the feed-style author he</ID>
     <ID>NoComments:BrowseNsitesScreen.kt:Refresh the list so the installed item is now flagged.</ID>
     <ID>NoComments:Citrine.kt:Record why the previous process died (ANR, native crash, excessive resource usage) while</ID>
@@ -57,34 +56,7 @@
     <ID>NoComments:CitrineContract.kt:URI paths</ID>
     <ID>NoComments:ClipboardReceiver.kt:Copy the URL to the clipboard</ID>
     <ID>NoComments:ClipboardReceiver.kt:Show a toast message</ID>
-    <ID>NoComments:CommandResult.kt:Creating an ObjectMapper is expensive; share one instance for all responses.</ID>
-    <ID>NoComments:Connection.kt:An idle connection can't qualify for closure until 10 minutes have elapsed.</ID>
-    <ID>NoComments:Connection.kt:Characters currently staged in outgoingQueue. The frame-count capacity alone lets a</ID>
-    <ID>NoComments:Connection.kt:Deep enough to absorb bursts (large REQ results, fanout floods) without</ID>
-    <ID>NoComments:Connection.kt:Do not call removeConnection here — the webSocket finally block owns removal.</ID>
-    <ID>NoComments:Connection.kt:Held while one REQ streams its stored events, so a connection streams one subscription at</ID>
-    <ID>NoComments:Connection.kt:Outbound frames are staged here and drained by a single writer coroutine using the</ID>
-    <ID>NoComments:Connection.kt:Over the char budget counts as full too: 1024 frames of large events is hundreds of MB.</ID>
-    <ID>NoComments:Connection.kt:Sleep the initial 10 minutes in one shot, then re-check every 5 minutes</ID>
-    <ID>NoComments:Connection.kt:Soft byte budget (in chars) for staged outbound frames. Sized against the connection</ID>
-    <ID>NoComments:Connection.kt:The client is not reading fast enough to keep up. Disconnect it rather than</ID>
-    <ID>NoComments:Connection.kt:Wait while over budget; a single frame larger than the budget still goes</ID>
-    <ID>NoComments:Connection.kt:a time and takes at most one of the app-wide history permits (EventRepository).</ID>
-    <ID>NoComments:Connection.kt:cap in CustomWebSocketServer: MAX_CONNECTIONS x this must stay well under the heap,</ID>
-    <ID>NoComments:Connection.kt:events than the buffer could hold.</ID>
-    <ID>NoComments:Connection.kt:has fallen this far behind instead of silently corrupting its stream.</ID>
-    <ID>NoComments:Connection.kt:instead of waking the CPU every minute per open connection.</ID>
-    <ID>NoComments:Connection.kt:non-suspending producers use trySend(), which disconnects a consumer that</ID>
-    <ID>NoComments:Connection.kt:silently dropping frames mid-stream, which corrupts REQ/OK semantics.</ID>
-    <ID>NoComments:Connection.kt:since slow clients (e.g. over Tor) keep their queue full.</ID>
-    <ID>NoComments:Connection.kt:slow client pin hundreds of MB when frames are large, so send() also waits on this.</ID>
-    <ID>NoComments:Connection.kt:so writing to it with trySend() silently dropped frames whenever a REQ streamed more</ID>
-    <ID>NoComments:Connection.kt:suspending session.send(). Ktor's session.outgoing only buffers a handful of frames,</ID>
-    <ID>NoComments:Connection.kt:through once the queue has drained.</ID>
-    <ID>NoComments:Connection.kt:unbounded memory growth. Suspending producers use send() for backpressure;</ID>
     <ID>NoComments:ContactListPolicyTest.kt:No-pubkey mode: nobody is followed, so no contact lists are fetched at all.</ID>
-    <ID>NoComments:ContentProviderApi.kt:ContentProvider test endpoints (for Postman testing)</ID>
-    <ID>NoComments:ContentProviderApi.kt:HTTP endpoints for testing ContentProvider errors</ID>
     <ID>NoComments:CrashReportCache.kt:Cached once at construction (Citrine.onCreate) so emergency writes from</ID>
     <ID>NoComments:CrashReportCache.kt:Keep the newest complete reports that fit within maxChars.</ID>
     <ID>NoComments:CrashReportCache.kt:Keeps stack.trace bounded in memory/disk and comfortably under NIP-44's 65,535-byte</ID>
@@ -105,40 +77,6 @@
     <ID>NoComments:CrashReportScreen.kt:records are the only trace of them the user can send. Run detect() here too so the</ID>
     <ID>NoComments:CrashReportScreen.kt:seal and gift wrap needs its own confirmation there.</ID>
     <ID>NoComments:CrashReportSender.kt:The sender's self-copy is useless here: only the developer's wrap needs to go out.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:60s keepalive (down from 5s) cuts wakeups by 12x and lets cellular/Wi-Fi</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Always clean up, even on cancellation</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Decouple socket reads from message processing: parsing, signature</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:HTTP route and the WebSocket upgrade handshake.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Ktor's default is unlimited, so one frame could be read whole into the heap</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Ktor's outgoing queue is unlimited by default, so session.send() never</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Let already-received messages finish (stores events, sends OKs)</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Membership changes and metadata regeneration run after the event is</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:NIP-86 IP block enforcement — a single chokepoint that covers every</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:NIP-86 Relay Management API</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Small: with maxFrameSize at several MB, 256 queued frames per connection</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Tor hidden-service clients all arrive from 127.0.0.1, so blockedIps can't</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:WebSocket endpoint</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:With Connection's 2M-char outbound budget, 50 connections bound outbound buffers to ~200 MB.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:and some client deflate implementations (e.g. gorilla/websocket's</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:before tearing the connection down.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:before the event size check runs. 4x covers JSON escaping of max-size content.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:connect over localhost/LAN where compression only burns CPU/battery,</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:connections. A bounded channel keeps per-connection ordering while</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:could pin the heap on their own.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:event delivery. Clients that don't negotiate the extension simply</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:flate reader) have a history of blocking mid-stream, which stalls</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:if the event is ephemeral the response will be sent after the event is sent to subscriptions</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:letting reads continue during processing bursts.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:limit them; cap the total so per-connection buffers can't add up to an OOM.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:on the network engine's threads, stalling reads for this and other</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:permessage-deflate is intentionally NOT installed. Nearly all clients</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:radios enter idle sleep between pings while still detecting dead peers well</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:receive uncompressed frames either way.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:stored and acknowledged.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:suspended and a non-reading client pinned the heap behind Connection's budget.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:verification, and DB checks are CPU/IO heavy and would otherwise run</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:verifyEvent never returns this; NIP-29 rejection happens below.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:within NAT and Tor circuit timeouts.</ID>
     <ID>NoComments:DateUtils.kt:Format the LocalDateTime with local format</ID>
     <ID>NoComments:DownloadYourEventsUserScreen.kt:Adds [relayUrl] to the sheet's list unless an equivalent relay is already listed.</ID>
     <ID>NoComments:DownloadYourEventsUserScreen.kt:Both lookups are bounded and fall back to "nothing found": a relay that</ID>
@@ -199,66 +137,7 @@
     <ID>NoComments:EventEntity.kt:tag name</ID>
     <ID>NoComments:EventEntity.kt:tag value</ID>
     <ID>NoComments:EventEntity.kt:value</ID>
-    <ID>NoComments:EventFilter.kt:Cheapest checks first: this runs against every active subscription</ID>
-    <ID>NoComments:EventFilter.kt:for every event inserted into the database.</ID>
     <ID>NoComments:EventRebroadcaster.kt:Collects ["OK", ...] responses and connection failures across all relays.</ID>
-    <ID>NoComments:EventRepository.kt:"[", "]", and trailing ","</ID>
-    <ID>NoComments:EventRepository.kt:--- Add each tag as an AND EXISTS in WHERE ---</ID>
-    <ID>NoComments:EventRepository.kt:--- Build SQL ---</ID>
-    <ID>NoComments:EventRepository.kt:--- EventEntity filters ---</ID>
-    <ID>NoComments:EventRepository.kt:App-wide cap on content chunks loaded at once, whatever the number of connections and</ID>
-    <ID>NoComments:EventRepository.kt:Attaches tags to [rows] and hands them to [onBatch] in order, in chunks holding at</ID>
-    <ID>NoComments:EventRepository.kt:B-tree (native memory, temp_store=MEMORY), and full rows put up to</ID>
-    <ID>NoComments:EventRepository.kt:Content loaded at once per content chunk: one max-size event.</ID>
-    <ID>NoComments:EventRepository.kt:Counts what was sent, not the page: skipped ids must not eat into the client's limit.</ID>
-    <ID>NoComments:EventRepository.kt:DISTINCT over full-width rows (including content) to dedupe them again, which</ID>
-    <ID>NoComments:EventRepository.kt:End (exclusive) of the chunk starting at [start]: as many consecutive events as fit</ID>
-    <ID>NoComments:EventRepository.kt:Estimates the serialized JSON frame length in chars (envelope + event fields + tags +</ID>
-    <ID>NoComments:EventRepository.kt:Events above the chunk budget may carry hundreds of thousands of duplicate tag</ID>
-    <ID>NoComments:EventRepository.kt:Exclude events whose NIP-40 expiration timestamp is in the past.</ID>
-    <ID>NoComments:EventRepository.kt:FTS results are ordered by rowid, so the (createdAt, id) keyset cursor does</ID>
-    <ID>NoComments:EventRepository.kt:Fixed envelope + field names + id(64) + pubkey(64) + sig(128) + numbers ≈ 357 chars.</ID>
-    <ID>NoComments:EventRepository.kt:Hard per-event ceilings so a single pathological event (unusually huge tag list or</ID>
-    <ID>NoComments:EventRepository.kt:Ids only: with an IN list on authors/kinds SQLite sorts the candidates in a temp</ID>
-    <ID>NoComments:EventRepository.kt:Keyset pagination cursor: continues strictly after the previous page's last row</ID>
-    <ID>NoComments:EventRepository.kt:Loads the events of [ids] and hands them to [onBatch] in [ids] order, in chunks of at</ID>
-    <ID>NoComments:EventRepository.kt:NIP-29 private groups: events the connection may not read are filtered per</ID>
-    <ID>NoComments:EventRepository.kt:Never load rows whose content exceeds the size cap: a single multi-MB row can</ID>
-    <ID>NoComments:EventRepository.kt:Note: no JOIN against TagEntity. The EXISTS predicates below do all the tag</ID>
-    <ID>NoComments:EventRepository.kt:QUERY_BATCH_SIZE x maxEventSize of content there, on top of the same in the heap.</ID>
-    <ID>NoComments:EventRepository.kt:Separate frame so the chunk's TagEntity lists and EventWithTags batch are out of scope</ID>
-    <ID>NoComments:EventRepository.kt:Serializes a stored event straight from its database row, skipping the construction</ID>
-    <ID>NoComments:EventRepository.kt:Streams tag rows for [chunk] straight into a per-event map, skipping the intermediate</ID>
-    <ID>NoComments:EventRepository.kt:Subscriptions that are not registered in EventSubscription (or were evicted from it)</ID>
-    <ID>NoComments:EventRepository.kt:Tags loaded at once per content chunk (~3 MB of TagEntity objects).</ID>
-    <ID>NoComments:EventRepository.kt:Tags were counted but are gone: the event was deleted or replaced</ID>
-    <ID>NoComments:EventRepository.kt:The FTS join is 1:1 (rowid = rowid) and the tag filters use EXISTS, so no row</ID>
-    <ID>NoComments:EventRepository.kt:The frame is written once, prefix and suffix included, into a single buffer.</ID>
-    <ID>NoComments:EventRepository.kt:The queries below block uninterruptibly, so this is where a subscription</ID>
-    <ID>NoComments:EventRepository.kt:an event whose id and signature no longer verify.</ID>
-    <ID>NoComments:EventRepository.kt:and eligible for GC before the next chunk's query starts.</ID>
-    <ID>NoComments:EventRepository.kt:any event that still exceeds the hard per-event ceiling.</ID>
-    <ID>NoComments:EventRepository.kt:are not cancelled when their connection goes away, so the streaming loops check.</ID>
-    <ID>NoComments:EventRepository.kt:between the two reads. Sending it without tags would hand the client</ID>
-    <ID>NoComments:EventRepository.kt:event, because a filter (e.g. {"kinds":[9]}) can match group content without</ID>
-    <ID>NoComments:EventRepository.kt:ever naming the group id. The per-event check works on the raw rows, so the</ID>
-    <ID>NoComments:EventRepository.kt:exhaust the heap while being serialized (issue #187).</ID>
-    <ID>NoComments:EventRepository.kt:filtering; a join would multiply each event row by its tag count and force a</ID>
-    <ID>NoComments:EventRepository.kt:frames), ~40 MB, or one oversized event's tags instead of the 10k.</ID>
-    <ID>NoComments:EventRepository.kt:idx_event_created_id. Never combine with searchKeywords (rowid ordering).</ID>
-    <ID>NoComments:EventRepository.kt:in the result is ever duplicated and no DISTINCT is needed in any mode.</ID>
-    <ID>NoComments:EventRepository.kt:is dramatically slower.</ID>
-    <ID>NoComments:EventRepository.kt:multi-MB tag strings) can never exhaust the 512 MB heap on read.</ID>
-    <ID>NoComments:EventRepository.kt:no-quartz-Event fast path below is preserved, and it only runs at all while a</ID>
-    <ID>NoComments:EventRepository.kt:not apply and the matching ids are loaded in one shot; content and tags are</ID>
-    <ID>NoComments:EventRepository.kt:private/hidden managed group exists.</ID>
-    <ID>NoComments:EventRepository.kt:rows from Citrine 3.0.0–3.2.1; repair those in SQLite before loading, and skip</ID>
-    <ID>NoComments:EventRepository.kt:shortcut: a chunk bigger than the room left in the client's queue still waits on it mid-send while h</ID>
-    <ID>NoComments:EventRepository.kt:shortcut: a common search term with no limit holds every matching id (~200 B each), page by rowid if</ID>
-    <ID>NoComments:EventRepository.kt:still loaded in bounded chunks.</ID>
-    <ID>NoComments:EventRepository.kt:subscriptions: about HISTORY_CHUNK_PERMITS x (1M chars of content + 10k tags + their</ID>
-    <ID>NoComments:EventRepository.kt:under the non-search ordering "createdAt DESC, id ASC", index-backed by</ID>
-    <ID>NoComments:EventRepository.kt:whose client sent CLOSE or disconnected stops costing memory and I/O.</ID>
     <ID>NoComments:EventRepositoryQueryTest.kt:Positional contract: expiry, since, kind, cursor(createdAt, createdAt, id), limit.</ID>
     <ID>NoComments:EventRepositoryQueryTest.kt:The keyset cursor is only valid under the non-search ordering.</ID>
     <ID>NoComments:EventRepositoryQueryTest.kt:batchedQuery's page query: SQLite sorts these rows in a temp B-tree for IN filters,</ID>
@@ -267,26 +146,6 @@
     <ID>NoComments:EventRepositoryStreamTest.kt:100 unique tags duplicated 105 times = 10,500 rows (&gt; CHUNK_TAG_BUDGET = 10,000).</ID>
     <ID>NoComments:EventRepositoryStreamTest.kt:600K + 600K is over the 1M-char chunk budget, so "b" starts a new chunk.</ID>
     <ID>NoComments:EventRepositoryStreamTest.kt:Estimate should stay tight (no excessive over-allocation).</ID>
-    <ID>NoComments:EventStore.kt:Check if offline and broadcast with WorkManager</ID>
-    <ID>NoComments:EventSubscription.kt:Drop closed subscriptions so future fanouts skip them entirely.</ID>
-    <ID>NoComments:EventSubscription.kt:NIP-01: subscription ids are managed independently per connection. The wire id</ID>
-    <ID>NoComments:EventSubscription.kt:NIP-29: never live-push private-group events to connections that are</ID>
-    <ID>NoComments:EventSubscription.kt:NIP-45: COUNT subscriptions answer once and are never registered, so they</ID>
-    <ID>NoComments:EventSubscription.kt:neither evict a same-id REQ subscription nor receive live EVENT fanout.</ID>
-    <ID>NoComments:EventSubscription.kt:not authenticated as a member (stored-query reads are gated the same</ID>
-    <ID>NoComments:EventSubscription.kt:stays the client-sent value; only the cache key is connection-scoped.</ID>
-    <ID>NoComments:EventSubscription.kt:way in EventRepository.subscribe).</ID>
-    <ID>NoComments:EventVerifier.kt:Aggregator-fetched events bypass the author/tagged-pubkey allowlists</ID>
-    <ID>NoComments:EventVerifier.kt:NIP-29: ids removed by a group admin's kind-9005 moderation event stay deleted,</ID>
-    <ID>NoComments:EventVerifier.kt:NIP-70: reposts of protected events MUST NOT embed the reposted event.</ID>
-    <ID>NoComments:EventVerifier.kt:NIP-86 ban lists — apply unconditionally (even to aggregator-fetched events),</ID>
-    <ID>NoComments:EventVerifier.kt:Verify the signature before any DB access so invalid events are</ID>
-    <ID>NoComments:EventVerifier.kt:because the aggregator already validated them against the user's</ID>
-    <ID>NoComments:EventVerifier.kt:but only for groups this relay manages — mirrored 9005s from foreign groups</ID>
-    <ID>NoComments:EventVerifier.kt:must not block re-imports.</ID>
-    <ID>NoComments:EventVerifier.kt:rejected without paying for the reads below.</ID>
-    <ID>NoComments:EventVerifier.kt:requested subscription filter before handing them off here.</ID>
-    <ID>NoComments:EventVerifier.kt:so a banned author can't sneak in via the relay aggregator.</ID>
     <ID>NoComments:ExecuteAllFanOutBenchmark.kt:Warm-up so the JIT compiles both paths before measurement.</ID>
     <ID>NoComments:ExitReasons.kt:ANRs ship the full traces file; only its first lines are useful in a chat message.</ID>
     <ID>NoComments:ExitReasons.kt:Android's lmkd kills foreground services under device-wide memory pressure and provides no</ID>
@@ -307,17 +166,6 @@
     <ID>NoComments:ExportDatabaseUtils.kt:attached in bounded chunks by the same helper the REQ path uses. The whole</ID>
     <ID>NoComments:ExportDatabaseUtils.kt:id list and the 1,000-events-with-all-their-tags batches this replaces held</ID>
     <ID>NoComments:GroupDao.kt:Tombstones the group (blocks id reuse) and clears its membership and invites.</ID>
-    <ID>NoComments:GroupManager.kt:The relay identity: the owner's key when configured (signed via the Amber</ID>
-    <ID>NoComments:GroupManager.kt:external signer), otherwise the relay's generated fallback key.</ID>
-    <ID>NoComments:GroupState.kt:Group ids are relay-local random strings; cap length and charset so ids stay usable</ID>
-    <ID>NoComments:GroupState.kt:in d-tags, naddr codes, and SQL without escaping surprises.</ID>
-    <ID>NoComments:GroupWrites.kt:An Amber login/logout changes the relay identity; metadata signed by the</ID>
-    <ID>NoComments:GroupWrites.kt:Monotonic created_at for relay-signed metadata so a regenerated 39xxx always</ID>
-    <ID>NoComments:GroupWrites.kt:allowlists or rejected-kinds configuration.</ID>
-    <ID>NoComments:GroupWrites.kt:previous identity is a distinct addressable event that would linger next to</ID>
-    <ID>NoComments:GroupWrites.kt:replaces the previous version even when several regens land in the same second.</ID>
-    <ID>NoComments:GroupWrites.kt:shouldVerify=false: relay-signed events must not be blocked by the owner's</ID>
-    <ID>NoComments:GroupWrites.kt:the fresh copies, so drop it once the new set is stored.</ID>
     <ID>NoComments:HomeScreen.kt:TODO: Replace this with a setup screen to allow automatic download in background</ID>
     <ID>NoComments:HttpClientManager.kt:Default OkHttp dispatcher caps in-flight Calls at 64 (5 per host), which throttles</ID>
     <ID>NoComments:HttpClientManager.kt:Fail closed: caller asked for proxied traffic but no proxy is up.</ID>
@@ -360,22 +208,8 @@
     <ID>NoComments:MainActivity.kt:Same mechanism for the relay identity signer (NIP-29 group metadata signing).</ID>
     <ID>NoComments:MainActivity.kt:alone would leave Amber reading a null callingPackage and rejecting the request.</ID>
     <ID>NoComments:MainActivity.kt:registerForActivityResult preserves the calling package on the intent — startActivity</ID>
-    <ID>NoComments:NegentropyHandler.kt:Each open session holds a materialized id set plus reconciliation state until</ID>
-    <ID>NoComments:NegentropyHandler.kt:NIP-29: with private groups on the relay, a broad filter's id set could reveal</ID>
-    <ID>NoComments:NegentropyHandler.kt:private-group event ids, so the storage is built from readable events only.</ID>
-    <ID>NoComments:NegentropyHandler.kt:the client finishes or closes it; abandoned sessions must not accumulate.</ID>
     <ID>NoComments:NetworkChangeDetector.kt:The first report after registering the callback is the network the</ID>
     <ID>NoComments:NetworkChangeDetector.kt:relays are already connecting on; only a return after a loss is a change.</ID>
-    <ID>NoComments:Nip29Handler.kt:Nothing to remove; store the request and move on.</ID>
-    <ID>NoComments:Nip29Handler.kt:Signs a kind 9000 (add) or 9001 (remove) with the relay's key and runs it through</ID>
-    <ID>NoComments:Nip29Handler.kt:Stored as-is; pin lists are served straight back to clients.</ID>
-    <ID>NoComments:Nip86Handler.kt:---------------------------------------------------------------------</ID>
-    <ID>NoComments:Nip86Handler.kt:Collapse trailing-slash differences (e.g. "http://h/" vs "http://h") so</ID>
-    <ID>NoComments:Nip86Handler.kt:Helpers</ID>
-    <ID>NoComments:Nip86Handler.kt:Method handlers</ID>
-    <ID>NoComments:Nip86Handler.kt:NIP-98 verification</ID>
-    <ID>NoComments:Nip86Handler.kt:clients that omit the root slash in the NIP-98 `u` tag still match.</ID>
-    <ID>NoComments:Nip86Handler.kt:countByKind returns a Flow — sample the first emission.</ID>
     <ID>NoComments:NsiteManager.kt:"nsite" + first 16 hex chars of sha256(address): a deterministic, hostname-safe slug.</ID>
     <ID>NoComments:NsiteManager.kt:Builds a Blossom URL for an icon, or null when there's no icon hash.</ID>
     <ID>NoComments:NsiteManager.kt:Common raster icon filenames, in priority order. Coil can't decode .ico/.svg, so those</ID>
@@ -441,85 +275,18 @@
     <ID>NoComments:RelayIdentity.kt:path can't auto-approve. The launcher routes through MainActivity's</ID>
     <ID>NoComments:RelayIdentity.kt:the internal fallback signer — so an Amber login/logout rebuilds the signer</ID>
     <ID>NoComments:RelayIdentity.kt:under the hood, which preserves the caller's identity on the intent — Amber relies</ID>
-    <ID>NoComments:RelayInfoDocument.kt:"self" field: the owner's key when configured, otherwise the</ID>
-    <ID>NoComments:RelayInfoDocument.kt:NIP-29 clients discover the relay's group-signing key via the</ID>
-    <ID>NoComments:RelayInfoDocument.kt:relay's generated identity.</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:Hex.decode("") yields an empty array rather than throwing, and bech32</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:Kinds the relay signs with the owner's key: relay-issued membership changes and the</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:NIP-29 group metadata events. Requested at login so Amber can auto-approve them.</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:happily encodes zero bytes into a stub like "npub106246s" — so an</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:unconfigured owner must be caught before decoding.</ID>
-    <ID>NoComments:RelayMessageHandler.kt:NIP-42: an AUTH event must carry a valid signature, otherwise any</ID>
-    <ID>NoComments:RelayMessageHandler.kt:client could authenticate as any pubkey.</ID>
     <ID>NoComments:ReportAssembler.kt:Device and Product Information</ID>
     <ID>NoComments:ReportAssembler.kt:Hardware Information</ID>
     <ID>NoComments:ReportAssembler.kt:OS Information</ID>
     <ID>NoComments:ReportAssembler.kt:Other Useful Information</ID>
     <ID>NoComments:ReportAssembler.kt:Thread and heap snapshot. For an `OutOfMemoryError` these are the numbers that say which</ID>
     <ID>NoComments:ReportAssembler.kt:Who held the heap: connections, live subscriptions and frames queued to slow clients.</ID>
-    <ID>NoComments:Settings.kt:(see RelayIdentity). Foreign group ids always pass through unmanaged.</ID>
-    <ID>NoComments:Settings.kt:- 13 NIP-59 seal (inner layer, only valid wrapped in a gift wrap)</ID>
-    <ID>NoComments:Settings.kt:- 22242 NIP-42 client auth (carried only in ["AUTH", ...] frames)</ID>
-    <ID>NoComments:Settings.kt:- 24242 Blossom (NIP-B7) blob auth (HTTP Authorization header artifact)</ID>
-    <ID>NoComments:Settings.kt:- 27235 NIP-98 HTTP auth (HTTP Authorization header artifact)</ID>
-    <ID>NoComments:Settings.kt:- 9734 NIP-57 zap request (sent to the LNURL callback, not relays)</ID>
-    <ID>NoComments:Settings.kt:100s service timer only runs the check roughly once per day.</ID>
-    <ID>NoComments:Settings.kt:3.0.0–3.2.1 has completed over both databases (see TagDeduplicator.cleanDatabases).</ID>
-    <ID>NoComments:Settings.kt:Amber (NIP-55) signer package that holds the relay owner's key. Set together with</ID>
-    <ID>NoComments:Settings.kt:Epoch seconds of the last daily nsite update check. Gated like [lastBackup] so the</ID>
-    <ID>NoComments:Settings.kt:Event kinds that are signed artifacts never meant to be published to a relay as</ID>
-    <ID>NoComments:Settings.kt:Events whose kind is in this set are rejected at ingestion before any storage.</ID>
-    <ID>NoComments:Settings.kt:External aggregator-style relays (e.g. wss://aggr.nostr.land) that mirror events</ID>
-    <ID>NoComments:Settings.kt:External signer used by the aggregator to answer NIP-42 AUTH challenges from upstream</ID>
-    <ID>NoComments:Settings.kt:Installed nsites (NIP-5A static websites). Downloaded to filesDir/nsites/&lt;folderName&gt;</ID>
-    <ID>NoComments:Settings.kt:NET_CAPABILITY_NOT_RESTRICTED — i.e., a "limited"/restricted network such as a</ID>
-    <ID>NoComments:Settings.kt:NIP-01 OK "mute:" response telling the client the event was ignored. Default-off so</ID>
-    <ID>NoComments:Settings.kt:NIP-86 (Relay Management API) state. Maps are kept as ConcurrentHashMap</ID>
-    <ID>NoComments:Settings.kt:Relays consulted only to look up NIP-65 (kind 10002), contact-list (kind 3), and</ID>
-    <ID>NoComments:Settings.kt:Relays queried to discover nsites. nsites use only this set (never the aggregator</ID>
-    <ID>NoComments:Settings.kt:Relays the aggregator listens to when no pubkey is configured — plain kinds+since</ID>
-    <ID>NoComments:Settings.kt:Signed artifacts that must never be stored as standalone events (see DEFAULT_REJECTED_KINDS).</ID>
-    <ID>NoComments:Settings.kt:Suggested relays for discovering nsites (NIP-5A). Used by the "reset to default" action</ID>
-    <ID>NoComments:Settings.kt:True once the one-shot cleanup of contact lists belonging to authors the owner does</ID>
-    <ID>NoComments:Settings.kt:True once the one-shot cleanup of duplicate TagEntity rows left behind by Citrine</ID>
-    <ID>NoComments:Settings.kt:UI preference for the "Show events" screen: when false the per-kind pie chart</ID>
-    <ID>NoComments:Settings.kt:When true, ephemeral events that no open subscription was listening to receive a</ID>
-    <ID>NoComments:Settings.kt:When true, the aggregator suspends subscriptions whenever the active network is</ID>
-    <ID>NoComments:Settings.kt:When true, the aggregator suspends subscriptions whenever the active network lacks</ID>
-    <ID>NoComments:Settings.kt:[ownerPubkey] by the "login with Amber" flow in relay info settings — the owner</ID>
-    <ID>NoComments:Settings.kt:addition to each author's per-relay NIP-65 routing.</ID>
-    <ID>NoComments:Settings.kt:and legend are hidden, leaving only the kind list.</ID>
-    <ID>NoComments:Settings.kt:and never stored:</ID>
-    <ID>NoComments:Settings.kt:and served through the same localhost web-client mechanism as [webClients].</ID>
-    <ID>NoComments:Settings.kt:available again. Default-on because the aggregator holds many WebSockets open and</ID>
-    <ID>NoComments:Settings.kt:because they are mutated by the HTTP RPC route and read concurrently by</ID>
-    <ID>NoComments:Settings.kt:captive-portal hotspot or an enterprise network that blocks general internet</ID>
-    <ID>NoComments:Settings.kt:challenges via the configured Amber-compatible signer.</ID>
-    <ID>NoComments:Settings.kt:fields are set, the aggregator installs a RelayAuthenticator and signs kind-22242</ID>
-    <ID>NoComments:Settings.kt:from many upstreams. Subscribed for the full author set on every refresh, in</ID>
-    <ID>NoComments:Settings.kt:groups are always managed: when an owner is configured their key is the relay</ID>
-    <ID>NoComments:Settings.kt:identity, otherwise a locally generated key signs the group metadata</ID>
-    <ID>NoComments:Settings.kt:in the nsite relay editor; an empty user list falls back to the aggregator relays.</ID>
-    <ID>NoComments:Settings.kt:is the dominant battery cost on cellular.</ID>
-    <ID>NoComments:Settings.kt:metered (mobile data or metered Wi-Fi) and resumes once an unmetered network is</ID>
-    <ID>NoComments:Settings.kt:mute-list (kind 10000) records when not already cached locally. An empty user</ID>
-    <ID>NoComments:Settings.kt:never silently break.</ID>
-    <ID>NoComments:Settings.kt:not follow has run (see RelayAggregator.pruneStrangerContactLists). Persisted so a</ID>
-    <ID>NoComments:Settings.kt:pubkey can only be configured through that login, never typed manually. NIP-29</ID>
-    <ID>NoComments:Settings.kt:relays); an empty list falls back to [DEFAULT_NSITE_RELAYS].</ID>
-    <ID>NoComments:Settings.kt:relays. Populated by the "Log in with external signer" flow in settings. When both</ID>
-    <ID>NoComments:Settings.kt:restart does not re-scan the whole kind-3 set.</ID>
-    <ID>NoComments:Settings.kt:standalone events. They are rejected at ingestion with an OK false "blocked:" response</ID>
-    <ID>NoComments:Settings.kt:subscription, no author filter. Also usable as an explicit extra relay set.</ID>
-    <ID>NoComments:Settings.kt:traffic. Resumes automatically once an unrestricted network is available.</ID>
-    <ID>NoComments:Settings.kt:unhandled ephemeral events are simply acknowledged with a plain OK.</ID>
-    <ID>NoComments:Settings.kt:value falls back to DEFAULT_NIP65_INDEXER_RELAYS at read time so NIP-65 lookups</ID>
-    <ID>NoComments:Settings.kt:verifyEvent() on the WebSocket dispatcher.</ID>
     <ID>NoComments:StoragePickerHelperTest.kt:A later unrelated permission result must not reopen the picker.</ID>
-    <ID>NoComments:SubscriptionManager.kt:An `OutOfMemoryError` in one request must not take the whole relay down: the process</ID>
-    <ID>NoComments:SubscriptionManager.kt:NIP-45: filters are OR'd into a single aggregated count result. No EOSE and no</ID>
-    <ID>NoComments:SubscriptionManager.kt:Returns true when a CLOSED denial was sent and the caller must stop.</ID>
-    <ID>NoComments:SubscriptionManager.kt:live registration: a COUNT subscription never receives EVENT fanout.</ID>
     <ID>NoComments:TagDeduplicator.kt:Catch any duplicate with pk &lt;= maxKeepPk (e.g. interleaved inserts).</ID>
     <ID>NoComments:TagDeduplicator.kt:Replaceable kinds hit hardest by hourly refreshes — repair these first so contact lists,</ID>
     <ID>NoComments:TagDeduplicator.kt:Scans [dao] in two passes: priority replaceable kinds first, then all events by primary</ID>
@@ -574,18 +341,6 @@
     <ID>NoComments:UnexpectedCrashSaver.kt:this returns, so a report launched on a scope is usually lost. OOMs are included too</ID>
     <ID>NoComments:UnexpectedCrashSaver.kt:— a real user's heap report is the only way to see which query exhausted memory in</ID>
     <ID>NoComments:UserAgentTest.kt:Runs after DefaultContentTypeInterceptor and answers locally, so no network is touched.</ID>
-    <ID>NoComments:WebClientHosting.kt:404 fallback.</ID>
-    <ID>NoComments:WebClientHosting.kt:Catch-all: /, /index.html, /assets/foo.js, etc</ID>
-    <ID>NoComments:WebClientHosting.kt:Filter headers before sending back to the original client</ID>
-    <ID>NoComments:WebClientHosting.kt:First try requested file</ID>
-    <ID>NoComments:WebClientHosting.kt:Forward headers to target, excluding engine-managed ones</ID>
-    <ID>NoComments:WebClientHosting.kt:IMPORTANT: Let Ktor manage Transfer-Encoding and Content-Length</ID>
-    <ID>NoComments:WebClientHosting.kt:If this is a client subdomain, proxy instead</ID>
-    <ID>NoComments:WebClientHosting.kt:SPA fallback for root or route paths without file extension</ID>
-    <ID>NoComments:WebClientHosting.kt:SPA/index fallback for the root or extension-less routes.</ID>
-    <ID>NoComments:WebClientHosting.kt:Serves a file from an app-internal [rootDir] (used by installed nsites). Mirrors</ID>
-    <ID>NoComments:WebClientHosting.kt:Streaming happens here</ID>
-    <ID>NoComments:WebClientHosting.kt:Trim leading slash</ID>
     <ID>NoComments:WebSocketServerService.kt:Add the intent, which inflates the back stack.</ID>
     <ID>NoComments:WebSocketServerService.kt:Always read the latest value so a delayed sample() emission cannot</ID>
     <ID>NoComments:WebSocketServerService.kt:Daily nsite update check. Gated by lastNsiteCheck like the weekly backup,</ID>
