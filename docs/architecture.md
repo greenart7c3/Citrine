@@ -193,6 +193,10 @@ stored events per kind as `KindCount` rows and deletes a kind on the app scope).
 `SettingsScreen` and `AggregatorSettingsScreen` call `RelayAggregator.onConfigChanged()`,
 which opens the database from its installed context. `Nip86SettingsScreen`:
 `Nip86SettingsViewModel.purgeEventsOf` deletes the banned authors' events.
+`ContactsScreen`: `ContactsViewModel` loads the stored contact lists and the
+outbox relay list. `RebroadcastScreen`: `RebroadcastViewModel` finds the author's
+relays (the stored NIP-65 list, else fetched, else the contact list's relays) and
+starts the rebroadcast job on the app scope.
 
 ### 4. Split the large server and service files
 
