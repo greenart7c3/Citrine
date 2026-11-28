@@ -41,7 +41,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,14 +49,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.server.Settings
-import com.greenart7c3.citrine.service.LocalPreferences
-import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.ui.navigation.Route
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 private data class SettingsCategory(
     val route: String,
@@ -122,89 +117,106 @@ fun SettingsScreen(
     navController: NavController,
     onApplyChanges: () -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(LocalContext.current.applicationContext)),
 ) {
     val context = LocalContext.current
     val pokeyListener = LocalPokeyListener.current
     val settingsResetCompleteMsg = stringResource(R.string.settings_reset_complete)
-    val scope = rememberCoroutineScope()
     var showResetDialog by remember { mutableStateOf(false) }
 
     Surface(modifier) {
         Column(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
+            SettingsCategoryList(
+                onNavigate = { route -> navController.navigate(route) },
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(settingsCategories.size) { index ->
-                    SettingsCategoryCard(
-                        category = settingsCategories[index],
-                        onClick = { navController.navigate(settingsCategories[index].route) },
-                    )
-                }
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                ElevatedButton(onClick = { showResetDialog = true }) {
-                    Icon(
-                        imageVector = Icons.Filled.RestartAlt,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(stringResource(R.string.reset_all_settings))
-                }
-            }
+            )
+            ResetSettingsButton(onClick = { showResetDialog = true })
         }
     }
 
     if (showResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text(stringResource(R.string.reset_all_settings)) },
-            text = { Text(stringResource(R.string.reset_all_settings_warning)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showResetDialog = false
-                        scope.launch(Dispatchers.IO) {
-                            Settings.defaultValues()
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            RelayAggregator.onConfigChanged()
-                            if (Settings.listenToPokeyBroadcasts) {
-                                pokeyListener.register()
-                            } else {
-                                pokeyListener.unregister()
-                            }
-                            onApplyChanges()
-                            scope.launch {
-                                Toast.makeText(
-                                    context,
-                                    settingsResetCompleteMsg,
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                        }
+        ResetSettingsDialog(
+            onConfirm = {
+                showResetDialog = false
+                viewModel.resetAllSettings(
+                    pokeyListener = pokeyListener,
+                    onApplyChanges = onApplyChanges,
+                    onReset = {
+                        Toast.makeText(
+                            context,
+                            settingsResetCompleteMsg,
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     },
-                ) {
-                    Text(stringResource(R.string.yes))
-                }
+                )
             },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
+            onDismiss = { showResetDialog = false },
         )
     }
+}
+
+@Composable
+private fun SettingsCategoryList(
+    onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(settingsCategories.size) { index ->
+            SettingsCategoryCard(
+                category = settingsCategories[index],
+                onClick = { onNavigate(settingsCategories[index].route) },
+            )
+        }
+        item {
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun ResetSettingsButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        ElevatedButton(onClick = onClick) {
+            Icon(
+                imageVector = Icons.Filled.RestartAlt,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(stringResource(R.string.reset_all_settings))
+        }
+    }
+}
+
+@Composable
+private fun ResetSettingsDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.reset_all_settings)) },
+        text = { Text(stringResource(R.string.reset_all_settings_warning)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.yes))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
 }
 
 @Composable
