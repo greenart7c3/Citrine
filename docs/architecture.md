@@ -272,12 +272,23 @@ exhaustive `when`s over `VerificationResult`, and `deleteEventById` into
 `requireEventAuthor` and `deleteVerified`. Step 4 is done: no file has a
 `LargeClass` entry left.
 
-### 5. Split `Citrine`
+### 5. Split `Citrine` (done)
 
 The outbound client and its WebSocket factory, the ephemeral/expired cleanup
 job and the crash report cache each move into a class of their own that
 `Citrine` constructs and holds, so `Citrine` is left with wiring and the
 Application callbacks.
+
+Done: the outbound client is `relays/AppRelayClient` (step 1), the crash report
+cache was already `CrashReportCache`, and the Pokey receiver is `PokeyListener`.
+The ephemeral, expired and age-based cleanup is `service/EventCleanup`, which
+`Citrine` holds as `eventCleanup`. Coil's loader is built by
+`service/ImageLoaderFactory`, registered with `SingletonImageLoader.setSafe`
+instead of `Citrine` implementing the factory. Starting the relay from a boot or
+package-replaced broadcast is `WebSocketServerService.scheduleStart(context)`, so
+`BootBroadcastReceiver` no longer reads the container (it leaves
+`contextCitrineUsers`). `Citrine` is left with wiring (`install` calls), `onCreate`
+and the companion's job flags (about 110 lines, down from 321).
 
 ### 6. Clear the mechanical Compose findings (done)
 

@@ -3,7 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$Settings.autoBackup &amp;&amp; Settings.autoBackupFolder.isNotBlank() &amp;&amp; Settings.lastBackup &lt; oneWeekAgo &amp;&amp; !Citrine.isImportingEvents</ID>
-    <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$suspend fun eventsToDelete</ID>
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
     <ID>CyclomaticComplexMethod:GroupState.kt:GroupState$fun applyMetadataTags: GroupState</ID>
@@ -193,22 +192,11 @@
     <ID>NoComments:AuthGate.kt:Early CLOSED for filters that explicitly target a managed private group's content</ID>
     <ID>NoComments:BrowseNsitesScreen.kt:Compact relative timestamp ("now", "5m", "1h", "3d", "2w", "4mo", "1y") for the feed-style author he</ID>
     <ID>NoComments:BrowseNsitesScreen.kt:Refresh the list so the installed item is now flagged.</ID>
-    <ID>NoComments:Citrine.kt:Coil image loader whose network fetches route through the app's OkHttp client so nsite</ID>
-    <ID>NoComments:Citrine.kt:Monotonic generation incremented whenever a new ephemeral event is stored so a</ID>
-    <ID>NoComments:Citrine.kt:Re-arm if an ephemeral event arrived in the narrow window between exiting</ID>
     <ID>NoComments:Citrine.kt:Record why the previous process died (ANR, native crash, excessive resource usage) while</ID>
-    <ID>NoComments:Citrine.kt:True on startup so the first cleanup sweep catches any ephemeral events left</ID>
     <ID>NoComments:Citrine.kt:True on startup so the first maintenance tick clears any stale progress</ID>
-    <ID>NoComments:Citrine.kt:Wait slightly past the 1-minute ephemeral TTL so a burst of ephemeral</ID>
-    <ID>NoComments:Citrine.kt:behind before a restart; cleared once the table holds no ephemeral events and</ID>
-    <ID>NoComments:Citrine.kt:events is cleaned in one pass; loop again if newer ones remain.</ID>
-    <ID>NoComments:Citrine.kt:icon downloads honor the relay's Tor/proxy fail-closed policy instead of going direct.</ID>
     <ID>NoComments:Citrine.kt:it can still be read, and leave it in the in-app log as well as the crash dialog.</ID>
     <ID>NoComments:Citrine.kt:notification left behind by a prior crash; set whenever notification id 2 is</ID>
     <ID>NoComments:Citrine.kt:posted and cleared once cancelled, avoiding redundant Binder IPCs when idle.</ID>
-    <ID>NoComments:Citrine.kt:racing cleanup pass never clears [hasEphemeralEvents] after a newer insert.</ID>
-    <ID>NoComments:Citrine.kt:re-set whenever a new ephemeral event is stored.</ID>
-    <ID>NoComments:Citrine.kt:the loop and releasing ephemeralCleanupScheduled.</ID>
     <ID>NoComments:CitrineBottomBar.kt:no bottom bar</ID>
     <ID>NoComments:CitrineContentProvider.kt:Already deleted</ID>
     <ID>NoComments:CitrineContentProvider.kt:Already sorted DESC by DB query</ID>
@@ -359,6 +347,15 @@
     <ID>NoComments:EventBroadcastWorker.kt:Get relays for the event</ID>
     <ID>NoComments:EventBroadcastWorker.kt:Send event to relays</ID>
     <ID>NoComments:EventBroadcastWorker.kt:Try to get relays from the user's advertised relay list (kind 10002)</ID>
+    <ID>NoComments:EventCleanup.kt:Monotonic generation incremented whenever a new ephemeral event is stored so a</ID>
+    <ID>NoComments:EventCleanup.kt:Re-arm if an ephemeral event arrived in the narrow window between exiting</ID>
+    <ID>NoComments:EventCleanup.kt:True on startup so the first cleanup sweep catches any ephemeral events left</ID>
+    <ID>NoComments:EventCleanup.kt:Wait slightly past the 1-minute ephemeral TTL so a burst of ephemeral</ID>
+    <ID>NoComments:EventCleanup.kt:behind before a restart; cleared once the table holds no ephemeral events and</ID>
+    <ID>NoComments:EventCleanup.kt:events is cleaned in one pass; loop again if newer ones remain.</ID>
+    <ID>NoComments:EventCleanup.kt:racing cleanup pass never clears [hasEphemeralEvents] after a newer insert.</ID>
+    <ID>NoComments:EventCleanup.kt:re-set whenever a new ephemeral event is stored.</ID>
+    <ID>NoComments:EventCleanup.kt:the loop and releasing ephemeralCleanupScheduled.</ID>
     <ID>NoComments:EventDao.kt:Callers pair [getEventRowsByIds] with this instead of [getEvents]: its `@Relation`</ID>
     <ID>NoComments:EventDao.kt:NIP-29: every event carrying an `h` tag for the given group id (used by kind 9008</ID>
     <ID>NoComments:EventDao.kt:NIP-29: group ids whose admins deleted the given event id via a stored kind-9005</ID>
