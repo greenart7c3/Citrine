@@ -650,7 +650,7 @@ class CitrineContentProvider : ContentProvider() {
         val eventWithTags = event.toEventWithTags()
         eventDao.insertEventWithTags(database, eventWithTags, null)
         if (event.isEphemeral()) {
-            context?.citrine?.scheduleEphemeralCleanup(database)
+            context?.citrine?.eventCleanup?.scheduleEphemeralCleanup(database)
         }
         return QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
     }

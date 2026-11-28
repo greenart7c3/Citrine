@@ -124,7 +124,6 @@ class ArchitectureTest {
         val contextCitrineUsers = setOf(
             "MainActivity.kt",
             "provider/CitrineContentProvider.kt",
-            "service/BootBroadcastReceiver.kt",
             "service/ClipboardReceiver.kt",
             "service/EventBroadcastWorker.kt",
             "service/WebSocketServerService.kt",

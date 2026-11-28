@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.greenart7c3.citrine.Citrine
-import com.greenart7c3.citrine.citrine
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 
@@ -16,11 +15,11 @@ class BootBroadcastReceiver : BroadcastReceiver() {
             return
         }
         if (intent.action == Intent.ACTION_PACKAGE_REPLACED && Build.VERSION.SDK_INT < Build.VERSION_CODES.S && intent.dataString?.contains("com.greenart7c3.citrine") == true) {
-            context.citrine.startService()
+            WebSocketServerService.scheduleStart(context)
         } else if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            context.citrine.startService()
+            WebSocketServerService.scheduleStart(context)
         } else if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            context.citrine.startService()
+            WebSocketServerService.scheduleStart(context)
         }
     }
 }

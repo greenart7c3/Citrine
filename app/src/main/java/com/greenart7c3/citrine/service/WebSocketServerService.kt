@@ -2,11 +2,13 @@ package com.greenart7c3.citrine.service
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.app.TaskStackBuilder
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Binder
@@ -109,7 +111,7 @@ class WebSocketServerService : Service() {
                             lastAgeRetentionMs = nowMs
                         }
                         citrine.applicationScope.launch {
-                            citrine.eventsToDelete(database, runAgeRetention = runAgeRetention)
+                            citrine.eventCleanup.eventsToDelete(database, runAgeRetention = runAgeRetention)
                         }
                     }
 
@@ -266,7 +268,7 @@ class WebSocketServerService : Service() {
             appDatabase = database,
             context = app,
             appScope = app.applicationScope,
-            onEphemeralEventStored = { app.scheduleEphemeralCleanup(database) },
+            onEphemeralEventStored = { app.eventCleanup.scheduleEphemeralCleanup(database) },
         )
         CustomWebSocketService.server?.start()
 
@@ -562,5 +564,23 @@ class WebSocketServerService : Service() {
         ageSeconds < 3600L -> "${ageSeconds / 60L}m"
         ageSeconds < 86_400L -> "${ageSeconds / 3600L}h"
         else -> "${ageSeconds / 86_400L}d"
+    }
+
+    companion object {
+        /** Starts the relay service through an alarm, which a boot or package-replaced broadcast is allowed to do. */
+        fun scheduleStart(context: Context) {
+            try {
+                val operation = PendingIntent.getForegroundService(
+                    context,
+                    10,
+                    Intent(context, WebSocketServerService::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                )
+                val alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
+                alarmManager.set(AlarmManager.RTC_WAKEUP, 1000, operation)
+            } catch (e: Exception) {
+                Log.e(Citrine.TAG, "Failed to start WebSocketServerService", e)
+            }
+        }
     }
 }
