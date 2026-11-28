@@ -55,9 +55,14 @@ private const val AGE_RETENTION_INTERVAL_MS = 60L * 60 * 1000
 private const val LOG_TRIM_INTERVAL_MS = 6L * 60 * 60 * 1000
 private const val ONE_WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000
 private const val ONE_DAY_SECONDS = 24L * 60 * 60
+private const val FOREGROUND_NOTIFICATION_ID = 1
+private const val BACKUP_PROGRESS_NOTIFICATION_ID = 2
+private const val DATABASE_UPGRADE_NOTIFICATION_ID = 3
 
-// Notification id for "nsite update available" prompts. Ids 1/2/3 are already used by the
-// foreground service, backup/download progress, and database-upgrade notifications.
+/**
+ * Notification id for "nsite update available" prompts. Ids 1/2/3 are already used by the
+ * foreground service, backup/download progress, and database-upgrade notifications.
+ */
 const val NSITE_UPDATE_NOTIFICATION_ID = 4
 
 class WebSocketServerService : Service() {
@@ -65,12 +70,12 @@ class WebSocketServerService : Service() {
     private val binder = LocalBinder()
     private var timer: Timer? = null
 
-    // Signature of the last notification we posted to id 1, used to skip re-posting
-    // identical content. Re-posting an unchanged notification can still wake the
-    // device and refresh the system UI, even with setOnlyAlertOnce.
-    @Volatile private var lastForegroundSignature: String? = null
+    // Re-posting an unchanged notification can still wake the device and refresh the
+    // system UI, even with setOnlyAlertOnce, so identical content is not re-posted.
+    @Suppress("NoComments")
+    @Volatile
+    private var lastForegroundSignature: String? = null
 
-    // Signature of the last backup-progress notification we posted to id 2.
     @Volatile private var lastBackupProgressText: String? = null
 
     @Volatile private var lastAgeRetentionMs: Long = 0L
@@ -126,7 +131,7 @@ class WebSocketServerService : Service() {
         val nowMs = System.currentTimeMillis()
         if (isBackupIdle() && !Citrine.isImportingEvents) {
             if (lastBackupProgressText != null || Citrine.hasProgressNotification) {
-                NotificationManagerCompat.from(citrine).cancel(2)
+                NotificationManagerCompat.from(citrine).cancel(BACKUP_PROGRESS_NOTIFICATION_ID)
                 lastBackupProgressText = null
                 Citrine.hasProgressNotification = false
             }
@@ -146,16 +151,19 @@ class WebSocketServerService : Service() {
             startAutoBackup(database)
         }
 
-        // Daily nsite update check. Gated by lastNsiteCheck like the weekly backup,
-        // and persisted before the async work so the next maintenance tick doesn't re-trigger.
         if (!Citrine.isImportingEvents && Settings.nsites.isNotEmpty()) {
-            val oneDayAgo = TimeUtils.now() - ONE_DAY_SECONDS
-            if (Settings.lastNsiteCheck < oneDayAgo) {
-                Settings.lastNsiteCheck = TimeUtils.now()
-                LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
+            if (isDailyNsiteCheckDue()) {
+                persistNsiteCheckBeforeItRunsSoTheNextTickSkipsIt()
                 scheduleNsiteUpdateCheck()
             }
         }
+    }
+
+    private fun isDailyNsiteCheckDue(): Boolean = Settings.lastNsiteCheck < TimeUtils.now() - ONE_DAY_SECONDS
+
+    private fun persistNsiteCheckBeforeItRunsSoTheNextTickSkipsIt() {
+        Settings.lastNsiteCheck = TimeUtils.now()
+        LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
     }
 
     private fun isBackupIdle(): Boolean = Citrine.job == null || Citrine.job?.isCompleted == true
@@ -217,7 +225,7 @@ class WebSocketServerService : Service() {
     private fun showBackupProgress(progress: String) {
         val notificationManager = NotificationManagerCompat.from(citrine)
         if (progress.isBlank()) {
-            notificationManager.cancel(2)
+            notificationManager.cancel(BACKUP_PROGRESS_NOTIFICATION_ID)
             lastBackupProgressText = null
             Citrine.hasProgressNotification = false
         } else if (progress != lastBackupProgressText) {
@@ -249,7 +257,7 @@ class WebSocketServerService : Service() {
                 .build()
 
             if (ActivityCompat.checkSelfPermission(citrine, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(2, notification)
+                notificationManager.notify(BACKUP_PROGRESS_NOTIFICATION_ID, notification)
                 lastBackupProgressText = progress
                 Citrine.hasProgressNotification = true
             }
@@ -297,10 +305,10 @@ class WebSocketServerService : Service() {
                         .build()
 
                     if (ActivityCompat.checkSelfPermission(this@WebSocketServerService, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                        notificationManager.notify(3, notification)
+                        notificationManager.notify(DATABASE_UPGRADE_NOTIFICATION_ID, notification)
                     }
                 } else {
-                    notificationManager.cancel(3)
+                    notificationManager.cancel(DATABASE_UPGRADE_NOTIFICATION_ID)
                 }
             }
         }
@@ -308,7 +316,6 @@ class WebSocketServerService : Service() {
 
     private fun startRelayServer(database: AppDatabase) {
         Log.d(Citrine.TAG, "Starting WebSocket server")
-        // Start the WebSocket server
         val app = citrine
         CustomWebSocketService.server = CustomWebSocketServer(
             host = Settings.host,
@@ -321,6 +328,7 @@ class WebSocketServerService : Service() {
         CustomWebSocketService.server?.start()
     }
 
+    @Suppress("NoComments")
     private fun startOrStopTor() {
         if (Settings.useTor || Settings.useProxy) {
             Log.d(Citrine.TAG, "Starting embedded Tor (hiddenService=${Settings.useTor}, socks=${Settings.useProxy})")
@@ -350,7 +358,7 @@ class WebSocketServerService : Service() {
         while (error && attempts < 5) {
             try {
                 val initial = buildForegroundNotification(RelayAggregator.status.value.takeIf { it.enabled })
-                startForeground(1, initial.notification)
+                startForeground(FOREGROUND_NOTIFICATION_ID, initial.notification)
                 lastForegroundSignature = initial.signature
                 error = false
             } catch (e: Exception) {
@@ -361,29 +369,35 @@ class WebSocketServerService : Service() {
     }
 
     private fun watchForegroundNotificationSources() {
-        @OptIn(FlowPreview::class)
+        refreshNotificationOnAggregatorStatus()
+        refreshNotificationWhenTorResolvesOnionHostname()
+    }
+
+    // The aggregator publishes status on every burst of received events and every
+    // relay connect/disconnect. Updating the foreground-service notification that
+    // often wakes SystemUI and racks up binder IPCs. Emit phase/enabled transitions
+    // immediately and throttle counter-only refreshes to [NOTIFICATION_THROTTLE_MS].
+    // Always read the latest value so a delayed sample() emission cannot
+    // overwrite a newer phase/enabled transition with stale state.
+    @Suppress("NoComments")
+    @OptIn(FlowPreview::class)
+    private fun refreshNotificationOnAggregatorStatus() {
         scope.launch {
-            // The aggregator publishes status on every burst of received events and every
-            // relay connect/disconnect. Updating the foreground-service notification that
-            // often wakes SystemUI and racks up binder IPCs. Emit phase/enabled transitions
-            // immediately and throttle counter-only refreshes to [NOTIFICATION_THROTTLE_MS].
             merge(
                 RelayAggregator.status.distinctUntilChangedBy { it.enabled to it.phase },
                 RelayAggregator.status.sample(NOTIFICATION_THROTTLE_MS),
             ).collect {
                 try {
-                    // Always read the latest value so a delayed sample() emission cannot
-                    // overwrite a newer phase/enabled transition with stale state.
                     postForegroundNotificationIfChanged(RelayAggregator.status.value.takeIf { it.enabled })
                 } catch (e: Exception) {
                     Log.e(Citrine.TAG, "Error updating aggregator notification", e)
                 }
             }
         }
+    }
 
+    private fun refreshNotificationWhenTorResolvesOnionHostname() {
         scope.launch {
-            // Refresh the notification when Tor finishes bootstrapping so the Copy Tor
-            // action appears with the resolved onion hostname.
             TorManager.state.collect {
                 try {
                     postForegroundNotificationIfChanged(RelayAggregator.status.value.takeIf { it.enabled })
@@ -394,10 +408,12 @@ class WebSocketServerService : Service() {
         }
     }
 
+    /**
+     * Stops Tor first, outside the timed shutdown block: that only enqueues the Tor stop on the
+     * application scope, and it must always run so the SOCKS listener and the onion service go
+     * away even if the server shutdown times out.
+     */
     override fun onDestroy() {
-        // Outside the timed block below: this only enqueues the Tor stop on the
-        // application scope, and it must always run so the SOCKS listener and
-        // the onion service go away even if the server shutdown times out.
         TorManager.stop()
         runBlocking {
             withTimeoutOrNull(5_000) {
@@ -436,8 +452,6 @@ class WebSocketServerService : Service() {
             .setContentIntent(resultPendingIntent)
             .setGroup(groupId)
 
-        // requestCode is used to disambiguate each PendingIntent's extras, otherwise
-        // FLAG_UPDATE_CURRENT would have them all share the most recently set URL.
         val localUrl = "ws://127.0.0.1:${Settings.port}"
         notificationBuilder.addAction(
             R.drawable.ic_launcher_background,
@@ -503,9 +517,7 @@ class WebSocketServerService : Service() {
         val resultIntent = Intent(this, MainActivity::class.java)
 
         return TaskStackBuilder.create(this).run {
-            // Add the intent, which inflates the back stack.
             addNextIntentWithParentStack(resultIntent)
-            // Get the PendingIntent containing the entire back stack.
             getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
     }
@@ -525,10 +537,13 @@ class WebSocketServerService : Service() {
         ) {
             return
         }
-        NotificationManagerCompat.from(this).notify(1, built.notification)
+        NotificationManagerCompat.from(this).notify(FOREGROUND_NOTIFICATION_ID, built.notification)
         lastForegroundSignature = built.signature
     }
 
+    // requestCode is used to disambiguate each PendingIntent's extras, otherwise
+    // FLAG_UPDATE_CURRENT would have them all share the most recently set URL.
+    @Suppress("NoComments")
     private fun copyPendingIntent(url: String, requestCode: Int): PendingIntent {
         val intent = Intent(this, ClipboardReceiver::class.java)
         intent.putExtra("url", url)
@@ -556,10 +571,10 @@ class WebSocketServerService : Service() {
 
         val updateIntent = Intent(this, ClipboardReceiver::class.java)
         updateIntent.putExtra("nsite_update", address)
+        val requestCodeUniquePerAddress = address.hashCode()
         val updatePendingIntent = PendingIntent.getBroadcast(
             this,
-            // Unique requestCode per address so concurrent nsite notifications don't collide.
-            address.hashCode(),
+            requestCodeUniquePerAddress,
             updateIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )

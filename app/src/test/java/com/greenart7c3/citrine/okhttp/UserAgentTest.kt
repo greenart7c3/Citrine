@@ -12,8 +12,7 @@ class UserAgentTest {
     @Test
     fun outgoingRequestsCarryCitrineUserAgent() {
         var sent: String? = null
-        // Runs after DefaultContentTypeInterceptor and answers locally, so no network is touched.
-        val client = HttpClientManager.getHttpClient(false).newBuilder()
+        val clientAnsweringLocallyAfterOurInterceptors = HttpClientManager.getHttpClient(false).newBuilder()
             .addInterceptor { chain ->
                 sent = chain.request().header("User-Agent")
                 Response.Builder()
@@ -26,7 +25,7 @@ class UserAgentTest {
             }
             .build()
 
-        client.newCall(Request.Builder().url("http://example.invalid/").build()).execute().close()
+        clientAnsweringLocallyAfterOurInterceptors.newCall(Request.Builder().url("http://example.invalid/").build()).execute().close()
 
         assertEquals("Citrine/${BuildConfig.VERSION_NAME}", sent)
     }

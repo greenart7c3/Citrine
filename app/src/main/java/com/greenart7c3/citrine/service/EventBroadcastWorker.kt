@@ -39,20 +39,17 @@ class EventBroadcastWorker(
             val event = dbEvent.toEvent()
             Log.d(Citrine.TAG, "EventBroadcastWorker: Broadcasting event $eventId to relays")
 
-            // Get relays for the event
             val relays = getRelaysForEvent(event, database)
             if (relays.isNullOrEmpty()) {
                 Log.d(Citrine.TAG, "EventBroadcastWorker: No relays found for event $eventId")
                 return@withContext Result.success()
             }
 
-            // Ensure client is connected
             val client = applicationContext.citrine.relayClient.client
             if (!client.isActive()) {
                 client.connect()
             }
 
-            // Send event to relays
             val result = client.publishAndConfirm(event, relayList = relays)
             client.disconnect()
             Log.d(Citrine.TAG, "EventBroadcastWorker: Success: $result broadcast event $eventId to relays")
@@ -86,7 +83,6 @@ class EventBroadcastWorker(
             return relaysFromEvent.toSet()
         }
 
-        // Try to get relays from the user's advertised relay list (kind 10002)
         val advertisedRelayList = database.eventDao().getAdvertisedRelayList(event.pubKey)
         val outboxRelays = advertisedRelayList?.toEvent() as? AdvertisedRelayListEvent
         val writeRelays = outboxRelays?.writeRelays()?.mapNotNull { relay ->

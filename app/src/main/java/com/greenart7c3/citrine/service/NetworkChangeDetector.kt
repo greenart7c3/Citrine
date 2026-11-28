@@ -39,13 +39,7 @@ class NetworkChangeDetector {
         val previous = last
         last = current
 
-        if (previous == null) {
-            // The first report after registering the callback is the network the
-            // relays are already connecting on; only a return after a loss is a change.
-            val wasLost = lost
-            lost = false
-            return if (wasLost) "network available again" else null
-        }
+        if (previous == null) return changeOnlyWhenReturningAfterLoss()
 
         return when {
             previous.networkId != current.networkId -> describeSwitch(previous, current)
@@ -65,6 +59,12 @@ class NetworkChangeDetector {
         last = null
         lost = true
         return true
+    }
+
+    private fun changeOnlyWhenReturningAfterLoss(): String? {
+        val wasLost = lost
+        lost = false
+        return if (wasLost) "network available again" else null
     }
 
     private fun describeSwitch(previous: NetworkSnapshot, current: NetworkSnapshot): String {

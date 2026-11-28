@@ -53,22 +53,22 @@ class ExpirationCheckBenchmark {
         val events = buildEvents(count = 20_000)
         val now = 1_700_000_000L
         val iterations = 20
+        val jitWarmUpPasses = 3
 
-        // Warm-up so JIT compiles both paths before measurement.
-        repeat(3) {
+        repeat(jitWarmUpPasses) {
             events.forEach { isExpiredViaTags(it, now) }
             events.forEach { isExpiredViaColumn(it, now) }
         }
 
         var tagsNanos = 0L
         var columnNanos = 0L
-        var sink = 0
+        var sinkKeepingLoopsFromJitElimination = 0
         repeat(iterations) {
             tagsNanos += measureNanoTime {
-                events.forEach { if (isExpiredViaTags(it, now)) sink++ }
+                events.forEach { if (isExpiredViaTags(it, now)) sinkKeepingLoopsFromJitElimination++ }
             }
             columnNanos += measureNanoTime {
-                events.forEach { if (isExpiredViaColumn(it, now)) sink++ }
+                events.forEach { if (isExpiredViaColumn(it, now)) sinkKeepingLoopsFromJitElimination++ }
             }
         }
 
@@ -86,7 +86,6 @@ class ExpirationCheckBenchmark {
             "Expected column access ($columnNanos ns) to beat tag scan ($tagsNanos ns)",
             columnNanos < tagsNanos,
         )
-        // Keeps the sink reachable so the JIT can't eliminate the loops above.
-        assertTrue(sink >= 0)
+        assertTrue(sinkKeepingLoopsFromJitElimination >= 0)
     }
 }

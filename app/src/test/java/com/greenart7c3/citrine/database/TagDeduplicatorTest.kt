@@ -54,10 +54,10 @@ class TagDeduplicatorTest {
         val dao = db.eventDao()
         dao.insertEvents(listOf(event("contact1", kind = 3)))
 
-        // Simulate 5 duplicate re-ingestions of a 4-tag contact list.
         val original = (0 until 4).map { i -> tag("contact1", i, "orig-$i") }
         dao.insertTags(original)
-        repeat(4) { copy ->
+        val reIngestionsAfterTheOriginal = 4
+        repeat(reIngestionsAfterTheOriginal) { copy ->
             dao.insertTags((0 until 4).map { i -> tag("contact1", i, "dup-$copy-$i") })
         }
         assertEquals(20, dao.countTagsForEvent("contact1"))
@@ -71,11 +71,10 @@ class TagDeduplicatorTest {
     }
 
     @Test
-    fun deduplicateEventHandlesInterleavedDuplicates() = runBlocking {
+    fun deduplicateEventRemovesADuplicateInsertedBeforeTheLastKeptRow() = runBlocking {
         val dao = db.eventDao()
         dao.insertEvents(listOf(event("e1", kind = 3)))
 
-        // pos 0 duplicated BEFORE pos 1's first appearance, so its duplicate has pk < maxKeepPk.
         dao.insertTags(
             listOf(
                 tag("e1", 0, "first-0"),

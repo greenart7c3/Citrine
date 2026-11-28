@@ -36,6 +36,18 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
+/**
+ * One adapter is one session: the relay client builds a fresh one per dial, and OkHttp binds
+ * exactly one socket to the listener created in [connect], so anything that reaches that
+ * listener is from this session by construction.
+ *
+ * The session ends once, by whichever of `onClosed`, `onFailure` or [disconnect] comes first,
+ * claimed with a compare-and-set so a [disconnect] racing a terminal callback still yields
+ * exactly one report. That keeps the [WebSocket.disconnect] contract: after [disconnect] the
+ * failure OkHttp raises for its own `cancel()` on the reader thread, or the `onClosed` its writer
+ * thread delivers once a close handshake completes, is dropped rather than reaching a relay
+ * client that has already moved on.
+ */
 class OkHttpWebSocket(
     val url: NormalizedRelayUrl,
     val httpClient: (url: NormalizedRelayUrl) -> OkHttpClient,
@@ -47,18 +59,6 @@ class OkHttpWebSocket(
 
     @Volatile private var activeListener: OkHttpWebsocketListener? = null
 
-    /**
-     * Set once, by whichever of `onClosed`, `onFailure` or [disconnect] ends the session first.
-     *
-     * One adapter is one session: the relay client builds a fresh one per dial, and OkHttp binds
-     * exactly one socket to the listener created in [connect], so anything that reaches that
-     * listener is from this session by construction. The only question a callback has to ask is
-     * whether the session already ended -- which is what keeps the [WebSocket.disconnect] contract:
-     * after [disconnect] the failure OkHttp raises for its own `cancel()` on the reader thread, or
-     * the `onClosed` its writer thread delivers once a close handshake completes, is dropped rather
-     * than reaching a relay client that has already moved on. Claimed with a compare-and-set so a
-     * [disconnect] racing a terminal callback still yields exactly one report.
-     */
     private val ended = AtomicBoolean(false)
 
     fun buildRequest() = Request.Builder().url(url.url).build()
@@ -98,14 +98,15 @@ class OkHttpWebSocket(
     ) : okhttp3.WebSocketListener() {
         val scope = CoroutineScope(Dispatchers.IO + exceptionHandler)
 
-        // UNLIMITED on purpose — do NOT bound this channel. The app holds
-        // many relay connections; a bounded buffer under a slow consumer
-        // would block OkHttp reader threads and park the backlog on the
-        // relay's outbound buffers — infrastructure that isn't ours. Drain
-        // the remote as fast as it can send; consumer speed is handled
-        // downstream.
+        /**
+         * UNLIMITED on purpose — do NOT bound this channel. The app holds many relay
+         * connections; a bounded buffer under a slow consumer would block OkHttp reader threads
+         * (which must stay free to keep draining the socket) and park the backlog on the relay's
+         * outbound buffers — infrastructure that isn't ours. Drain the remote as fast as it can
+         * send; consumer speed is handled downstream.
+         */
         val incomingMessages: Channel<String> = Channel(Channel.UNLIMITED)
-        val job = // Launch a coroutine to process messages from the channel.
+        val job =
             scope.launch {
                 for (message in incomingMessages) {
                     out.onMessage(message)
@@ -118,8 +119,7 @@ class OkHttpWebSocket(
             scope.cancel()
         }
 
-        /** Claims the session's single terminal report. False if it already ended. */
-        private fun endSession(): Boolean {
+        private fun claimTerminalReport(): Boolean {
             if (!ended.compareAndSet(false, true)) return false
             socket = null
             activeListener = null
@@ -143,30 +143,30 @@ class OkHttpWebSocket(
             text: String,
         ) {
             if (ended.get()) return
-            // Never blocks (unlimited channel): the OkHttp reader
-            // thread must stay free to keep draining the socket.
             incomingMessages.trySendBlocking(text)
         }
 
+        /**
+         * The relay sent a CLOSE frame. OkHttp's contract (WebSocketListener KDoc,
+         * RealWebSocket, and its own WebSocketEcho recipe) is that onClosed fires
+         * only once BOTH peers have sent a close, and sending ours is the
+         * application's job. Left unanswered, the socket sits half-closed: no
+         * onClosed, no onFailure, send() still accepted and silently discarded, and
+         * a later cancel() is silent too -- so the relay client kept believing it
+         * was connected, with its REQs live, until OkHttp's 120s ping path finally
+         * failed up to two intervals later. Answering completes the handshake and
+         * OkHttp reports onClosed at once, whether or not the relay still holds the
+         * TCP session open.
+         *
+         * Always answers 1000 rather than echoing `code`: close() validates the code it is
+         * asked to write and throws on the reserved ones (1005, 1006, 1015), and a
+         * relay may send anything.
+         */
         override fun onClosing(
             webSocket: okhttp3.WebSocket,
             code: Int,
             reason: String,
         ) {
-            // The relay sent a CLOSE frame. OkHttp's contract (WebSocketListener KDoc,
-            // RealWebSocket, and its own WebSocketEcho recipe) is that onClosed fires
-            // only once BOTH peers have sent a close, and sending ours is the
-            // application's job. Left unanswered, the socket sits half-closed: no
-            // onClosed, no onFailure, send() still accepted and silently discarded, and
-            // a later cancel() is silent too -- so the relay client kept believing it
-            // was connected, with its REQs live, until OkHttp's 120s ping path finally
-            // failed up to two intervals later. Answering completes the handshake and
-            // OkHttp reports onClosed at once, whether or not the relay still holds the
-            // TCP session open.
-            //
-            // Always 1000 rather than echoing `code`: close() validates the code it is
-            // asked to write and throws on the reserved ones (1005, 1006, 1015), and a
-            // relay may send anything.
             webSocket.close(1000, null)
         }
 
@@ -175,7 +175,7 @@ class OkHttpWebSocket(
             code: Int,
             reason: String,
         ) {
-            if (!endSession()) return
+            if (!claimTerminalReport()) return
             out.onClosed(code, reason)
         }
 
@@ -184,7 +184,7 @@ class OkHttpWebSocket(
             t: Throwable,
             response: Response?,
         ) {
-            if (!endSession()) return
+            if (!claimTerminalReport()) return
             out.onFailure(t, response?.code, response?.message)
         }
     }
@@ -192,17 +192,18 @@ class OkHttpWebSocket(
     class Builder(
         val httpClient: (NormalizedRelayUrl) -> OkHttpClient,
     ) : WebsocketBuilder {
-        // Called when connecting.
         override fun build(
             url: NormalizedRelayUrl,
             out: WebSocketListener,
         ) = OkHttpWebSocket(url, httpClient, out)
     }
 
+    /**
+     * Claims the session end itself and reports it at once: OkHttp's cancel() raises no callback
+     * when no reader is left to fail (the state a relay-initiated close leaves behind), and when
+     * it does the failure arrives later on its own thread. The relay client needs the answer now.
+     */
     override fun disconnect() {
-        // Claim the session ourselves: OkHttp's cancel() raises no callback when no reader is
-        // left to fail (the state a relay-initiated close leaves behind), and when it does the
-        // failure arrives later on its own thread. The relay client needs the answer now.
         val closing = socket ?: return
         if (!ended.compareAndSet(false, true)) return
         socket = null

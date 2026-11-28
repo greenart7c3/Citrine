@@ -82,7 +82,7 @@ object EventRebroadcaster {
         }
 
         val client = relayClient.client
-        val collector = OkCollector()
+        val collector = OkAndConnectFailureCollector()
         client.addConnectionListener(collector)
         if (!client.isActive()) {
             client.connect()
@@ -176,7 +176,7 @@ object EventRebroadcaster {
     private suspend fun awaitOkResponses(
         batch: List<Event>,
         relays: Set<NormalizedRelayUrl>,
-        collector: OkCollector,
+        collector: OkAndConnectFailureCollector,
     ) {
         val deadline = System.currentTimeMillis() + BATCH_TIMEOUT_MS
         while (System.currentTimeMillis() < deadline) {
@@ -191,7 +191,7 @@ object EventRebroadcaster {
     private fun tallyBatch(
         batch: List<Event>,
         relays: Set<NormalizedRelayUrl>,
-        collector: OkCollector,
+        collector: OkAndConnectFailureCollector,
     ) {
         var accepted = 0
         var duplicates = 0
@@ -229,7 +229,7 @@ object EventRebroadcaster {
 
     private fun dropUnreachableRelays(
         activeRelays: MutableSet<NormalizedRelayUrl>,
-        collector: OkCollector,
+        collector: OkAndConnectFailureCollector,
     ) {
         val unreachable = activeRelays.filter { relay ->
             collector.connectFailures(relay) >= MAX_CONNECT_FAILURES && !collector.hasResponded(relay)
@@ -243,8 +243,7 @@ object EventRebroadcaster {
         }
     }
 
-    /** Collects ["OK", ...] responses and connection failures across all relays. */
-    private class OkCollector : RelayConnectionListener {
+    private class OkAndConnectFailureCollector : RelayConnectionListener {
         private val oks = ConcurrentHashMap<String, OkMessage>()
         private val failures = ConcurrentHashMap<NormalizedRelayUrl, Int>()
         private val responded = ConcurrentHashMap.newKeySet<NormalizedRelayUrl>()

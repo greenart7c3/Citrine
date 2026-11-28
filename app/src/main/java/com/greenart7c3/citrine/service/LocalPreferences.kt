@@ -9,6 +9,11 @@ import com.greenart7c3.citrine.server.Settings
 
 object PrefKeys {
     const val ALLOWED_KINDS = "allowed_kinds"
+
+    /**
+     * Written even when empty, so a user who clears the defaults keeps an empty set on reload
+     * instead of having [Settings.DEFAULT_REJECTED_KINDS] restored.
+     */
     const val REJECTED_KINDS = "rejected_kinds"
     const val ALLOWED_PUB_KEYS = "allowed_pub_keys"
     const val ALLOWED_TAGGED_PUB_KEYS = "allowed_tagged_pub_keys"
@@ -31,6 +36,12 @@ object PrefKeys {
     const val START_ON_BOOT = "start_on_boot"
     const val LAST_BACKUP = "last_backup"
     const val USE_PROXY = "use_proxy"
+
+    /**
+     * Unset on installs from before this key existed, which routed every URL through Tor when the
+     * proxy was enabled; it then defaults to [USE_PROXY] to keep that behavior until the user
+     * chooses otherwise.
+     */
     const val PROXY_ALL_URLS = "proxy_all_urls"
     const val USE_TOR = "use_tor"
     const val ONION_HOSTNAME = "onion_hostname"
@@ -56,21 +67,25 @@ object PrefKeys {
     const val RELAY_AGGREGATOR_WIFI_ONLY = "relay_aggregator_wifi_only"
     const val RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK = "relay_aggregator_pause_on_limited_network"
 
-    // One-shot flag: contact lists of authors the owner does not follow have been deleted.
+    /** One-shot flag: contact lists of authors the owner does not follow have been deleted. */
     const val STRANGER_CONTACT_LISTS_PRUNED = "stranger_contact_lists_pruned"
 
-    // One-shot flag: duplicate TagEntity rows from Citrine 3.0.0–3.2.1 have been cleaned.
+    /** One-shot flag: duplicate TagEntity rows from Citrine 3.0.0–3.2.1 have been cleaned. */
     const val DUPLICATE_TAGS_CLEANED = "duplicate_tags_cleaned"
     const val AGGREGATOR_SIGNER_PUBKEY = "aggregator_signer_pubkey"
     const val AGGREGATOR_SIGNER_PACKAGE_NAME = "aggregator_signer_package_name"
     const val SHOW_EVENT_GRAPH = "show_event_graph"
 
-    // Amber (NIP-55) signer package holding the relay owner's key; set together with
-    // RELAY_OWNER_PUBKEY by the Amber login in relay info settings.
+    /**
+     * Amber (NIP-55) signer package holding the relay owner's key; set together with
+     * [RELAY_OWNER_PUBKEY] by the Amber login in relay info settings.
+     */
     const val RELAY_SIGNER_PACKAGE_NAME = "relay_signer_package_name"
 
-    // Hex private key of the relay's generated fallback identity, used to sign NIP-29
-    // group metadata when no owner is configured. Read/written only by RelayIdentity.
+    /**
+     * Hex private key of the relay's generated fallback identity, used to sign NIP-29
+     * group metadata when no owner is configured. Read/written only by [RelayIdentity].
+     */
     const val RELAY_PRIVATE_KEY = "relay_private_key"
 }
 
@@ -98,8 +113,6 @@ object LocalPreferences {
         } else {
             putString(PrefKeys.ALLOWED_KINDS, settings.allowedKinds.joinToString(","))
         }
-        // Persisted even when empty so a user who clears the defaults keeps an empty
-        // set on reload instead of having DEFAULT_REJECTED_KINDS restored.
         putString(PrefKeys.REJECTED_KINDS, settings.rejectedKinds.joinToString(","))
         putStringSet(PrefKeys.ALLOWED_PUB_KEYS, settings.allowedPubKeys)
         putStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, settings.allowedTaggedPubKeys)
@@ -234,8 +247,6 @@ object LocalPreferences {
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
         Settings.lastBackup = prefs.getLong(PrefKeys.LAST_BACKUP, 0)
         Settings.useProxy = prefs.getBoolean(PrefKeys.USE_PROXY, false)
-        // Migration: pre-existing installs with proxy enabled used to route every URL through Tor.
-        // Preserve that behavior unless the user has explicitly chosen otherwise.
         Settings.proxyAllUrls = prefs.getBoolean(PrefKeys.PROXY_ALL_URLS, Settings.useProxy)
         Settings.useTor = prefs.getBoolean(PrefKeys.USE_TOR, false)
         Settings.onionHostname = prefs.getString(PrefKeys.ONION_HOSTNAME, "") ?: ""

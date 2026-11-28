@@ -16,11 +16,18 @@ import kotlinx.coroutines.launch
  * forwards to the real logcat when running a debug build.
  *
  * Persisted logs are trimmed to the last week by [com.greenart7c3.citrine.service.WebSocketServerService].
+ *
+ * Logging never blocks the caller: entries go through a bounded buffer that drops the oldest
+ * entries when the writer falls behind. Sequential non-error lines (a startup or an event burst)
+ * are coalesced for a short window into a single SQLite write transaction instead of one disk
+ * write per call, error lines flush immediately so fatal context reaches disk right away, and an
+ * idle writer parks on the buffer with zero wakeups. A failing write is dropped silently.
  */
 object Log {
-    // Integer priority constants mirroring [android.util.Log] so call sites that pass a level
-    // (e.g. isLoggable) keep working unchanged.
+    /** Mirrors [android.util.Log.DEBUG], for call sites that pass a level (e.g. [isLoggable]). */
     const val DEBUG = 3
+
+    /** Mirrors [android.util.Log.ERROR], for call sites that pass a level (e.g. [isLoggable]). */
     const val ERROR = 6
 
     private const val LEVEL_VERBOSE = "V"
@@ -30,18 +37,13 @@ object Log {
     private const val LEVEL_ERROR = "E"
 
     private const val BATCH_SIZE = 200
-
-    // Short coalescing window so sequential log lines (e.g. a startup or event burst)
-    // land in a single SQLite write transaction instead of triggering one disk write
-    // per call. Idle periods park on channel.receive() with zero wakeups.
-    private const val FLUSH_DELAY_MS = 2_000L
+    private const val COALESCE_WINDOW_MS = 2_000L
+    private const val PENDING_ENTRIES_CAPACITY = 2000
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // Bounded buffer so a burst of logging on a hot path can never block callers or grow without
-    // bound. When the consumer falls behind we drop the oldest entries rather than the newest.
-    private val channel = Channel<LogEntity>(
-        capacity = 2000,
+    private val pendingEntries = Channel<LogEntity>(
+        capacity = PENDING_ENTRIES_CAPACITY,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
@@ -63,32 +65,28 @@ object Log {
 
     private suspend fun consume(logDao: LogDao) {
         val buffer = ArrayList<LogEntity>(BATCH_SIZE)
-        for (first in channel) {
+        for (first in pendingEntries) {
             buffer.add(first)
-            // Coalesce sequential non-error log lines into a single SQLite write
-            // transaction without cancelling receive() (so no log line can be dropped
-            // on a timeout boundary). Error logs flush immediately so fatal context
-            // reaches disk right away. Idle periods park on channel iteration with zero
-            // wakeups.
             if (first.level != LEVEL_ERROR) {
-                delay(FLUSH_DELAY_MS)
+                delayToCoalesceWithoutCancellingReceive()
             }
             while (true) {
                 while (buffer.size < BATCH_SIZE) {
-                    val next = channel.tryReceive().getOrNull() ?: break
+                    val next = pendingEntries.tryReceive().getOrNull() ?: break
                     buffer.add(next)
                 }
                 try {
                     logDao.insertAll(buffer)
                 } catch (_: Exception) {
-                    // Never let logging failures crash or spam the app.
                 }
                 buffer.clear()
-                val more = channel.tryReceive().getOrNull() ?: break
+                val more = pendingEntries.tryReceive().getOrNull() ?: break
                 buffer.add(more)
             }
         }
     }
+
+    private suspend fun delayToCoalesceWithoutCancellingReceive() = delay(COALESCE_WINDOW_MS)
 
     private fun persist(level: String, tag: String, msg: String, tr: Throwable?) {
         val message = if (tr != null) {
@@ -96,7 +94,7 @@ object Log {
         } else {
             msg
         }
-        channel.trySend(
+        pendingEntries.trySend(
             LogEntity(
                 timestamp = System.currentTimeMillis(),
                 level = level,

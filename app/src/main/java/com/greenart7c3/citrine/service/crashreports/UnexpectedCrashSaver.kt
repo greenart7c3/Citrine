@@ -27,14 +27,16 @@ class UnexpectedCrashSaver(
 ) : Thread.UncaughtExceptionHandler {
     private val defaultUEH: Thread.UncaughtExceptionHandler? = Thread.getDefaultUncaughtExceptionHandler()
 
+    /**
+     * Caches the report synchronously: the default handler terminates the process immediately
+     * after this returns, so a report launched on a scope is usually lost. OOMs are included too,
+     * since a real user's heap report is the only way to see which query exhausted memory in the
+     * field; a failing write is only logged before the default handler runs.
+     */
     override fun uncaughtException(
         t: Thread,
         e: Throwable,
     ) {
-        // Written synchronously: the default handler terminates the process immediately after
-        // this returns, so a report launched on a scope is usually lost. OOMs are included too
-        // — a real user's heap report is the only way to see which query exhausted memory in
-        // the field, and the try/catch below keeps the write itself from failing.
         try {
             cache.appendReport(ReportAssembler(cache.appContext).buildReport(e))
         } catch (reportError: Throwable) {

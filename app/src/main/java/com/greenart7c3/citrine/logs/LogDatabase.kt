@@ -16,6 +16,7 @@ abstract class LogDatabase : RoomDatabase() {
         @Volatile
         private var database: LogDatabase? = null
 
+        /** Logs are disposable: if the schema ever changes the database starts fresh instead of migrating. */
         fun getDatabase(context: Context): LogDatabase = database ?: synchronized(this) {
             database ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -23,7 +24,6 @@ abstract class LogDatabase : RoomDatabase() {
                 "citrine_logs_database",
             )
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                // Logs are disposable; if the schema ever changes just start fresh.
                 .fallbackToDestructiveMigration(true)
                 .build()
                 .also { database = it }

@@ -44,16 +44,17 @@ object TorManager {
     private const val BOOTSTRAP_POLL_MS = 500L
     private const val SOCKS_BIND_ATTEMPTS = 5
 
-    // Grace window after stop() before tearing down the TorClient completely.
     // A settings "Apply" restarts WebSocketServerService within ~1s, so keeping
-    // the client dormant briefly avoids a 15-30s re-bootstrap on unrelated
+    // the client dormant briefly avoids a 15-30s Tor re-bootstrap on unrelated
     // setting edits while still freeing all Tor background tasks and sockets
     // when the relay is actually stopped.
+    @Suppress("NoComments")
     private const val DESTROY_AFTER_STOP_DELAY_MS = 10_000L
 
-    // The identity key is generated right after startOnionService, so the
+    // Arti generates the identity key right after startOnionService, so the
     // hostname normally shows up with the first poll. The deadline only
     // matters if the keystore write fails or the launch silently stalls.
+    @Suppress("NoComments")
     private const val ONION_HOSTNAME_TIMEOUT_MS = 90_000L
 
     sealed interface State {
@@ -66,24 +67,19 @@ object TorManager {
     private val _state = MutableStateFlow<State>(State.Off)
     val state: StateFlow<State> = _state.asStateFlow()
 
-    /** The start → bootstrap job; non-null and active while Tor is up or coming up. */
     @Volatile
-    private var job: Job? = null
+    private var startedOrStartingJob: Job? = null
 
-    /** Pending stop/destroy cleanup job, chained so lifecycle calls never race. */
     @Volatile
-    private var pendingLifecycle: Job? = null
+    private var lastChainedLifecycleJob: Job? = null
 
-    /** Delayed full teardown scheduled by [stop]; cancelled if [start] runs again promptly. */
     @Volatile
     private var pendingDestroy: Job? = null
 
-    /** Serializes binding and releasing the SOCKS listener against [stop]. */
-    private val proxyLock = Any()
+    private val socksListenerLock = Any()
 
-    /** True once the native library loaded; native calls are skipped until then. */
     @Volatile
-    private var nativeReady = false
+    private var nativeLibraryLoaded = false
 
     @Volatile
     private var lastLocalPort: Int = 0
@@ -101,25 +97,27 @@ object TorManager {
             _state.value = State.Bootstrapping
             pendingDestroy?.cancel()
             pendingDestroy = null
-            job?.cancel()
-            val previous = pendingLifecycle
+            startedOrStartingJob?.cancel()
+            val previous = lastChainedLifecycleJob
             val newJob = appScope.launch(Dispatchers.IO) {
                 previous?.join()
                 run()
             }
-            job = newJob
-            pendingLifecycle = newJob
+            startedOrStartingJob = newJob
+            lastChainedLifecycleJob = newJob
         }
     }
 
+    /**
+     * Rebuilds the Arti client (fresh circuits), as restarting the old tor daemon did; the
+     * UI's Retry button is the way out of [State.Error].
+     */
     fun retry() {
         val port = lastLocalPort.takeIf { it > 0 } ?: Settings.port
         if (restarting) return
         restarting = true
         appScope.launch(Dispatchers.IO) {
             try {
-                // Rebuild the client (fresh circuits), as restarting the old tor
-                // daemon did — the UI's Retry button is the way out of Error.
                 stop(destroyClient = true)
                 start(port, lastEnableHiddenService || Settings.useTor)
             } finally {
@@ -143,16 +141,16 @@ object TorManager {
         synchronized(this) {
             pendingDestroy?.cancel()
             pendingDestroy = null
-            job?.cancel()
-            job = null
+            startedOrStartingJob?.cancel()
+            startedOrStartingJob = null
             _state.value = State.Off
             releaseSocksPort()
-            if (!nativeReady) return
-            previous = pendingLifecycle
+            if (!nativeLibraryLoaded) return
+            previous = lastChainedLifecycleJob
             stopJob = appScope.launch(Dispatchers.IO) {
                 previous?.join()
                 try {
-                    synchronized(proxyLock) { ArtiNative.stopSocksProxy() }
+                    synchronized(socksListenerLock) { ArtiNative.stopSocksProxy() }
                     ArtiNative.stopOnionService()
                     if (destroyClient) {
                         ArtiNative.destroy()
@@ -166,18 +164,18 @@ object TorManager {
                     Log.e(Citrine.TAG, "Error stopping built-in Tor", e)
                 }
             }
-            pendingLifecycle = stopJob
+            lastChainedLifecycleJob = stopJob
             if (!destroyClient) {
                 pendingDestroy = appScope.launch(Dispatchers.IO) {
                     val self = coroutineContext[Job]
                     delay(DESTROY_AFTER_STOP_DELAY_MS)
                     stopJob.join()
                     synchronized(this@TorManager) {
-                        // A new start() or stop() arrived while we were waiting.
-                        if (!isActive || job != null || pendingDestroy !== self) return@launch
+                        val startOrStopArrivedWhileWaiting = !isActive || startedOrStartingJob != null || pendingDestroy !== self
+                        if (startOrStopArrivedWhileWaiting) return@launch
                         pendingDestroy = null
-                        val prev = pendingLifecycle
-                        pendingLifecycle = appScope.launch(Dispatchers.IO) {
+                        val prev = lastChainedLifecycleJob
+                        lastChainedLifecycleJob = appScope.launch(Dispatchers.IO) {
                             prev?.join()
                             try {
                                 ArtiNative.destroy()
@@ -193,6 +191,7 @@ object TorManager {
         }
     }
 
+    @Suppress("NoComments")
     private suspend fun run() {
         try {
             startTor()
@@ -206,6 +205,7 @@ object TorManager {
         }
     }
 
+    @Suppress("NoComments")
     private suspend fun startTor() {
         if (!initializeArti()) return
 
@@ -223,22 +223,12 @@ object TorManager {
 
     private suspend fun initializeArti(): Boolean {
         ArtiNative.setLogCallback { line -> Log.d(Citrine.TAG, line) }
-        nativeReady = true
-        // Check cancellation after publishing nativeReady: if stop() ran before
-        // nativeReady became true it cancelled our job without queuing a stopJob,
-        // so we must bail out before initialize() creates a live TorClient.
-        currentCoroutineContext().ensureActive()
+        nativeLibraryLoaded = true
+        abortIfStoppedBeforeNativeLibraryLoaded()
         Log.i(Citrine.TAG, "Starting built-in Tor: ${ArtiNative.getVersion()}")
 
         val dataDir = File(appContext.filesDir, "arti").apply { mkdirs() }
-        // kmp-tor's hidden service directory holds the relay's onion
-        // identity key: hand it to Arti for the address carry-over before
-        // anything can generate a fresh key. kmp-tor's work directory is
-        // the app_torservice getDir.
-        val legacyHsDir = File(
-            appContext.getDir("torservice", Context.MODE_PRIVATE),
-            "citrine_hs",
-        ).takeIf { File(it, "hs_ed25519_secret_key").exists() }
+        val legacyHsDir = kmpTorHiddenServiceDirHoldingOnionIdentityKey()
         val result = ArtiNative.initialize(
             dataDir.absolutePath,
             legacyHsDir?.absolutePath ?: "",
@@ -248,18 +238,30 @@ object TorManager {
             return false
         }
         currentCoroutineContext().ensureActive()
-        // Wake the client if a previous stop() placed it in DormantMode::Soft.
-        ArtiNative.setDormant(0)
+        wakeFromDormancyLeftByPreviousStop()
         if (legacyHsDir == null) {
-            // kmp-tor leftovers without a hidden service identity.
-            deleteLegacyKmpTorData()
+            deleteLegacyKmpTorDataWithoutOnionIdentity()
         } else {
-            // The identity-bearing directory is the native side's to remove
-            // (only after a successful import); the Tor cache holds no
-            // keys and can go as soon as Arti initialized.
-            File(appContext.cacheDir, "torservice").deleteRecursively()
+            deleteKeylessKmpTorCacheLeavingIdentityDirToArtiImport()
         }
         return true
+    }
+
+    private suspend fun abortIfStoppedBeforeNativeLibraryLoaded() {
+        currentCoroutineContext().ensureActive()
+    }
+
+    private fun kmpTorHiddenServiceDirHoldingOnionIdentityKey(): File? = File(
+        appContext.getDir("torservice", Context.MODE_PRIVATE),
+        "citrine_hs",
+    ).takeIf { File(it, "hs_ed25519_secret_key").exists() }
+
+    private fun wakeFromDormancyLeftByPreviousStop() {
+        ArtiNative.setDormant(0)
+    }
+
+    private fun deleteKeylessKmpTorCacheLeavingIdentityDirToArtiImport() {
+        File(appContext.cacheDir, "torservice").deleteRecursively()
     }
 
     private fun startOrStopOnionService(): Boolean {
@@ -299,21 +301,18 @@ object TorManager {
         }
     }
 
-    /** Binds the SOCKS listener on a free loopback port; null (and Error) when none could be bound. */
     private suspend fun bindSocksProxy(): Int? {
-        val context = currentCoroutineContext()
+        val startContext = currentCoroutineContext()
         repeat(SOCKS_BIND_ATTEMPTS) {
             val port = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { it.localPort }
             val (username, password) = TorSocksAuthenticator.newCredentials()
-            val result = synchronized(proxyLock) {
-                // stop() may have run while initialize() was blocking.
-                if (!context.isActive) return null
+            val result = synchronized(socksListenerLock) {
+                val stoppedWhileInitializeBlocked = !startContext.isActive
+                if (stoppedWhileInitializeBlocked) return null
                 ArtiNative.startSocksProxy(port, username, password)
             }
             if (result == 0) {
-                // Published before the port, so no dial can reach the listener without them.
-                TorSocksAuthenticator.set(port, username, password)
-                HttpClientManager.setDefaultProxyOnPort(port)
+                publishCredentialsBeforeProxyPort(port, username, password)
                 return port
             }
             Log.e(Citrine.TAG, "Failed to bind the Tor SOCKS proxy on port $port ($result)")
@@ -322,12 +321,18 @@ object TorManager {
         return null
     }
 
+    private fun publishCredentialsBeforeProxyPort(port: Int, username: String, password: String) {
+        TorSocksAuthenticator.set(port, username, password)
+        HttpClientManager.setDefaultProxyOnPort(port)
+    }
+
     /**
      * Drops the SOCKS port and, while OkHttp still dials through it, replaces
      * the proxy with a fail-closed placeholder. Without this, the released
      * loopback port stays configured until Tor rebinds, and a co-installed app
      * that binds it first receives Citrine's proxied dials.
      */
+    @Suppress("NoComments")
     private fun releaseSocksPort() {
         TorSocksAuthenticator.clear()
         HttpClientManager.setDefaultProxy(null)
@@ -338,13 +343,7 @@ object TorManager {
         releaseSocksPort()
     }
 
-    /**
-     * kmp-tor's working directories from before the switch to Arti (the
-     * app_torservice getDir plus its cache). Only called when there is no
-     * hidden service identity in them: with one, the native side removes the
-     * directory itself after importing the key.
-     */
-    private fun deleteLegacyKmpTorData() {
+    private fun deleteLegacyKmpTorDataWithoutOnionIdentity() {
         listOf(
             appContext.getDir("torservice", Context.MODE_PRIVATE),
             File(appContext.cacheDir, "torservice"),

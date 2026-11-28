@@ -78,8 +78,8 @@ class EventRepositoryStreamTest {
         val (n, batches) = emit(listOf("a", "b", "c"))
 
         assertEquals(3, n)
-        // 600K + 600K is over the 1M-char chunk budget, so "b" starts a new chunk.
-        assertEquals(listOf(listOf("a"), listOf("b", "c")), batches.map { b -> b.map { it.event.id } })
+        val bStartsANewChunkSinceTwoHalvesExceedTheCharBudget = listOf(listOf("a"), listOf("b", "c"))
+        assertEquals(bStartsANewChunkSinceTwoHalvesExceedTheCharBudget, batches.map { b -> b.map { it.event.id } })
         assertEquals(listOf("t"), batches.flatten().single { it.event.id == "c" }.tags.map { it.col0Name })
     }
 
@@ -103,7 +103,6 @@ class EventRepositoryStreamTest {
         val ev = event("dup", 10)
         insert(ev)
 
-        // 100 unique tags duplicated 105 times = 10,500 rows (> CHUNK_TAG_BUDGET = 10,000).
         val oneCopy = (0 until 100).map { pos ->
             TagEntity(
                 pkEvent = "dup",
@@ -116,7 +115,8 @@ class EventRepositoryStreamTest {
                 kind = 1,
             )
         }
-        repeat(105) { dao.insertTags(oneCopy) }
+        val copiesAboveTheTenThousandRowChunkTagBudget = 105
+        repeat(copiesAboveTheTenThousandRowChunkTagBudget) { dao.insertTags(oneCopy) }
         assertEquals(10_500, dao.countTagsForEvent("dup"))
 
         val (n, batches) = emit(listOf("dup"))
@@ -187,7 +187,7 @@ class EventRepositoryStreamTest {
         val frame = with(EventRepository) { ewt.toEventFrame(escapedSubId) }
 
         assertEquals(true, estimate >= frame.length)
-        // Estimate should stay tight (no excessive over-allocation).
-        assertEquals(true, estimate - frame.length < 2_000)
+        val tightOverAllocationChars = 2_000
+        assertEquals(true, estimate - frame.length < tightOverAllocationChars)
     }
 }

@@ -70,6 +70,11 @@ object EventDownloader {
      * one in-flight batch per relay instead of accumulating the full set before writing.
      *
      * [onBatchDownloaded] is called with the size of every batch once it has been sunk.
+     *
+     * A slow relay that is still streaming events is making progress, so the REQ in flight is
+     * waited on. A relay that leaves a REQ unanswered gets a fresh one (see
+     * [RelayClientSubscription.restartSubscription]), and is given up on after a few silent
+     * rounds in a row.
      */
     suspend fun fetchAllEventsByUserPaginated(
         client: NostrClient,
@@ -125,17 +130,10 @@ object EventDownloader {
                 }
 
                 if (answered || toSend != null) {
-                    // A slow relay that is still streaming events is making progress: keep waiting
-                    // on the REQ in flight instead of giving up on it.
                     unansweredRounds = 0
                 } else {
-                    // Nothing arrived and the relay never answered the REQ. `until` only moves on
-                    // EOSE, so the next REQ would carry the exact same filters and the relay
-                    // client would dedupe it away (or consider the old one still in flight),
-                    // leaving this loop spinning forever. Drop the subscription so the retry is
-                    // actually sent, and give up on this relay after a few silent rounds.
                     unansweredRounds++
-                    if (unansweredRounds >= MAX_UNANSWERED_ROUNDS) {
+                    if (unansweredRounds >= MAX_CONSECUTIVE_UNANSWERED_REQS) {
                         Log.w(
                             Citrine.TAG,
                             "Giving up on ${normalizedUrl.url} after $unansweredRounds unanswered requests ($downloaded events downloaded)",
@@ -217,12 +215,6 @@ object EventDownloader {
         return result
     }
 
-    /**
-     * Stores an event fetched from an indexer without making the caller wait for Room.
-     *
-     * The relay-list lookups above only need the event itself; the write (signature check, the
-     * replaceable-event cleanup, the history database) must not gate the UI that asked for it.
-     */
     private fun storeInBackground(event: Event) {
         appScope.launch(Dispatchers.IO) {
             try {
@@ -284,10 +276,10 @@ object EventDownloader {
     }
 
     /**
-     * Tracks how many events the download has pulled so far and keeps notification 2 in sync.
      * Notifications are throttled: with a big archive `sink` runs for seconds per batch, and
      * `notify` is a binder round-trip, so republishing on every batch would be wasted work.
      */
+    @Suppress("NoComments")
     private class DownloadProgress(
         private val relayCount: Int,
     ) {
@@ -316,7 +308,7 @@ object EventDownloader {
 
         fun publish(force: Boolean) {
             val now = SystemClock.elapsedRealtime()
-            if (!force && now - lastPublish.get() < PUBLISH_INTERVAL_MS) return
+            if (!force && now - lastPublish.get() < MIN_PUBLISH_GAP_MS) return
             lastPublish.set(now)
             setProgress(
                 context.getString(
@@ -332,8 +324,7 @@ object EventDownloader {
         private fun formatCount(count: Int): String = NumberFormat.getIntegerInstance().format(count.toLong())
 
         private companion object {
-            /** Minimum gap between two progress notifications, in milliseconds. */
-            const val PUBLISH_INTERVAL_MS = 1_000L
+            const val MIN_PUBLISH_GAP_MS = 1_000L
         }
     }
 
@@ -385,9 +376,7 @@ object EventDownloader {
     }
 
     private const val REQ_TIMEOUT_MS = 30_000L
-
-    /** How many consecutive unanswered REQs a relay gets before the download gives up on it. */
-    private const val MAX_UNANSWERED_ROUNDS = 3
+    private const val MAX_CONSECUTIVE_UNANSWERED_REQS = 3
 }
 
 class RelayClientSubscription(

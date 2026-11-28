@@ -31,14 +31,19 @@ import kotlinx.coroutines.withContext
 
 private const val STACK_TRACE_FILENAME = "stack.trace"
 
+/**
+ * The cached crash report, stamped with the update time of the APK that wrote it. The installed
+ * APK's update time is read once, at construction (Citrine.onCreate), so emergency writes from
+ * [UnexpectedCrashSaver] during an OOM never make a PackageManager binder call. A report from
+ * another install (or an unstamped legacy one, whenever the update time is known) is discarded
+ * after reading only its first line, so an oversized old file never lands in the heap.
+ */
 class CrashReportCache(
     val appContext: Context,
     currentUpdateTimeProvider: () -> Long = { packageLastUpdateTime(appContext) },
 ) {
     private val lock = Any()
 
-    // Cached once at construction (Citrine.onCreate) so emergency writes from
-    // UnexpectedCrashSaver during an OOM never make a PackageManager binder call.
     private val currentUpdateTime: Long = currentUpdateTimeProvider()
 
     private fun outputStream() = appContext.openFileOutput(STACK_TRACE_FILENAME, Context.MODE_PRIVATE)
@@ -51,11 +56,6 @@ class CrashReportCache(
         null
     }
 
-    /**
-     * Reads the cached report text only if it belongs to the currently installed APK. Checks the
-     * first line before reading the body so an oversized or legacy file from a previous version is
-     * discarded without loading it into the heap.
-     */
     private fun readCurrentReportOrNull(): String? = inputStreamOrNull()?.use { inStream ->
         BufferedReader(InputStreamReader(inStream, Charsets.UTF_8)).use { reader ->
             val firstLine = reader.readLine() ?: return@use null
@@ -66,9 +66,7 @@ class CrashReportCache(
                 }
                 readBounded(reader, MAX_READ_CHARS).takeIf { it.isNotBlank() }
             } else {
-                // Legacy file written before update-time stamping: treat as belonging to an older
-                // install whenever we know the current APK's lastUpdateTime.
-                if (!isReportCurrent(0L, currentUpdateTime)) {
+                if (!isReportCurrent(UNSTAMPED_LEGACY_REPORT_UPDATE_TIME, currentUpdateTime)) {
                     return@use null
                 }
                 val rest = readBounded(reader, (MAX_READ_CHARS - firstLine.length - 1).coerceAtLeast(0))
@@ -111,9 +109,13 @@ class CrashReportCache(
     companion object {
         private const val UPDATE_TIME_PREFIX = "#updateTime="
         internal const val REPORT_SEPARATOR = "\n\n---\n\n"
+        private const val UNSTAMPED_LEGACY_REPORT_UPDATE_TIME = 0L
 
-        // Keeps stack.trace bounded in memory/disk and comfortably under NIP-44's 65,535-byte
-        // double-wrapped NIP-17 plaintext limit (with headroom for ExitReasons text).
+        /**
+         * Keeps stack.trace bounded in memory/disk and comfortably under NIP-44's 65,535-byte
+         * double-wrapped NIP-17 plaintext limit (with headroom for ExitReasons text):
+         * https://github.com/nostr-protocol/nips/blob/master/44.md
+         */
         internal const val MAX_CACHE_CHARS = 32_000
         private const val MAX_READ_CHARS = MAX_CACHE_CHARS * 2
 
@@ -133,19 +135,18 @@ class CrashReportCache(
             val directLen = existing.length + REPORT_SEPARATOR.length + incoming.length
             if (directLen <= maxChars) return "$existing$REPORT_SEPARATOR$incoming"
 
-            // Keep the newest complete reports that fit within maxChars.
             val parts = existing.split(REPORT_SEPARATOR) + incoming
-            val kept = ArrayDeque<String>()
+            val newestCompleteReportsThatFit = ArrayDeque<String>()
             var total = 0
             for (i in parts.lastIndex downTo 0) {
                 val part = parts[i]
                 if (part.isBlank()) continue
-                val added = if (kept.isEmpty()) part.length else part.length + REPORT_SEPARATOR.length
+                val added = if (newestCompleteReportsThatFit.isEmpty()) part.length else part.length + REPORT_SEPARATOR.length
                 if (total + added > maxChars) break
-                kept.addFirst(part)
+                newestCompleteReportsThatFit.addFirst(part)
                 total += added
             }
-            return kept.joinToString(REPORT_SEPARATOR)
+            return newestCompleteReportsThatFit.joinToString(REPORT_SEPARATOR)
         }
 
         private fun readBounded(reader: BufferedReader, maxChars: Int): String {

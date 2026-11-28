@@ -75,6 +75,15 @@ import kotlinx.coroutines.withContext
 /**
  * Full-screen report review: the user sees and can trim what is sent, then either signs it with
  * Amber (the developer can reply to their npub) or sends it from a throwaway key.
+ *
+ * ANRs and native crashes never reach the uncaught-exception handler, so the report also carries
+ * the process exit records from [ExitReasons], detected here too so the screen does not race ahead
+ * of Citrine.onCreate()'s background detection. The cached crash file is deleted once loaded, so
+ * after a failed send the screen keeps the only copy and stays open.
+ *
+ * With Amber, one prompt grants the whole NIP-17 build (the chat message, the seal and the NIP-44
+ * encryption of both). A foreground launcher is still registered for users who did not tick
+ * "remember" in Amber, where every seal and gift wrap needs its own confirmation.
  */
 @Composable
 fun CrashReportScreen(modifier: Modifier = Modifier) {
@@ -88,8 +97,7 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
     var reportText by remember { mutableStateOf("") }
     var showScreen by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
-    // Kept alive while the send is in flight: it holds the launcher Amber answers through.
-    var signer by remember { mutableStateOf<NostrSignerExternal?>(null) }
+    var signerHoldingAmberResponseLauncher by remember { mutableStateOf<NostrSignerExternal?>(null) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -116,16 +124,15 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
             withContext(Dispatchers.Main) {
                 sending = false
                 Toast.makeText(context, if (sent) sentMsg else failedMsg, Toast.LENGTH_LONG).show()
-                // On failure the cache file is already gone, so the screen keeps the only copy.
                 if (sent) forgetReport()
             }
         }
     }
 
     val signWithAmber = rememberAmberSignIn(
-        currentSigner = { signer },
+        currentSigner = { signerHoldingAmberResponseLauncher },
         onSignerReady = { externalSigner ->
-            signer = externalSigner
+            signerHoldingAmberResponseLauncher = externalSigner
             sendReport(externalSigner)
         },
     )
@@ -156,8 +163,7 @@ private fun rememberAmberSignIn(
     val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
     val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
 
-    // Responses to sign requests Amber sent back while the report was being built.
-    val respondLauncher = rememberLauncherForActivityResult(
+    val signResponsesWhileBuildingLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
         onResult = { result ->
             if (result.resultCode != RESULT_OK) {
@@ -180,11 +186,9 @@ private fun rememberAmberSignIn(
             if (externalSigner == null) {
                 Toast.makeText(context, signRequestRejectedMsg, Toast.LENGTH_SHORT).show()
             } else {
-                // Covers the case where the user did not tick "remember" in Amber, so every
-                // seal and gift wrap needs its own confirmation there.
                 externalSigner.registerForegroundLauncher { intent ->
                     try {
-                        respondLauncher.launch(intent)
+                        signResponsesWhileBuildingLauncher.launch(intent)
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         Log.e(Citrine.TAG, "Could not open the signer app", e)
@@ -211,9 +215,6 @@ private fun rememberAmberSignIn(
 
 private suspend fun loadReport(crashReportCache: CrashReportCache, appContext: Context): String {
     val stack = crashReportCache.loadAndDelete()
-    // ANRs and native crashes never reach the uncaught-exception handler, so the exit
-    // records are the only trace of them the user can send. Run detect() here too so the
-    // crash screen does not race ahead of Citrine.onCreate()'s background detection.
     ExitReasons.detect(appContext)
     val exits = ExitReasons.pending(appContext)
     return listOfNotNull(stack?.takeIf { it.isNotBlank() }, exits?.takeIf { it.isNotBlank() })
@@ -238,17 +239,18 @@ private fun amberSigner(data: Intent?, appContext: Context): NostrSignerExternal
     )
 }
 
+private const val NIP17_CHAT_MESSAGE_KIND = 14
+private const val NIP17_SEAL_KIND = 13
+
 private fun amberLoginIntent(): Intent {
     val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
     intent.putExtra("type", "get_public_key")
-    // One Amber prompt covers the whole NIP-17 build: the chat message, the seal and the
-    // NIP-44 encryption of both.
-    val permissions = listOf(
-        Permission(CommandType.SIGN_EVENT, 14),
-        Permission(CommandType.SIGN_EVENT, 13),
+    val onePromptForTheWholeNip17Build = listOf(
+        Permission(CommandType.SIGN_EVENT, NIP17_CHAT_MESSAGE_KIND),
+        Permission(CommandType.SIGN_EVENT, NIP17_SEAL_KIND),
         Permission(CommandType.NIP44_ENCRYPT),
     )
-    intent.putExtra("permissions", permissions.joinToString(",", "[", "]") { it.toJson() })
+    intent.putExtra("permissions", onePromptForTheWholeNip17Build.joinToString(",", "[", "]") { it.toJson() })
     intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     return intent
 }

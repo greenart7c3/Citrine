@@ -34,7 +34,11 @@ import java.util.Locale
  * very early, before the encrypted settings store is guaranteed to be usable), and exits older
  * than the current APK's `lastUpdateTime` are skipped so upgrading does not report stale history
  * from an earlier version. Formatted abnormal records are kept in a second key so both the log
- * line written from `Citrine.onCreate` and the crash screen see the same text.
+ * line written from `Citrine.onCreate` and the crash screen see the same text; pending records
+ * written before an upgrade (or before their update time was tracked) are dropped for the same
+ * reason. New abnormal records are appended to the pending ones from the same install, so a crash
+ * on startup does not erase the ANR that happened before it. Each record names the version that
+ * died, as stamped through [ActivityManager.setProcessStateSummary], or the installed one.
  */
 object ExitReasons {
     private const val PREFS = "exit_reasons"
@@ -48,10 +52,6 @@ object ExitReasons {
     private val timestampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
     private var stateSummarySet = false
 
-    // Exit reasons worth showing to a user: all of them mean the process died abnormally without
-    // reaching the uncaught-exception handler. REASON_LOW_MEMORY is deliberately excluded because
-    // Android's lmkd kills foreground services under device-wide memory pressure and provides no
-    // stack trace or actionable diagnostics.
     private val ABNORMAL_REASONS = setOf(
         ApplicationExitInfo.REASON_CRASH,
         ApplicationExitInfo.REASON_CRASH_NATIVE,
@@ -69,19 +69,8 @@ object ExitReasons {
      */
     fun isAbnormal(reason: Int, importance: Int): Boolean = importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE && reason in ABNORMAL_REASONS
 
-    /**
-     * Earliest exit timestamp that can belong to the current install and has not been seen yet.
-     * Ignoring exits older than [lastUpdateTime] prevents an upgrade from surfacing stale exits
-     * from a prior version under the newly installed version's label.
-     */
     internal fun cutoffTimestamp(lastSeen: Long, lastUpdateTime: Long): Long = maxOf(lastSeen, lastUpdateTime)
 
-    /**
-     * True when pending records stored under [pendingUpdateTime] still belong to the currently
-     * installed APK ([currentUpdateTime]). Pending records written before an upgrade (or before
-     * this timestamp was tracked) are dropped so an update does not surface stale prior-version
-     * reports.
-     */
     internal fun isPendingCurrent(pendingUpdateTime: Long, currentUpdateTime: Long): Boolean = currentUpdateTime == 0L || pendingUpdateTime == currentUpdateTime
 
     internal fun resolveVersionLabel(processStateSummary: ByteArray?, fallback: String = currentVersionLabel()): String = processStateSummary
@@ -167,10 +156,8 @@ object ExitReasons {
             prefs.edit {
                 putLong(KEY_LAST_SEEN, maxOf(cutoff, records.maxOf { it.timestamp }))
                 if (fresh.isNotEmpty()) {
-                    // Keep earlier unread records from this install: a crash on startup must not
-                    // erase the ANR that happened before it.
-                    val previous = if (pendingIsCurrent) prefs.getString(KEY_PENDING, null) else null
-                    val combined = listOfNotNull(previous?.takeIf { it.isNotBlank() }, fresh.joinToString("\n\n"))
+                    val earlierUnreadFromThisInstall = if (pendingIsCurrent) prefs.getString(KEY_PENDING, null) else null
+                    val combined = listOfNotNull(earlierUnreadFromThisInstall?.takeIf { it.isNotBlank() }, fresh.joinToString("\n\n"))
                     putString(KEY_PENDING, combined.joinToString("\n\n"))
                     putLong(KEY_PENDING_UPDATE_TIME, updateTime)
                 }
@@ -222,8 +209,6 @@ object ExitReasons {
 
     @RequiresApi(Build.VERSION_CODES.R)
     private fun describe(info: ApplicationExitInfo): String = buildString {
-        // Prefer the version recorded on the dying process via setProcessStateSummary; fall back
-        // to the currently installed version when absent.
         append("Citrine ")
         append(resolveVersionLabel(info.processStateSummary))
         append(" · ")
@@ -251,16 +236,15 @@ object ExitReasons {
         }
 
         if (info.reason == ApplicationExitInfo.REASON_ANR) {
-            anrTrace(info)?.let {
+            anrTraceHead(info)?.let {
                 append("\n  ANR trace (first lines):\n")
                 append(it)
             }
         }
     }
 
-    // ANRs ship the full traces file; only its first lines are useful in a chat message.
     @RequiresApi(Build.VERSION_CODES.R)
-    private fun anrTrace(info: ApplicationExitInfo): String? = try {
+    private fun anrTraceHead(info: ApplicationExitInfo): String? = try {
         info.traceInputStream?.use { stream ->
             InputStreamReader(stream).use { reader ->
                 val buffer = CharArray(MAX_TRACE_CHARS)

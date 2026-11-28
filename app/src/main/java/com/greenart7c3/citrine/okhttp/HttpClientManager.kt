@@ -30,9 +30,12 @@ import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 
 object HttpClientManager {
+    private const val IMMEDIATELY_REFUSED_LOCAL_PORT = 1
+
     // Default OkHttp dispatcher caps in-flight Calls at 64 (5 per host), which throttles
     // the aggregator when it tries to open hundreds of relay WebSockets in parallel.
     // Give it room for the full fan-out; long-lived WebSocket upgrades each hold a slot.
+    @Suppress("NoComments")
     private val dispatcher = Dispatcher().apply {
         maxRequests = 1024
         maxRequestsPerHost = 32
@@ -48,11 +51,8 @@ object HttpClientManager {
 
     val DEFAULT_TIMEOUT_ON_WIFI: Duration = Duration.ofSeconds(10L)
 
-    // Routes connections at an immediately-refused local port so that requests
-    // requiring a proxy fail closed (rather than leaking direct) while no real
-    // proxy is configured.
     private val failClosedProxy: Proxy =
-        Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", 1))
+        Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", IMMEDIATELY_REFUSED_LOCAL_PORT))
 
     private val defaultTimeout = DEFAULT_TIMEOUT_ON_WIFI
     private var defaultHttpClient: OkHttpClient? = null
@@ -69,7 +69,6 @@ object HttpClientManager {
             Log.d(Citrine.TAG, "Changing proxy to: ${proxy != null}")
             currentProxy = proxy
 
-            // recreates singleton
             defaultHttpClient = buildHttpClient(currentProxy ?: failClosedProxy, defaultTimeout)
         }
     }
@@ -92,11 +91,12 @@ object HttpClientManager {
             .build()
     }
 
+    /**
+     * Fails closed: with [useProxy] and no proxy up, returns a client whose connections fail at
+     * connect time (against an immediately-refused local port) rather than silently going direct.
+     */
     fun getHttpClient(useProxy: Boolean): OkHttpClient = if (useProxy) {
         if (currentProxy == null) {
-            // Fail closed: caller asked for proxied traffic but no proxy is up.
-            // Return a client whose connections fail at connect time rather
-            // than silently going direct.
             if (failClosedHttpClient == null) {
                 failClosedHttpClient = buildHttpClient(failClosedProxy, defaultTimeout)
             }

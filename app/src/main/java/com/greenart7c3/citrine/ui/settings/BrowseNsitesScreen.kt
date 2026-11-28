@@ -104,7 +104,6 @@ fun BrowseNsitesScreen(
                     }
                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 }
-                // Refresh the list so the installed item is now flagged.
                 NsiteManager.discover()
             }
         }
@@ -467,7 +466,6 @@ private fun AvatarFallback(authorName: String) {
     }
 }
 
-/** Compact relative timestamp ("now", "5m", "1h", "3d", "2w", "4mo", "1y") for the feed-style author header. */
 private fun relativeTimeShort(epochSeconds: Long): String {
     val diffMillis = System.currentTimeMillis() - epochSeconds * 1000
     val minutes = diffMillis / 60_000

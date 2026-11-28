@@ -41,8 +41,8 @@ class EventRepositoryQueryTest {
             batchLimit = 10,
         )
         assertTrue(sql.contains("length(EventEntity.content) <= ?"))
-        // expiry, kind, size cap, cursor x3, limit
-        assertEquals(7, params.size)
+        val expiryKindSizeCapThreeCursorParamsAndLimit = 7
+        assertEquals(expiryKindSizeCapThreeCursorParamsAndLimit, params.size)
         assertEquals(1000, params[2])
         assertEquals(5L, params[3])
 
@@ -62,11 +62,11 @@ class EventRepositoryQueryTest {
 
         val cursorPredicate = "(EventEntity.createdAt < ? OR (EventEntity.createdAt = ? AND EventEntity.id > ?))"
         assertTrue(sql.contains(cursorPredicate))
-        // The keyset cursor is only valid under the non-search ordering.
-        assertTrue(sql.contains("ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC LIMIT ?"))
+        val nonSearchOrderingTheKeysetCursorNeeds = "ORDER BY EventEntity.createdAt DESC, EventEntity.id ASC LIMIT ?"
+        assertTrue(sql.contains(nonSearchOrderingTheKeysetCursorNeeds))
 
-        // Positional contract: expiry, since, kind, cursor(createdAt, createdAt, id), limit.
-        assertEquals(7, params.size)
+        val expirySinceKindThreeCursorParamsAndLimit = 7
+        assertEquals(expirySinceKindThreeCursorParamsAndLimit, params.size)
         val expiry = params[0] as Long
         assertTrue(expiry > 0)
         assertEquals(100, params[1])
@@ -99,6 +99,7 @@ class EventRepositoryQueryTest {
         assertEquals(1, noLimitParams.size)
     }
 
+    @Suppress("NoComments")
     @Test
     fun pageQuerySortsIdsOnlyWithCursorAndLimit() {
         // batchedQuery's page query: SQLite sorts these rows in a temp B-tree for IN filters,

@@ -39,6 +39,10 @@ sealed class QueryResult<out T> {
 /**
  * Content Provider for exposing Citrine's Nostr event data to other Android apps.
  * Allows external apps to query events and tags using ContentResolver.
+ *
+ * Results are filtered by the caller's [CitrineContract.Events.PARAM_AUTH_PUBKEY] with the
+ * same rules as SubscriptionManager.execute(); the filter runs after the database query, which
+ * cannot express it.
  */
 class CitrineContentProvider : ContentProvider() {
 
@@ -48,7 +52,6 @@ class CitrineContentProvider : ContentProvider() {
     companion object {
         private const val TAG = "CitrineContentProvider"
 
-        // URI matcher codes
         private const val EVENTS = 100
         private const val EVENT_ID = 101
         private const val EVENTS_BY_PUBKEY = 102
@@ -72,21 +75,13 @@ class CitrineContentProvider : ContentProvider() {
         return true
     }
 
-    /**
-     * Filters events based on authentication.
-     * Returns true if the event should be included in results, false otherwise.
-     * Matches the logic from SubscriptionManager.execute() lines 25-58.
-     */
     private fun shouldIncludeEvent(eventWithTags: EventWithTags, authPubkey: String?): Boolean {
-        // If no auth pubkey provided, exclude private events and events with p tags/authors
         val authenticatedPubkey = authPubkey ?: return false
 
         val event = eventWithTags.toEvent()
         val eventKind = event.kind
 
-        // Check if event is a private event kind
         if (KINDS_PRIVATE_EVENTS.contains(eventKind)) {
-            // For private events, require auth and check if user is sender or receiver
             val senders = setOf(eventWithTags.event.pubkey)
             val receivers = event.taggedUsers().map { it.pubKey }.toSet()
 
@@ -99,17 +94,13 @@ class CitrineContentProvider : ContentProvider() {
             return hasAccess
         }
 
-        // For non-private events, check if they have p tags or authors
-        // This matches SubscriptionManager logic for empty kind filters with p tags or authors
         val hasPTags = eventWithTags.tags.any { it.col0Name == "p" }
         val hasAuthors = eventWithTags.event.pubkey.isNotEmpty()
 
         if (!hasPTags && !hasAuthors) {
-            // No p tags and no specific authors, include it
             return true
         }
 
-        // Has p tags or authors, check if authenticated user is sender or receiver
         val senders = setOf(eventWithTags.event.pubkey)
         val receivers = eventWithTags.tags
             .filter { it.col0Name == "p" }
@@ -172,7 +163,6 @@ class CitrineContentProvider : ContentProvider() {
                 val createdAtTo = uri.getQueryParameter(CitrineContract.Events.PARAM_CREATED_AT_TO)?.toLongOrNull()
                     ?: Long.MAX_VALUE
 
-                // Validate parameters
                 if (offset < 0) {
                     return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
                 }
@@ -183,7 +173,6 @@ class CitrineContentProvider : ContentProvider() {
                     return@runBlocking QueryResult.error("Invalid date range: createdAtFrom ($createdAtFrom) > createdAtTo ($createdAtTo)")
                 }
 
-                // Use optimized database query instead of loading all events into memory
                 val rawEvents = eventDao.getEventsByDateRange(
                     createdAtFrom = createdAtFrom,
                     createdAtTo = createdAtTo,
@@ -191,7 +180,6 @@ class CitrineContentProvider : ContentProvider() {
                     offset = offset,
                 )
 
-                // Apply auth filtering (cannot be done at DB level due to complex logic)
                 val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
 
                 QueryResult.Success(filtered)
@@ -263,7 +251,6 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                // Validate parameters
                 if (limit < 0) {
                     return@runBlocking QueryResult.error("Invalid limit: $limit (must be >= 0)")
                 }
@@ -271,8 +258,7 @@ class CitrineContentProvider : ContentProvider() {
                     return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
                 }
 
-                // Use optimized database query with pubkey filter
-                val rawEvents = eventDao.getEventsByPubkey(
+                val newestFirst = eventDao.getEventsByPubkey(
                     pubkey = pubkey,
                     kind = kind,
                     createdAtFrom = createdAtFrom,
@@ -280,18 +266,9 @@ class CitrineContentProvider : ContentProvider() {
                     limit = limit,
                     offset = offset,
                 )
-                // Apply auth filtering (cannot be done at DB level due to complex logic)
-                val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+                val filtered = newestFirst.filter { shouldIncludeEvent(it, authPubkey) }
 
-                // Note: Sorting is now done at DB level (DESC by default)
-                // If custom sort order is needed, we'd need to add it to the DAO query
-                val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
-                    filtered.sortedBy { it.event.createdAt }
-                } else {
-                    filtered // Already sorted DESC by DB query
-                }
-
-                QueryResult.Success(sortedEvents)
+                QueryResult.Success(inRequestedOrder(filtered, sortOrder))
             } catch (e: Exception) {
                 Log.e(TAG, "Error querying events by pubkey: $pubkey", e)
                 QueryResult.error("Failed to query events by pubkey: ${e.message}", e)
@@ -329,7 +306,6 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                // Validate parameters
                 if (limit < 0) {
                     return@runBlocking QueryResult.error("Invalid limit: $limit (must be >= 0)")
                 }
@@ -337,8 +313,7 @@ class CitrineContentProvider : ContentProvider() {
                     return@runBlocking QueryResult.error("Invalid offset: $offset (must be >= 0)")
                 }
 
-                // Use optimized database query with kind filter
-                val rawEvents = eventDao.getEventsByKind(
+                val newestFirst = eventDao.getEventsByKind(
                     kind = kind,
                     pubkey = pubkey,
                     createdAtFrom = createdAtFrom,
@@ -346,18 +321,9 @@ class CitrineContentProvider : ContentProvider() {
                     limit = limit,
                     offset = offset,
                 )
-                // Apply auth filtering (cannot be done at DB level due to complex logic)
-                val filtered = rawEvents.filter { shouldIncludeEvent(it, authPubkey) }
+                val filtered = newestFirst.filter { shouldIncludeEvent(it, authPubkey) }
 
-                // Note: Sorting is now done at DB level (DESC by default)
-                // If custom sort order is needed, we'd need to add it to the DAO query
-                val sortedEvents = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
-                    filtered.sortedBy { it.event.createdAt }
-                } else {
-                    filtered // Already sorted DESC by DB query
-                }
-
-                QueryResult.Success(sortedEvents)
+                QueryResult.Success(inRequestedOrder(filtered, sortOrder))
             } catch (e: Exception) {
                 Log.e(TAG, "Error querying events by kind: $kind", e)
                 QueryResult.error("Failed to query events by kind: ${e.message}", e)
@@ -373,13 +339,15 @@ class CitrineContentProvider : ContentProvider() {
         }
     }
 
+    private fun inRequestedOrder(eventsNewestFirst: List<EventWithTags>, sortOrder: String?): List<EventWithTags> = if (sortOrder != null && sortOrder.contains("createdAt ASC")) {
+        eventsNewestFirst.sortedBy { it.event.createdAt }
+    } else {
+        eventsNewestFirst
+    }
+
     private fun queryAllTags(
         projection: Array<out String>?,
-    ): Cursor {
-        // Tags are typically queried with events, so this returns empty for now
-        // Can be implemented if needed
-        return buildTagCursor(emptyList(), projection)
-    }
+    ): Cursor = buildTagCursor(emptyList(), projection)
 
     private fun queryTagsByEvent(
         uri: Uri,
@@ -521,7 +489,6 @@ class CitrineContentProvider : ContentProvider() {
 
         val result = runBlocking {
             try {
-                // Extract and validate event data from ContentValues
                 val eventId = values.getAsString(CitrineContract.Events.COLUMN_ID)
                     ?: return@runBlocking QueryResult.error<Uri>("Event ID is required")
                 when (val parsed = eventFromValues(values, eventId)) {
@@ -554,12 +521,8 @@ class CitrineContentProvider : ContentProvider() {
         val sig = values.getAsString(CitrineContract.Events.COLUMN_SIG)
             ?: return QueryResult.error("Signature is required")
 
-        // Extract tags from ContentValues if provided
-        // Tags would be provided as a separate ContentValues or JSON string
-        // For now, we'll create event without tags and let validation handle it
-        val tags = emptyArray<Array<String>>()
+        val noTagsFromContentValues = emptyArray<Array<String>>()
 
-        // Create Event object
         val event: Event = EventFactory.create(
             id = eventId,
             pubKey = pubkey,
@@ -567,21 +530,18 @@ class CitrineContentProvider : ContentProvider() {
             kind = kind,
             content = content,
             sig = sig,
-            tags = tags,
+            tags = noTagsFromContentValues,
         )
         return QueryResult.Success(event)
     }
 
     private suspend fun storeEvent(event: Event, eventId: String): QueryResult<Uri> {
-        // Validate and process event using the same logic as WebSocket server
         val server = CustomWebSocketService.server
         return if (server != null) {
             val verificationResult = server.innerProcessEvent(event, null, shouldVerify = true)
 
             val refusal = verificationFailure(verificationResult) ?: policyRefusal(verificationResult, event)
             if (refusal == null) {
-                // Event was successfully validated and inserted by innerProcessEvent
-                // Event already exists, return existing URI
                 QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
             } else {
                 QueryResult.error<Uri>(refusal)
@@ -636,12 +596,10 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     private suspend fun storeWithoutServer(event: Event, eventId: String): QueryResult<Uri> {
-        // Server not available, do basic validation and insert
         if (!event.verify()) {
             return QueryResult.error("Event ID hash or signature verification failed")
         }
 
-        // Check if event already exists
         val existing = eventDao.getById(eventId)
         if (existing != null) {
             return QueryResult.Success(Uri.withAppendedPath(CitrineContract.Events.CONTENT_URI, eventId))
@@ -673,7 +631,6 @@ class CitrineContentProvider : ContentProvider() {
         if (eventId == null) return 0
 
         return runBlocking {
-            // Load event from database
             val eventWithTags = eventDao.getById(eventId)
             if (eventWithTags == null) {
                 Log.d(TAG, "Event not found: $eventId")
@@ -682,12 +639,10 @@ class CitrineContentProvider : ContentProvider() {
 
             requireEventAuthor(authPubkey, eventWithTags)
 
-            // If server is available, validate using server logic
             val server = CustomWebSocketService.server
             if (server != null) {
                 deleteVerified(server, eventWithTags, eventId)
             } else {
-                // Server not available, just delete if authorized
                 eventDao.delete(listOf(eventId))
                 1
             }
@@ -695,7 +650,6 @@ class CitrineContentProvider : ContentProvider() {
     }
 
     private fun requireEventAuthor(authPubkey: String?, eventWithTags: EventWithTags) {
-        // Validate that the auth pubkey matches the event author
         if (authPubkey == null) {
             Log.d(TAG, "Delete denied: no auth pubkey provided")
             throw SecurityException("Authentication required to delete events")
@@ -709,13 +663,10 @@ class CitrineContentProvider : ContentProvider() {
 
     private suspend fun deleteVerified(server: CustomWebSocketServer, eventWithTags: EventWithTags, eventId: String): Int {
         val event = eventWithTags.toEvent()
-        // For delete events (kind 5), we need to validate the delete event itself
-        // For regular events, we just check authorization
         return when (val result = server.verifyEvent(event, null, shouldVerify = true)) {
             CustomWebSocketServer.VerificationResult.Valid,
             CustomWebSocketServer.VerificationResult.AlreadyInDatabase,
             -> {
-                // Event is valid, proceed with deletion
                 eventDao.delete(listOf(eventId))
                 1
             }
@@ -723,7 +674,6 @@ class CitrineContentProvider : ContentProvider() {
                 throw SecurityException("Event ID hash verification failed")
             }
             CustomWebSocketServer.VerificationResult.Deleted -> {
-                // Already deleted
                 0
             }
             else -> {
@@ -737,9 +687,5 @@ class CitrineContentProvider : ContentProvider() {
         values: ContentValues?,
         selection: String?,
         selectionArgs: Array<out String>?,
-    ): Int {
-        // Nostr events are generally immutable, so updates are not typically supported
-        // This could be used for metadata updates if needed
-        throw UnsupportedOperationException("Update not supported for Nostr events")
-    }
+    ): Int = throw UnsupportedOperationException("Update not supported for Nostr events")
 }

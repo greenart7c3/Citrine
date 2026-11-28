@@ -104,9 +104,9 @@ class ExecuteAllFanOutBenchmark {
         val eventJson = buildEventJson()
         val subscriptionIds = buildSubscriptionIds(200)
         val iterations = 20
+        val jitWarmUpPasses = 3
 
-        // Warm-up so the JIT compiles both paths before measurement.
-        repeat(3) {
+        repeat(jitWarmUpPasses) {
             subscriptionIds.forEach { oldPath(eventJson, it) }
             val warmJsonStr = mapper.writeValueAsString(eventJson)
             val warmEscaped = subscriptionIds.map { mapper.writeValueAsString(it) }

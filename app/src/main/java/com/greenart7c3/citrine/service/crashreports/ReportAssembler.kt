@@ -30,7 +30,9 @@ import com.greenart7c3.citrine.service.CustomWebSocketService
 /**
  * Text a user can paste into a report: device, build, failing thread, stack trace and heap
  * state. Built while the process may already be out of memory, so it stays allocation-light —
- * numbers and short strings only, no file listings or event counts.
+ * numbers and short strings only, no file listings or event counts. For an `OutOfMemoryError`
+ * the heap state says which kind of memory ran out (Java heap vs native), who held it
+ * (connections, live subscriptions, frames queued to slow clients) and how large the databases were.
  */
 class ReportAssembler(
     private val context: Context? = null,
@@ -41,7 +43,6 @@ class ReportAssembler(
         appendLine(BuildConfig.VERSION_NAME)
         appendLine()
 
-        // Device and Product Information
         appendLine("| Prop | Value |")
         appendLine("|------|-------|")
         append("| Manuf |")
@@ -54,7 +55,6 @@ class ReportAssembler(
         append(Build.PRODUCT)
         appendLine(" |")
 
-        // OS Information
         append("| Android |")
         append(Build.VERSION.RELEASE)
         appendLine(" |")
@@ -62,7 +62,6 @@ class ReportAssembler(
         append(Build.VERSION.SDK_INT.toString())
         appendLine(" |")
 
-        // Hardware Information
         append("| Brand |")
         append(Build.BRAND)
         appendLine(" |")
@@ -70,7 +69,6 @@ class ReportAssembler(
         append(Build.HARDWARE)
         appendLine(" |")
 
-        // Other Useful Information
         append("| Device | ")
         append(Build.DEVICE)
         appendLine(" |")
@@ -100,14 +98,10 @@ class ReportAssembler(
         }
         appendLine("```")
 
-        appendMemory()
+        appendThreadHeapAndDatabaseSizes()
     }
 
-    /**
-     * Thread and heap snapshot. For an `OutOfMemoryError` these are the numbers that say which
-     * kind of memory ran out (Java heap vs native) and how large the databases were.
-     */
-    private fun StringBuilder.appendMemory() {
+    private fun StringBuilder.appendThreadHeapAndDatabaseSizes() {
         val thread = Thread.currentThread()
         appendLine()
         appendLine("| Memory | Value |")
@@ -129,7 +123,6 @@ class ReportAssembler(
         append(mb(Debug.getNativeHeapAllocatedSize()))
         appendLine("MB |")
 
-        // Who held the heap: connections, live subscriptions and frames queued to slow clients.
         runCatching {
             val connections = CustomWebSocketService.server?.connections?.value.orEmpty()
             append("| Relay | connections=")

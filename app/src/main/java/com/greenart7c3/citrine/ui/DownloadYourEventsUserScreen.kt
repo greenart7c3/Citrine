@@ -85,17 +85,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Upper bound for one relay lookup in [SelectRelayModal]. */
 private const val RELAY_LOOKUP_TIMEOUT_MS = 15_000L
 
-/**
- * Runs one relay lookup under a hard deadline.
- *
- * Timeouts and failures both degrade to "nothing found": the relay sheet must always open with
- * whatever was resolved — even nothing — so that manual relay entry and the fetch button stay
- * reachable. Nothing in here may keep the spinner up forever.
- */
-private suspend fun <T> lookupRelays(
+private suspend fun <T> lookupRelaysOrNothingFoundWithinDeadline(
     what: String,
     block: suspend () -> T?,
 ): T? = try {
@@ -107,12 +99,18 @@ private suspend fun <T> lookupRelays(
     null
 }
 
-/** Adds [relayUrl] to the sheet's list unless an equivalent relay is already listed. */
 private fun MutableList<NormalizedRelayUrl>.addIfNew(relayUrl: String) {
     val normalized = RelayUrlNormalizer.normalizeOrNull(relayUrl) ?: return
     if (none { it.displayUrl() == normalized.displayUrl() }) add(normalized)
 }
 
+/**
+ * Sheet listing the user's relays, read from their contact list and relay list. Both lookups
+ * are bounded and fall back to "nothing found" (a relay that never answers, or a local query
+ * stuck behind a write, must never leave the sheet spinning), so the sheet always opens with
+ * whatever was resolved and manual relay entry and the fetch button stay reachable. Results
+ * are added as they arrive.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SelectRelayModal(
@@ -133,8 +131,6 @@ fun SelectRelayModal(
         content = {
             val keyboardController = LocalSoftwareKeyboardController.current
             var relayText by remember { mutableStateOf(TextFieldValue()) }
-            // Snapshot list: the lookups below land off the main thread, so a plain
-            // MutableList would fill up without ever recomposing the list.
             val relays = remember { mutableStateListOf<NormalizedRelayUrl>() }
 
             var loading by remember { mutableStateOf(true) }
@@ -149,14 +145,11 @@ fun SelectRelayModal(
                         }
                     }
 
-                    // Both lookups are bounded and fall back to "nothing found": a relay that
-                    // never answers, or a local query stuck behind a write, must never leave the
-                    // sheet spinning with no way out. Results are added as they arrive.
-                    lookupRelays("contact list for ${signer.pubKey}") {
+                    lookupRelaysOrNothingFoundWithinDeadline("contact list for ${signer.pubKey}") {
                         withContext(Dispatchers.IO) { viewModel.contactList(signer) }
                     }?.relays()?.forEach { relays.addIfNew(it.key.url) }
 
-                    lookupRelays("relay list for ${signer.pubKey}") {
+                    lookupRelaysOrNothingFoundWithinDeadline("relay list for ${signer.pubKey}") {
                         withContext(Dispatchers.IO) { viewModel.relayList(signer) }
                     }?.relays()?.forEach { relays.addIfNew(it.relayUrl.url) }
                 } finally {
@@ -177,7 +170,6 @@ fun SelectRelayModal(
                 relays = relays,
                 onRemoveRelay = { index -> relays.removeAt(index) },
                 onFetch = {
-                    // TODO: find out why nostr.band keeps downloading events forever
                     onDone(relays)
                 },
             )

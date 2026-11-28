@@ -21,36 +21,31 @@ import kotlinx.coroutines.launch
 class EventCleanup(private val appScope: CoroutineScope) {
     private val ephemeralCleanupScheduled = AtomicBoolean(false)
 
-    // Monotonic generation incremented whenever a new ephemeral event is stored so a
-    // racing cleanup pass never clears [hasEphemeralEvents] after a newer insert.
-    private val ephemeralGeneration = AtomicLong(1L)
+    private val ephemeralInsertGeneration = AtomicLong(1L)
 
-    // True on startup so the first cleanup sweep catches any ephemeral events left
-    // behind before a restart; cleared once the table holds no ephemeral events and
-    // re-set whenever a new ephemeral event is stored.
     @Volatile
-    private var hasEphemeralEvents = true
+    private var mayHaveEphemeralEvents = true
 
     fun scheduleEphemeralCleanup(database: AppDatabase) {
-        ephemeralGeneration.incrementAndGet()
-        hasEphemeralEvents = true
+        ephemeralInsertGeneration.incrementAndGet()
+        mayHaveEphemeralEvents = true
         ensureEphemeralCleanupRunning(database)
     }
 
+    private fun noEphemeralInsertSince(generation: Long): Boolean = ephemeralInsertGeneration.get() == generation
+
     private fun ensureEphemeralCleanupRunning(database: AppDatabase) {
-        if (!hasEphemeralEvents || !ephemeralCleanupScheduled.compareAndSet(false, true)) return
+        if (!mayHaveEphemeralEvents || !ephemeralCleanupScheduled.compareAndSet(false, true)) return
         appScope.launch(Dispatchers.IO) {
             try {
-                while (isActive && hasEphemeralEvents) {
-                    // Wait slightly past the 1-minute ephemeral TTL so a burst of ephemeral
-                    // events is cleaned in one pass; loop again if newer ones remain.
-                    delay(75_000L)
+                while (isActive && mayHaveEphemeralEvents) {
+                    delay(SWEEP_DELAY_JUST_PAST_EPHEMERAL_TTL_MS)
                     if (Citrine.isImportingEvents) continue
-                    val genBefore = ephemeralGeneration.get()
+                    val generationBeforeSweep = ephemeralInsertGeneration.get()
                     database.eventDao().deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
                     if (!database.eventDao().hasEphemeralEvents()) {
-                        if (ephemeralGeneration.get() == genBefore) {
-                            hasEphemeralEvents = false
+                        if (noEphemeralInsertSince(generationBeforeSweep)) {
+                            mayHaveEphemeralEvents = false
                             break
                         }
                     }
@@ -61,11 +56,13 @@ class EventCleanup(private val appScope: CoroutineScope) {
             } finally {
                 ephemeralCleanupScheduled.set(false)
             }
-            // Re-arm if an ephemeral event arrived in the narrow window between exiting
-            // the loop and releasing ephemeralCleanupScheduled.
-            if (hasEphemeralEvents) {
-                ensureEphemeralCleanupRunning(database)
-            }
+            rearmIfStoredWhileReleasingSchedule(database)
+        }
+    }
+
+    private fun rearmIfStoredWhileReleasingSchedule(database: AppDatabase) {
+        if (mayHaveEphemeralEvents) {
+            ensureEphemeralCleanupRunning(database)
         }
     }
 
@@ -77,7 +74,7 @@ class EventCleanup(private val appScope: CoroutineScope) {
         Citrine.cancelJob()
         Citrine.job = appScope.launch(Dispatchers.IO) {
             try {
-                if (isActive && hasEphemeralEvents) deleteEphemeral(database, verbose)
+                if (isActive && mayHaveEphemeralEvents) deleteEphemeral(database, verbose)
                 if (isActive) deleteExpired(database, verbose)
                 if (runAgeRetention && Settings.deleteEventsOlderThan != OlderThan.NEVER && isActive) deleteOld(database, verbose)
             } catch (e: Exception) {
@@ -90,10 +87,10 @@ class EventCleanup(private val appScope: CoroutineScope) {
     private suspend fun deleteEphemeral(database: AppDatabase, verbose: Boolean) {
         val duration = measureTime {
             if (verbose) Log.d(TAG, "Deleting ephemeral events older than one minute ago")
-            val genBefore = ephemeralGeneration.get()
+            val generationBeforeSweep = ephemeralInsertGeneration.get()
             database.eventDao().deleteEphemeralEvents(TimeUtils.oneMinuteAgo())
-            if (!database.eventDao().hasEphemeralEvents() && ephemeralGeneration.get() == genBefore) {
-                hasEphemeralEvents = false
+            if (!database.eventDao().hasEphemeralEvents() && noEphemeralInsertSince(generationBeforeSweep)) {
+                mayHaveEphemeralEvents = false
             }
         }
         if (verbose) Log.d(TAG, "Deleted ephemeral events in $duration")
@@ -132,5 +129,9 @@ class EventCleanup(private val appScope: CoroutineScope) {
             }
         }
         if (verbose) Log.d(TAG, "Deleted old events in $duration")
+    }
+
+    private companion object {
+        const val SWEEP_DELAY_JUST_PAST_EPHEMERAL_TTL_MS = 75_000L
     }
 }

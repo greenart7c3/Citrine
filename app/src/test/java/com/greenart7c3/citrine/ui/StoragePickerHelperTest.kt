@@ -83,7 +83,7 @@ class StoragePickerHelperTest {
     }
 
     @Test
-    fun api27WhenPermissionDeniedNotifiesAndClearsPendingRequest() {
+    fun api27WhenPermissionDeniedNotifiesAndALaterResultDoesNotReopenThePicker() {
         var granted = false
         var folderPickerCalls = 0
         var deniedCalls = 0
@@ -114,7 +114,6 @@ class StoragePickerHelperTest {
         assertEquals(0, folderPickerCalls)
         assertEquals(1, deniedCalls)
 
-        // A later unrelated permission result must not reopen the picker.
         granted = true
         helper.onPermissionsResult(
             mapOf(

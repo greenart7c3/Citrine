@@ -22,8 +22,7 @@ class ContactListPolicyTest {
     }
 
     @Test
-    fun nothingIsBackfilledWhenNoFollowListIsKnown() {
-        // No-pubkey mode: nobody is followed, so no contact lists are fetched at all.
+    fun nothingIsBackfilledInNoPubkeyModeWhereNobodyIsFollowed() {
         assertFalse(ContactListPolicy.shouldBackfillContactList("anyone", emptySet()))
     }
 

@@ -61,6 +61,11 @@ data class EventWithTags(
     val tags: List<TagEntity>,
 )
 
+/**
+ * One tag of an event at [position], flattened into columns: the tag name ([col0Name]), its
+ * value ([col1Value]), the marker ([col2Differentiator]), the next value ([col3Amount]) and
+ * every further element in [col4Plus], so a tag of any length fits.
+ */
 @Entity(
     foreignKeys = [
         ForeignKey(
@@ -90,7 +95,6 @@ data class TagEntity(
     var pkEvent: String? = null,
     val position: Int,
 
-    // Holds 6 columns but can be extended.
     val col0Name: String?,
     val col1Value: String?,
     val col2Differentiator: String?,
@@ -153,13 +157,9 @@ fun Event.toEventWithTags(): EventWithTags {
     val dbTags = tags.mapIndexed { index, tag ->
         TagEntity(
             position = index,
-            // tag name
             col0Name = tag.getOrNull(0),
-            // tag value
             col1Value = tag.getOrNull(1),
-            // marker
             col2Differentiator = tag.getOrNull(2),
-            // value
             col3Amount = tag.getOrNull(3),
             col4Plus = if (tag.size > 4) tag.asList().subList(4, tag.size) else emptyList(),
             kind = kind,
