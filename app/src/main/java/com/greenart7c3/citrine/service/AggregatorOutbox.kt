@@ -9,18 +9,8 @@ import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 
 private const val TAG = "RelayAggregator"
 
-// Per-author cap on how many of the author's NIP-65 write relays we'll actually
-// subscribe to. Lower = fewer concurrent WebSockets and less battery drain; higher
-// = better redundancy if any one relay drops events. The greedy picker (capRelaysPerAuthor)
-// prefers relays that already cover other authors so the chosen set converges to a
-// small number of well-shared relays even with a large follow list.
 private const val MAX_RELAYS_PER_AUTHOR = 3
 
-// Cap on the total number of distinct outbound relays across all authors. Each relay
-// costs a full OkHttp TLS WebSocket: hundreds of KB of JVM + native memory plus kernel
-// socket buffers and a file descriptor. Beyond ~200 relays the per-connection RSS/FD
-// cost outweighs the marginal per-author coverage, so keep the relays that cover the
-// most authors.
 private const val MAX_TOTAL_SUB_RELAYS = 200
 
 internal class RelayLists(
@@ -33,11 +23,7 @@ internal class RelayLists(
 internal class SubscriptionPlan(
     val relayToAuthors: MutableMap<NormalizedRelayUrl, MutableSet<String>>,
     val relayLists: RelayLists,
-    // Authors in scope for the current subscription topology; empty in no-pubkey
-    // mode. Used to prune lastEventByPubkey cursors that nothing consumes.
     val scopedAuthors: Set<String>,
-    // Follows resolved this refresh, or empty when the owner's contact list could not
-    // be loaded (nothing is deleted in that case — see pruneStrangerContactLists).
     val ownerFollows: Set<String>,
 )
 
@@ -49,7 +35,6 @@ internal suspend fun resolveRelayLists(
     indexers: List<NormalizedRelayUrl>,
 ): RelayLists {
     val cachedRelayLists = mutableMapOf<String, AdvertisedRelayListEvent>()
-    // Resolve NIP-65 for all authors in one batch instead of N sequential fetches.
     val uncached = mutableSetOf<String>()
     for (pk in authors) {
         val cached = fetcher.loadCleanLatestByKind(dao, pk, AdvertisedRelayListEvent.KIND)?.toEvent() as? AdvertisedRelayListEvent
@@ -81,11 +66,6 @@ internal fun buildOutboxMap(
     sources: List<NormalizedRelayUrl>,
 ): MutableMap<NormalizedRelayUrl, MutableSet<String>> {
     val relayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
-    // Build each author's candidate write-relay list (with the per-author
-    // fallback for missing NIP-65), then cap each author at MAX_RELAYS_PER_AUTHOR
-    // using a greedy popularity-based picker to converge on a small shared set
-    // of relays. Aggregator-source relays are then layered on top with the full
-    // author set, so they act as a backstop mirror for every followed pubkey.
     val authorWriteRelays = mutableMapOf<String, List<NormalizedRelayUrl>>()
     var fellBackCount = 0
     for (pk in authors) {
@@ -99,13 +79,12 @@ internal fun buildOutboxMap(
                 FALLBACK_OUTBOX_RELAYS
             }
     }
-    val capped = capRelaysPerAuthor(authorWriteRelays, MAX_RELAYS_PER_AUTHOR)
+    val capped = capRelaysPerAuthorPreferringShared(authorWriteRelays, MAX_RELAYS_PER_AUTHOR)
     relayToAuthors.putAll(capped)
     sources.forEach { relay ->
         relayToAuthors.getOrPut(relay) { mutableSetOf() }.addAll(authors)
     }
     if (relayToAuthors.size > MAX_TOTAL_SUB_RELAYS) {
-        // Keep the relays covering the most authors; drop the long tail.
         val keptKeys = relayToAuthors.entries
             .sortedWith(
                 compareByDescending<Map.Entry<NormalizedRelayUrl, MutableSet<String>>> { it.value.size }
@@ -139,9 +118,6 @@ internal suspend fun fetchOwnerMetadata(
     indexers: List<NormalizedRelayUrl>,
     sources: List<NormalizedRelayUrl>,
 ) {
-    // Same cap-then-overlay-sources strategy for kind-0 metadata fetches: take
-    // each author's NIP-65 write relays (indexers as the fallback for unknown
-    // authors), cap per-author, then add the aggregator-source relays.
     val authorMetadataRelays = mutableMapOf<String, List<NormalizedRelayUrl>>()
     var metadataIndexerFallback = 0
     for (pk in authors) {
@@ -155,7 +131,7 @@ internal suspend fun fetchOwnerMetadata(
                 indexers
             }
     }
-    val metadataRelayToAuthors = capRelaysPerAuthor(authorMetadataRelays, MAX_RELAYS_PER_AUTHOR)
+    val metadataRelayToAuthors = capRelaysPerAuthorPreferringShared(authorMetadataRelays, MAX_RELAYS_PER_AUTHOR)
     sources.forEach { relay ->
         metadataRelayToAuthors.getOrPut(relay) { mutableSetOf() }.addAll(authors)
     }
@@ -171,13 +147,7 @@ internal suspend fun fetchOwnerMetadata(
     )
 }
 
-// Picks at most [cap] relays per author from each author's candidate write-relay list,
-// greedily preferring relays that already cover many other authors. The popularity
-// score is computed across all authors once, then each author independently picks its
-// top-[cap] relays by that score with ties broken by candidate-list order. This keeps
-// total open WebSocket count low while still spreading coverage across multiple relays
-// per author.
-private fun capRelaysPerAuthor(
+private fun capRelaysPerAuthorPreferringShared(
     authorWriteRelays: Map<String, List<NormalizedRelayUrl>>,
     cap: Int,
 ): MutableMap<NormalizedRelayUrl, MutableSet<String>> {

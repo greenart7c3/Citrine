@@ -18,11 +18,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "RelayAggregator"
 
-/**
- * Issues one subscription to all [relays] asking for kind-10002 events authored by any
- * pubkey in [pubkeys] and collects the latest per author. Returns as soon as every relay
- * sends EOSE or after [timeoutMs] milliseconds, whichever comes first.
- */
+@Suppress("NoComments")
 internal suspend fun batchFetchRelayLists(
     relayClient: RelayClient,
     pubkeys: Set<String>,
@@ -83,7 +79,6 @@ internal suspend fun batchFetchRelayLists(
 
     relayClient.client.addConnectionListener(collector)
     try {
-        // Pack every author chunk into a single REQ as multiple filters.
         // Calling subscribe() once per chunk with the same subId would overwrite the
         // previous filter set in Quartz, leaving only the last chunk actually queried.
         val filters = pubkeys.toList().chunked(MAX_AUTHORS_PER_SUB).map { chunk ->
@@ -101,20 +96,12 @@ internal suspend fun batchFetchRelayLists(
         relayClient.client.removeConnectionListener(collector)
     }
 
-    // Persist what we learned so future refreshes are a cache hit.
     results.values.forEach {
         runCatching { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
     }
     return results
 }
 
-/**
- * Issues a single subscription that asks each relay in [relayToAuthors] for kind-0 events
- * authored by the pubkeys mapped to it (no `since`), then collects the latest per author.
- * The per-relay routing lets the caller send each author's metadata fetch to their own
- * NIP-65 write relays when known, falling back to indexer relays otherwise. Returns when
- * every relay sends EOSE or after [timeoutMs] elapses.
- */
 internal suspend fun batchFetchMetadata(
     relayClient: RelayClient,
     relayToAuthors: Map<NormalizedRelayUrl, Set<String>>,
@@ -174,9 +161,6 @@ internal suspend fun batchFetchMetadata(
 
     relayClient.client.addConnectionListener(collector)
     try {
-        // One filter list per relay so each relay only gets asked about the authors that
-        // actually advertised it as a write relay. Authors with no NIP-65 are routed to
-        // the indexer relays by the caller.
         val perRelayFilters = relayToAuthors.mapValues { (_, authors) ->
             authors.toList().chunked(MAX_AUTHORS_PER_SUB).map { chunk ->
                 Filter(
