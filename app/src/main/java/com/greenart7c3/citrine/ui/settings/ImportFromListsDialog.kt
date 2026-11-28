@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -73,6 +74,84 @@ fun ImportFromListsDialog(
     onDismiss: () -> Unit,
     onConfirm: (Set<String>) -> Unit,
 ) {
+    val signer = rememberImportListsSigner(signerPubkey, signerPackage)
+
+    val fetched = remember { FetchedLists() }
+    var expandedId by remember { mutableStateOf<String?>(null) }
+    var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    LaunchedEffect(signer) {
+        fetched.load(signer)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                ImportListsTitle(onDismiss = onDismiss)
+                HorizontalDivider()
+
+                when {
+                    fetched.loading -> ImportListsLoading()
+                    fetched.error -> ImportListsMessage(message = stringResource(R.string.import_lists_error), onDismiss = onDismiss)
+                    fetched.lists.isEmpty() -> ImportListsMessage(message = stringResource(R.string.no_lists_found), onDismiss = onDismiss)
+                    else -> ImportListsPicker(
+                        lists = fetched.lists,
+                        profiles = fetched.profiles,
+                        expandedId = expandedId,
+                        onToggleExpand = { list, expanded -> expandedId = if (expanded) null else list.id },
+                        selected = selected,
+                        onTogglePubkey = { pubkey ->
+                            selected = if (pubkey in selected) selected - pubkey else selected + pubkey
+                        },
+                    )
+                }
+
+                if (!fetched.loading && !fetched.error && fetched.lists.isNotEmpty()) {
+                    HorizontalDivider()
+                    ImportListsActions(
+                        selectedCount = selected.size,
+                        onDismiss = onDismiss,
+                        onConfirm = { onConfirm(selected) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private class FetchedLists {
+    var loading by mutableStateOf(true)
+    var error by mutableStateOf(false)
+    var lists by mutableStateOf<List<ListImporter.UserListEntry>>(emptyList())
+    var profiles by mutableStateOf<Map<String, ListImporter.ProfileInfo>>(emptyMap())
+
+    suspend fun load(signer: NostrSignerExternal) {
+        loading = true
+        error = false
+        try {
+            val result = ListImporter.fetch(signer)
+            lists = result.lists
+            profiles = result.profiles
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("ImportLists", "fetch failed", e)
+            error = true
+        } finally {
+            loading = false
+        }
+    }
+}
+
+@Composable
+private fun rememberImportListsSigner(signerPubkey: String, signerPackage: String): NostrSignerExternal {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -109,176 +188,157 @@ fun ImportFromListsDialog(
             }
         }
     }
+    return signer
+}
 
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf(false) }
-    var lists by remember { mutableStateOf<List<ListImporter.UserListEntry>>(emptyList()) }
-    var profiles by remember { mutableStateOf<Map<String, ListImporter.ProfileInfo>>(emptyMap()) }
-    var expandedId by remember { mutableStateOf<String?>(null) }
-    var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
-
-    LaunchedEffect(signer) {
-        loading = true
-        error = false
-        try {
-            val result = ListImporter.fetch(signer)
-            lists = result.lists
-            profiles = result.profiles
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e("ImportLists", "fetch failed", e)
-            error = true
-        } finally {
-            loading = false
+@Composable
+private fun ImportListsTitle(onDismiss: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.import_from_lists_title),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onDismiss) {
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
         }
     }
+}
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+@Composable
+private fun ImportListsLoading() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
+        CircularProgressIndicator()
+        Spacer(Modifier.size(12.dp))
+        Text(stringResource(R.string.importing_lists))
+    }
+}
+
+@Composable
+private fun ImportListsMessage(message: String, onDismiss: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = message,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.size(12.dp))
+        TextButton(onClick = onDismiss) {
+            Text(stringResource(R.string.close))
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.ImportListsPicker(
+    lists: List<ListImporter.UserListEntry>,
+    profiles: Map<String, ListImporter.ProfileInfo>,
+    expandedId: String?,
+    onToggleExpand: (ListImporter.UserListEntry, Boolean) -> Unit,
+    selected: Set<String>,
+    onTogglePubkey: (String) -> Unit,
+) {
+    Text(
+        text = stringResource(R.string.select_lists_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(12.dp),
+    )
+    LazyColumn(modifier = Modifier.weight(1f)) {
+        items(lists, key = { it.id }) { list ->
+            val expanded = expandedId == list.id
+            UserListCard(
+                list = list,
+                expanded = expanded,
+                onToggleExpand = { onToggleExpand(list, expanded) },
+                profiles = profiles,
+                selected = selected,
+                onTogglePubkey = onTogglePubkey,
+            )
+        }
+    }
+}
+
+@Composable
+private fun UserListCard(
+    list: ListImporter.UserListEntry,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    profiles: Map<String, ListImporter.ProfileInfo>,
+    selected: Set<String>,
+    onTogglePubkey: (String) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggleExpand)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.import_from_lists_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
-                    }
-                }
-                HorizontalDivider()
-
-                when {
-                    loading -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            CircularProgressIndicator()
-                            Spacer(Modifier.size(12.dp))
-                            Text(stringResource(R.string.importing_lists))
-                        }
-                    }
-                    error -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(24.dp),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.import_lists_error),
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(Modifier.size(12.dp))
-                            TextButton(onClick = onDismiss) {
-                                Text(stringResource(R.string.close))
-                            }
-                        }
-                    }
-                    lists.isEmpty() -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(24.dp),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.no_lists_found),
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(Modifier.size(12.dp))
-                            TextButton(onClick = onDismiss) {
-                                Text(stringResource(R.string.close))
-                            }
-                        }
-                    }
-                    else -> {
-                        Text(
-                            text = stringResource(R.string.select_lists_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(12.dp),
-                        )
-                        LazyColumn(modifier = Modifier.weight(1f)) {
-                            items(lists, key = { it.id }) { list ->
-                                val expanded = expandedId == list.id
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { expandedId = if (expanded) null else list.id }
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(
-                                            text = list.title,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        Text(
-                                            text = list.pubkeys.size.toString(),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        Icon(
-                                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                            contentDescription = null,
-                                        )
-                                    }
-                                    if (expanded) {
-                                        HorizontalDivider()
-                                        list.pubkeys.forEach { pubkey ->
-                                            MemberRow(
-                                                pubkey = pubkey,
-                                                profile = profiles[pubkey],
-                                                checked = pubkey in selected,
-                                                onToggle = {
-                                                    selected = if (pubkey in selected) selected - pubkey else selected + pubkey
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (!loading && !error && lists.isNotEmpty()) {
-                    HorizontalDivider()
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TextButton(onClick = onDismiss) {
-                            Text(stringResource(R.string.cancel))
-                        }
-                        Spacer(Modifier.size(8.dp))
-                        TextButton(
-                            enabled = selected.isNotEmpty(),
-                            onClick = { onConfirm(selected) },
-                        ) {
-                            Text(stringResource(R.string.add_selected, selected.size))
-                        }
-                    }
-                }
+            Text(
+                text = list.title,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = list.pubkeys.size.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+            )
+        }
+        if (expanded) {
+            HorizontalDivider()
+            list.pubkeys.forEach { pubkey ->
+                MemberRow(
+                    pubkey = pubkey,
+                    profile = profiles[pubkey],
+                    checked = pubkey in selected,
+                    onToggle = { onTogglePubkey(pubkey) },
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun ImportListsActions(
+    selectedCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onDismiss) {
+            Text(stringResource(R.string.cancel))
+        }
+        Spacer(Modifier.size(8.dp))
+        TextButton(
+            enabled = selectedCount > 0,
+            onClick = onConfirm,
+        ) {
+            Text(stringResource(R.string.add_selected, selectedCount))
         }
     }
 }

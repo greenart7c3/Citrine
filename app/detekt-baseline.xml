@@ -6,25 +6,21 @@
     <ID>ComplexCondition:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$Settings.autoBackup &amp;&amp; Settings.autoBackupFolder.isNotBlank() &amp;&amp; Settings.lastBackup &lt; oneWeekAgo &amp;&amp; !Citrine.isImportingEvents</ID>
     <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$suspend fun eventsToDelete</ID>
     <ID>CyclomaticComplexMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
-    <ID>CyclomaticComplexMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
     <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
     <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class) private fun startKtorHttpServer: EmbeddedServer&lt;CIOApplicationEngine, CIOApplicationEngine.Configuration&gt;</ID>
     <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$private fun policyAllows: Boolean</ID>
     <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEvent: VerificationResult</ID>
     <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEventBatch</ID>
     <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
-    <ID>CyclomaticComplexMethod:DownloadYourEventsUserScreen.kt:@Composable fun DownloadYourEventsUserScreen</ID>
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
     <ID>CyclomaticComplexMethod:GroupState.kt:GroupState$fun applyMetadataTags: GroupState</ID>
-    <ID>CyclomaticComplexMethod:ImportFromListsDialog.kt:@Composable fun ImportFromListsDialog</ID>
     <ID>CyclomaticComplexMethod:ListImporter.kt:ListImporter$suspend fun fetch: Result</ID>
     <ID>CyclomaticComplexMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
     <ID>CyclomaticComplexMethod:Nip29Handler.kt:Nip29Handler$private fun moderate: Nip29Result</ID>
     <ID>CyclomaticComplexMethod:Nip29Handler.kt:Nip29Handler$suspend fun process: Nip29Result</ID>
     <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$fun verifyNip98: String?</ID>
     <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$private suspend fun dispatch: Any?</ID>
-    <ID>CyclomaticComplexMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
     <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
     <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
     <ID>CyclomaticComplexMethod:TagDeduplicator.kt:TagDeduplicator$internal suspend fun cleanDao: Pair&lt;Int, Int&gt;?</ID>
@@ -32,32 +28,22 @@
     <ID>LargeClass:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
     <ID>LargeClass:RelayAggregator.kt:RelayAggregator</ID>
     <ID>LongMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
-    <ID>LongMethod:ContactsScreen.kt:@Composable fun ContactsScreen</ID>
-    <ID>LongMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
     <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
     <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class) private fun startKtorHttpServer: EmbeddedServer&lt;CIOApplicationEngine, CIOApplicationEngine.Configuration&gt;</ID>
     <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEvent: VerificationResult</ID>
     <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEventBatch</ID>
     <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
-    <ID>LongMethod:DatabaseInfo.kt:@Composable fun DatabaseInfo</ID>
-    <ID>LongMethod:DownloadYourEventsUserScreen.kt:@Composable fun DownloadYourEventsUserScreen</ID>
-    <ID>LongMethod:DownloadYourEventsUserScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun SelectRelayModal</ID>
     <ID>LongMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
     <ID>LongMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
-    <ID>LongMethod:HomeViewModel.kt:HomeViewModel$fun importDatabase</ID>
-    <ID>LongMethod:ImportFromListsDialog.kt:@Composable fun ImportFromListsDialog</ID>
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun saveSettingsToEncryptedStorage</ID>
     <ID>LongMethod:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
-    <ID>LongMethod:NsiteRow.kt:@Composable fun NsiteRow</ID>
-    <ID>LongMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
     <ID>LongMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
     <ID>LongMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
     <ID>LongMethod:TorManager.kt:TorManager$private suspend fun run</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$@SuppressLint("UnspecifiedRegisterReceiverFlag") override fun onCreate</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$private fun buildForegroundNotification: ForegroundNotification</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
-    <ID>LongParameterList:StoragePickerHelper.kt:StoragePickerHelper</ID>
     <ID>NestedBlockDepth:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
     <ID>NestedBlockDepth:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
     <ID>NoComments:AuthGate.kt:Early CLOSED for filters that explicitly target a managed private group's content</ID>

@@ -22,6 +22,7 @@ package com.greenart7c3.citrine.service.crashreports
 
 import android.app.Activity.RESULT_OK
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -81,8 +82,6 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
     val appContext = context.applicationContext
     val appScope = LocalAppScope.current
     val crashReportCache = LocalCrashReportCache.current
-    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
-    val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
     val sentMsg = stringResource(R.string.crash_report_sent)
     val failedMsg = stringResource(R.string.crash_report_send_failed)
 
@@ -94,14 +93,7 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val stack = crashReportCache.loadAndDelete()
-            // ANRs and native crashes never reach the uncaught-exception handler, so the exit
-            // records are the only trace of them the user can send. Run detect() here too so the
-            // crash screen does not race ahead of Citrine.onCreate()'s background detection.
-            ExitReasons.detect(appContext)
-            val exits = ExitReasons.pending(appContext)
-            val joined = listOfNotNull(stack?.takeIf { it.isNotBlank() }, exits?.takeIf { it.isNotBlank() })
-                .joinToString("\n\n")
+            val joined = loadReport(crashReportCache, appContext)
             if (joined.isNotBlank()) {
                 withContext(Dispatchers.Main) {
                     reportText = joined
@@ -130,6 +122,40 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
         }
     }
 
+    val signWithAmber = rememberAmberSignIn(
+        currentSigner = { signer },
+        onSignerReady = { externalSigner ->
+            signer = externalSigner
+            sendReport(externalSigner)
+        },
+    )
+
+    if (!showScreen) return
+
+    BackHandler(enabled = !sending) { forgetReport() }
+
+    CrashReportContent(
+        reportText = reportText,
+        onReportTextChange = { reportText = it },
+        sending = sending,
+        onSignWithAmber = signWithAmber,
+        onSendAnonymously = { sendReport(CrashReportSender.anonymousSigner()) },
+        onCancel = { forgetReport() },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun rememberAmberSignIn(
+    currentSigner: () -> NostrSignerExternal?,
+    onSignerReady: (NostrSignerExternal) -> Unit,
+): () -> Unit {
+    val context = LocalContext.current
+    val appContext = context.applicationContext
+    val appScope = LocalAppScope.current
+    val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
+    val noExternalSignerMsg = stringResource(R.string.no_external_signer_installed)
+
     // Responses to sign requests Amber sent back while the report was being built.
     val respondLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -139,7 +165,7 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
             } else {
                 result.data?.let { data ->
                     appScope.launch(Dispatchers.IO) {
-                        signer?.newResponse(data)
+                        currentSigner()?.newResponse(data)
                     }
                 }
             }
@@ -149,57 +175,29 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
     val loginLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
         onResult = { result ->
-            if (result.resultCode != RESULT_OK) {
+            val externalSigner = result.takeIf { it.resultCode == RESULT_OK }
+                ?.let { amberSigner(it.data, appContext) }
+            if (externalSigner == null) {
                 Toast.makeText(context, signRequestRejectedMsg, Toast.LENGTH_SHORT).show()
             } else {
-                val pubkey = result.data?.getStringExtra("signature").orEmpty()
-                val packageName = result.data?.getStringExtra("package").orEmpty()
-
-                val hexKey = if (pubkey.startsWith("npub")) {
-                    (Nip19Parser.uriToRoute(pubkey)?.entity as? NPub)?.hex.orEmpty()
-                } else {
-                    pubkey
-                }
-
-                if (hexKey.isBlank() || packageName.isBlank()) {
-                    Toast.makeText(context, signRequestRejectedMsg, Toast.LENGTH_SHORT).show()
-                } else {
-                    val externalSigner = NostrSignerExternal(
-                        hexKey,
-                        packageName,
-                        appContext.contentResolver,
-                    )
-                    // Covers the case where the user did not tick "remember" in Amber, so every
-                    // seal and gift wrap needs its own confirmation there.
-                    externalSigner.registerForegroundLauncher { intent ->
-                        try {
-                            respondLauncher.launch(intent)
-                        } catch (e: Exception) {
-                            if (e is CancellationException) throw e
-                            Log.e(Citrine.TAG, "Could not open the signer app", e)
-                        }
+                // Covers the case where the user did not tick "remember" in Amber, so every
+                // seal and gift wrap needs its own confirmation there.
+                externalSigner.registerForegroundLauncher { intent ->
+                    try {
+                        respondLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        Log.e(Citrine.TAG, "Could not open the signer app", e)
                     }
-                    signer = externalSigner
-                    sendReport(externalSigner)
                 }
+                onSignerReady(externalSigner)
             }
         },
     )
 
-    fun signWithAmber() {
+    return {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
-            intent.putExtra("type", "get_public_key")
-            // One Amber prompt covers the whole NIP-17 build: the chat message, the seal and the
-            // NIP-44 encryption of both.
-            val permissions = listOf(
-                Permission(CommandType.SIGN_EVENT, 14),
-                Permission(CommandType.SIGN_EVENT, 13),
-                Permission(CommandType.NIP44_ENCRYPT),
-            )
-            intent.putExtra("permissions", permissions.joinToString(",", "[", "]") { it.toJson() })
-            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            loginLauncher.launch(intent)
+            loginLauncher.launch(amberLoginIntent())
         } catch (e: ActivityNotFoundException) {
             Log.e(Citrine.TAG, "Could not open the signer app", e)
             Toast.makeText(context, noExternalSignerMsg, Toast.LENGTH_LONG).show()
@@ -209,11 +207,62 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
             Toast.makeText(context, noExternalSignerMsg, Toast.LENGTH_LONG).show()
         }
     }
+}
 
-    if (!showScreen) return
+private suspend fun loadReport(crashReportCache: CrashReportCache, appContext: Context): String {
+    val stack = crashReportCache.loadAndDelete()
+    // ANRs and native crashes never reach the uncaught-exception handler, so the exit
+    // records are the only trace of them the user can send. Run detect() here too so the
+    // crash screen does not race ahead of Citrine.onCreate()'s background detection.
+    ExitReasons.detect(appContext)
+    val exits = ExitReasons.pending(appContext)
+    return listOfNotNull(stack?.takeIf { it.isNotBlank() }, exits?.takeIf { it.isNotBlank() })
+        .joinToString("\n\n")
+}
 
-    BackHandler(enabled = !sending) { forgetReport() }
+private fun amberSigner(data: Intent?, appContext: Context): NostrSignerExternal? {
+    val pubkey = data?.getStringExtra("signature").orEmpty()
+    val packageName = data?.getStringExtra("package").orEmpty()
 
+    val hexKey = if (pubkey.startsWith("npub")) {
+        (Nip19Parser.uriToRoute(pubkey)?.entity as? NPub)?.hex.orEmpty()
+    } else {
+        pubkey
+    }
+
+    if (hexKey.isBlank() || packageName.isBlank()) return null
+    return NostrSignerExternal(
+        hexKey,
+        packageName,
+        appContext.contentResolver,
+    )
+}
+
+private fun amberLoginIntent(): Intent {
+    val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri())
+    intent.putExtra("type", "get_public_key")
+    // One Amber prompt covers the whole NIP-17 build: the chat message, the seal and the
+    // NIP-44 encryption of both.
+    val permissions = listOf(
+        Permission(CommandType.SIGN_EVENT, 14),
+        Permission(CommandType.SIGN_EVENT, 13),
+        Permission(CommandType.NIP44_ENCRYPT),
+    )
+    intent.putExtra("permissions", permissions.joinToString(",", "[", "]") { it.toJson() })
+    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    return intent
+}
+
+@Composable
+private fun CrashReportContent(
+    reportText: String,
+    onReportTextChange: (String) -> Unit,
+    sending: Boolean,
+    onSignWithAmber: () -> Unit,
+    onSendAnonymously: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -234,7 +283,7 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
             )
             OutlinedTextField(
                 value = reportText,
-                onValueChange = { reportText = it },
+                onValueChange = onReportTextChange,
                 enabled = !sending,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -245,21 +294,21 @@ fun CrashReportScreen(modifier: Modifier = Modifier) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             Button(
-                onClick = { signWithAmber() },
+                onClick = onSignWithAmber,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !sending && reportText.isNotBlank(),
             ) {
                 Text(stringResource(R.string.crash_report_sign_with_amber))
             }
             OutlinedButton(
-                onClick = { sendReport(CrashReportSender.anonymousSigner()) },
+                onClick = onSendAnonymously,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !sending && reportText.isNotBlank(),
             ) {
                 Text(stringResource(R.string.crash_report_send_anonymously))
             }
             TextButton(
-                onClick = { forgetReport() },
+                onClick = onCancel,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 enabled = !sending,
             ) {

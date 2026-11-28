@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -180,13 +181,7 @@ class HomeViewModel(
         Citrine.job = appScope.launch(Dispatchers.IO) {
             val file = files.first()
             if (file.extension != "jsonl") {
-                appScope.launch(Dispatchers.Main) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.invalid_file_extension),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
+                showToast(context, R.string.invalid_file_extension)
                 return@launch
             }
 
@@ -194,54 +189,7 @@ class HomeViewModel(
                 Citrine.isImportingEvents = true
                 setProgress(context.getString(R.string.reading_file, file.name))
 
-                var linesRead = 0
-                val input2 = file.openInputStream(context) ?: return@launch
-                input2.use { ip ->
-                    ip.bufferedReader().use {
-                        if (shouldDelete) {
-                            setProgress(context.getString(R.string.deleting_all_events))
-                            database.eventDao().deleteAll()
-                        }
-
-                        it.useLines { lines ->
-                            lines.forEach { line ->
-                                if (line.isBlank()) {
-                                    return@forEach
-                                }
-                                val event = Event.fromJson(line)
-                                val result = CustomWebSocketService.server?.innerProcessEvent(event, null)
-                                if (result == CustomWebSocketServer.VerificationResult.InvalidId || result == CustomWebSocketServer.VerificationResult.InvalidSignature) {
-                                    Log.d(Citrine.TAG, "before: ${event.tags.size}")
-
-                                    val uniqueTags: Array<Array<String>> = event.tags
-                                        .distinctBy { tag -> tag.joinToString("|") }
-                                        .map { value -> value }
-                                        .toTypedArray()
-                                    Log.d(Citrine.TAG, "after: ${uniqueTags.size}")
-
-                                    val newEvent = Event(
-                                        id = event.id,
-                                        pubKey = event.pubKey,
-                                        createdAt = event.createdAt,
-                                        kind = event.kind,
-                                        tags = uniqueTags,
-                                        content = event.content,
-                                        sig = event.sig,
-                                    )
-
-                                    val result = CustomWebSocketService.server?.innerProcessEvent(newEvent, null)
-                                    Log.d(Citrine.TAG, "result: $result")
-                                }
-
-                                linesRead++
-                                if (linesRead % 100 == 0) {
-                                    setProgress(context.getString(R.string.imported2, linesRead.toString()))
-                                }
-                            }
-                        }
-                        delay(3000)
-                    }
-                }
+                val linesRead = importLines(file, shouldDelete, context) ?: return@launch
 
                 setProgress(context.getString(R.string.imported_events_successfully, linesRead))
                 Citrine.isImportingEvents = false
@@ -257,17 +205,81 @@ class HomeViewModel(
                 Citrine.isImportingEvents = false
                 if (e is CancellationException) throw e
                 Log.d(Citrine.TAG, e.message ?: "", e)
-                appScope.launch(Dispatchers.Main) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.import_failed),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
+                showToast(context, R.string.import_failed)
                 setProgress("")
                 setProgress(context.getString(R.string.import_failed))
                 onFinished()
             }
+        }
+    }
+
+    private fun showToast(context: Context, @StringRes message: Int) {
+        appScope.launch(Dispatchers.Main) {
+            Toast.makeText(
+                context,
+                context.getString(message),
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    private suspend fun importLines(
+        file: DocumentFile,
+        shouldDelete: Boolean,
+        context: Context,
+    ): Int? {
+        var linesRead = 0
+        val input2 = file.openInputStream(context) ?: return null
+        input2.use { ip ->
+            ip.bufferedReader().use {
+                if (shouldDelete) {
+                    setProgress(context.getString(R.string.deleting_all_events))
+                    database.eventDao().deleteAll()
+                }
+
+                it.useLines { lines ->
+                    lines.forEach { line ->
+                        if (line.isBlank()) {
+                            return@forEach
+                        }
+                        importLine(line)
+
+                        linesRead++
+                        if (linesRead % 100 == 0) {
+                            setProgress(context.getString(R.string.imported2, linesRead.toString()))
+                        }
+                    }
+                }
+                delay(3000)
+            }
+        }
+        return linesRead
+    }
+
+    private suspend fun importLine(line: String) {
+        val event = Event.fromJson(line)
+        val result = CustomWebSocketService.server?.innerProcessEvent(event, null)
+        if (result == CustomWebSocketServer.VerificationResult.InvalidId || result == CustomWebSocketServer.VerificationResult.InvalidSignature) {
+            Log.d(Citrine.TAG, "before: ${event.tags.size}")
+
+            val uniqueTags: Array<Array<String>> = event.tags
+                .distinctBy { tag -> tag.joinToString("|") }
+                .map { value -> value }
+                .toTypedArray()
+            Log.d(Citrine.TAG, "after: ${uniqueTags.size}")
+
+            val newEvent = Event(
+                id = event.id,
+                pubKey = event.pubKey,
+                createdAt = event.createdAt,
+                kind = event.kind,
+                tags = uniqueTags,
+                content = event.content,
+                sig = event.sig,
+            )
+
+            val retried = CustomWebSocketService.server?.innerProcessEvent(newEvent, null)
+            Log.d(Citrine.TAG, "result: $retried")
         }
     }
 

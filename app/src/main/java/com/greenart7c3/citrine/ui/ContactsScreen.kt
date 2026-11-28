@@ -33,15 +33,18 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.R
+import com.greenart7c3.citrine.data.RelayClient
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.utils.toDateString
 import com.vitorpamplona.quartz.nip01Core.relay.client.accessories.publishAndConfirm
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
+import com.vitorpamplona.quartz.nip02FollowList.ReadWrite
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
 import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,9 +64,125 @@ fun ContactsScreen(
     val relayClient = LocalRelayClient.current
     val coroutineScope = rememberCoroutineScope()
 
+    val noRelaysFoundMsg = stringResource(R.string.no_relays_found)
+
+    val signer = contactsSigner(pubKey, packageName, coroutineScope)
+
+    val events = remember { mutableListOf<ContactListEvent>() }
+    var outboxRelays by remember { mutableStateOf<AdvertisedRelayListEvent?>(null) }
+    LaunchedEffect(Unit) {
+        coroutineScope.launch(Dispatchers.IO) {
+            loading = true
+            for (contactListEvent in viewModel.contactLists(pubKey)) {
+                Log.d("ContactsScreen", "ContactListEvent: $contactListEvent")
+                events.add(contactListEvent)
+            }
+            outboxRelays = viewModel.outboxRelays(pubKey)
+
+            loading = false
+        }
+    }
+
+    if (loading) {
+        ContactsLoading(modifier = modifier)
+    } else {
+        ContactListsContent(
+            events = events,
+            onRestore = { event ->
+                val relays = event.relays()
+                if (relays.isNullOrEmpty() && outboxRelays == null) {
+                    coroutineScope.launch {
+                        Toast.makeText(
+                            context,
+                            noRelaysFoundMsg,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return@ContactListsContent
+                }
+
+                coroutineScope.launch(Dispatchers.IO) {
+                    restoreContactList(
+                        event = event,
+                        relays = relays,
+                        signer = signer,
+                        outboxRelays = outboxRelays,
+                        relayClient = relayClient,
+                        onPublishingChange = { loading = it },
+                    )
+                    coroutineScope.launch(Dispatchers.Main) {
+                        navController.navigateUp()
+                    }
+                }
+            },
+            modifier = modifier,
+        )
+    }
+}
+
+private suspend fun restoreContactList(
+    event: ContactListEvent,
+    relays: Map<NormalizedRelayUrl, ReadWrite>,
+    signer: NostrSignerExternal,
+    outboxRelays: AdvertisedRelayListEvent?,
+    relayClient: RelayClient,
+    onPublishingChange: (Boolean) -> Unit,
+) {
+    val signedEvent = ContactListEvent.create(
+        event.content,
+        event.tags,
+        signer,
+    )
+    val localRelays = restoreRelays(outboxRelays, relays)
+
+    onPublishingChange(true)
+
+    delay(1000)
+    relayClient.client.publishAndConfirm(signedEvent, relayList = localRelays.toSet())
+    CustomWebSocketService.server?.innerProcessEvent(signedEvent, null)
+    relayClient.client.disconnect()
+    onPublishingChange(false)
+}
+
+@Composable
+private fun ContactsLoading(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+    }
+}
+
+private fun restoreRelays(
+    outboxRelays: AdvertisedRelayListEvent?,
+    relays: Map<NormalizedRelayUrl, ReadWrite>,
+): List<NormalizedRelayUrl> {
+    val outbox = outboxRelays?.writeRelays()?.map { relay ->
+        NormalizedRelayUrl(
+            url = relay,
+        )
+    }
+    return outbox ?: relays.mapNotNull { relay ->
+        if (relay.value.write) {
+            relay.key
+        } else {
+            null
+        }
+    }
+}
+
+@Composable
+private fun contactsSigner(
+    pubKey: String,
+    packageName: String,
+    coroutineScope: CoroutineScope,
+): NostrSignerExternal {
+    val context = LocalContext.current
+
     val signRequestRejectedMsg = stringResource(R.string.sign_request_rejected)
     val ensureSignerAuthorizedMsg = stringResource(R.string.make_sure_the_signer_application_has_authorized_this_transaction)
-    val noRelaysFoundMsg = stringResource(R.string.no_relays_found)
 
     val signer = NostrSignerExternal(
         pubKey,
@@ -103,135 +222,86 @@ fun ContactsScreen(
             }
         }
     }
+    return signer
+}
 
-    val events = remember { mutableListOf<ContactListEvent>() }
-    var outboxRelays by remember { mutableStateOf<AdvertisedRelayListEvent?>(null) }
-    LaunchedEffect(Unit) {
-        coroutineScope.launch(Dispatchers.IO) {
-            loading = true
-            for (contactListEvent in viewModel.contactLists(pubKey)) {
-                Log.d("ContactsScreen", "ContactListEvent: $contactListEvent")
-                events.add(contactListEvent)
+@Composable
+private fun ContactListsContent(
+    events: List<ContactListEvent>,
+    onRestore: (ContactListEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.background)
+            .fillMaxSize(),
+    ) {
+        if (events.isEmpty()) {
+            Column(
+                Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    stringResource(R.string.no_follow_list_found),
+                    textAlign = TextAlign.Center,
+                )
             }
-            outboxRelays = viewModel.outboxRelays(pubKey)
+        }
 
-            loading = false
+        LazyColumn(
+            Modifier.fillMaxSize(),
+        ) {
+            items(events.size) {
+                val event = events[it]
+                ContactListCard(
+                    event = event,
+                    onRestore = { onRestore(event) },
+                )
+            }
         }
     }
+}
 
-    if (loading) {
-        Column(
-            modifier = modifier,
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+@Composable
+private fun ContactListCard(
+    event: ContactListEvent,
+    onRestore: () -> Unit,
+) {
+    Card(
+        Modifier
+            .fillMaxWidth()
+            .padding(4.dp),
+    ) {
+        Text(
+            "Date: ${event.createdAt.toDateString()}",
+            modifier = Modifier.padding(
+                start = 6.dp,
+                end = 6.dp,
+                top = 6.dp,
+            ),
+        )
+        Text(
+            "Following: ${event.verifiedFollowKeySet().size}",
+            modifier = Modifier.padding(horizontal = 6.dp),
+        )
+        Text(
+            "Relays: ${event.relays().keys.size}",
+            modifier = Modifier.padding(horizontal = 6.dp),
+        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
         ) {
-            CircularProgressIndicator()
-        }
-    } else {
-        Column(
-            modifier = modifier
-                .background(MaterialTheme.colorScheme.background)
-                .fillMaxSize(),
-        ) {
-            if (events.isEmpty()) {
-                Column(
-                    Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        stringResource(R.string.no_follow_list_found),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-
-            LazyColumn(
-                Modifier.fillMaxSize(),
+            ElevatedButton(
+                onClick = onRestore,
+                modifier = Modifier.padding(
+                    start = 6.dp,
+                    end = 6.dp,
+                    bottom = 6.dp,
+                ),
             ) {
-                items(events.size) {
-                    val event = events[it]
-                    Card(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(4.dp),
-                    ) {
-                        Text(
-                            "Date: ${event.createdAt.toDateString()}",
-                            modifier = Modifier.padding(
-                                start = 6.dp,
-                                end = 6.dp,
-                                top = 6.dp,
-                            ),
-                        )
-                        Text(
-                            "Following: ${event.verifiedFollowKeySet().size}",
-                            modifier = Modifier.padding(horizontal = 6.dp),
-                        )
-                        Text(
-                            "Relays: ${event.relays().keys.size}",
-                            modifier = Modifier.padding(horizontal = 6.dp),
-                        )
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            ElevatedButton(
-                                onClick = {
-                                    val relays = event.relays()
-                                    if (relays.isNullOrEmpty() && outboxRelays == null) {
-                                        coroutineScope.launch {
-                                            Toast.makeText(
-                                                context,
-                                                noRelaysFoundMsg,
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                        return@ElevatedButton
-                                    }
-
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        val signedEvent = ContactListEvent.create(
-                                            event.content,
-                                            event.tags,
-                                            signer,
-                                        )
-                                        val outbox = outboxRelays?.writeRelays()?.map { relay ->
-                                            NormalizedRelayUrl(
-                                                url = relay,
-                                            )
-                                        }
-                                        val localRelays = outbox ?: relays.mapNotNull { relay ->
-                                            if (relay.value.write) {
-                                                relay.key
-                                            } else {
-                                                null
-                                            }
-                                        }
-
-                                        loading = true
-
-                                        delay(1000)
-                                        relayClient.client.publishAndConfirm(signedEvent, relayList = localRelays.toSet())
-                                        CustomWebSocketService.server?.innerProcessEvent(signedEvent, null)
-                                        relayClient.client.disconnect()
-                                        loading = false
-                                        coroutineScope.launch(Dispatchers.Main) {
-                                            navController.navigateUp()
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.padding(
-                                    start = 6.dp,
-                                    end = 6.dp,
-                                    bottom = 6.dp,
-                                ),
-                            ) {
-                                Text(stringResource(R.string.restore))
-                            }
-                        }
-                    }
-                }
+                Text(stringResource(R.string.restore))
             }
         }
     }

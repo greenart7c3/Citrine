@@ -18,14 +18,18 @@ class StoragePickerHelperTest {
         var deniedCalls = 0
 
         val helper = StoragePickerHelper(
-            sdkInt = Build.VERSION_CODES.O_MR1,
-            hasLegacyStoragePermissions = { granted },
-            requestLegacyStoragePermissions = { requested = it },
-            launchFolderPicker = { folderPickerCalls++ },
-            launchFilePicker = {},
+            legacyPermissions = LegacyStoragePermissions(
+                sdkInt = Build.VERSION_CODES.O_MR1,
+                hasLegacyStoragePermissions = { granted },
+                requestLegacyStoragePermissions = { requested = it },
+            ),
+            pickers = StoragePickers(
+                launchFolderPicker = { folderPickerCalls++ },
+                launchFilePicker = {},
+                setFolderSelectedCallback = {},
+                setFileSelectedCallback = {},
+            ),
             onPermissionDenied = { deniedCalls++ },
-            setFolderSelectedCallback = {},
-            setFileSelectedCallback = {},
         )
 
         helper.openFolderPicker()
@@ -58,14 +62,18 @@ class StoragePickerHelperTest {
         var folderPickerCalls = 0
 
         val helper = StoragePickerHelper(
-            sdkInt = Build.VERSION_CODES.P,
-            hasLegacyStoragePermissions = { false },
-            requestLegacyStoragePermissions = { requested = it },
-            launchFolderPicker = { folderPickerCalls++ },
-            launchFilePicker = {},
+            legacyPermissions = LegacyStoragePermissions(
+                sdkInt = Build.VERSION_CODES.P,
+                hasLegacyStoragePermissions = { false },
+                requestLegacyStoragePermissions = { requested = it },
+            ),
+            pickers = StoragePickers(
+                launchFolderPicker = { folderPickerCalls++ },
+                launchFilePicker = {},
+                setFolderSelectedCallback = {},
+                setFileSelectedCallback = {},
+            ),
             onPermissionDenied = {},
-            setFolderSelectedCallback = {},
-            setFileSelectedCallback = {},
         )
 
         helper.openFolderPicker()
@@ -81,14 +89,18 @@ class StoragePickerHelperTest {
         var deniedCalls = 0
 
         val helper = StoragePickerHelper(
-            sdkInt = Build.VERSION_CODES.O_MR1,
-            hasLegacyStoragePermissions = { granted },
-            requestLegacyStoragePermissions = {},
-            launchFolderPicker = { folderPickerCalls++ },
-            launchFilePicker = {},
+            legacyPermissions = LegacyStoragePermissions(
+                sdkInt = Build.VERSION_CODES.O_MR1,
+                hasLegacyStoragePermissions = { granted },
+                requestLegacyStoragePermissions = {},
+            ),
+            pickers = StoragePickers(
+                launchFolderPicker = { folderPickerCalls++ },
+                launchFilePicker = {},
+                setFolderSelectedCallback = {},
+                setFileSelectedCallback = {},
+            ),
             onPermissionDenied = { deniedCalls++ },
-            setFolderSelectedCallback = {},
-            setFileSelectedCallback = {},
         )
 
         helper.openFolderPicker()
@@ -121,14 +133,18 @@ class StoragePickerHelperTest {
         var folderPickerCalls = 0
 
         val helper = StoragePickerHelper(
-            sdkInt = Build.VERSION_CODES.O_MR1,
-            hasLegacyStoragePermissions = { true },
-            requestLegacyStoragePermissions = { requested = it },
-            launchFolderPicker = { folderPickerCalls++ },
-            launchFilePicker = {},
+            legacyPermissions = LegacyStoragePermissions(
+                sdkInt = Build.VERSION_CODES.O_MR1,
+                hasLegacyStoragePermissions = { true },
+                requestLegacyStoragePermissions = { requested = it },
+            ),
+            pickers = StoragePickers(
+                launchFolderPicker = { folderPickerCalls++ },
+                launchFilePicker = {},
+                setFolderSelectedCallback = {},
+                setFileSelectedCallback = {},
+            ),
             onPermissionDenied = {},
-            setFolderSelectedCallback = {},
-            setFileSelectedCallback = {},
         )
 
         helper.openFolderPicker()
@@ -143,14 +159,18 @@ class StoragePickerHelperTest {
         var folderPickerCalls = 0
 
         val helper = StoragePickerHelper(
-            sdkInt = Build.VERSION_CODES.Q,
-            hasLegacyStoragePermissions = { false },
-            requestLegacyStoragePermissions = { requested = it },
-            launchFolderPicker = { folderPickerCalls++ },
-            launchFilePicker = {},
+            legacyPermissions = LegacyStoragePermissions(
+                sdkInt = Build.VERSION_CODES.Q,
+                hasLegacyStoragePermissions = { false },
+                requestLegacyStoragePermissions = { requested = it },
+            ),
+            pickers = StoragePickers(
+                launchFolderPicker = { folderPickerCalls++ },
+                launchFilePicker = {},
+                setFolderSelectedCallback = {},
+                setFileSelectedCallback = {},
+            ),
             onPermissionDenied = {},
-            setFolderSelectedCallback = {},
-            setFileSelectedCallback = {},
         )
 
         helper.openFolderPicker()
@@ -164,14 +184,18 @@ class StoragePickerHelperTest {
         var deniedCalls = 0
 
         val helper = StoragePickerHelper(
-            sdkInt = Build.VERSION_CODES.O_MR1,
-            hasLegacyStoragePermissions = { true },
-            requestLegacyStoragePermissions = {},
-            launchFolderPicker = { throw StoragePermissionDeniedException() },
-            launchFilePicker = {},
+            legacyPermissions = LegacyStoragePermissions(
+                sdkInt = Build.VERSION_CODES.O_MR1,
+                hasLegacyStoragePermissions = { true },
+                requestLegacyStoragePermissions = {},
+            ),
+            pickers = StoragePickers(
+                launchFolderPicker = { throw StoragePermissionDeniedException() },
+                launchFilePicker = {},
+                setFolderSelectedCallback = {},
+                setFileSelectedCallback = {},
+            ),
             onPermissionDenied = { deniedCalls++ },
-            setFolderSelectedCallback = {},
-            setFileSelectedCallback = {},
         )
 
         helper.openFolderPicker()
@@ -186,14 +210,18 @@ class StoragePickerHelperTest {
         var forwardedFileCallback: ((Int, List<androidx.documentfile.provider.DocumentFile>) -> Unit)? = null
 
         val helper = StoragePickerHelper(
-            sdkInt = Build.VERSION_CODES.O_MR1,
-            hasLegacyStoragePermissions = { false },
-            requestLegacyStoragePermissions = {},
-            launchFolderPicker = {},
-            launchFilePicker = { filePickerCalls++ },
+            legacyPermissions = LegacyStoragePermissions(
+                sdkInt = Build.VERSION_CODES.O_MR1,
+                hasLegacyStoragePermissions = { false },
+                requestLegacyStoragePermissions = {},
+            ),
+            pickers = StoragePickers(
+                launchFolderPicker = {},
+                launchFilePicker = { filePickerCalls++ },
+                setFolderSelectedCallback = { forwardedFolderCallback = it },
+                setFileSelectedCallback = { forwardedFileCallback = it },
+            ),
             onPermissionDenied = {},
-            setFolderSelectedCallback = { forwardedFolderCallback = it },
-            setFileSelectedCallback = { forwardedFileCallback = it },
         )
 
         val folderCb: (Int, androidx.documentfile.provider.DocumentFile) -> Unit = { _, _ -> }

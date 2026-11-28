@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -143,36 +144,14 @@ fun DatabaseInfo(
     val appScope = LocalAppScope.current
     var showGraph by remember { mutableStateOf(Settings.showEventGraph) }
 
-    if (wantsToDeleteKind != null) {
-        AlertDialog(
-            text = {
-                Text(stringResource(R.string.are_you_sure_you_want_to_delete_all_events_of_kind, wantsToDeleteKind!!))
+    wantsToDeleteKind?.let { kind ->
+        DeleteKindDialog(
+            kind = kind,
+            onConfirm = {
+                viewModel.deleteKind(kind) { wantsToDeleteKind = null }
             },
-            title = {
-                Text(stringResource(R.string.delete), fontWeight = FontWeight.Bold)
-            },
-            onDismissRequest = {
+            onDismiss = {
                 wantsToDeleteKind = null
-            },
-            confirmButton = {
-                TextButton(
-                    content = {
-                        Text(stringResource(R.string.yes))
-                    },
-                    onClick = {
-                        viewModel.deleteKind(wantsToDeleteKind!!) { wantsToDeleteKind = null }
-                    },
-                )
-            },
-            dismissButton = {
-                TextButton(
-                    content = {
-                        Text(stringResource(R.string.no))
-                    },
-                    onClick = {
-                        wantsToDeleteKind = null
-                    },
-                )
             },
         )
     }
@@ -185,47 +164,21 @@ fun DatabaseInfo(
             .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                stringResource(R.string.total, total),
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-            )
-            IconButton(
-                onClick = {
-                    showGraph = !showGraph
-                    Settings.showEventGraph = showGraph
-                    appScope.launch(Dispatchers.IO) {
-                        LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                    }
-                },
-            ) {
-                Icon(
-                    imageVector = if (showGraph) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = stringResource(if (showGraph) R.string.hide_graph else R.string.show_graph),
-                )
-            }
-        }
+        TotalHeader(
+            total = total,
+            showGraph = showGraph,
+            onToggleGraph = {
+                showGraph = !showGraph
+                Settings.showEventGraph = showGraph
+                appScope.launch(Dispatchers.IO) {
+                    LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
+                }
+            },
+        )
         Spacer(modifier = Modifier.padding(4.dp))
 
         if (showGraph && slices.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                PieChart(
-                    slices = slices,
-                    modifier = Modifier.size(160.dp),
-                )
-                PieLegend(slices = slices, total = total)
-            }
-            Spacer(modifier = Modifier.padding(4.dp))
+            EventGraph(slices = slices, total = total)
         }
 
         LazyColumn(
@@ -233,34 +186,124 @@ fun DatabaseInfo(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             items(events) { item ->
-                Row(
-                    Modifier.fillMaxWidth(),
-                ) {
-                    ElevatedButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            navController.navigate("Feed/${item.kind}")
-                        },
-                    ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text("Kind: ${item.kind}")
-                            Text("${item.count}")
-                        }
-                    }
-                    IconButton(
-                        content = {
-                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
-                        },
-                        onClick = {
-                            wantsToDeleteKind = item.kind
-                        },
-                    )
-                }
+                KindCountRow(
+                    item = item,
+                    onOpen = {
+                        navController.navigate("Feed/${item.kind}")
+                    },
+                    onDelete = {
+                        wantsToDeleteKind = item.kind
+                    },
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun ColumnScope.EventGraph(slices: List<PieSlice>, total: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        PieChart(
+            slices = slices,
+            modifier = Modifier.size(160.dp),
+        )
+        PieLegend(slices = slices, total = total)
+    }
+    Spacer(modifier = Modifier.padding(4.dp))
+}
+
+@Composable
+private fun DeleteKindDialog(
+    kind: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        text = {
+            Text(stringResource(R.string.are_you_sure_you_want_to_delete_all_events_of_kind, kind))
+        },
+        title = {
+            Text(stringResource(R.string.delete), fontWeight = FontWeight.Bold)
+        },
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                content = {
+                    Text(stringResource(R.string.yes))
+                },
+                onClick = onConfirm,
+            )
+        },
+        dismissButton = {
+            TextButton(
+                content = {
+                    Text(stringResource(R.string.no))
+                },
+                onClick = onDismiss,
+            )
+        },
+    )
+}
+
+@Composable
+private fun TotalHeader(
+    total: Int,
+    showGraph: Boolean,
+    onToggleGraph: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.total, total),
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Center,
+        )
+        IconButton(
+            onClick = onToggleGraph,
+        ) {
+            Icon(
+                imageVector = if (showGraph) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                contentDescription = stringResource(if (showGraph) R.string.hide_graph else R.string.show_graph),
+            )
+        }
+    }
+}
+
+@Composable
+private fun KindCountRow(
+    item: KindCount,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+    ) {
+        ElevatedButton(
+            modifier = Modifier.weight(1f),
+            onClick = onOpen,
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Kind: ${item.kind}")
+                Text("${item.count}")
+            }
+        }
+        IconButton(
+            content = {
+                Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
+            },
+            onClick = onDelete,
+        )
     }
 }

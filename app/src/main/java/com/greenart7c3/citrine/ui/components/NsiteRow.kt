@@ -57,40 +57,11 @@ fun NsiteRow(
         shape = RoundedCornerShape(16.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                NsiteIcon(
-                    model = remember(nsite.folderName) { NsiteManager.localIconFile(nsite.folderName) },
-                    monogram = nsite.displayName.firstOrNull()?.toString(),
-                    size = 48.dp,
-                )
-                Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(
-                        stringResource(R.string.nsite_badge),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        nsite.displayName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                IconButton(onClick = { onToggleAutoUpdate(!nsite.autoUpdate) }) {
-                    Icon(
-                        imageVector = if (nsite.autoUpdate) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = stringResource(R.string.auto_update),
-                        tint = if (nsite.autoUpdate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                FilledTonalButton(onClick = onOpen) {
-                    Text(stringResource(R.string.open))
-                }
-            }
+            NsiteHeader(
+                nsite = nsite,
+                onToggleAutoUpdate = onToggleAutoUpdate,
+                onOpen = onOpen,
+            )
             if (nsite.description.isNotBlank()) {
                 Text(
                     nsite.description,
@@ -100,58 +71,126 @@ fun NsiteRow(
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-                    .clickable { expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.Default.Shield,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    stringResource(R.string.nsite_details),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            NsiteDetailsToggle(
+                expanded = expanded,
+                onToggle = { expanded = !expanded },
+            )
+            AnimatedVisibility(visible = expanded) {
+                NsiteDetails(
+                    nsite = nsite,
+                    updateAvailable = updateAvailable,
+                    onUpdate = onUpdate,
+                    onDelete = onDelete,
                 )
             }
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    Text(
-                        "${nsite.folderName}.localhost:${Settings.port}",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        if (updateAvailable) {
-                            TextButton(onClick = onUpdate) {
-                                Text(stringResource(R.string.update_now))
-                            }
-                        }
-                        TextButton(
-                            onClick = onDelete,
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        ) {
-                            Text(stringResource(R.string.delete))
-                        }
-                    }
+        }
+    }
+}
+
+@Composable
+private fun NsiteHeader(
+    nsite: NsiteInfo,
+    onToggleAutoUpdate: (Boolean) -> Unit,
+    onOpen: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NsiteIcon(
+            model = remember(nsite.folderName) { NsiteManager.localIconFile(nsite.folderName) },
+            monogram = nsite.displayName.firstOrNull()?.toString(),
+            size = 48.dp,
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(
+                stringResource(R.string.nsite_badge),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                nsite.displayName,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        IconButton(onClick = { onToggleAutoUpdate(!nsite.autoUpdate) }) {
+            Icon(
+                imageVector = if (nsite.autoUpdate) Icons.Default.Star else Icons.Default.StarBorder,
+                contentDescription = stringResource(R.string.auto_update),
+                tint = if (nsite.autoUpdate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        FilledTonalButton(onClick = onOpen) {
+            Text(stringResource(R.string.open))
+        }
+    }
+}
+
+@Composable
+private fun NsiteDetailsToggle(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clickable(onClick = onToggle),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Default.Shield,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            stringResource(R.string.nsite_details),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun NsiteDetails(
+    nsite: NsiteInfo,
+    updateAvailable: Boolean,
+    onUpdate: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(
+            "${nsite.folderName}.localhost:${Settings.port}",
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            if (updateAvailable) {
+                TextButton(onClick = onUpdate) {
+                    Text(stringResource(R.string.update_now))
                 }
+            }
+            TextButton(
+                onClick = onDelete,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Text(stringResource(R.string.delete))
             }
         }
     }
