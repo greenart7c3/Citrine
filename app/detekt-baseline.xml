@@ -20,7 +20,6 @@
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
     <ID>CyclomaticComplexMethod:GroupState.kt:GroupState$fun applyMetadataTags: GroupState</ID>
-    <ID>CyclomaticComplexMethod:HomeScreen.kt:@Composable fun HomeScreen</ID>
     <ID>CyclomaticComplexMethod:ImportFromListsDialog.kt:@Composable fun ImportFromListsDialog</ID>
     <ID>CyclomaticComplexMethod:ListImporter.kt:ListImporter$suspend fun fetch: Result</ID>
     <ID>CyclomaticComplexMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
@@ -41,7 +40,6 @@
     <ID>LongMethod:AggregatorSettingsScreen.kt:@Composable fun AggregatorSettingsScreen</ID>
     <ID>LongMethod:BrowseNsitesScreen.kt:@Composable fun BrowseNsitesScreen</ID>
     <ID>LongMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
-    <ID>LongMethod:CitrineScaffold.kt:@SuppressLint("ConfigurationScreenWidthHeight") @Composable fun CitrineScaffold</ID>
     <ID>LongMethod:ContactsScreen.kt:@Composable fun ContactsScreen</ID>
     <ID>LongMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
     <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
@@ -54,7 +52,6 @@
     <ID>LongMethod:DownloadYourEventsUserScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun SelectRelayModal</ID>
     <ID>LongMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
     <ID>LongMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
-    <ID>LongMethod:HomeScreen.kt:@Composable fun HomeScreen</ID>
     <ID>LongMethod:HomeViewModel.kt:HomeViewModel$fun importDatabase</ID>
     <ID>LongMethod:ImportFromListsDialog.kt:@Composable fun ImportFromListsDialog</ID>
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
@@ -1024,6 +1021,5 @@
     <ID>TooManyFunctions:EventDao.kt:EventDao</ID>
     <ID>TooManyFunctions:EventRepository.kt:EventRepository</ID>
     <ID>TooManyFunctions:GroupManager.kt:GroupManager</ID>
-    <ID>ViewModelInjection:CitrineScaffold.kt:val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.factory(appContext, appScope))</ID>
   </CurrentIssues>
 </SmellBaseline>
