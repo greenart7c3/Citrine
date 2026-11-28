@@ -11,11 +11,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun CloseButton(onCancel: () -> Unit) {
+fun CloseButton(onCancel: () -> Unit, modifier: Modifier = Modifier) {
     Button(
         onClick = {
             onCancel()
         },
+        modifier = modifier,
         shape = RoundedCornerShape(20.dp),
     ) {
         Icon(

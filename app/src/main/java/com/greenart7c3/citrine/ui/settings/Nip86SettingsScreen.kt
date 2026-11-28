@@ -43,9 +43,9 @@ private val EVENT_ID_REGEX = Regex("^[0-9a-f]{64}$")
 
 @Composable
 fun Nip86SettingsScreen(
+    onApplyChanges: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: Nip86SettingsViewModel = viewModel(factory = Nip86SettingsViewModel.factory(LocalContext.current.applicationContext)),
-    onApplyChanges: () -> Unit,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

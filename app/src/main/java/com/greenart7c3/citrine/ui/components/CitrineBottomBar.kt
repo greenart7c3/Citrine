@@ -9,6 +9,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -21,6 +22,7 @@ import com.greenart7c3.citrine.ui.navigation.settingsSubRoutes
 fun CitrineBottomBar(
     destinationRoute: String,
     navController: NavController,
+    modifier: Modifier = Modifier,
 ) {
     val isBackBarRoute = destinationRoute.startsWith("Feed") ||
         destinationRoute == Route.DatabaseInfo.route ||
@@ -31,7 +33,7 @@ fun CitrineBottomBar(
 
     when {
         isBackBarRoute -> {
-            BottomAppBar {
+            BottomAppBar(modifier = modifier) {
                 IconRow(
                     center = true,
                     title = stringResource(R.string.go_back),
@@ -43,7 +45,7 @@ fun CitrineBottomBar(
         }
         isHiddenRoute -> { /* no bottom bar */ }
         else -> {
-            NavigationBar(tonalElevation = 0.dp) {
+            NavigationBar(modifier = modifier, tonalElevation = 0.dp) {
                 navigationItems.forEach {
                     val selected = destinationRoute == it.route
                     NavigationBarItem(

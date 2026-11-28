@@ -4,6 +4,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.ui.navigation.Route
@@ -12,10 +13,12 @@ import com.greenart7c3.citrine.ui.navigation.Route
 @Composable
 fun CitrineTopAppBar(
     destinationRoute: String,
+    modifier: Modifier = Modifier,
 ) {
     val titleRes = titleResForRoute(destinationRoute) ?: return
     CenterAlignedTopAppBar(
         title = { Text(text = stringResource(titleRes)) },
+        modifier = modifier,
     )
 }
 

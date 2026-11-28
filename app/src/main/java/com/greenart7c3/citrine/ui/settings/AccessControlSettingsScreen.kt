@@ -53,8 +53,8 @@ private data class ImportSession(val pubkey: String, val packageName: String)
 
 @Composable
 fun AccessControlSettingsScreen(
-    modifier: Modifier = Modifier,
     onApplyChanges: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

@@ -48,10 +48,10 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun ContactsScreen(
-    modifier: Modifier,
     pubKey: String,
     packageName: String,
     navController: NavController,
+    modifier: Modifier = Modifier,
     viewModel: ContactsViewModel = viewModel(factory = ContactsViewModel.factory(LocalContext.current.applicationContext)),
 ) {
     var loading by remember {

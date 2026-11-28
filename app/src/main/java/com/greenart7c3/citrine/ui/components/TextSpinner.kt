@@ -114,27 +114,33 @@ fun TextSpinner(
 
     if (optionsShowing) {
         options.isNotEmpty().also {
-            SpinnerSelectionDialog(options = options, onDismiss = { optionsShowing = false }) {
-                currentText = options[it].title
-                optionsShowing = false
-                onSelect(it)
-            }
+            SpinnerSelectionDialog(
+                options = options,
+                onDismiss = { optionsShowing = false },
+                onSelect = {
+                    currentText = options[it].title
+                    optionsShowing = false
+                    onSelect(it)
+                },
+            )
         }
     }
 }
 
 @Composable
 fun SpinnerSelectionDialog(
-    title: String? = null,
     options: ImmutableList<TitleExplainer>,
     onDismiss: () -> Unit,
     onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    title: String? = null,
 ) {
     SpinnerSelectionDialog(
         title = title,
         options = options,
         onSelect = onSelect,
         onDismiss = onDismiss,
+        modifier = modifier,
     ) { item ->
         Row(
             horizontalArrangement = Arrangement.Center,
@@ -156,14 +162,16 @@ fun SpinnerSelectionDialog(
 
 @Composable
 fun <T> SpinnerSelectionDialog(
-    title: String? = null,
     options: ImmutableList<T>,
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    title: String? = null,
     onRenderItem: @Composable (T) -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
+            modifier = modifier,
             border = BorderStroke(0.25.dp, Color.LightGray),
             shape = RoundedCornerShape(5.dp),
         ) {

@@ -61,8 +61,8 @@ private val RELAY_SIGNER_KINDS = listOf(
 
 @Composable
 fun RelayInfoSettingsScreen(
-    modifier: Modifier = Modifier,
     onApplyChanges: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

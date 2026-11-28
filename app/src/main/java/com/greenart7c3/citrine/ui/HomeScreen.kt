@@ -73,10 +73,10 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
-    modifier: Modifier,
     homeViewModel: HomeViewModel,
     navController: NavController,
     storageHelper: StoragePickerHelper,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val appContext = context.applicationContext

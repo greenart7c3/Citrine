@@ -131,9 +131,9 @@ private fun PieLegend(slices: List<PieSlice>, total: Int) {
 
 @Composable
 fun DatabaseInfo(
-    modifier: Modifier = Modifier,
     navController: NavController,
     viewModel: DatabaseInfoViewModel,
+    modifier: Modifier = Modifier,
 ) {
     val events by viewModel.countByKind.collectAsStateWithLifecycle()
 

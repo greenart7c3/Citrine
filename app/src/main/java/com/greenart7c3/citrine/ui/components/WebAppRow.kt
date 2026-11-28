@@ -24,9 +24,10 @@ fun WebAppRow(
     onOpenWebApp: () -> Unit,
     onDelete: () -> Unit,
     item: String,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpenWebApp)
             .padding(vertical = 4.dp),

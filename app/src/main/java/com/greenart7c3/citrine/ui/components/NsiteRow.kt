@@ -48,11 +48,12 @@ fun NsiteRow(
     onToggleAutoUpdate: (Boolean) -> Unit,
     onUpdate: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     OutlinedCard(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {

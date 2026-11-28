@@ -18,12 +18,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SwitchSettingRow(
     title: String,
-    description: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    description: String? = null,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
             .padding(vertical = 4.dp),
