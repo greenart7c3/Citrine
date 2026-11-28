@@ -203,6 +203,13 @@ composables; the three list screens use private `LazyListScope` item builders
 `stickyHeader` needs that scope and a composable wrapper would merge the items.
 Unsaved edits now survive a configuration change.
 
+The other settings screens follow the same shape: `AccessControlSettingsViewModel`,
+`AggregatorSettingsViewModel`, `Nip86SettingsViewModel`, `WebClientsSettingsViewModel`,
+`NsiteRelaysSettingsViewModel`, `BrowseNsitesViewModel` and `BackupSettingsViewModel`.
+The editable lists share two state holders, `EditableSet` (a set and the field a new
+entry is typed in) and `EditableBanList` (NIP-86 bans with their reasons), which the
+item builders edit directly.
+
 ### 3. Keep `ui/` off the database (done)
 
 Move each screen's loading and writing into its ViewModel and hand the screen
