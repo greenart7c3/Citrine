@@ -22,8 +22,11 @@ import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.CustomWebSocketServer
+import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.ClipboardReceiver
 import com.greenart7c3.citrine.service.CustomWebSocketService
+import com.greenart7c3.citrine.service.LocalPreferences
+import com.greenart7c3.citrine.service.RelayAggregator
 import com.greenart7c3.citrine.service.WebSocketServerService
 import com.greenart7c3.citrine.utils.ExportDatabaseUtils
 import com.vitorpamplona.quartz.nip01Core.core.Event
@@ -84,15 +87,43 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Wipes every table once the running background job has stopped. The aggregator is
+     * stopped first so its listener cannot write into tables being cleared, and restarted
+     * afterwards with its sync marker reset, since the cache it would reuse is gone.
+     */
+    fun deleteAllEvents() {
+        Citrine.cancelJob()
+        appScope.launch(Dispatchers.IO) {
+            Citrine.job?.join()
+            val resumeAggregator = Settings.relayAggregatorEnabled
+            if (resumeAggregator) RelayAggregator.stop()
+            Citrine.isImportingEvents = true
+            setProgress("Deleting all events")
+            database.clearAllTables()
+            setProgress("")
+            Citrine.isImportingEvents = false
+            if (resumeAggregator) {
+                Settings.relayAggregatorLastSync = 0L
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, appContext)
+                RelayAggregator.start(database)
+            }
+        }
+    }
+
     fun setPubKey(returnedKey: String) {
         _state.value = _state.value.copy(
             pubKey = returnedKey,
         )
     }
 
+    private val database by lazy { AppDatabase.getDatabase(appContext) }
+
+    /** True while Room migrates the database on first open after an upgrade. */
+    val isDatabaseUpgrading = AppDatabase.isDatabaseUpgrading
+
     fun exportDatabase(
         folder: DocumentFile,
-        database: AppDatabase,
         context: Context,
     ) {
         Citrine.cancelJob()
@@ -110,7 +141,6 @@ class HomeViewModel(
     fun importDatabase(
         files: List<DocumentFile>,
         shouldDelete: Boolean,
-        database: AppDatabase,
         context: Context,
         onFinished: () -> Unit,
     ) {

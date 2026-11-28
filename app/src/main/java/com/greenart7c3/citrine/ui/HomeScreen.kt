@@ -47,8 +47,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.AppDatabase.Companion.isDatabaseUpgrading
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.CustomWebSocketService
@@ -104,7 +102,7 @@ fun HomeScreen(
         }
 
         val state = homeViewModel.state.collectAsStateWithLifecycle()
-        val isUpgradingDatabase = isDatabaseUpgrading.collectAsStateWithLifecycle()
+        val isUpgradingDatabase = homeViewModel.isDatabaseUpgrading.collectAsStateWithLifecycle()
         val isRunning = CustomWebSocketService.running.collectAsStateWithLifecycle()
         var deleteAllDialog by remember { mutableStateOf(false) }
         var showDialog by remember { mutableStateOf(false) }
@@ -114,7 +112,6 @@ fun HomeScreen(
         }
         var saveToPreferences by remember { mutableStateOf(false) }
 
-        val database = AppDatabase.getDatabase(context)
         val launcher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult(),
             onResult = { result ->
@@ -202,7 +199,6 @@ fun HomeScreen(
             }
             homeViewModel.exportDatabase(
                 folder = folder,
-                database = database,
                 context = context,
             )
         }
@@ -220,28 +216,7 @@ fun HomeScreen(
                 },
                 onConfirm = {
                     deleteAllDialog = false
-                    Citrine.cancelJob()
-                    appScope.launch(Dispatchers.IO) {
-                        Citrine.job?.join()
-                        // Stop the aggregator before wiping the database so its listener
-                        // can't ingest new events into tables we're clearing. Restart it
-                        // afterwards if the setting is still enabled.
-                        val resumeAggregator = Settings.relayAggregatorEnabled
-                        if (resumeAggregator) RelayAggregator.stop()
-                        Citrine.isImportingEvents = true
-                        homeViewModel.setProgress("Deleting all events")
-                        database.clearAllTables()
-                        homeViewModel.setProgress("")
-                        Citrine.isImportingEvents = false
-                        // The cache the aggregator reuses on restart lives in the DB we just
-                        // wiped. Reset the sync marker so the next refresh does a full
-                        // cold-start network fetch instead of reusing a now-empty cache.
-                        if (resumeAggregator) {
-                            Settings.relayAggregatorLastSync = 0L
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, appContext)
-                            RelayAggregator.start(database)
-                        }
-                    }
+                    homeViewModel.deleteAllEvents()
                 },
             )
         }
@@ -257,7 +232,6 @@ fun HomeScreen(
                         files = selectedFiles,
                         shouldDelete = true,
                         context = context,
-                        database = database,
                         onFinished = {
                             selectedFiles.clear()
                         },
@@ -269,7 +243,6 @@ fun HomeScreen(
                         files = selectedFiles,
                         shouldDelete = false,
                         context = context,
-                        database = database,
                         onFinished = {
                             selectedFiles.clear()
                         },
