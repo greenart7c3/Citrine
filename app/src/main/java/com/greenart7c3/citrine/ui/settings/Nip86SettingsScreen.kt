@@ -29,8 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.PubkeyInputRow
@@ -44,6 +44,7 @@ private val EVENT_ID_REGEX = Regex("^[0-9a-f]{64}$")
 @Composable
 fun Nip86SettingsScreen(
     modifier: Modifier = Modifier,
+    viewModel: Nip86SettingsViewModel = viewModel(factory = Nip86SettingsViewModel.factory(LocalContext.current.applicationContext)),
     onApplyChanges: () -> Unit,
 ) {
     var isLoading by remember { mutableStateOf(false) }
@@ -75,10 +76,7 @@ fun Nip86SettingsScreen(
                 Settings.bannedEventIds = java.util.concurrent.ConcurrentHashMap(bannedEventIds)
                 Settings.blockedIps = java.util.concurrent.ConcurrentHashMap(blockedIps)
                 LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                val eventDao = AppDatabase.getDatabase(context).eventDao()
-                pubkeysToPurge.intersect(bannedPubKeys.keys).forEach { pubkey ->
-                    eventDao.deleteByPubkey(pubkey)
-                }
+                viewModel.purgeEventsOf(pubkeysToPurge.intersect(bannedPubKeys.keys))
                 pubkeysToPurge = emptySet()
                 onApplyChanges()
                 delay(1500)

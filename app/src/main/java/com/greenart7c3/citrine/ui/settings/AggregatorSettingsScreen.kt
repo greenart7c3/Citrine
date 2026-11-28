@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -164,7 +163,7 @@ fun AggregatorSettingsScreen(
                 aggregatorSignerPackageName = resolvedSignerPackage
                 aggregatorRefreshMinutes = TextFieldValue(refreshMinutes.toString())
 
-                RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                RelayAggregator.onConfigChanged()
                 onApplyChanges()
                 delay(1500)
                 isLoading = false
