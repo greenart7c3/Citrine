@@ -25,23 +25,20 @@ private fun NetworkCapabilities.toSnapshot(network: Network) = NetworkSnapshot(
 
 internal fun connectivityManager(context: Context): ConnectivityManager? = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
 
+private fun activeNetworkWithInternet(context: Context): NetworkCapabilities? {
+    val cm = connectivityManager(context) ?: return null
+    val net = cm.activeNetwork ?: return null
+    val caps = cm.getNetworkCapabilities(net) ?: return null
+    return caps.takeIf { it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) }
+}
+
 internal fun isOnMeteredNetwork(context: Context): Boolean {
-    val cm = connectivityManager(context) ?: return false
-    val net = cm.activeNetwork ?: return false
-    val caps = cm.getNetworkCapabilities(net) ?: return false
-    // Treat "no internet capability" as not-metered for our purposes — we'll have
-    // bigger problems than bandwidth if there's no internet at all.
-    if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
+    val caps = activeNetworkWithInternet(context) ?: return false
     return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
 }
 
 internal fun isOnLimitedNetwork(context: Context): Boolean {
-    val cm = connectivityManager(context) ?: return false
-    val net = cm.activeNetwork ?: return false
-    val caps = cm.getNetworkCapabilities(net) ?: return false
-    // Same rationale as above: when there's no internet capability at all, don't claim
-    // the network is "limited" — let other failure paths handle it.
-    if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
+    val caps = activeNetworkWithInternet(context) ?: return false
     return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
 }
 
@@ -51,6 +48,7 @@ internal fun isOnLimitedNetwork(context: Context): Boolean {
  * every socket, clear the backoff and redial; Quartz replays the stored REQs on
  * reconnect, so the aggregator's subscriptions come back on their own.
  */
+@Suppress("NoComments")
 internal fun resetRelayConnections(relayClient: RelayClient, reason: String) {
     Log.d(TAG, "Resetting relay connections: $reason")
     val client = relayClient.client
@@ -68,6 +66,7 @@ internal class AggregatorNetworkCallback(
     private val cancelPendingRelayReset: () -> Unit,
     private val scheduleNetworkEval: () -> Unit,
 ) : ConnectivityManager.NetworkCallback() {
+    @Suppress("NoComments")
     override fun onAvailable(network: Network) {
         // onCapabilitiesChanged follows right away, but read them here too in
         // case it does not, so a new default network is never missed.

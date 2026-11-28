@@ -64,35 +64,26 @@ internal val FALLBACK_OUTBOX_RELAYS = listOf(
 )
 
 // Keep well under the per-filter author cap that stricter relays enforce (often 100–200).
+@Suppress("NoComments")
 internal const val MAX_AUTHORS_PER_SUB = 100
 
 internal const val BATCH_FETCH_TIMEOUT_MS = 15_000L
 
-// Floor on time between two refreshes regardless of trigger (loop tick, network resume,
-// config change). Prevents back-to-back full bootstraps from a flapping connection.
 private const val MIN_REFRESH_INTERVAL_MS = 30_000L
 
-// Cap on how many configured intervals we'll skip after consecutive refresh failures.
 private const val MAX_FAILURE_BACKOFF_MULTIPLIER = 8
 
-// Bounded buffer for events handed off from the relay listener to the consumer
-// coroutine. DROP_OLDEST means a chatty relay can't OOM the IO pool; the next refresh
-// re-queries with a `since` derived from the DB so any dropped event is recoverable.
 private const val EVENT_CHANNEL_CAPACITY = 256
 
-// How long to wait after the last connectivity callback before re-evaluating the
-// network state. Collapses bursts of `onCapabilitiesChanged` during signal flapping
-// into a single evaluation.
 private const val NETWORK_DEBOUNCE_MS = 2_000L
 
-// How long to let a network change settle before rebuilding the relay sockets.
 private const val NETWORK_SETTLE_MS = 1_000L
 
-// Cap on how often counter-only status updates (relay count, event count) are pushed
-// through `_status`. Phase changes (BOOTSTRAPPING/REFRESHING/LISTENING/PAUSED) still
-// emit immediately. Without this, the StateFlow fires on every received event and
-// every Compose collector recomposes hundreds of times per second on the UI thread.
 private const val STATUS_EMIT_INTERVAL_MS = 500L
+
+private const val MAX_BACKFILL_SEEN_PUBKEYS = 10_000
+
+private const val PROGRESS_LOG_EVERY = 100L
 
 object RelayAggregator {
     private lateinit var context: Context
@@ -120,45 +111,24 @@ object RelayAggregator {
 
     @Volatile private var listener: AggregatorListener? = null
 
-    // Pubkeys we've already considered for opportunistic kind-0 / kind-3 backfill in this
-    // session. The LruCache bound trades a rare duplicate backfill (idempotent: the DAO
-    // existence check inside backfillUserIfMissing skips the network call) for never
-    // letting the seen-set grow with every stranger surfaced by the tagged subs.
-    private val backfilledPubkeys = LruCache<String, Boolean>(10_000)
+    private val backfilledPubkeys = LruCache<String, Boolean>(MAX_BACKFILL_SEEN_PUBKEYS)
 
     private val eventsReceived = AtomicLong(0)
 
-    // Authors whose contact list the owner actually consumes: their own follows plus
-    // themselves. Contact lists of strangers surfaced by the tagged subs are no longer
-    // backfilled — they are the largest events on the network, kind 3 is in
-    // [Settings.preservedKindsFromDeletion] so retention never prunes them, and they are
-    // what drove the REQ path into an OutOfMemoryError.
     @Volatile private var followedAuthors: Set<String> = emptySet()
 
     @Volatile private var authorCount: Int = 0
 
-    // Pubkey the currently-running aggregator was started for. Used by onConfigChanged
-    // to detect identity changes and trigger a full restart.
     @Volatile private var currentPubkey: String? = null
 
-    // True while subscriptions are torn down because the active network triggered a pause
-    // condition — either it is metered with [Settings.relayAggregatorWifiOnly] enabled, or
-    // it is restricted/limited with [Settings.relayAggregatorPauseOnLimitedNetwork] enabled.
-    // The refresh loop checks this flag and skips its body until [resumeFromNetwork] resets
-    // it.
     @Volatile private var pausedForNetwork: Boolean = false
 
-    // The database the aggregator was started with — saved so the network callback can
-    // trigger a refresh on resume without the caller threading it through.
     @Volatile private var database: AppDatabase? = null
 
     @Volatile private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
-    // Tracks the default network so a switch (Wi-Fi <-> mobile, VPN up/down, regaining
-    // internet access) rebuilds the relay sockets instead of leaving them on dead routes.
     @Volatile private var networkChangeDetector = NetworkChangeDetector()
 
-    // Settle delay for [resetRelayConnections]; replaced by every network change.
     @Volatile private var pendingRelayReset: Job? = null
 
     private val relayAuth = AggregatorRelayAuth()
@@ -176,30 +146,18 @@ object RelayAggregator {
         relayAuth.activityLauncher = null
     }
 
-    // Debounced re-evaluation of network state. Cancelled and rescheduled by every
-    // ConnectivityManager callback so a burst of changes only triggers one evaluation.
     @Volatile private var networkEvalJob: Job? = null
 
-    // Hand-off queues from AggregatorListener to single consumer coroutines. Replacing
-    // per-event `scope.launch { ... }` cuts coroutine creation under heavy event load.
     @Volatile private var eventChannel: Channel<Event>? = null
 
     @Volatile private var backfillChannel: Channel<String>? = null
 
-    // Wall-clock time of the last refreshAndSubscribe completion. Used to throttle
-    // back-to-back refresh requests (start, network resume, config change).
     @Volatile private var lastRefreshFinishedAt: Long = 0L
 
-    // Number of consecutive refresh failures. Multiplies the loop sleep by 2^n up to
-    // MAX_FAILURE_BACKOFF_MULTIPLIER, then resets on success.
     @Volatile private var consecutiveFailures: Int = 0
 
     private val droppedEvents = AtomicLong(0)
 
-    // Set by refreshStatusCounters when relay counts or eventsReceived change; consumed
-    // by the demand-driven emitter started in `start()` to push at most one StateFlow
-    // update per STATUS_EMIT_INTERVAL_MS while parking completely idle with zero wakeups
-    // whenever nothing is changing.
     private val statusDirty = AtomicBoolean(false)
 
     @Volatile private var statusTrigger: Channel<Unit>? = null
@@ -207,8 +165,20 @@ object RelayAggregator {
     private val refreshing = AtomicBoolean(false)
 
     private val _status = MutableStateFlow(AggregatorStatus())
+
+    /**
+     * The aggregator's phase and counters. Phase changes are published immediately;
+     * counter-only changes (relay and event counts) are coalesced to at most one update per
+     * [STATUS_EMIT_INTERVAL_MS], so a collector does not recompose for every received event.
+     */
     val status: StateFlow<AggregatorStatus> = _status.asStateFlow()
 
+    /**
+     * Starts the aggregator for the configured pubkey, or for the extra relays alone when no
+     * pubkey is set. Does nothing when it is already running, disabled, or has neither. When
+     * the current network matches a pause setting (wifi-only on a metered network, or pause
+     * on a limited one), it starts paused instead of opening subscriptions.
+     */
     @Synchronized
     fun start(database: AppDatabase) {
         if (scope != null) return
@@ -231,17 +201,10 @@ object RelayAggregator {
         backfillChannel = newBackfillChannel
         statusTrigger = newStatusTrigger
 
-        // Single consumer for inbound events: persist sequentially instead of spawning a
-        // coroutine per event in onIncomingMessage.
         launchEventConsumer(newScope, newEventChannel, database)
 
-        // Single consumer for opportunistic kind-0 / kind-3 backfill of newly-seen authors.
         launchBackfillConsumer(newScope, newBackfillChannel, database)
 
-        // Demand-driven flusher for counter-only status updates. Parks completely idle
-        // with zero wakeups when nothing is arriving, and coalesces a burst of
-        // refreshStatusCounters() calls into at most one StateFlow emission per
-        // STATUS_EMIT_INTERVAL_MS so Compose collectors don't recompose per event.
         launchStatusFlusher(newScope, newStatusTrigger)
 
         val newListener = AggregatorListener()
@@ -251,17 +214,12 @@ object RelayAggregator {
         relayAuth.installAuthenticatorIfNeeded(newScope, context, relayClient)
 
         registerNetworkCallback()
-        // Initial check: if we're already on a metered network and the user wants
-        // wifi-only, start in the paused state instead of opening subs.
         evaluateNetworkState()
 
         if (!pausedForNetwork) {
             publishStatus(phase = AggregatorPhase.BOOTSTRAPPING)
         }
 
-        // Warm the mute-list cache from the local DB before the refresh loop kicks off the
-        // network fetch. Ensures the first events admitted after start() respect any mute
-        // entries we already saved on a previous run; no network round-trip on this path.
         if (Settings.aggregatorPubkey.isNotBlank()) {
             launchWarmMuteListLoad(newScope, database)
         }
@@ -278,10 +236,7 @@ object RelayAggregator {
                         continue
                     }
                     CustomWebSocketService.server?.innerProcessEvent(ev, null, fromAggregator = true)
-                    // Owner's mute-list update arriving live (kind 10000) refreshes the in-memory
-                    // sets so subsequent events use the new list without waiting for the next
-                    // periodic refresh tick.
-                    if (ev.kind == 10000 && ev.pubKey == Settings.aggregatorPubkey && ev.createdAt > muteList.muteListSeenAt) {
+                    if (isNewerOwnerMuteList(ev)) {
                         muteList.scheduleMuteListRefresh(database)
                     }
                 } catch (e: CancellationException) {
@@ -292,6 +247,8 @@ object RelayAggregator {
             }
         }
     }
+
+    private fun isNewerOwnerMuteList(ev: Event): Boolean = ev.kind == 10000 && ev.pubKey == Settings.aggregatorPubkey && ev.createdAt > muteList.muteListSeenAt
 
     private fun launchBackfillConsumer(scope: CoroutineScope, channel: Channel<String>, database: AppDatabase) {
         scope.launch {
@@ -334,10 +291,8 @@ object RelayAggregator {
             while (isActive) {
                 if (!pausedForNetwork) {
                     try {
-                        if (!refreshAndSubscribe(database)) {
-                            // Skipped, e.g. a cancelled refresh from before a restart still holds
-                            // `refreshing` or just stamped the floor. Sleeping the full interval
-                            // here left the status on "Fetching…" for an hour, so retry soon.
+                        val refreshRan = refreshAndSubscribe(database)
+                        if (!refreshRan) {
                             delay(MIN_REFRESH_INTERVAL_MS)
                             continue
                         }
@@ -375,10 +330,6 @@ object RelayAggregator {
         listener?.let { relayClient.client.removeConnectionListener(it) }
         listener = null
 
-        // The authenticator's internal client listener stays registered with NostrClient
-        // until destroy() is called, so explicitly tear it down here in addition to
-        // dropping the references. A subsequent start() will install a fresh one against
-        // the new scope.
         relayAuth.destroy()
 
         unregisterNetworkCallback()
@@ -444,11 +395,6 @@ object RelayAggregator {
             .onFailure { Log.e(TAG, "registerDefaultNetworkCallback failed", it) }
     }
 
-    /**
-     * Network changes arrive as a burst of callbacks (the new network, then its
-     * capabilities as validation completes); wait for it to settle so the relays are
-     * rebuilt once, on the final network.
-     */
     @Synchronized
     private fun scheduleRelayReset(reason: String) {
         val s = scope ?: return
@@ -486,11 +432,6 @@ object RelayAggregator {
         }
     }
 
-    /**
-     * Reconciles the current network state against the wifi-only and pause-on-limited
-     * settings, pausing or resuming the aggregator accordingly. Cheap to call repeatedly;
-     * only acts when the desired state diverges from the actual one.
-     */
     @Synchronized
     private fun evaluateNetworkState() {
         if (scope == null) return
@@ -506,16 +447,17 @@ object RelayAggregator {
     private fun pauseForNetwork() {
         Log.d(TAG, "Pausing aggregator: network pause condition triggered")
         pausedForNetwork = true
-        // Tear down active subscriptions so we stop receiving events. Keep
-        // [lastEventByPubkey] and [currentPubkey] in place — when we resume, the next
-        // refresh uses them to compute tight per-chunk `since` values.
+        closeSubscriptionsKeepingSinceCursors()
+        publishStatus(phase = AggregatorPhase.PAUSED)
+    }
+
+    private fun closeSubscriptionsKeepingSinceCursors() {
         subscriptions.trackedSubIds.forEach { runCatching { relayClient.client.unsubscribe(it) } }
         subscriptions.trackedSubIds.clear()
         subscriptions.activeRelaySubs.clear()
         subscriptions.subscribedRelays.clear()
         subscriptions.connectedRelays.clear()
         subscriptions.taggedSubIds.clear()
-        publishStatus(phase = AggregatorPhase.PAUSED)
     }
 
     private fun resumeFromNetwork() {
@@ -552,11 +494,6 @@ object RelayAggregator {
                 stop()
             }
             enabled && pubkey != currentPubkey -> {
-                // Identity changed: drop every existing subscription and rebuild from
-                // scratch. Reset lastSync so the new user gets the full cold-start
-                // window. The contact list is always re-fetched on every refresh
-                // (no cache short-circuit), so the new user's follows are picked
-                // up from the network on the first refresh after restart.
                 Log.d(TAG, "Aggregator pubkey changed ($currentPubkey -> $pubkey), restarting")
                 stop()
                 Settings.relayAggregatorLastSync = 0L
@@ -564,13 +501,7 @@ object RelayAggregator {
                 start(database)
             }
             enabled && running -> {
-                // The AUTH toggle / signer identity may have changed. Reinstall the
-                // authenticator against the running scope so the new settings take effect
-                // without a full restart.
                 scope?.let { relayAuth.installAuthenticatorIfNeeded(it, context, relayClient) }
-                // The wifi-only toggle may have just changed; re-evaluate before
-                // dispatching a refresh so a flip to any network-based pause condition
-                // doesn't kick off a doomed refresh that we'd immediately tear down.
                 evaluateNetworkState()
                 if (!pausedForNetwork) {
                     scope?.launch {
@@ -588,7 +519,6 @@ object RelayAggregator {
         }
     }
 
-    /** Returns false when the refresh was skipped without running, so the loop can retry soon. */
     private suspend fun refreshAndSubscribe(database: AppDatabase): Boolean {
         if (Citrine.isImportingEvents) {
             Log.d(TAG, "Import in progress; skipping refresh")
@@ -634,11 +564,6 @@ object RelayAggregator {
             relayClient.client.connect()
         }
 
-        // When no pubkey is configured, the aggregator becomes a plain relay listener:
-        // subscribe to every extra relay with the configured kinds and the sync window,
-        // no author filter, no NIP-65 lookups, no tagged sub. This path uses the same
-        // diff-vs-activeRelaySubs + cleanup logic as the pubkey path by representing
-        // each relay as a single empty-author "chunk".
         val noPubkeyMode = aggPubkey.isBlank()
         Log.d(
             TAG,
@@ -658,12 +583,7 @@ object RelayAggregator {
 
         publishStatus(phase = AggregatorPhase.REFRESHING)
 
-        // Kinds 0 (metadata) and 3 (contact list) are fetched via dedicated unfiltered
-        // paths above (loadOrBootstrapContactList, batchFetchMetadata) — exclude them
-        // here so they aren't also subscribed with a `since` ceiling on the main and
-        // tagged subs, which would risk masking newer copies behind the cursor.
-        val subscriptionKinds = Settings.relayAggregatorKinds.toList() -
-            MetadataEvent.KIND - ContactListEvent.KIND
+        val subscriptionKinds = kindsExceptMetadataAndContactsFetchedWithoutSince()
         val bootstrapSince = subscriptions.computeBootstrapSince()
         subscriptions.reseedCursors(dao, plan, subscriptionKinds, bootstrapSince)
         val newActiveSubs = subscriptions.pushMainSubs(plan.relayToAuthors, subscriptionKinds, bootstrapSince)
@@ -677,6 +597,9 @@ object RelayAggregator {
         val newSubscribedRelays = subscriptions.commit(newActiveSubs)
         finishRefresh(database, refreshStartMs, newSubscribedRelays.size, noPubkeyMode, aggPubkey, plan.ownerFollows)
     }
+
+    private fun kindsExceptMetadataAndContactsFetchedWithoutSince(): List<Int> = Settings.relayAggregatorKinds.toList() -
+        MetadataEvent.KIND - ContactListEvent.KIND
 
     private fun finishRefresh(
         database: AppDatabase,
@@ -697,9 +620,6 @@ object RelayAggregator {
         )
         publishStatus(phase = AggregatorPhase.LISTENING)
 
-        // One-shot cleanup of contact lists stored for authors the owner does not follow.
-        // Runs on the aggregator scope so a large delete never delays the subscriptions
-        // that were just opened.
         if (!noPubkeyMode && !Settings.strangerContactListsPruned) {
             scope?.launch {
                 try {
@@ -717,23 +637,14 @@ object RelayAggregator {
         authorCount = 0
         val relayToAuthors = mutableMapOf<NormalizedRelayUrl, MutableSet<String>>()
         extraRelays.forEach { relay ->
-            // Empty author set is a marker the subscribe loop recognizes to
-            // issue a filter without the `authors` field.
-            relayToAuthors[relay] = mutableSetOf()
+            relayToAuthors[relay] = anyAuthor()
         }
         return SubscriptionPlan(relayToAuthors, RelayLists(emptyMap(), emptyMap()), scopedAuthors = emptySet(), ownerFollows = emptySet())
     }
 
+    private fun anyAuthor(): MutableSet<String> = mutableSetOf()
+
     private suspend fun planOwnerSubscriptions(dao: EventDao, aggPubkey: String): SubscriptionPlan {
-        // When a successful refresh happened recently (within one refresh interval),
-        // treat the DB cache as authoritative for the rarely-changing owner data
-        // (contact list, mute list, metadata) and skip the proactive network fetches.
-        // This is what makes an app restart or a network change cheap: subscriptions
-        // are rebuilt from cache instead of re-pulling everything from indexer relays.
-        // NIP-65 (below) is intentionally left cache-first-but-fetch-misses since it
-        // feeds relay routing. The periodic loop fires after the interval elapses, so
-        // it sees cacheFresh == false and still does a full network refresh that picks
-        // up new follows.
         val nowSec = TimeUtils.now()
         val refreshIntervalSec = Settings.relayAggregatorRefreshMinutes.coerceAtLeast(1) * 60L
         val cacheFresh = Settings.relayAggregatorLastSync > 0L &&
@@ -748,10 +659,6 @@ object RelayAggregator {
             },
         )
 
-        // Refresh the owner's NIP-51 mute list before opening the main subscriptions.
-        // The public portion is applied synchronously; the (optional) private portion
-        // resolves on its own coroutine via the signer so a slow Amber prompt does not
-        // hold up the rest of the refresh.
         runCatching { muteList.refreshMuteList(dao, aggPubkey, skipNetworkIfCached = cacheFresh) }
             .onFailure { Log.e(TAG, "refreshMuteList failed", it) }
 
@@ -767,16 +674,12 @@ object RelayAggregator {
                 "${follows.size} follows (+ self) for $aggPubkey (createdAt=${contactList?.createdAt ?: "none"})",
         )
 
-        val indexers = fetcher.indexerRelays()
+        val indexers = fetcher.indexerRelaysOrDefaults()
         val sources = fetcher.aggregatorSourceRelays()
 
         val relayLists = resolveRelayLists(relayClient, fetcher, dao, authors, indexers)
         val relayToAuthors = buildOutboxMap(fetcher, authors, relayLists, sources)
 
-        // Metadata (kind 0) is only stored, never used to build subscriptions, so
-        // skip both the relay-map construction and the network fetch when the cache is
-        // fresh. Newly-seen authors on the live stream still get their metadata via
-        // backfillUserIfMissing().
         if (!cacheFresh) {
             fetchOwnerMetadata(relayClient, fetcher, authors, relayLists, indexers, sources)
         }
@@ -795,18 +698,11 @@ object RelayAggregator {
         )
     }
 
-    // Marks the counters as needing publication and wakes the demand-driven emitter.
-    // The emitter coalesces bursts over STATUS_EMIT_INTERVAL_MS and parks with zero
-    // wakeups whenever nothing is arriving. Cheap enough to call on the relay listener
-    // thread for every received event.
     private fun refreshStatusCounters() {
         statusDirty.set(true)
         statusTrigger?.trySend(Unit)
     }
 
-    // Publishes the current counter snapshot to `_status` if any counter changed since
-    // the last emission. Phase changes go through `publishStatus` directly and bypass
-    // the throttle so UI/notification reflect transitions promptly.
     private fun flushPendingStatus() {
         if (!statusDirty.compareAndSet(true, false)) return
         val current = _status.value
@@ -829,14 +725,9 @@ object RelayAggregator {
             }
             if (msg is EventMessage && subscriptions.trackedSubIds.contains(msg.subId)) {
                 val ev = msg.event
-                // Track lastSeen by author so the next refresh can compute a tighter
-                // per-chunk `since`. Update for every received event — events from
-                // tagged subs (random pubkeys) cost a bit of memory but are harmless;
-                // events from main subs are exactly what we want to record.
                 subscriptions.lastEventByPubkey.merge(ev.pubKey, ev.createdAt) { a, b -> maxOf(a, b) }
                 val n = eventsReceived.incrementAndGet()
-                // Periodic progress heartbeat so we can see the stream without per-event spam.
-                if (n == 1L || n % 100L == 0L) {
+                if (isProgressLogCount(n)) {
                     Log.d(
                         TAG,
                         "Events received: $n (${connectedRelays.size}/${subscribedRelays.size} relays connected)",
@@ -846,27 +737,26 @@ object RelayAggregator {
                 val mismatchReason = subscriptions.filterMismatchReason(relay.url, msg.subId, ev)
                 if (mismatchReason != null) {
                     val d = droppedEvents.incrementAndGet()
-                    if (d == 1L || d % 100L == 0L) {
+                    if (isProgressLogCount(d)) {
                         Log.d(TAG, "Dropping event ${ev.id} (kind ${ev.kind}) from ${relay.url.url} sub ${msg.subId}: $mismatchReason (total dropped: $d)")
                     }
                     return
                 }
-                // Hand the event off to the consumer coroutine instead of launching a fresh
-                // coroutine per event. trySend is non-blocking; the bounded channel is
-                // configured with DROP_OLDEST so a chatty relay degrades gracefully.
                 eventChannel?.trySend(ev)
-                // First time we see this author in the live stream, kick off a one-shot
-                // backfill of their kind 0 / kind 3 from the indexer relays so unknown users
-                // surfaced via the tagged sub get a profile + follow list. The DAO check
-                // inside backfillUserIfMissing skips the network call when both are already
-                // cached, so authors covered by the periodic batch fetch are a no-op.
-                if (backfilledPubkeys.get(ev.pubKey) == null) {
-                    backfilledPubkeys.put(ev.pubKey, true)
-                    backfillChannel?.trySend(ev.pubKey)
-                }
+                backfillOnFirstSight(ev.pubKey)
             }
         }
 
+        private fun isProgressLogCount(n: Long): Boolean = n == 1L || n % PROGRESS_LOG_EVERY == 0L
+
+        private fun backfillOnFirstSight(pubkey: String) {
+            if (backfilledPubkeys.get(pubkey) == null) {
+                backfilledPubkeys.put(pubkey, true)
+                backfillChannel?.trySend(pubkey)
+            }
+        }
+
+        @Suppress("NoComments")
         override fun onDisconnected(relay: IRelayClient) {
             val connectedRelays = subscriptions.connectedRelays
             // Quartz's NostrClient.onConnected() calls syncFilters() on reconnect, which

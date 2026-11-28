@@ -29,27 +29,15 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
         return NormalizedRelayUrl(url = n.url)
     }
 
-    // Resolves the user-configured NIP-65 indexer relays. An empty user set falls back to
-    // the built-in defaults so NIP-65 / contact-list / mute-list bootstrap lookups never
-    // silently break when the user clears the list.
-    fun indexerRelays(): List<NormalizedRelayUrl> {
+    fun indexerRelaysOrDefaults(): List<NormalizedRelayUrl> {
         val raw = Settings.relayAggregatorIndexerRelays
             .takeIf { it.isNotEmpty() }
             ?: Settings.DEFAULT_NIP65_INDEXER_RELAYS
         return raw.mapNotNull { normalizeRemote(it) }
     }
 
-    // Resolves the user-configured aggregator-source relays (e.g. wss://aggr.nostr.land).
-    // No default fallback: an empty user list means "no aggregator overlay", which is a
-    // legitimate configuration (rely entirely on per-author NIP-65 routing).
     fun aggregatorSourceRelays(): List<NormalizedRelayUrl> = Settings.relayAggregatorSourceRelays.mapNotNull { normalizeRemote(it) }
 
-    /**
-     * Fetches a single replaceable event of [kind] for [pubkey] from [relays] with no `since`
-     * filter. Used both for the user's own kind 3 / kind 0 and for opportunistic backfill of
-     * strangers whose events arrive on the tagged sub. Returns null on timeout, error, or
-     * relay miss.
-     */
     private suspend fun fetchSingleReplaceable(
         kind: Int,
         pubkey: String,
@@ -89,8 +77,6 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
 
     suspend fun backfillUserIfMissing(dao: EventDao, pubkey: String, followedAuthors: () -> Set<String>) {
         val needsMetadata = dao.getLatestEventIdByKind(pubkey, MetadataEvent.KIND) == null
-        // Contact lists are only fetched for authors the owner follows: strangers met through
-        // the tagged subs would otherwise pile up thousands of large, never-pruned kind-3 events.
         val needsContactList = ContactListPolicy.shouldBackfillContactList(pubkey, followedAuthors()) &&
             dao.getLatestEventIdByKind(pubkey, ContactListEvent.KIND) == null
         val needsRelayList = dao.getLatestEventIdByKind(pubkey, AdvertisedRelayListEvent.KIND) == null
@@ -100,7 +86,7 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
             "Backfilling unknown user $pubkey " +
                 "(metadata=$needsMetadata, contacts=$needsContactList, relayList=$needsRelayList)",
         )
-        val indexers = indexerRelays()
+        val indexers = indexerRelaysOrDefaults()
         if (needsRelayList) {
             fetchSingleReplaceable(AdvertisedRelayListEvent.KIND, pubkey, indexers)?.let {
                 CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true)
@@ -119,11 +105,6 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
         }
     }
 
-    /**
-     * Returns [pubkey]'s NIP-65 write relays as a normalized list, or null when no relay list
-     * is cached or the cached list has no usable write relays. Reads the freshly persisted
-     * value from the DB so a kind-10002 fetch performed earlier in the same refresh is visible.
-     */
     private suspend fun userWriteRelays(dao: EventDao, pubkey: String): List<NormalizedRelayUrl>? {
         val relayList = loadCleanLatestByKind(dao, pubkey, AdvertisedRelayListEvent.KIND)?.toEvent() as? AdvertisedRelayListEvent
         return relayList
@@ -138,8 +119,6 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
         skipNetworkIfCached: Boolean = false,
     ): ContactListEvent? {
         val cached = loadCleanLatestByKind(dao, pubkey, ContactListEvent.KIND)?.toEvent() as? ContactListEvent
-        // When the cache is fresh and we already have a copy, skip the indexer round-trip and
-        // reuse it. A null cache (e.g. a wiped DB) always falls through to the network fetch.
         if (skipNetworkIfCached && cached != null) {
             Log.d(TAG, "Contact list: using cached copy for $pubkey (createdAt=${cached.createdAt})")
             return cached
@@ -155,7 +134,7 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
         if (!relayClient.client.isActive()) relayClient.client.connect()
         val fetched = try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                relayClient.client.fetchFirst(subId, indexerRelays().associateWith { filters })
+                relayClient.client.fetchFirst(subId, indexerRelaysOrDefaults().associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e
@@ -166,14 +145,7 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
             runCatching { relayClient.client.unsubscribe(subId) }
         }
         fetched?.let { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
-        // Prefer whichever copy is newest — a cache hit may still beat a slow/partial fetch.
-        val fetchedContactList = fetched as? ContactListEvent
-        return when {
-            fetchedContactList == null -> cached
-            cached == null -> fetchedContactList
-            fetchedContactList.createdAt >= cached.createdAt -> fetchedContactList
-            else -> cached
-        }
+        return newerOf(cached, fetched as? ContactListEvent)
     }
 
     suspend fun loadOrBootstrapMuteList(dao: EventDao, pubkey: String): Event? {
@@ -189,7 +161,7 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
         if (!relayClient.client.isActive()) relayClient.client.connect()
         val fetched = try {
             withTimeoutOrNull(BATCH_FETCH_TIMEOUT_MS) {
-                relayClient.client.fetchFirst(subId, indexerRelays().associateWith { filters })
+                relayClient.client.fetchFirst(subId, indexerRelaysOrDefaults().associateWith { filters })
             }
         } catch (e: CancellationException) {
             throw e
@@ -200,11 +172,13 @@ internal class AggregatorFetcher(private val relayClient: RelayClient) {
             runCatching { relayClient.client.unsubscribe(subId) }
         }
         fetched?.let { CustomWebSocketService.server?.innerProcessEvent(it, null, fromAggregator = true) }
-        return when {
-            fetched == null -> cached
-            cached == null -> fetched
-            fetched.createdAt >= cached.createdAt -> fetched
-            else -> cached
-        }
+        return newerOf(cached, fetched)
+    }
+
+    private fun <T : Event> newerOf(cached: T?, fetched: T?): T? = when {
+        fetched == null -> cached
+        cached == null -> fetched
+        fetched.createdAt >= cached.createdAt -> fetched
+        else -> cached
     }
 }
