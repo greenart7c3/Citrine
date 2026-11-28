@@ -2,16 +2,9 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:CustomWebSocketServer.kt:CustomWebSocketServer$(filter.since == null || filter.since == 0) &amp;&amp; (filter.until == null || filter.until == 0) &amp;&amp; filter.limit == null</ID>
     <ID>ComplexCondition:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$Settings.autoBackup &amp;&amp; Settings.autoBackupFolder.isNotBlank() &amp;&amp; Settings.lastBackup &lt; oneWeekAgo &amp;&amp; !Citrine.isImportingEvents</ID>
     <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$suspend fun eventsToDelete</ID>
     <ID>CyclomaticComplexMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
-    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
-    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class) private fun startKtorHttpServer: EmbeddedServer&lt;CIOApplicationEngine, CIOApplicationEngine.Configuration&gt;</ID>
-    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$private fun policyAllows: Boolean</ID>
-    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEvent: VerificationResult</ID>
-    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEventBatch</ID>
-    <ID>CyclomaticComplexMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
     <ID>CyclomaticComplexMethod:GroupState.kt:GroupState$fun applyMetadataTags: GroupState</ID>
@@ -25,14 +18,8 @@
     <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
     <ID>CyclomaticComplexMethod:TagDeduplicator.kt:TagDeduplicator$internal suspend fun cleanDao: Pair&lt;Int, Int&gt;?</ID>
     <ID>CyclomaticComplexMethod:TorManager.kt:TorManager$private suspend fun run</ID>
-    <ID>LargeClass:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
     <ID>LargeClass:RelayAggregator.kt:RelayAggregator</ID>
     <ID>LongMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
-    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
-    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class) private fun startKtorHttpServer: EmbeddedServer&lt;CIOApplicationEngine, CIOApplicationEngine.Configuration&gt;</ID>
-    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEvent: VerificationResult</ID>
-    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun innerProcessEventBatch</ID>
-    <ID>LongMethod:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
     <ID>LongMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
     <ID>LongMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
@@ -44,7 +31,6 @@
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$@SuppressLint("UnspecifiedRegisterReceiverFlag") override fun onCreate</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$private fun buildForegroundNotification: ForegroundNotification</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
-    <ID>NestedBlockDepth:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
     <ID>NestedBlockDepth:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
     <ID>NoComments:AuthGate.kt:Early CLOSED for filters that explicitly target a managed private group's content</ID>
     <ID>NoComments:BrowseNsitesScreen.kt:Compact relative timestamp ("now", "5m", "1h", "3d", "2w", "4mo", "1y") for the feed-style author he</ID>
@@ -138,6 +124,8 @@
     <ID>NoComments:Connection.kt:through once the queue has drained.</ID>
     <ID>NoComments:Connection.kt:unbounded memory growth. Suspending producers use send() for backpressure;</ID>
     <ID>NoComments:ContactListPolicyTest.kt:No-pubkey mode: nobody is followed, so no contact lists are fetched at all.</ID>
+    <ID>NoComments:ContentProviderApi.kt:ContentProvider test endpoints (for Postman testing)</ID>
+    <ID>NoComments:ContentProviderApi.kt:HTTP endpoints for testing ContentProvider errors</ID>
     <ID>NoComments:CrashReportCache.kt:Cached once at construction (Citrine.onCreate) so emergency writes from</ID>
     <ID>NoComments:CrashReportCache.kt:Keep the newest complete reports that fit within maxChars.</ID>
     <ID>NoComments:CrashReportCache.kt:Keeps stack.trace bounded in memory/disk and comfortably under NIP-44's 65,535-byte</ID>
@@ -158,49 +146,23 @@
     <ID>NoComments:CrashReportScreen.kt:records are the only trace of them the user can send. Run detect() here too so the</ID>
     <ID>NoComments:CrashReportScreen.kt:seal and gift wrap needs its own confirmation there.</ID>
     <ID>NoComments:CrashReportSender.kt:The sender's self-copy is useless here: only the developer's wrap needs to go out.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:"self" field: the owner's key when configured, otherwise the</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:404 fallback.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:60s keepalive (down from 5s) cuts wakeups by 12x and lets cellular/Wi-Fi</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Aggregator-fetched events bypass the author/tagged-pubkey allowlists</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Always clean up, even on cancellation</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Catch-all: /, /index.html, /assets/foo.js, etc</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Check if offline and broadcast with WorkManager</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:ContentProvider test endpoints (for Postman testing)</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Decouple socket reads from message processing: parsing, signature</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Filter headers before sending back to the original client</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:First try requested file</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Forward headers to target, excluding engine-managed ones</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:HTTP endpoints for testing ContentProvider errors</ID>
     <ID>NoComments:CustomWebSocketServer.kt:HTTP route and the WebSocket upgrade handshake.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:IMPORTANT: Let Ktor manage Transfer-Encoding and Content-Length</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:If this is a client subdomain, proxy instead</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Ktor's default is unlimited, so one frame could be read whole into the heap</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Ktor's outgoing queue is unlimited by default, so session.send() never</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Let already-received messages finish (stores events, sends OKs)</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Membership changes and metadata regeneration run after the event is</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:NIP-29 clients discover the relay's group-signing key via the</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:NIP-29: ids removed by a group admin's kind-9005 moderation event stay deleted,</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:NIP-42: an AUTH event must carry a valid signature, otherwise any</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:NIP-70: reposts of protected events MUST NOT embed the reposted event.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:NIP-86 IP block enforcement — a single chokepoint that covers every</ID>
     <ID>NoComments:CustomWebSocketServer.kt:NIP-86 Relay Management API</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:NIP-86 ban lists — apply unconditionally (even to aggregator-fetched events),</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:SPA fallback for root or route paths without file extension</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:SPA/index fallback for the root or extension-less routes.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Serves a file from an app-internal [rootDir] (used by installed nsites). Mirrors</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Small: with maxFrameSize at several MB, 256 queued frames per connection</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Streaming happens here</ID>
     <ID>NoComments:CustomWebSocketServer.kt:Tor hidden-service clients all arrive from 127.0.0.1, so blockedIps can't</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Trim leading slash</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:Verify the signature before any DB access so invalid events are</ID>
     <ID>NoComments:CustomWebSocketServer.kt:WebSocket endpoint</ID>
     <ID>NoComments:CustomWebSocketServer.kt:With Connection's 2M-char outbound budget, 50 connections bound outbound buffers to ~200 MB.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:and some client deflate implementations (e.g. gorilla/websocket's</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:because the aggregator already validated them against the user's</ID>
     <ID>NoComments:CustomWebSocketServer.kt:before tearing the connection down.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:before the event size check runs. 4x covers JSON escaping of max-size content.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:but only for groups this relay manages — mirrored 9005s from foreign groups</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:client could authenticate as any pubkey.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:connect over localhost/LAN where compression only burns CPU/battery,</ID>
     <ID>NoComments:CustomWebSocketServer.kt:connections. A bounded channel keeps per-connection ordering while</ID>
     <ID>NoComments:CustomWebSocketServer.kt:could pin the heap on their own.</ID>
@@ -209,15 +171,10 @@
     <ID>NoComments:CustomWebSocketServer.kt:if the event is ephemeral the response will be sent after the event is sent to subscriptions</ID>
     <ID>NoComments:CustomWebSocketServer.kt:letting reads continue during processing bursts.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:limit them; cap the total so per-connection buffers can't add up to an OOM.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:must not block re-imports.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:on the network engine's threads, stalling reads for this and other</ID>
     <ID>NoComments:CustomWebSocketServer.kt:permessage-deflate is intentionally NOT installed. Nearly all clients</ID>
     <ID>NoComments:CustomWebSocketServer.kt:radios enter idle sleep between pings while still detecting dead peers well</ID>
     <ID>NoComments:CustomWebSocketServer.kt:receive uncompressed frames either way.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:rejected without paying for the reads below.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:relay's generated identity.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:requested subscription filter before handing them off here.</ID>
-    <ID>NoComments:CustomWebSocketServer.kt:so a banned author can't sneak in via the relay aggregator.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:stored and acknowledged.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:suspended and a non-reading client pinned the heap behind Connection's budget.</ID>
     <ID>NoComments:CustomWebSocketServer.kt:verification, and DB checks are CPU/IO heavy and would otherwise run</ID>
@@ -342,6 +299,7 @@
     <ID>NoComments:EventRepositoryStreamTest.kt:100 unique tags duplicated 105 times = 10,500 rows (&gt; CHUNK_TAG_BUDGET = 10,000).</ID>
     <ID>NoComments:EventRepositoryStreamTest.kt:600K + 600K is over the 1M-char chunk budget, so "b" starts a new chunk.</ID>
     <ID>NoComments:EventRepositoryStreamTest.kt:Estimate should stay tight (no excessive over-allocation).</ID>
+    <ID>NoComments:EventStore.kt:Check if offline and broadcast with WorkManager</ID>
     <ID>NoComments:EventSubscription.kt:Drop closed subscriptions so future fanouts skip them entirely.</ID>
     <ID>NoComments:EventSubscription.kt:NIP-01: subscription ids are managed independently per connection. The wire id</ID>
     <ID>NoComments:EventSubscription.kt:NIP-29: never live-push private-group events to connections that are</ID>
@@ -350,6 +308,17 @@
     <ID>NoComments:EventSubscription.kt:not authenticated as a member (stored-query reads are gated the same</ID>
     <ID>NoComments:EventSubscription.kt:stays the client-sent value; only the cache key is connection-scoped.</ID>
     <ID>NoComments:EventSubscription.kt:way in EventRepository.subscribe).</ID>
+    <ID>NoComments:EventVerifier.kt:Aggregator-fetched events bypass the author/tagged-pubkey allowlists</ID>
+    <ID>NoComments:EventVerifier.kt:NIP-29: ids removed by a group admin's kind-9005 moderation event stay deleted,</ID>
+    <ID>NoComments:EventVerifier.kt:NIP-70: reposts of protected events MUST NOT embed the reposted event.</ID>
+    <ID>NoComments:EventVerifier.kt:NIP-86 ban lists — apply unconditionally (even to aggregator-fetched events),</ID>
+    <ID>NoComments:EventVerifier.kt:Verify the signature before any DB access so invalid events are</ID>
+    <ID>NoComments:EventVerifier.kt:because the aggregator already validated them against the user's</ID>
+    <ID>NoComments:EventVerifier.kt:but only for groups this relay manages — mirrored 9005s from foreign groups</ID>
+    <ID>NoComments:EventVerifier.kt:must not block re-imports.</ID>
+    <ID>NoComments:EventVerifier.kt:rejected without paying for the reads below.</ID>
+    <ID>NoComments:EventVerifier.kt:requested subscription filter before handing them off here.</ID>
+    <ID>NoComments:EventVerifier.kt:so a banned author can't sneak in via the relay aggregator.</ID>
     <ID>NoComments:ExecuteAllFanOutBenchmark.kt:Warm-up so the JIT compiles both paths before measurement.</ID>
     <ID>NoComments:ExitReasons.kt:ANRs ship the full traces file; only its first lines are useful in a chat message.</ID>
     <ID>NoComments:ExitReasons.kt:Android's lmkd kills foreground services under device-wide memory pressure and provides no</ID>
@@ -819,11 +788,16 @@
     <ID>NoComments:RelayIdentity.kt:path can't auto-approve. The launcher routes through MainActivity's</ID>
     <ID>NoComments:RelayIdentity.kt:the internal fallback signer — so an Amber login/logout rebuilds the signer</ID>
     <ID>NoComments:RelayIdentity.kt:under the hood, which preserves the caller's identity on the intent — Amber relies</ID>
+    <ID>NoComments:RelayInfoDocument.kt:"self" field: the owner's key when configured, otherwise the</ID>
+    <ID>NoComments:RelayInfoDocument.kt:NIP-29 clients discover the relay's group-signing key via the</ID>
+    <ID>NoComments:RelayInfoDocument.kt:relay's generated identity.</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:Hex.decode("") yields an empty array rather than throwing, and bech32</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:Kinds the relay signs with the owner's key: relay-issued membership changes and the</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:NIP-29 group metadata events. Requested at login so Amber can auto-approve them.</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:happily encodes zero bytes into a stub like "npub106246s" — so an</ID>
     <ID>NoComments:RelayInfoSettingsScreen.kt:unconfigured owner must be caught before decoding.</ID>
+    <ID>NoComments:RelayMessageHandler.kt:NIP-42: an AUTH event must carry a valid signature, otherwise any</ID>
+    <ID>NoComments:RelayMessageHandler.kt:client could authenticate as any pubkey.</ID>
     <ID>NoComments:ReportAssembler.kt:Device and Product Information</ID>
     <ID>NoComments:ReportAssembler.kt:Hardware Information</ID>
     <ID>NoComments:ReportAssembler.kt:OS Information</ID>
@@ -947,6 +921,18 @@
     <ID>NoComments:UnexpectedCrashSaver.kt:this returns, so a report launched on a scope is usually lost. OOMs are included too</ID>
     <ID>NoComments:UnexpectedCrashSaver.kt:— a real user's heap report is the only way to see which query exhausted memory in</ID>
     <ID>NoComments:UserAgentTest.kt:Runs after DefaultContentTypeInterceptor and answers locally, so no network is touched.</ID>
+    <ID>NoComments:WebClientHosting.kt:404 fallback.</ID>
+    <ID>NoComments:WebClientHosting.kt:Catch-all: /, /index.html, /assets/foo.js, etc</ID>
+    <ID>NoComments:WebClientHosting.kt:Filter headers before sending back to the original client</ID>
+    <ID>NoComments:WebClientHosting.kt:First try requested file</ID>
+    <ID>NoComments:WebClientHosting.kt:Forward headers to target, excluding engine-managed ones</ID>
+    <ID>NoComments:WebClientHosting.kt:IMPORTANT: Let Ktor manage Transfer-Encoding and Content-Length</ID>
+    <ID>NoComments:WebClientHosting.kt:If this is a client subdomain, proxy instead</ID>
+    <ID>NoComments:WebClientHosting.kt:SPA fallback for root or route paths without file extension</ID>
+    <ID>NoComments:WebClientHosting.kt:SPA/index fallback for the root or extension-less routes.</ID>
+    <ID>NoComments:WebClientHosting.kt:Serves a file from an app-internal [rootDir] (used by installed nsites). Mirrors</ID>
+    <ID>NoComments:WebClientHosting.kt:Streaming happens here</ID>
+    <ID>NoComments:WebClientHosting.kt:Trim leading slash</ID>
     <ID>NoComments:WebSocketServerService.kt:Add the intent, which inflates the back stack.</ID>
     <ID>NoComments:WebSocketServerService.kt:Always read the latest value so a delayed sample() emission cannot</ID>
     <ID>NoComments:WebSocketServerService.kt:Daily nsite update check. Gated by lastNsiteCheck like the weekly backup,</ID>
@@ -975,7 +961,6 @@
     <ID>NoComments:WebSocketServerService.kt:requestCode is used to disambiguate each PendingIntent's extras, otherwise</ID>
     <ID>NoComments:WebSocketServerService.kt:the onion service go away even if the server shutdown times out.</ID>
     <ID>ReturnCount:AuthGate.kt:AuthGate$fun check: Denial?</ID>
-    <ID>ReturnCount:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
     <ID>ReturnCount:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
     <ID>ReturnCount:Nip29Handler.kt:Nip29Handler$suspend fun process: Nip29Result</ID>
     <ID>ReturnCount:Nip86Handler.kt:Nip86Handler$fun verifyNip98: String?</ID>
@@ -983,10 +968,8 @@
     <ID>ReturnCount:RelayAggregator.kt:RelayAggregator$private fun filterMismatchReason: String?</ID>
     <ID>ReturnCount:TorManager.kt:TorManager$private suspend fun run</ID>
     <ID>ThrowsCount:CitrineContentProvider.kt:CitrineContentProvider$private fun deleteEventById: Int</ID>
-    <ID>ThrowsCount:CustomWebSocketServer.kt:CustomWebSocketServer$@OptIn(DelicateCoroutinesApi::class) private suspend fun processNewRelayMessage</ID>
     <ID>ThrowsCount:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
     <ID>ThrowsCount:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
-    <ID>TooManyFunctions:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
     <ID>TooManyFunctions:EventDao.kt:EventDao</ID>
     <ID>TooManyFunctions:EventRepository.kt:EventRepository</ID>
     <ID>TooManyFunctions:GroupManager.kt:GroupManager</ID>
