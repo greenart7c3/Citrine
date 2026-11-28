@@ -125,10 +125,6 @@ class ArchitectureTest {
             "ui/DownloadYourEventsUserScreen.kt",
             "ui/HomeScreen.kt",
             "ui/RebroadcastScreen.kt",
-            "ui/SettingsScreen.kt",
-            "ui/components/DatabaseInfo.kt",
-            "ui/settings/AggregatorSettingsScreen.kt",
-            "ui/settings/Nip86SettingsScreen.kt",
         )
 
         val contextCitrineUsers = setOf(

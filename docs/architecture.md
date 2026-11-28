@@ -188,6 +188,12 @@ Move each screen's loading and writing into its ViewModel and hand the screen
 only what it shows; delete the screen from `databaseInUi`. `DatabaseInfo.kt`'s
 ViewModel moves to a file of its own.
 
+Done so far: `DatabaseInfo` (`DatabaseInfoViewModel` in its own file counts the
+stored events per kind as `KindCount` rows and deletes a kind on the app scope).
+`SettingsScreen` and `AggregatorSettingsScreen` call `RelayAggregator.onConfigChanged()`,
+which opens the database from its installed context. `Nip86SettingsScreen`:
+`Nip86SettingsViewModel.purgeEventsOf` deletes the banned authors' events.
+
 ### 4. Split the large server and service files
 
 `RelayAggregator`, `CustomWebSocketServer` (message handling per verb, the

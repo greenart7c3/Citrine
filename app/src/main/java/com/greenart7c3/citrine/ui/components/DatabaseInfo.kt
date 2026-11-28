@@ -38,22 +38,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventDao
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.LocalAppScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.sample
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private val pieColors = listOf(
@@ -72,7 +63,7 @@ private val pieColors = listOf(
 
 private data class PieSlice(val label: String, val count: Int, val color: Color)
 
-private fun buildPieSlices(events: List<EventDao.CountResult>): List<PieSlice> {
+private fun buildPieSlices(events: List<KindCount>): List<PieSlice> {
     val sorted = events.sortedByDescending { it.count }
     val top = sorted.take(9)
     val otherCount = sorted.drop(9).sumOf { it.count }
@@ -138,37 +129,9 @@ private fun PieLegend(slices: List<PieSlice>, total: Int) {
     }
 }
 
-class DatabaseInfoViewModelFactory(
-    private val database: AppDatabase,
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(DatabaseInfoViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return DatabaseInfoViewModel(database) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}
-
-class DatabaseInfoViewModel(
-    database: AppDatabase,
-) : ViewModel() {
-
-    @OptIn(FlowPreview::class)
-    val countByKind =
-        database.eventDao().countByKind()
-            .sample(2_000)
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5_000),
-                emptyList(),
-            )
-}
-
 @Composable
 fun DatabaseInfo(
     modifier: Modifier = Modifier,
-    database: AppDatabase,
     navController: NavController,
     viewModel: DatabaseInfoViewModel,
 ) {
@@ -197,10 +160,7 @@ fun DatabaseInfo(
                         Text(stringResource(R.string.yes))
                     },
                     onClick = {
-                        appScope.launch(Dispatchers.IO) {
-                            database.eventDao().deleteByKind(wantsToDeleteKind!!)
-                            wantsToDeleteKind = null
-                        }
+                        viewModel.deleteKind(wantsToDeleteKind!!) { wantsToDeleteKind = null }
                     },
                 )
             },

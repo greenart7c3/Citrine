@@ -793,7 +793,10 @@ object RelayAggregator {
         }
     }
 
-    fun onConfigChanged(database: AppDatabase) {
+    /** Starts, restarts or stops the aggregator after its settings changed. */
+    fun onConfigChanged() = onConfigChanged(AppDatabase.getDatabase(context))
+
+    private fun onConfigChanged(database: AppDatabase) {
         val pubkey = Settings.aggregatorPubkey
         val hasExtraRelays = Settings.relayAggregatorExtraRelays.isNotEmpty()
         val enabled = Settings.relayAggregatorEnabled && (pubkey.isNotBlank() || hasExtraRelays)

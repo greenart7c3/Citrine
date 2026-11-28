@@ -52,7 +52,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.server.Settings
 import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.service.RelayAggregator
@@ -179,7 +178,7 @@ fun SettingsScreen(
                         scope.launch(Dispatchers.IO) {
                             Settings.defaultValues()
                             LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                            RelayAggregator.onConfigChanged(AppDatabase.getDatabase(context))
+                            RelayAggregator.onConfigChanged()
                             if (Settings.listenToPokeyBroadcasts) {
                                 pokeyListener.register()
                             } else {
