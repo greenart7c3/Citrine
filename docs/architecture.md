@@ -315,3 +315,15 @@ parameter it would only become a `ViewModelForwarding` finding.
 module by module: each comment deleted, said through a name or type, moved into
 public KDoc, or kept under `@Suppress("NoComments")` when it documents a
 constraint outside our code.
+
+Done so far: every non-comment finding (31). Conditions became named predicates
+(`isAutoBackupDue`, `targetsPersonalEvents`), functions with many returns or throws
+name each refusal (`nip98Refusal`, the NIP-29 and negentropy refusals), and long
+functions are short orchestrators over named steps (`TorManager.startTor`,
+`WebSocketServerService.runMaintenance`, `LocalPreferences`' read and put helpers,
+`EventRepository`'s `QueryParts` and `TagRowReader`). `EventDao` extends seven
+grouped DAO interfaces (`EventQueryDao`, `EventLookupDao`, `EventInsertDao`,
+`EventMatchDao`, `EventCleanupDao`/`EventDeleteDao`, `EventPageDao`, `TagRepairDao`)
+instead of declaring every query itself, so call sites and the generated Room code
+stay the same, and `GroupManager`'s write side is `GroupWrites.kt`. What is left
+is the `NoComments` grandfathering.
