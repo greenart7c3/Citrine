@@ -17,7 +17,14 @@ import com.greenart7c3.citrine.server.EventSubscription
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface EventDao {
+interface EventDao :
+    EventQueryDao,
+    TagRepairDao,
+    EventLookupDao,
+    EventInsertDao,
+    EventMatchDao,
+    EventCleanupDao,
+    EventPageDao {
     class CountResult {
         var kind: Int = 0
         var count: Int = 0
@@ -34,6 +41,13 @@ interface EventDao {
         var maxKeepPk: Long? = null
     }
 
+    class ContentLength {
+        var id: String = ""
+        var length: Int = 0
+    }
+}
+
+interface EventQueryDao {
     @RawQuery
     fun getEvents(query: SupportSQLiteQuery): List<EventWithTags>
 
@@ -41,8 +55,37 @@ interface EventDao {
     // loads the tags of every row at once, hundreds of thousands of [TagEntity] objects
     // per page for contact lists, mute lists and follow sets.
     @Query("SELECT pkEvent, COUNT(*) AS count FROM TagEntity WHERE pkEvent IN (:ids) GROUP BY pkEvent")
-    fun countTagsByEvent(ids: List<String>): List<TagCount>
+    fun countTagsByEvent(ids: List<String>): List<EventDao.TagCount>
 
+    // Primary-key lookups, so sizing a page reads no content into memory.
+    @Query("SELECT id, length(content) AS length FROM EventEntity WHERE id IN (:ids)")
+    fun contentLengths(ids: List<String>): List<EventDao.ContentLength>
+
+    @Query("SELECT * FROM EventEntity WHERE id IN (:ids)")
+    fun getEventRowsByIds(ids: List<String>): List<EventEntity>
+
+    @RawQuery
+    fun count(query: SupportSQLiteQuery): Int
+
+    /**
+     * One keyset page of whole rows, ordered by primary key. Used by backup/export so a
+     * multi-GB database can be written out without ever holding more than a page of
+     * [EventEntity] (and no tags at all) in the heap.
+     */
+    @Query("SELECT * FROM EventEntity WHERE id > :afterId ORDER BY id ASC LIMIT :limit")
+    suspend fun getEventRowsAfter(afterId: String, limit: Int): List<EventEntity>
+
+    @Query("SELECT COUNT(*) FROM EventEntity")
+    suspend fun countAll(): Int
+
+    @RawQuery
+    fun getIdsAndCreatedAt(query: SupportSQLiteQuery): List<IdAndCreatedAt>
+
+    @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
+    fun countByKind(): Flow<List<EventDao.CountResult>>
+}
+
+interface TagRepairDao {
     @Query("SELECT COUNT(*) FROM TagEntity WHERE pkEvent = :eventId")
     suspend fun countTagsForEvent(eventId: String): Int
 
@@ -59,7 +102,7 @@ interface EventDao {
           )
         """,
     )
-    suspend fun getTagDuplicateStats(eventId: String): TagDuplicateStats
+    suspend fun getTagDuplicateStats(eventId: String): EventDao.TagDuplicateStats
 
     @Query(
         """
@@ -97,41 +140,6 @@ interface EventDao {
     @Query("SELECT id FROM EventEntity WHERE id > :afterId ORDER BY id ASC LIMIT :limit")
     suspend fun getEventIdsAfter(afterId: String, limit: Int): List<String>
 
-    @Query("SELECT EXISTS(SELECT 1 FROM EventEntity WHERE id = :id)")
-    suspend fun existsById(id: String): Boolean
-
-    @Query("SELECT pubkey FROM EventEntity WHERE id = :id LIMIT 1")
-    suspend fun getPubkeyById(id: String): String?
-
-    @Query("SELECT id FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind ORDER BY createdAt DESC, id ASC LIMIT 1")
-    suspend fun getLatestEventIdByKind(pubkey: String, kind: Int): String?
-
-    class ContentLength {
-        var id: String = ""
-        var length: Int = 0
-    }
-
-    // Primary-key lookups, so sizing a page reads no content into memory.
-    @Query("SELECT id, length(content) AS length FROM EventEntity WHERE id IN (:ids)")
-    fun contentLengths(ids: List<String>): List<ContentLength>
-
-    @Query("SELECT * FROM EventEntity WHERE id IN (:ids)")
-    fun getEventRowsByIds(ids: List<String>): List<EventEntity>
-
-    @RawQuery
-    fun count(query: SupportSQLiteQuery): Int
-
-    /**
-     * One keyset page of whole rows, ordered by primary key. Used by backup/export so a
-     * multi-GB database can be written out without ever holding more than a page of
-     * [EventEntity] (and no tags at all) in the heap.
-     */
-    @Query("SELECT * FROM EventEntity WHERE id > :afterId ORDER BY id ASC LIMIT :limit")
-    suspend fun getEventRowsAfter(afterId: String, limit: Int): List<EventEntity>
-
-    @Query("SELECT COUNT(*) FROM EventEntity")
-    suspend fun countAll(): Int
-
     /** One keyset page of id + author of [kind] events (newest first), without loading tags,
      * strictly after the cursor ([createdAt], [id]). Used by the aggregator's one-shot cleanup
      * of contact lists belonging to authors the owner does not follow. The redundant
@@ -145,13 +153,64 @@ interface EventDao {
         """,
     )
     suspend fun getIdsAndPubkeysByKindAfter(kind: Int, createdAt: Long, id: String, limit: Int): List<IdAndPubkey>
+}
 
-    @RawQuery
-    fun getIdsAndCreatedAt(query: SupportSQLiteQuery): List<IdAndCreatedAt>
+interface EventLookupDao {
+    @Query("SELECT EXISTS(SELECT 1 FROM EventEntity WHERE id = :id)")
+    suspend fun existsById(id: String): Boolean
 
-    @Query("SELECT kind, COUNT(*) count FROM EventEntity GROUP BY kind ORDER BY kind ASC")
-    fun countByKind(): Flow<List<CountResult>>
+    @Query("SELECT pubkey FROM EventEntity WHERE id = :id LIMIT 1")
+    suspend fun getPubkeyById(id: String): String?
 
+    @Query("SELECT id FROM EventEntity WHERE pubkey = :pubkey AND kind = :kind ORDER BY createdAt DESC, id ASC LIMIT 1")
+    suspend fun getLatestEventIdByKind(pubkey: String, kind: Int): String?
+
+    @Query("SELECT id FROM EventEntity WHERE id IN (:ids)")
+    suspend fun existingIds(ids: List<String>): List<String>
+
+    @Query("SELECT * FROM EventEntity WHERE id = :id")
+    @Transaction
+    suspend fun getById(id: String): EventWithTags?
+
+    @Query("SELECT * FROM EventEntity WHERE id in (:ids)")
+    @Transaction
+    suspend fun getByIds(ids: List<String>): List<EventWithTags>
+
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC")
+    @Transaction
+    suspend fun getContactLists(pubkey: String): List<EventWithTags>
+
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC LIMIT 1")
+    @Transaction
+    suspend fun getContactList(pubkey: String): EventWithTags?
+
+    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10002 ORDER BY createdAt DESC, id ASC LIMIT 1")
+    @Transaction
+    suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?
+
+    @Query(
+        """
+        SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
+          FROM EventEntity
+         WHERE pubkey IN (:pubkeys)
+           AND kind IN (:kinds)
+         GROUP BY pubkey
+        """,
+    )
+    suspend fun getLatestEventTimestamps(pubkeys: List<String>, kinds: List<Int>): List<PubkeyTimestamp>
+
+    @Query(
+        """
+        SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
+          FROM EventEntity
+         WHERE pubkey IN (:pubkeys)
+         GROUP BY pubkey
+        """,
+    )
+    suspend fun getLatestEventTimestampsAllKinds(pubkeys: List<String>): List<PubkeyTimestamp>
+}
+
+interface EventInsertDao {
     /**
      * Inserts [event] and returns its row id, or null when the event was already stored.
      *
@@ -200,21 +259,6 @@ interface EventDao {
     @Transaction
     suspend fun insertTags(tags: List<TagEntity>)
 
-    @Query("SELECT id FROM EventEntity WHERE id IN (:ids)")
-    suspend fun existingIds(ids: List<String>): List<String>
-
-    @Query(
-        """
-        SELECT DISTINCT TagEntity.col1Value
-          FROM TagEntity
-         INNER JOIN EventEntity ON EventEntity.id = TagEntity.pkEvent
-         WHERE EventEntity.kind = 5
-           AND TagEntity.col0Name = 'e'
-           AND TagEntity.col1Value IN (:ids)
-        """,
-    )
-    suspend fun getDeletedEventsByIds(ids: List<String>): List<String>
-
     @Query("DELETE FROM TagEntity WHERE pkEvent IN (:ids)")
     suspend fun deleteTagsForIds(ids: List<String>)
 
@@ -230,59 +274,37 @@ interface EventDao {
         if (tags.isNotEmpty()) insertTags(tags)
     }
 
-    @Query("SELECT * FROM EventEntity WHERE id = :id")
     @Transaction
-    suspend fun getById(id: String): EventWithTags?
+    suspend fun insertEventWithTags(
+        database: RoomDatabase,
+        dbEvent: EventWithTags,
+        connection: Connection?,
+    ) {
+        // Returns null when the row already exists (IGNORE) — skip tag I/O and
+        // fan-out in that case rather than orphaning the existing event's tags.
+        insertEventIfNew(database, dbEvent.event)?.let {
+            dbEvent.tags.forEach {
+                it.pkEvent = dbEvent.event.id
+            }
 
-    @Query("SELECT * FROM EventEntity WHERE id in (:ids)")
-    @Transaction
-    suspend fun getByIds(ids: List<String>): List<EventWithTags>
-
-    @Transaction
-    suspend fun deleteEventsWithExpirations(now: Long) {
-        val ids = countEventsWithExpirations(now)
-        if (ids.isNotEmpty()) {
-            Log.d(Citrine.TAG, "Deleting ${ids.size} expired events")
-            delete(ids)
+            insertTags(dbEvent.tags)
+            EventSubscription.executeAll(dbEvent, connection)
         }
     }
+}
 
-    @Query("SELECT EventEntity.id FROM EventEntity EventEntity WHERE EventEntity.expiresAt IS NOT NULL AND EventEntity.expiresAt < :now")
-    @Transaction
-    suspend fun countEventsWithExpirations(now: Long): List<String>
-
-    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC")
-    @Transaction
-    suspend fun getContactLists(pubkey: String): List<EventWithTags>
-
-    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 3 ORDER BY createdAt DESC, id ASC LIMIT 1")
-    @Transaction
-    suspend fun getContactList(pubkey: String): EventWithTags?
-
-    @Query("SELECT * FROM EventEntity WHERE pubkey = :pubkey and kind = 10002 ORDER BY createdAt DESC, id ASC LIMIT 1")
-    @Transaction
-    suspend fun getAdvertisedRelayList(pubkey: String): EventWithTags?
-
+interface EventMatchDao {
     @Query(
         """
-        SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
-          FROM EventEntity
-         WHERE pubkey IN (:pubkeys)
-           AND kind IN (:kinds)
-         GROUP BY pubkey
+        SELECT DISTINCT TagEntity.col1Value
+          FROM TagEntity
+         INNER JOIN EventEntity ON EventEntity.id = TagEntity.pkEvent
+         WHERE EventEntity.kind = 5
+           AND TagEntity.col0Name = 'e'
+           AND TagEntity.col1Value IN (:ids)
         """,
     )
-    suspend fun getLatestEventTimestamps(pubkeys: List<String>, kinds: List<Int>): List<PubkeyTimestamp>
-
-    @Query(
-        """
-        SELECT pubkey AS pubkey, MAX(createdAt) AS createdAt
-          FROM EventEntity
-         WHERE pubkey IN (:pubkeys)
-         GROUP BY pubkey
-        """,
-    )
-    suspend fun getLatestEventTimestampsAllKinds(pubkeys: List<String>): List<PubkeyTimestamp>
+    suspend fun getDeletedEventsByIds(ids: List<String>): List<String>
 
     @Query("SELECT id FROM EventEntity WHERE kind = :kind AND pubkey = :pubkey ORDER BY createdAt DESC, id ASC")
     @Transaction
@@ -297,31 +319,6 @@ interface EventDao {
     )
     @Transaction
     suspend fun getByKindNewest(kind: Int, pubkey: String, createdAt: Long, incomingId: String): List<String>
-
-    // Tags are removed transactionally via the FK ON DELETE CASCADE on
-    // TagEntity.pkEvent, which Room enables by default.
-    @Query("DELETE FROM EventEntity WHERE id IN (:ids) AND pubkey = :pubkey")
-    @Transaction
-    suspend fun delete(ids: List<String>, pubkey: String)
-
-    @Query("DELETE FROM EventEntity WHERE id in (:ids)")
-    @Transaction
-    suspend fun delete(ids: List<String>)
-
-    @Query("DELETE FROM EventEntity WHERE kind = :kind")
-    @Transaction
-    suspend fun deleteByKind(kind: Int)
-
-    @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey")
-    @Transaction
-    suspend fun deleteByPubkey(pubkey: String)
-
-    @Query("SELECT EXISTS(SELECT 1 FROM EventEntity WHERE kind >= 20000 AND kind < 30000)")
-    suspend fun hasEphemeralEvents(): Boolean
-
-    @Query("SELECT id FROM EventEntity WHERE kind >= 20000 AND kind < 30000 AND createdAt < :oneMinuteAgo")
-    @Transaction
-    suspend fun getEphemeralEvents(oneMinuteAgo: Long): List<String>
 
     @Query(
         """
@@ -369,84 +366,6 @@ interface EventDao {
     )
     @Transaction
     suspend fun getNewestReplaceable(kind: Int, pubkey: String, dTagValue: String, createdAt: Long, incomingId: String): List<String>
-
-    @Transaction
-    suspend fun deleteAll() {
-        deleteAllTags()
-        innerDeleteAll()
-    }
-
-    @Query("DELETE FROM EventEntity")
-    @Transaction
-    suspend fun innerDeleteAll()
-
-    @Query("DELETE FROM TagEntity")
-    @Transaction
-    suspend fun deleteAllTags()
-
-    @Transaction
-    suspend fun insertEventWithTags(
-        database: RoomDatabase,
-        dbEvent: EventWithTags,
-        connection: Connection?,
-    ) {
-        // Returns null when the row already exists (IGNORE) — skip tag I/O and
-        // fan-out in that case rather than orphaning the existing event's tags.
-        insertEventIfNew(database, dbEvent.event)?.let {
-            dbEvent.tags.forEach {
-                it.pkEvent = dbEvent.event.id
-            }
-
-            insertTags(dbEvent.tags)
-            EventSubscription.executeAll(dbEvent, connection)
-        }
-    }
-
-    @Transaction
-    @Query(
-        """
-    SELECT * FROM EventEntity
-    WHERE kind = :kind
-      AND (
-        :createdAt IS NULL OR
-        createdAt < :createdAt OR
-        (createdAt = :createdAt AND id > :id)
-      )
-    ORDER BY createdAt DESC, id ASC
-    LIMIT :limit
-""",
-    )
-    suspend fun getByKindKeyset(
-        kind: Int,
-        createdAt: Long?,
-        id: String?,
-        limit: Int,
-    ): List<EventWithTags>
-
-    @Query("DELETE FROM EventEntity WHERE createdAt <= :until")
-    @Transaction
-    suspend fun deleteAll(until: Long)
-
-    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND pubkey NOT IN (:pubKeys)")
-    @Transaction
-    suspend fun deleteAll(until: Long, pubKeys: Array<String>)
-
-    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND kind NOT IN (:kinds)")
-    @Transaction
-    suspend fun deleteAll(until: Long, kinds: IntArray)
-
-    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND pubkey NOT IN (:pubKeys) AND kind NOT IN (:kinds)")
-    @Transaction
-    suspend fun deleteAll(until: Long, pubKeys: Array<String>, kinds: IntArray)
-
-    @Transaction
-    suspend fun deleteEphemeralEvents(oneMinuteAgo: Long) {
-        val ids = getEphemeralEvents(oneMinuteAgo)
-        if (ids.isNotEmpty()) {
-            Log.d(Citrine.TAG, "Deleting ${ids.size} ephemeral events")
-            delete(ids)
-        }
-    }
 
     @Query(
         """
@@ -505,6 +424,110 @@ interface EventDao {
     )
     @Transaction
     suspend fun getEventIdsByGroupId(groupId: String): List<String>
+}
+
+interface EventDeleteDao {
+    // Tags are removed transactionally via the FK ON DELETE CASCADE on
+    // TagEntity.pkEvent, which Room enables by default.
+    @Query("DELETE FROM EventEntity WHERE id IN (:ids) AND pubkey = :pubkey")
+    @Transaction
+    suspend fun delete(ids: List<String>, pubkey: String)
+
+    @Query("DELETE FROM EventEntity WHERE id in (:ids)")
+    @Transaction
+    suspend fun delete(ids: List<String>)
+
+    @Query("DELETE FROM EventEntity WHERE kind = :kind")
+    @Transaction
+    suspend fun deleteByKind(kind: Int)
+
+    @Query("DELETE FROM EventEntity WHERE pubkey = :pubkey")
+    @Transaction
+    suspend fun deleteByPubkey(pubkey: String)
+
+    @Transaction
+    suspend fun deleteAll() {
+        deleteAllTags()
+        innerDeleteAll()
+    }
+
+    @Query("DELETE FROM EventEntity")
+    @Transaction
+    suspend fun innerDeleteAll()
+
+    @Query("DELETE FROM TagEntity")
+    @Transaction
+    suspend fun deleteAllTags()
+}
+
+interface EventCleanupDao : EventDeleteDao {
+    @Transaction
+    suspend fun deleteEventsWithExpirations(now: Long) {
+        val ids = countEventsWithExpirations(now)
+        if (ids.isNotEmpty()) {
+            Log.d(Citrine.TAG, "Deleting ${ids.size} expired events")
+            delete(ids)
+        }
+    }
+
+    @Query("SELECT EventEntity.id FROM EventEntity EventEntity WHERE EventEntity.expiresAt IS NOT NULL AND EventEntity.expiresAt < :now")
+    @Transaction
+    suspend fun countEventsWithExpirations(now: Long): List<String>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM EventEntity WHERE kind >= 20000 AND kind < 30000)")
+    suspend fun hasEphemeralEvents(): Boolean
+
+    @Query("SELECT id FROM EventEntity WHERE kind >= 20000 AND kind < 30000 AND createdAt < :oneMinuteAgo")
+    @Transaction
+    suspend fun getEphemeralEvents(oneMinuteAgo: Long): List<String>
+
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until")
+    @Transaction
+    suspend fun deleteAll(until: Long)
+
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND pubkey NOT IN (:pubKeys)")
+    @Transaction
+    suspend fun deleteAll(until: Long, pubKeys: Array<String>)
+
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND kind NOT IN (:kinds)")
+    @Transaction
+    suspend fun deleteAll(until: Long, kinds: IntArray)
+
+    @Query("DELETE FROM EventEntity WHERE createdAt <= :until AND pubkey NOT IN (:pubKeys) AND kind NOT IN (:kinds)")
+    @Transaction
+    suspend fun deleteAll(until: Long, pubKeys: Array<String>, kinds: IntArray)
+
+    @Transaction
+    suspend fun deleteEphemeralEvents(oneMinuteAgo: Long) {
+        val ids = getEphemeralEvents(oneMinuteAgo)
+        if (ids.isNotEmpty()) {
+            Log.d(Citrine.TAG, "Deleting ${ids.size} ephemeral events")
+            delete(ids)
+        }
+    }
+}
+
+interface EventPageDao {
+    @Transaction
+    @Query(
+        """
+    SELECT * FROM EventEntity
+    WHERE kind = :kind
+      AND (
+        :createdAt IS NULL OR
+        createdAt < :createdAt OR
+        (createdAt = :createdAt AND id > :id)
+      )
+    ORDER BY createdAt DESC, id ASC
+    LIMIT :limit
+""",
+    )
+    suspend fun getByKindKeyset(
+        kind: Int,
+        createdAt: Long?,
+        id: String?,
+        limit: Int,
+    ): List<EventWithTags>
 
     // Optimized queries for ContentProvider
     // Using sentinel values: Long.MIN_VALUE/MAX_VALUE means "no filter"

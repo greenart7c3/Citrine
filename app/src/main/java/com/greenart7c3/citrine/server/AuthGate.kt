@@ -7,36 +7,23 @@ import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
 object AuthGate {
     enum class Denial { AUTH_REQUIRED, RESTRICTED }
 
-    fun check(filter: EventFilter, connection: Connection): Denial? {
-        nip29Check(filter, connection)?.let { return it }
+    fun check(filter: EventFilter, connection: Connection): Denial? = nip29Check(filter, connection)
+        ?: if (targetsPersonalEvents(filter)) participantCheck(filter, connection) else null
 
-        for (kind in filter.kinds) {
-            if (KINDS_PRIVATE_EVENTS.contains(kind)) {
-                if (connection.users.isEmpty()) return Denial.AUTH_REQUIRED
+    private fun targetsPersonalEvents(filter: EventFilter): Boolean = filter.kinds.any { KINDS_PRIVATE_EVENTS.contains(it) } ||
+        (filter.kinds.isEmpty() && (filter.tags.contains("p") || filter.authors.isNotEmpty()))
 
-                val senders = filter.authors
-                val receivers = filter.tags.filter { it.key == "p" }
-                if (!senders.any { connection.users.contains(it) } &&
-                    !receivers.any { entry -> entry.value.any { receiver -> connection.users.contains(receiver) } }
-                ) {
-                    return Denial.RESTRICTED
-                }
-            }
-        }
+    private fun participantCheck(filter: EventFilter, connection: Connection): Denial? = when {
+        connection.users.isEmpty() -> Denial.AUTH_REQUIRED
+        isParticipant(filter, connection) -> null
+        else -> Denial.RESTRICTED
+    }
 
-        if (filter.kinds.isEmpty() && (filter.tags.contains("p") || filter.authors.isNotEmpty())) {
-            if (connection.users.isEmpty()) return Denial.AUTH_REQUIRED
-
-            val senders = filter.authors
-            val receivers = filter.tags.filter { it.key == "p" }
-            if (!senders.any { connection.users.contains(it) } &&
-                !receivers.any { entry -> entry.value.any { receiver -> connection.users.contains(receiver) } }
-            ) {
-                return Denial.RESTRICTED
-            }
-        }
-
-        return null
+    private fun isParticipant(filter: EventFilter, connection: Connection): Boolean {
+        val senders = filter.authors
+        val receivers = filter.tags.filter { it.key == "p" }
+        return senders.any { connection.users.contains(it) } ||
+            receivers.any { entry -> entry.value.any { receiver -> connection.users.contains(receiver) } }
     }
 
     /**

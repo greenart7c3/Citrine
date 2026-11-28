@@ -27,57 +27,61 @@ object Nip29Handler {
     private val HEX_KEY_REGEX = Regex("^[0-9a-f]{64}$")
 
     suspend fun process(event: Event, server: CustomWebSocketServer, db: AppDatabase): Nip29Result {
-        if (event.kind in Nip29.METADATA_KINDS) {
-            if (event.pubKey == GroupManager.relayPubKey) return Nip29Result.NotApplicable
-            GroupManager.get(GroupManager.groupIdOf(event)) ?: return Nip29Result.NotApplicable
-            return Nip29Result.Reject("blocked: group metadata events can only be published by this relay")
-        }
+        if (event.kind in Nip29.METADATA_KINDS) return metadataEvent(event)
 
         val groupId = event.tags.firstOrNull { it.size > 1 && it[0] == "h" }?.get(1)
             ?: return Nip29Result.NotApplicable
 
-        if (event.kind == Nip29.KIND_CREATE_GROUP) {
-            if (!Nip29.isValidGroupId(groupId)) {
-                return Nip29Result.Reject("invalid: group id must be 1-64 characters of a-z, A-Z, 0-9, - or _")
-            }
-            if (GroupManager.get(groupId) != null) {
-                return Nip29Result.Reject("duplicate: group '$groupId' already exists on this relay")
-            }
-            return Nip29Result.Accept {
-                if (GroupManager.createGroup(db, groupId, event) != null) {
-                    GroupManager.scheduleRegen(server, groupId)
-                }
-            }
-        }
+        if (event.kind == Nip29.KIND_CREATE_GROUP) return createGroup(event, groupId, server, db)
 
         val group = GroupManager.get(groupId) ?: return Nip29Result.NotApplicable
-        if (group.isDeleted) {
-            return Nip29Result.Reject("blocked: group '$groupId' has been deleted")
+        return if (group.isDeleted) {
+            Nip29Result.Reject("blocked: group '$groupId' has been deleted")
+        } else {
+            groupEvent(event, group, groupId, server, db)
         }
+    }
 
-        return when (event.kind) {
-            Nip29.KIND_PUT_USER,
-            Nip29.KIND_REMOVE_USER,
-            Nip29.KIND_EDIT_METADATA,
-            Nip29.KIND_DELETE_EVENT,
-            Nip29.KIND_DELETE_GROUP,
-            Nip29.KIND_CREATE_INVITE,
-            Nip29.KIND_UPDATE_PIN_LIST,
-            -> moderate(event, group, server, db)
+    private fun metadataEvent(event: Event): Nip29Result = when {
+        event.pubKey == GroupManager.relayPubKey -> Nip29Result.NotApplicable
+        GroupManager.get(GroupManager.groupIdOf(event)) == null -> Nip29Result.NotApplicable
+        else -> Nip29Result.Reject("blocked: group metadata events can only be published by this relay")
+    }
 
-            Nip29.KIND_JOIN_REQUEST -> joinRequest(event, group, server)
-
-            Nip29.KIND_LEAVE_REQUEST -> leaveRequest(event, group, server)
-
-            else -> {
-                if (group.isRestricted && !group.isMember(event.pubKey) && !GroupManager.isPrivileged(group, event.pubKey)) {
-                    Nip29Result.Reject("restricted: not a member of group '$groupId'")
-                } else {
-                    Nip29Result.Accept()
-                }
+    private fun createGroup(event: Event, groupId: String, server: CustomWebSocketServer, db: AppDatabase): Nip29Result = when {
+        !Nip29.isValidGroupId(groupId) -> Nip29Result.Reject("invalid: group id must be 1-64 characters of a-z, A-Z, 0-9, - or _")
+        GroupManager.get(groupId) != null -> Nip29Result.Reject("duplicate: group '$groupId' already exists on this relay")
+        else -> Nip29Result.Accept {
+            if (GroupManager.createGroup(db, groupId, event) != null) {
+                GroupManager.scheduleRegen(server, groupId)
             }
         }
     }
+
+    private fun groupEvent(event: Event, group: GroupState, groupId: String, server: CustomWebSocketServer, db: AppDatabase): Nip29Result = when (event.kind) {
+        Nip29.KIND_PUT_USER,
+        Nip29.KIND_REMOVE_USER,
+        Nip29.KIND_EDIT_METADATA,
+        Nip29.KIND_DELETE_EVENT,
+        Nip29.KIND_DELETE_GROUP,
+        Nip29.KIND_CREATE_INVITE,
+        Nip29.KIND_UPDATE_PIN_LIST,
+        -> moderate(event, group, server, db)
+
+        Nip29.KIND_JOIN_REQUEST -> joinRequest(event, group, server)
+
+        Nip29.KIND_LEAVE_REQUEST -> leaveRequest(event, group, server)
+
+        else -> {
+            if (isRefusedPoster(group, event.pubKey)) {
+                Nip29Result.Reject("restricted: not a member of group '$groupId'")
+            } else {
+                Nip29Result.Accept()
+            }
+        }
+    }
+
+    private fun isRefusedPoster(group: GroupState, pubkey: String): Boolean = group.isRestricted && !group.isMember(pubkey) && !GroupManager.isPrivileged(group, pubkey)
 
     private fun moderate(event: Event, group: GroupState, server: CustomWebSocketServer, db: AppDatabase): Nip29Result {
         if (!GroupManager.isPrivileged(group, event.pubKey)) {
@@ -85,58 +89,66 @@ object Nip29Handler {
         }
 
         return when (event.kind) {
-            Nip29.KIND_PUT_USER -> Nip29Result.Accept {
-                taggedPubkeys(event).forEach { tag ->
-                    GroupManager.putUser(db, group.id, tag[1], GroupState.rolesFromPTag(tag))
-                }
-                GroupManager.scheduleRegen(server, group.id)
-            }
+            Nip29.KIND_PUT_USER -> Nip29Result.Accept { putUsers(event, group, server, db) }
 
-            Nip29.KIND_REMOVE_USER -> Nip29Result.Accept {
-                taggedPubkeys(event).forEach { tag ->
-                    GroupManager.removeUser(db, group.id, tag[1])
-                }
-                GroupManager.scheduleRegen(server, group.id)
-            }
+            Nip29.KIND_REMOVE_USER -> Nip29Result.Accept { removeUsers(event, group, server, db) }
 
             Nip29.KIND_EDIT_METADATA -> Nip29Result.Accept {
                 GroupManager.editMetadata(db, group.id, event)
                 GroupManager.scheduleRegen(server, group.id)
             }
 
-            Nip29.KIND_DELETE_EVENT -> Nip29Result.Accept {
-                val targetIds = event.tags
-                    .filter { it.size > 1 && it[0] == "e" }
-                    .map { it[1] }
-                    .filter { it != event.id }
-                targetIds.forEach { targetId ->
-                    val target = db.eventDao().getById(targetId) ?: return@forEach
-                    val belongsToGroup = target.tags.any { it.col0Name == "h" && it.col1Value == group.id }
-                    if (belongsToGroup) {
-                        db.eventDao().delete(listOf(targetId))
-                    }
-                }
-            }
+            Nip29.KIND_DELETE_EVENT -> Nip29Result.Accept { deleteGroupEvents(event, group, db) }
 
             Nip29.KIND_DELETE_GROUP -> Nip29Result.Accept {
                 GroupManager.deleteGroup(db, group.id, keepEventId = event.id)
             }
 
-            Nip29.KIND_CREATE_INVITE -> {
-                val code = event.tags.firstOrNull { it.size > 1 && it[0] == "code" }?.get(1)
-                if (code.isNullOrBlank()) {
-                    Nip29Result.Reject("invalid: create-invite requires a code tag")
-                } else {
-                    Nip29Result.Accept {
-                        GroupManager.addInvite(db, group.id, code, event.createdAt)
-                    }
-                }
-            }
+            Nip29.KIND_CREATE_INVITE -> createInvite(event, group, db)
 
             // Stored as-is; pin lists are served straight back to clients.
             Nip29.KIND_UPDATE_PIN_LIST -> Nip29Result.Accept()
 
             else -> Nip29Result.NotApplicable
+        }
+    }
+
+    private suspend fun putUsers(event: Event, group: GroupState, server: CustomWebSocketServer, db: AppDatabase) {
+        taggedPubkeys(event).forEach { tag ->
+            GroupManager.putUser(db, group.id, tag[1], GroupState.rolesFromPTag(tag))
+        }
+        GroupManager.scheduleRegen(server, group.id)
+    }
+
+    private suspend fun removeUsers(event: Event, group: GroupState, server: CustomWebSocketServer, db: AppDatabase) {
+        taggedPubkeys(event).forEach { tag ->
+            GroupManager.removeUser(db, group.id, tag[1])
+        }
+        GroupManager.scheduleRegen(server, group.id)
+    }
+
+    private suspend fun deleteGroupEvents(event: Event, group: GroupState, db: AppDatabase) {
+        val targetIds = event.tags
+            .filter { it.size > 1 && it[0] == "e" }
+            .map { it[1] }
+            .filter { it != event.id }
+        targetIds.forEach { targetId ->
+            val target = db.eventDao().getById(targetId) ?: return@forEach
+            val belongsToGroup = target.tags.any { it.col0Name == "h" && it.col1Value == group.id }
+            if (belongsToGroup) {
+                db.eventDao().delete(listOf(targetId))
+            }
+        }
+    }
+
+    private fun createInvite(event: Event, group: GroupState, db: AppDatabase): Nip29Result {
+        val code = event.tags.firstOrNull { it.size > 1 && it[0] == "code" }?.get(1)
+        return if (code.isNullOrBlank()) {
+            Nip29Result.Reject("invalid: create-invite requires a code tag")
+        } else {
+            Nip29Result.Accept {
+                GroupManager.addInvite(db, group.id, code, event.createdAt)
+            }
         }
     }
 

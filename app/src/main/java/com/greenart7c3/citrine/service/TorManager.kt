@@ -195,81 +195,7 @@ object TorManager {
 
     private suspend fun run() {
         try {
-            ArtiNative.setLogCallback { line -> Log.d(Citrine.TAG, line) }
-            nativeReady = true
-            // Check cancellation after publishing nativeReady: if stop() ran before
-            // nativeReady became true it cancelled our job without queuing a stopJob,
-            // so we must bail out before initialize() creates a live TorClient.
-            currentCoroutineContext().ensureActive()
-            Log.i(Citrine.TAG, "Starting built-in Tor: ${ArtiNative.getVersion()}")
-
-            val dataDir = File(appContext.filesDir, "arti").apply { mkdirs() }
-            // kmp-tor's hidden service directory holds the relay's onion
-            // identity key: hand it to Arti for the address carry-over before
-            // anything can generate a fresh key. kmp-tor's work directory is
-            // the app_torservice getDir.
-            val legacyHsDir = File(
-                appContext.getDir("torservice", Context.MODE_PRIVATE),
-                "citrine_hs",
-            ).takeIf { File(it, "hs_ed25519_secret_key").exists() }
-            val result = ArtiNative.initialize(
-                dataDir.absolutePath,
-                legacyHsDir?.absolutePath ?: "",
-            )
-            if (result != 0) {
-                fail("Arti failed to initialize ($result)")
-                return
-            }
-            currentCoroutineContext().ensureActive()
-            // Wake the client if a previous stop() placed it in DormantMode::Soft.
-            ArtiNative.setDormant(0)
-            if (legacyHsDir == null) {
-                // kmp-tor leftovers without a hidden service identity.
-                deleteLegacyKmpTorData()
-            } else {
-                // The identity-bearing directory is the native side's to remove
-                // (only after a successful import); the Tor cache holds no
-                // keys and can go as soon as Arti initialized.
-                File(appContext.cacheDir, "torservice").deleteRecursively()
-            }
-
-            val port = bindSocksProxy() ?: return
-            Log.i(Citrine.TAG, "Built-in Tor SOCKS proxy on port $port")
-
-            if (lastEnableHiddenService) {
-                val hsResult = ArtiNative.startOnionService(ONION_VIRTUAL_PORT, lastLocalPort)
-                if (hsResult != 0) {
-                    fail("onion service start failed ($hsResult)")
-                    return
-                }
-            } else {
-                ArtiNative.stopOnionService()
-            }
-
-            // The SOCKS listener accepts connections right away (each one waits
-            // for its circuit), but report Running only once Arti can carry
-            // traffic — like the old daemon's bootstrap did — and, for the
-            // onion service, once the hostname is readable from the keystore.
-            val hostname = withTimeoutOrNull(ONION_HOSTNAME_TIMEOUT_MS) {
-                while (currentCoroutineContext().isActive) {
-                    if (ArtiNative.isBootstrapped() == 1) {
-                        Log.i(Citrine.TAG, "Built-in Tor bootstrapped")
-                        if (!lastEnableHiddenService) return@withTimeoutOrNull ""
-                        ArtiNative.getOnionHostname().takeIf { it.isNotBlank() }?.let { return@withTimeoutOrNull it }
-                    }
-                    delay(BOOTSTRAP_POLL_MS.milliseconds)
-                }
-                null
-            }
-            if (hostname == null) {
-                fail("onion hostname unavailable")
-                return
-            }
-            _state.value = State.Running(hostname)
-            if (hostname.isNotBlank() && Settings.onionHostname != hostname) {
-                Settings.onionHostname = hostname
-                LocalPreferences.saveSettingsToEncryptedStorage(Settings, appContext)
-            }
+            startTor()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -277,6 +203,99 @@ object TorManager {
             // (UnsatisfiedLinkError, ExceptionInInitializerError).
             Log.e(Citrine.TAG, "Failed to start built-in Tor", e)
             fail(e.message)
+        }
+    }
+
+    private suspend fun startTor() {
+        if (!initializeArti()) return
+
+        val port = bindSocksProxy() ?: return
+        Log.i(Citrine.TAG, "Built-in Tor SOCKS proxy on port $port")
+
+        if (!startOrStopOnionService()) return
+
+        // The SOCKS listener accepts connections right away (each one waits
+        // for its circuit), but report Running only once Arti can carry
+        // traffic — like the old daemon's bootstrap did — and, for the
+        // onion service, once the hostname is readable from the keystore.
+        publishHostname(awaitHostname())
+    }
+
+    private suspend fun initializeArti(): Boolean {
+        ArtiNative.setLogCallback { line -> Log.d(Citrine.TAG, line) }
+        nativeReady = true
+        // Check cancellation after publishing nativeReady: if stop() ran before
+        // nativeReady became true it cancelled our job without queuing a stopJob,
+        // so we must bail out before initialize() creates a live TorClient.
+        currentCoroutineContext().ensureActive()
+        Log.i(Citrine.TAG, "Starting built-in Tor: ${ArtiNative.getVersion()}")
+
+        val dataDir = File(appContext.filesDir, "arti").apply { mkdirs() }
+        // kmp-tor's hidden service directory holds the relay's onion
+        // identity key: hand it to Arti for the address carry-over before
+        // anything can generate a fresh key. kmp-tor's work directory is
+        // the app_torservice getDir.
+        val legacyHsDir = File(
+            appContext.getDir("torservice", Context.MODE_PRIVATE),
+            "citrine_hs",
+        ).takeIf { File(it, "hs_ed25519_secret_key").exists() }
+        val result = ArtiNative.initialize(
+            dataDir.absolutePath,
+            legacyHsDir?.absolutePath ?: "",
+        )
+        if (result != 0) {
+            fail("Arti failed to initialize ($result)")
+            return false
+        }
+        currentCoroutineContext().ensureActive()
+        // Wake the client if a previous stop() placed it in DormantMode::Soft.
+        ArtiNative.setDormant(0)
+        if (legacyHsDir == null) {
+            // kmp-tor leftovers without a hidden service identity.
+            deleteLegacyKmpTorData()
+        } else {
+            // The identity-bearing directory is the native side's to remove
+            // (only after a successful import); the Tor cache holds no
+            // keys and can go as soon as Arti initialized.
+            File(appContext.cacheDir, "torservice").deleteRecursively()
+        }
+        return true
+    }
+
+    private fun startOrStopOnionService(): Boolean {
+        if (!lastEnableHiddenService) {
+            ArtiNative.stopOnionService()
+            return true
+        }
+        val hsResult = ArtiNative.startOnionService(ONION_VIRTUAL_PORT, lastLocalPort)
+        if (hsResult != 0) {
+            fail("onion service start failed ($hsResult)")
+            return false
+        }
+        return true
+    }
+
+    private suspend fun awaitHostname(): String? = withTimeoutOrNull(ONION_HOSTNAME_TIMEOUT_MS) {
+        while (currentCoroutineContext().isActive) {
+            if (ArtiNative.isBootstrapped() == 1) {
+                Log.i(Citrine.TAG, "Built-in Tor bootstrapped")
+                if (!lastEnableHiddenService) return@withTimeoutOrNull ""
+                ArtiNative.getOnionHostname().takeIf { it.isNotBlank() }?.let { return@withTimeoutOrNull it }
+            }
+            delay(BOOTSTRAP_POLL_MS.milliseconds)
+        }
+        null
+    }
+
+    private fun publishHostname(hostname: String?) {
+        if (hostname == null) {
+            fail("onion hostname unavailable")
+            return
+        }
+        _state.value = State.Running(hostname)
+        if (hostname.isNotBlank() && Settings.onionHostname != hostname) {
+            Settings.onionHostname = hostname
+            LocalPreferences.saveSettingsToEncryptedStorage(Settings, appContext)
         }
     }
 

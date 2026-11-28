@@ -73,32 +73,41 @@ object ListImporter {
         }
 
         if (muteList != null) {
-            val publicPubs = pubkeysFromTags(muteList)
-            if (publicPubs.isNotEmpty()) lists.add(UserListEntry("mute_public", "Mute list (public)", publicPubs))
-            if (muteList.content.isNotBlank()) {
-                val priv = decryptPubkeys(signer, muteList.content, pubKey)
-                if (priv.isNotEmpty()) lists.add(UserListEntry("mute_private", "Mute list (private)", priv))
-            }
+            lists.addAll(muteListEntries(signer, muteList, pubKey))
         }
 
         for (ev in curations) {
-            val dTag = ev.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1) ?: continue
-            val publicPubs = pubkeysFromTags(ev)
-            val privPubs = if (ev.content.isNotBlank()) decryptPubkeys(signer, ev.content, pubKey) else emptyList()
-            val all = (publicPubs + privPubs).distinct()
-            if (all.isNotEmpty()) {
-                val name = ev.tags
-                    .firstOrNull { it.size > 1 && (it[0] == "title" || it[0] == "name") }
-                    ?.getOrNull(1)
-                    ?.takeIf { it.isNotBlank() }
-                    ?: dTag
-                lists.add(UserListEntry("curation_$dTag", "Curation: $name", all))
-            }
+            curationEntry(signer, ev, pubKey)?.let { lists.add(it) }
         }
 
         val allPubs = lists.flatMap { it.pubkeys }.toSet()
         val profiles = fetchProfiles(allPubs)
         return Result(lists, profiles)
+    }
+
+    private suspend fun muteListEntries(signer: NostrSignerExternal, muteList: Event, pubKey: String): List<UserListEntry> {
+        val entries = mutableListOf<UserListEntry>()
+        val publicPubs = pubkeysFromTags(muteList)
+        if (publicPubs.isNotEmpty()) entries.add(UserListEntry("mute_public", "Mute list (public)", publicPubs))
+        if (muteList.content.isNotBlank()) {
+            val priv = decryptPubkeys(signer, muteList.content, pubKey)
+            if (priv.isNotEmpty()) entries.add(UserListEntry("mute_private", "Mute list (private)", priv))
+        }
+        return entries
+    }
+
+    private suspend fun curationEntry(signer: NostrSignerExternal, ev: Event, pubKey: String): UserListEntry? {
+        val dTag = ev.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1) ?: return null
+        val publicPubs = pubkeysFromTags(ev)
+        val privPubs = if (ev.content.isNotBlank()) decryptPubkeys(signer, ev.content, pubKey) else emptyList()
+        val all = (publicPubs + privPubs).distinct()
+        if (all.isEmpty()) return null
+        val name = ev.tags
+            .firstOrNull { it.size > 1 && (it[0] == "title" || it[0] == "name") }
+            ?.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
+            ?: dTag
+        return UserListEntry("curation_$dTag", "Curation: $name", all)
     }
 
     private suspend fun fetchFirstEvent(kinds: List<Int>, pubKey: String): Event? {

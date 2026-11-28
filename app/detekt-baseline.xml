@@ -2,27 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$Settings.autoBackup &amp;&amp; Settings.autoBackupFolder.isNotBlank() &amp;&amp; Settings.lastBackup &lt; oneWeekAgo &amp;&amp; !Citrine.isImportingEvents</ID>
-    <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
-    <ID>CyclomaticComplexMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
-    <ID>CyclomaticComplexMethod:GroupState.kt:GroupState$fun applyMetadataTags: GroupState</ID>
-    <ID>CyclomaticComplexMethod:ListImporter.kt:ListImporter$suspend fun fetch: Result</ID>
-    <ID>CyclomaticComplexMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
-    <ID>CyclomaticComplexMethod:Nip29Handler.kt:Nip29Handler$private fun moderate: Nip29Result</ID>
-    <ID>CyclomaticComplexMethod:Nip29Handler.kt:Nip29Handler$suspend fun process: Nip29Result</ID>
-    <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$fun verifyNip98: String?</ID>
-    <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$private suspend fun dispatch: Any?</ID>
-    <ID>CyclomaticComplexMethod:TagDeduplicator.kt:TagDeduplicator$internal suspend fun cleanDao: Pair&lt;Int, Int&gt;?</ID>
-    <ID>CyclomaticComplexMethod:TorManager.kt:TorManager$private suspend fun run</ID>
-    <ID>LongMethod:EventRepository.kt:EventRepository$fun createQuery: Pair&lt;String, List&lt;Any&gt;&gt;</ID>
-    <ID>LongMethod:EventRepository.kt:EventRepository$internal suspend fun loadTagsByEvents: TagLoadResult</ID>
-    <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
-    <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun saveSettingsToEncryptedStorage</ID>
-    <ID>LongMethod:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
-    <ID>LongMethod:TorManager.kt:TorManager$private suspend fun run</ID>
-    <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$@SuppressLint("UnspecifiedRegisterReceiverFlag") override fun onCreate</ID>
-    <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$private fun buildForegroundNotification: ForegroundNotification</ID>
-    <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
     <ID>NoComments:AggregatorBatchFetch.kt:Calling subscribe() once per chunk with the same subId would overwrite the</ID>
     <ID>NoComments:AggregatorBatchFetch.kt:Issues a single subscription that asks each relay in [relayToAuthors] for kind-0 events</ID>
     <ID>NoComments:AggregatorBatchFetch.kt:Issues one subscription to all [relays] asking for kind-10002 events authored by any</ID>
@@ -494,17 +473,17 @@
     <ID>NoComments:ExportDatabaseUtils.kt:attached in bounded chunks by the same helper the REQ path uses. The whole</ID>
     <ID>NoComments:ExportDatabaseUtils.kt:id list and the 1,000-events-with-all-their-tags batches this replaces held</ID>
     <ID>NoComments:GroupDao.kt:Tombstones the group (blocks id reuse) and clears its membership and invites.</ID>
-    <ID>NoComments:GroupManager.kt:An Amber login/logout changes the relay identity; metadata signed by the</ID>
-    <ID>NoComments:GroupManager.kt:Monotonic created_at for relay-signed metadata so a regenerated 39xxx always</ID>
     <ID>NoComments:GroupManager.kt:The relay identity: the owner's key when configured (signed via the Amber</ID>
-    <ID>NoComments:GroupManager.kt:allowlists or rejected-kinds configuration.</ID>
     <ID>NoComments:GroupManager.kt:external signer), otherwise the relay's generated fallback key.</ID>
-    <ID>NoComments:GroupManager.kt:previous identity is a distinct addressable event that would linger next to</ID>
-    <ID>NoComments:GroupManager.kt:replaces the previous version even when several regens land in the same second.</ID>
-    <ID>NoComments:GroupManager.kt:shouldVerify=false: relay-signed events must not be blocked by the owner's</ID>
-    <ID>NoComments:GroupManager.kt:the fresh copies, so drop it once the new set is stored.</ID>
     <ID>NoComments:GroupState.kt:Group ids are relay-local random strings; cap length and charset so ids stay usable</ID>
     <ID>NoComments:GroupState.kt:in d-tags, naddr codes, and SQL without escaping surprises.</ID>
+    <ID>NoComments:GroupWrites.kt:An Amber login/logout changes the relay identity; metadata signed by the</ID>
+    <ID>NoComments:GroupWrites.kt:Monotonic created_at for relay-signed metadata so a regenerated 39xxx always</ID>
+    <ID>NoComments:GroupWrites.kt:allowlists or rejected-kinds configuration.</ID>
+    <ID>NoComments:GroupWrites.kt:previous identity is a distinct addressable event that would linger next to</ID>
+    <ID>NoComments:GroupWrites.kt:replaces the previous version even when several regens land in the same second.</ID>
+    <ID>NoComments:GroupWrites.kt:shouldVerify=false: relay-signed events must not be blocked by the owner's</ID>
+    <ID>NoComments:GroupWrites.kt:the fresh copies, so drop it once the new set is stored.</ID>
     <ID>NoComments:HomeScreen.kt:TODO: Replace this with a setup screen to allow automatic download in background</ID>
     <ID>NoComments:HttpClientManager.kt:Default OkHttp dispatcher caps in-flight Calls at 64 (5 per host), which throttles</ID>
     <ID>NoComments:HttpClientManager.kt:Fail closed: caller asked for proxied traffic but no proxy is up.</ID>
@@ -949,15 +928,5 @@
     <ID>NoComments:WebSocketServerService.kt:relay connect/disconnect. Updating the foreground-service notification that</ID>
     <ID>NoComments:WebSocketServerService.kt:requestCode is used to disambiguate each PendingIntent's extras, otherwise</ID>
     <ID>NoComments:WebSocketServerService.kt:the onion service go away even if the server shutdown times out.</ID>
-    <ID>ReturnCount:AuthGate.kt:AuthGate$fun check: Denial?</ID>
-    <ID>ReturnCount:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
-    <ID>ReturnCount:Nip29Handler.kt:Nip29Handler$suspend fun process: Nip29Result</ID>
-    <ID>ReturnCount:Nip86Handler.kt:Nip86Handler$fun verifyNip98: String?</ID>
-    <ID>ReturnCount:NsiteManager.kt:NsiteManager$private suspend fun downloadAndStore: Result&lt;NsiteInfo&gt;</ID>
-    <ID>ReturnCount:TorManager.kt:TorManager$private suspend fun run</ID>
-    <ID>ThrowsCount:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
-    <ID>TooManyFunctions:EventDao.kt:EventDao</ID>
-    <ID>TooManyFunctions:EventRepository.kt:EventRepository</ID>
-    <ID>TooManyFunctions:GroupManager.kt:GroupManager</ID>
   </CurrentIssues>
 </SmellBaseline>

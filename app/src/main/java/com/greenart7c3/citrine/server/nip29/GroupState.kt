@@ -66,24 +66,27 @@ data class GroupState(
      * event: `name`/`about`/`picture` value tags plus the marker flags `private`/`public`,
      * `closed`/`open`, `restricted`/`unrestricted` and `hidden`/`unhidden`.
      */
-    fun applyMetadataTags(tags: Array<Array<String>>): GroupState {
-        var state = this
-        tags.forEach { tag ->
-            when (tag.getOrNull(0)) {
-                "name" -> state = state.copy(name = tag.getOrNull(1) ?: "")
-                "about" -> state = state.copy(about = tag.getOrNull(1) ?: "")
-                "picture" -> state = state.copy(picture = tag.getOrNull(1) ?: "")
-                "private" -> state = state.copy(isPrivate = true)
-                "public" -> state = state.copy(isPrivate = false)
-                "closed" -> state = state.copy(isClosed = true)
-                "open" -> state = state.copy(isClosed = false)
-                "restricted" -> state = state.copy(isRestricted = true)
-                "unrestricted" -> state = state.copy(isRestricted = false)
-                "hidden" -> state = state.copy(isHidden = true)
-                "unhidden" -> state = state.copy(isHidden = false)
-            }
-        }
-        return state
+    fun applyMetadataTags(tags: Array<Array<String>>): GroupState = tags.fold(this) { state, tag ->
+        state.withValueTag(tag) ?: state.withFlagTag(tag) ?: state
+    }
+
+    private fun withValueTag(tag: Array<String>): GroupState? = when (tag.getOrNull(0)) {
+        "name" -> copy(name = tag.getOrNull(1) ?: "")
+        "about" -> copy(about = tag.getOrNull(1) ?: "")
+        "picture" -> copy(picture = tag.getOrNull(1) ?: "")
+        else -> null
+    }
+
+    private fun withFlagTag(tag: Array<String>): GroupState? = when (tag.getOrNull(0)) {
+        "private" -> copy(isPrivate = true)
+        "public" -> copy(isPrivate = false)
+        "closed" -> copy(isClosed = true)
+        "open" -> copy(isClosed = false)
+        "restricted" -> copy(isRestricted = true)
+        "unrestricted" -> copy(isRestricted = false)
+        "hidden" -> copy(isHidden = true)
+        "unhidden" -> copy(isHidden = false)
+        else -> null
     }
 
     /** Roles carried by a `["p", pubkey, role...]` tag, defaulting to plain membership. */
