@@ -119,9 +119,9 @@ private val settingsCategories = listOf(
 
 @Composable
 fun SettingsScreen(
-    modifier: Modifier = Modifier,
     navController: NavController,
     onApplyChanges: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val pokeyListener = LocalPokeyListener.current

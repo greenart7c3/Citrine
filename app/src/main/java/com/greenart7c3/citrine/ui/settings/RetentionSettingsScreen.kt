@@ -37,8 +37,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun RetentionSettingsScreen(
-    modifier: Modifier = Modifier,
     onApplyChanges: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -95,9 +95,10 @@ fun RetentionSettingsScreen(
                         description = R.string.delete_events_older_than_description,
                         selectedItems = deleteItems,
                         selectedIndex = olderThanTypeIndex,
-                    ) {
-                        olderThanTypeIndex = it
-                    }
+                        onSelect = {
+                            olderThanTypeIndex = it
+                        },
+                    )
                 }
 
                 stickyHeader {

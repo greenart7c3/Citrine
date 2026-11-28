@@ -74,6 +74,7 @@ fun copyToClipboard(scope: CoroutineScope, clipboard: Clipboard, text: String) {
 @Composable
 fun CitrineScaffold(
     storageHelper: StoragePickerHelper,
+    modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val appScope = LocalAppScope.current
@@ -83,6 +84,7 @@ fun CitrineScaffold(
     val destinationRoute = navBackStackEntry?.destination?.route ?: ""
 
     Scaffold(
+        modifier = modifier,
         bottomBar = {
             CitrineBottomBar(
                 destinationRoute = destinationRoute,

@@ -27,12 +27,13 @@ fun TagsSection(
     label: String,
     tags: Array<Array<String>>,
     onCopy: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tagsToShow = tags.take(10)
     val moreCount = tags.size - 10
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

@@ -42,11 +42,11 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun WebClientsSettingsScreen(
-    modifier: Modifier = Modifier,
     storageHelper: StoragePickerHelper,
     onApplyChanges: () -> Unit,
     onBrowseNsites: () -> Unit,
     onNsiteRelays: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

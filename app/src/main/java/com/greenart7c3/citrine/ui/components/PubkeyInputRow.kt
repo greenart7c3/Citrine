@@ -27,10 +27,11 @@ fun PubkeyInputRow(
     onValueChange: (TextFieldValue) -> Unit,
     onPaste: () -> Unit,
     onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
     label: String = "",
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OutlinedTextField(
@@ -65,9 +66,10 @@ fun PubkeyInputRow(
 fun PubkeyListItem(
     text: String,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

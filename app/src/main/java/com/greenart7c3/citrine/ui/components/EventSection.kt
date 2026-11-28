@@ -32,11 +32,12 @@ fun EventSection(
     label: String,
     displayValue: String,
     onCopy: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable {
                 expanded = !expanded

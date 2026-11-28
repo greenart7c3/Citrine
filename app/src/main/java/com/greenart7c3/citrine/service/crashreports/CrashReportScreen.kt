@@ -76,7 +76,7 @@ import kotlinx.coroutines.withContext
  * Amber (the developer can reply to their npub) or sends it from a throwaway key.
  */
 @Composable
-fun CrashReportScreen() {
+fun CrashReportScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val appScope = LocalAppScope.current
@@ -214,7 +214,7 @@ fun CrashReportScreen() {
 
     BackHandler(enabled = !sending) { forgetReport() }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

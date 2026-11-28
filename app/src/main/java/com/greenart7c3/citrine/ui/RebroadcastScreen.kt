@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -66,7 +67,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun RebroadcastScreen(
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
     viewModel: RebroadcastViewModel = viewModel(factory = RebroadcastViewModel.factory(LocalContext.current.applicationContext, LocalAppScope.current)),
 ) {
     val context = LocalContext.current
@@ -419,7 +420,7 @@ fun RebroadcastScreen(
 }
 
 @Composable
-private fun RebroadcastProgress(state: EventRebroadcaster.State) {
+private fun ColumnScope.RebroadcastProgress(state: EventRebroadcaster.State) {
     val statusText = when (state.status) {
         EventRebroadcaster.Status.RUNNING -> stringResource(R.string.rebroadcast_running)
         EventRebroadcaster.Status.FINISHED -> stringResource(R.string.rebroadcast_finished)

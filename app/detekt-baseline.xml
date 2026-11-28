@@ -4,16 +4,6 @@
   <CurrentIssues>
     <ID>ComplexCondition:CustomWebSocketServer.kt:CustomWebSocketServer$(filter.since == null || filter.since == 0) &amp;&amp; (filter.until == null || filter.until == 0) &amp;&amp; filter.limit == null</ID>
     <ID>ComplexCondition:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$Settings.autoBackup &amp;&amp; Settings.autoBackupFolder.isNotBlank() &amp;&amp; Settings.lastBackup &lt; oneWeekAgo &amp;&amp; !Citrine.isImportingEvents</ID>
-    <ID>ComposableParamOrder:BackupSettingsScreen.kt:@Composable fun BackupSettingsScreen</ID>
-    <ID>ComposableParamOrder:DatabaseInfo.kt:@Composable fun DatabaseInfo</ID>
-    <ID>ComposableParamOrder:DownloadYourEventsUserScreen.kt:@Composable fun RelayCard</ID>
-    <ID>ComposableParamOrder:IconRow.kt:@OptIn(ExperimentalFoundationApi::class) @Composable fun IconRow</ID>
-    <ID>ComposableParamOrder:RelayInfo.kt:@Composable fun RelayInfo</ID>
-    <ID>ComposableParamOrder:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
-    <ID>ComposableParamOrder:SwitchSettingRow.kt:@Composable fun SwitchSettingRow</ID>
-    <ID>ComposableParamOrder:TextSpinner.kt:@Composable fun &lt;T&gt; SpinnerSelectionDialog</ID>
-    <ID>ComposableParamOrder:TextSpinner.kt:@Composable fun SpinnerSelectionDialog</ID>
-    <ID>ComposableParamOrder:WebClientsSettingsScreen.kt:@Composable fun WebClientsSettingsScreen</ID>
     <ID>CyclomaticComplexMethod:AccessControlSettingsScreen.kt:@Composable fun AccessControlSettingsScreen</ID>
     <ID>CyclomaticComplexMethod:AggregatorSettingsScreen.kt:@Composable fun AggregatorSettingsScreen</ID>
     <ID>CyclomaticComplexMethod:BrowseNsitesScreen.kt:@Composable fun BrowseNsitesScreen</ID>
@@ -45,16 +35,6 @@
     <ID>CyclomaticComplexMethod:RelayInfoSettingsScreen.kt:@Composable fun RelayInfoSettingsScreen</ID>
     <ID>CyclomaticComplexMethod:TagDeduplicator.kt:TagDeduplicator$internal suspend fun cleanDao: Pair&lt;Int, Int&gt;?</ID>
     <ID>CyclomaticComplexMethod:TorManager.kt:TorManager$private suspend fun run</ID>
-    <ID>LambdaParameterEventTrailing:AccessControlSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:AggregatorSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:BackupSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:DownloadYourEventsUserScreen.kt:onClick: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:NetworkSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:Nip86SettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:RelayInfoSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:RetentionSettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:SettingsScreen.kt:onApplyChanges: () -&gt; Unit</ID>
-    <ID>LambdaParameterEventTrailing:WebClientsSettingsScreen.kt:onNsiteRelays: () -&gt; Unit</ID>
     <ID>LargeClass:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
     <ID>LargeClass:RelayAggregator.kt:RelayAggregator</ID>
     <ID>LongMethod:AccessControlSettingsScreen.kt:@Composable fun AccessControlSettingsScreen</ID>
@@ -96,32 +76,6 @@
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$private fun buildForegroundNotification: ForegroundNotification</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
     <ID>LongParameterList:StoragePickerHelper.kt:StoragePickerHelper</ID>
-    <ID>ModifierMissing:AddressRow.kt:@Composable fun AddressRow</ID>
-    <ID>ModifierMissing:CitrineBottomBar.kt:@Composable fun CitrineBottomBar</ID>
-    <ID>ModifierMissing:CitrineScaffold.kt:@SuppressLint("ConfigurationScreenWidthHeight") @Composable fun CitrineScaffold</ID>
-    <ID>ModifierMissing:CitrineTopAppBar.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun CitrineTopAppBar</ID>
-    <ID>ModifierMissing:CloseButton.kt:@Composable fun CloseButton</ID>
-    <ID>ModifierMissing:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
-    <ID>ModifierMissing:EventSection.kt:@Composable fun EventSection</ID>
-    <ID>ModifierMissing:IconRow.kt:@OptIn(ExperimentalFoundationApi::class) @Composable fun IconRow</ID>
-    <ID>ModifierMissing:LogcatScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun LogcatScreen</ID>
-    <ID>ModifierMissing:NsiteRow.kt:@Composable fun NsiteRow</ID>
-    <ID>ModifierMissing:PubkeyInputRow.kt:@Composable fun PubkeyInputRow</ID>
-    <ID>ModifierMissing:PubkeyInputRow.kt:@Composable fun PubkeyListItem</ID>
-    <ID>ModifierMissing:SettingsCommon.kt:@Composable fun EmptyListHint</ID>
-    <ID>ModifierMissing:SettingsCommon.kt:@Composable fun SectionHeader</ID>
-    <ID>ModifierMissing:SettingsCommon.kt:@Composable fun SettingsApplyBar</ID>
-    <ID>ModifierMissing:SettingsRow.kt:@Composable fun SettingsRow</ID>
-    <ID>ModifierMissing:SwitchSettingRow.kt:@Composable fun SwitchSettingRow</ID>
-    <ID>ModifierMissing:TagsSection.kt:@Composable fun TagsSection</ID>
-    <ID>ModifierMissing:TextSpinner.kt:@Composable fun SpinnerSelectionDialog</ID>
-    <ID>ModifierMissing:WebAppInput.kt:@Composable fun WebAppInput</ID>
-    <ID>ModifierMissing:WebAppRow.kt:@Composable fun WebAppRow</ID>
-    <ID>ModifierWithoutDefault:ContactsScreen.kt:modifier: Modifier</ID>
-    <ID>ModifierWithoutDefault:DownloadYourEventsUserScreen.kt:modifier: Modifier</ID>
-    <ID>ModifierWithoutDefault:HomeScreen.kt:modifier: Modifier</ID>
-    <ID>ModifierWithoutDefault:RebroadcastScreen.kt:modifier: Modifier</ID>
-    <ID>MultipleEmitters:RebroadcastScreen.kt:@Composable private fun RebroadcastProgress</ID>
     <ID>NestedBlockDepth:CustomWebSocketServer.kt:CustomWebSocketServer$suspend fun verifyEvent: VerificationResult</ID>
     <ID>NestedBlockDepth:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
     <ID>NoComments:AuthGate.kt:Early CLOSED for filters that explicitly target a managed private group's content</ID>

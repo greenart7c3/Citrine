@@ -254,8 +254,8 @@ fun SelectRelayModal(
 
 @Composable
 fun DownloadYourEventsUserScreen(
-    modifier: Modifier,
     navController: NavController,
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -465,9 +465,9 @@ fun DownloadYourEventsUserScreen(
 
 @Composable
 fun RelayCard(
-    modifier: Modifier = Modifier,
     relay: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
         modifier

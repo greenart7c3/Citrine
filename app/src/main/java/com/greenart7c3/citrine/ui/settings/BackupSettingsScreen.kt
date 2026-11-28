@@ -24,9 +24,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun BackupSettingsScreen(
-    modifier: Modifier = Modifier,
     storageHelper: StoragePickerHelper,
     onApplyChanges: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

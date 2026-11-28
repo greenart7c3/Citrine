@@ -24,12 +24,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogcatScreen(
-    logcatViewModel: LogcatViewModel = viewModel(factory = LogcatViewModel.factory(LocalContext.current.applicationContext)),
     onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    logcatViewModel: LogcatViewModel = viewModel(factory = LogcatViewModel.factory(LocalContext.current.applicationContext)),
 ) {
     val logMessages = logcatViewModel.logMessages.collectAsStateWithLifecycle()
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 navigationIcon = {

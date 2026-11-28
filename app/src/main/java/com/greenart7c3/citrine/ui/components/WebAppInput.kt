@@ -20,9 +20,10 @@ fun WebAppInput(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -20,9 +20,9 @@ import androidx.compose.ui.unit.dp
 import com.greenart7c3.citrine.R
 
 @Composable
-fun SectionHeader(title: String) {
+fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface),
     ) {
@@ -38,12 +38,12 @@ fun SectionHeader(title: String) {
 }
 
 @Composable
-fun EmptyListHint(text: String) {
+fun EmptyListHint(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 4.dp),
+        modifier = modifier.padding(vertical = 4.dp),
     )
 }
 
@@ -51,9 +51,10 @@ fun EmptyListHint(text: String) {
 fun SettingsApplyBar(
     enabled: Boolean,
     onApply: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),

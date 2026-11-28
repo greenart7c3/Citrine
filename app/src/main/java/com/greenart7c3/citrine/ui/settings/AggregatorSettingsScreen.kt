@@ -54,8 +54,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AggregatorSettingsScreen(
-    modifier: Modifier = Modifier,
     onApplyChanges: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

@@ -13,8 +13,8 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun RelayInfo(
-    modifier: Modifier = Modifier,
     connections: Int,
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier,

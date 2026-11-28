@@ -28,12 +28,13 @@ import kotlinx.coroutines.launch
 fun AddressRow(
     label: String,
     address: String,
+    modifier: Modifier = Modifier,
     color: Color = Color.Unspecified,
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
