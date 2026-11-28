@@ -43,24 +43,18 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.logs.Log
-import com.greenart7c3.citrine.service.EventDownloader
 import com.greenart7c3.citrine.service.EventRebroadcaster
 import com.greenart7c3.citrine.utils.KINDS_PRIVATE_EVENTS
-import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.displayUrl
-import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
-import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
 import com.vitorpamplona.quartz.nip19Bech32.toNpub
-import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.Hex
 import java.time.LocalDate
 import java.time.ZoneId
@@ -70,22 +64,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private data class RebroadcastRequest(
-    val relays: List<NormalizedRelayUrl>,
-    val authorPubKey: String?,
-    val kinds: Set<Int>,
-    val since: Long?,
-    val until: Long?,
-    val includePrivateKinds: Boolean,
-)
-
 @Composable
 fun RebroadcastScreen(
     modifier: Modifier,
+    viewModel: RebroadcastViewModel = viewModel(factory = RebroadcastViewModel.factory(LocalContext.current.applicationContext, LocalAppScope.current)),
 ) {
     val context = LocalContext.current
     val relayClient = LocalRelayClient.current
-    val appScope = LocalAppScope.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val state by EventRebroadcaster.state.collectAsStateWithLifecycle()
 
@@ -166,27 +151,7 @@ fun RebroadcastScreen(
         loadingUserRelays = true
         scope.launch(Dispatchers.IO) {
             try {
-                val database = AppDatabase.getDatabase(context)
-                val signer = NostrSignerInternal(KeyPair(pubKey = Hex.decode(author)))
-
-                var advertised = database.eventDao().getAdvertisedRelayList(author)?.toEvent() as? AdvertisedRelayListEvent
-                if (advertised == null) {
-                    advertised = EventDownloader.fetchAdvertisedRelayList(signer)
-                }
-                val found = mutableListOf<NormalizedRelayUrl>()
-                advertised?.writeRelays()?.forEach { url ->
-                    RelayUrlNormalizer.normalizeOrNull(url)?.let { found.add(it) }
-                }
-
-                if (found.isEmpty()) {
-                    var contactList = database.eventDao().getContactList(author)?.toEvent() as? ContactListEvent
-                    if (contactList == null) {
-                        contactList = EventDownloader.fetchContactList(signer)
-                    }
-                    contactList?.relays()?.forEach { relay ->
-                        RelayUrlNormalizer.normalizeOrNull(relay.key.url)?.let { found.add(it) }
-                    }
-                }
+                val found = viewModel.authorRelays(author)
 
                 withContext(Dispatchers.Main) {
                     if (found.isEmpty()) {
@@ -320,19 +285,7 @@ fun RebroadcastScreen(
                 TextButton(
                     onClick = {
                         pendingRequest = null
-                        val database = AppDatabase.getDatabase(context)
-                        Citrine.cancelJob()
-                        Citrine.job = appScope.launch(Dispatchers.IO) {
-                            EventRebroadcaster.rebroadcast(
-                                database = database,
-                                relays = request.relays,
-                                authorPubKey = request.authorPubKey,
-                                kinds = request.kinds,
-                                since = request.since,
-                                until = request.until,
-                                includePrivateKinds = request.includePrivateKinds,
-                            )
-                        }
+                        viewModel.rebroadcast(request)
                     },
                 ) {
                     Text(stringResource(R.string.yes))

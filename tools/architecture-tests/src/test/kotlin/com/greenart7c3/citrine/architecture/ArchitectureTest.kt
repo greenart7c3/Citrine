@@ -121,10 +121,8 @@ class ArchitectureTest {
 
         val databaseInUi = setOf(
             "ui/CitrineScaffold.kt",
-            "ui/ContactsScreen.kt",
             "ui/DownloadYourEventsUserScreen.kt",
             "ui/HomeScreen.kt",
-            "ui/RebroadcastScreen.kt",
         )
 
         val contextCitrineUsers = setOf(
