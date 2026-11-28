@@ -120,9 +120,7 @@ class ArchitectureTest {
         val databaseOrDaoCallEvenWithoutImport = Regex("""\.(\w*D|d)aos?\(|\bget(History|Log)?Database\(""")
 
         val databaseInUi = setOf(
-            "ui/CitrineScaffold.kt",
             "ui/DownloadYourEventsUserScreen.kt",
-            "ui/HomeScreen.kt",
         )
 
         val contextCitrineUsers = setOf(

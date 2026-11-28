@@ -34,13 +34,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.paging.LoadState
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.EventPagingSource
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.ui.components.CitrineBottomBar
 import com.greenart7c3.citrine.ui.components.CitrineTopAppBar
 import com.greenart7c3.citrine.ui.components.DatabaseInfo
@@ -137,26 +132,13 @@ fun CitrineScaffold(
                 arguments = listOf(navArgument("kind") { type = NavType.IntType }),
                 content = {
                     it.arguments?.getInt("kind")?.let { kind ->
-                        val context = LocalContext.current
-                        val database = AppDatabase.getDatabase(context)
                         val clipboard = LocalClipboard.current
-
-                        val pager = Pager(
-                            config = PagingConfig(
-                                pageSize = 20,
-                                initialLoadSize = 40,
-                                prefetchDistance = 5,
-                                enablePlaceholders = false,
-                            ),
-                            pagingSourceFactory = {
-                                EventPagingSource(
-                                    dao = database.eventDao(),
-                                    kind = kind,
-                                )
-                            },
+                        val feedViewModel = viewModel<FeedViewModel>(
+                            key = "feed-$kind",
+                            factory = FeedViewModel.factory(appContext, kind),
                         )
 
-                        val events = pager.flow.collectAsLazyPagingItems()
+                        val events = feedViewModel.events.collectAsLazyPagingItems()
 
                         LazyColumn(
                             modifier = Modifier
@@ -164,10 +146,7 @@ fun CitrineScaffold(
                                 .padding(padding),
                         ) {
                             items(events.itemCount) { index ->
-                                val event = events[index]
-                                event?.let { eventWithTags ->
-                                    val event = eventWithTags.toEvent()
-
+                                events[index]?.let { event ->
                                     Card(
                                         modifier = Modifier
                                             .padding(16.dp),

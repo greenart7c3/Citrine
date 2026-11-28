@@ -459,13 +459,7 @@
     <ID>NoComments:GroupManager.kt:the fresh copies, so drop it once the new set is stored.</ID>
     <ID>NoComments:GroupState.kt:Group ids are relay-local random strings; cap length and charset so ids stay usable</ID>
     <ID>NoComments:GroupState.kt:in d-tags, naddr codes, and SQL without escaping surprises.</ID>
-    <ID>NoComments:HomeScreen.kt:Stop the aggregator before wiping the database so its listener</ID>
     <ID>NoComments:HomeScreen.kt:TODO: Replace this with a setup screen to allow automatic download in background</ID>
-    <ID>NoComments:HomeScreen.kt:The cache the aggregator reuses on restart lives in the DB we just</ID>
-    <ID>NoComments:HomeScreen.kt:afterwards if the setting is still enabled.</ID>
-    <ID>NoComments:HomeScreen.kt:can't ingest new events into tables we're clearing. Restart it</ID>
-    <ID>NoComments:HomeScreen.kt:cold-start network fetch instead of reusing a now-empty cache.</ID>
-    <ID>NoComments:HomeScreen.kt:wiped. Reset the sync marker so the next refresh does a full</ID>
     <ID>NoComments:HttpClientManager.kt:Default OkHttp dispatcher caps in-flight Calls at 64 (5 per host), which throttles</ID>
     <ID>NoComments:HttpClientManager.kt:Fail closed: caller asked for proxied traffic but no proxy is up.</ID>
     <ID>NoComments:HttpClientManager.kt:Give it room for the full fan-out; long-lived WebSocket upgrades each hold a slot.</ID>

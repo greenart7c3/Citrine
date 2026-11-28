@@ -196,7 +196,12 @@ which opens the database from its installed context. `Nip86SettingsScreen`:
 `ContactsScreen`: `ContactsViewModel` loads the stored contact lists and the
 outbox relay list. `RebroadcastScreen`: `RebroadcastViewModel` finds the author's
 relays (the stored NIP-65 list, else fetched, else the contact list's relays) and
-starts the rebroadcast job on the app scope.
+starts the rebroadcast job on the app scope. `HomeScreen`: `HomeViewModel` opens
+the database itself for export and import, wipes it (`deleteAllEvents`, stopping
+and restarting the aggregator around it) and exposes the upgrade flag. The
+per-kind event list in `CitrineScaffold`: `FeedViewModel` owns the `Pager`
+(cached in its scope, so it is no longer rebuilt on every recomposition) and
+hands the screen `Event`s.
 
 ### 4. Split the large server and service files
 
