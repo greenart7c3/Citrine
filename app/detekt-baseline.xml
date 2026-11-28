@@ -31,7 +31,6 @@
     <ID>CyclomaticComplexMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
     <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
     <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
-    <ID>CyclomaticComplexMethod:RelayInfoSettingsScreen.kt:@Composable fun RelayInfoSettingsScreen</ID>
     <ID>CyclomaticComplexMethod:TagDeduplicator.kt:TagDeduplicator$internal suspend fun cleanDao: Pair&lt;Int, Int&gt;?</ID>
     <ID>CyclomaticComplexMethod:TorManager.kt:TorManager$private suspend fun run</ID>
     <ID>LargeClass:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
@@ -57,16 +56,12 @@
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun saveSettingsToEncryptedStorage</ID>
     <ID>LongMethod:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
-    <ID>LongMethod:NetworkSettingsScreen.kt:@Composable fun NetworkSettingsScreen</ID>
     <ID>LongMethod:Nip86SettingsScreen.kt:@Composable fun Nip86SettingsScreen</ID>
     <ID>LongMethod:NsiteRelaysSettingsScreen.kt:@Composable fun NsiteRelaysSettingsScreen</ID>
     <ID>LongMethod:NsiteRow.kt:@Composable fun NsiteRow</ID>
     <ID>LongMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
     <ID>LongMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
     <ID>LongMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
-    <ID>LongMethod:RelayInfoSettingsScreen.kt:@Composable fun RelayInfoSettingsScreen</ID>
-    <ID>LongMethod:RetentionSettingsScreen.kt:@Composable fun RetentionSettingsScreen</ID>
-    <ID>LongMethod:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
     <ID>LongMethod:TorManager.kt:TorManager$private suspend fun run</ID>
     <ID>LongMethod:WebClientsSettingsScreen.kt:@Composable fun WebClientsSettingsScreen</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$@SuppressLint("UnspecifiedRegisterReceiverFlag") override fun onCreate</ID>

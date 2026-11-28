@@ -194,6 +194,15 @@ around `HomeScreen`, whose default `viewModel(...)` then resolves the same insta
 so the ViewModel is never forwarded (the Home route's back-stack entry would
 otherwise own a second one, since the bottom bar pops it on every tab switch).
 
+`SettingsScreen`, `NetworkSettingsScreen`, `RelayInfoSettingsScreen` and
+`RetentionSettingsScreen`: a `…ViewModel` each holds the form's state, initialised
+from `Settings` as before, and runs its apply logic at the same moments; the screens
+keep the toasts, clipboard and signer launchers. `SettingsScreen` lays out section
+composables; the three list screens use private `LazyListScope` item builders
+(`relaySwitchItems`, `connectionItems`, `preservedKindsItems`, …), since
+`stickyHeader` needs that scope and a composable wrapper would merge the items.
+Unsaved edits now survive a configuration change.
+
 ### 3. Keep `ui/` off the database (done)
 
 Move each screen's loading and writing into its ViewModel and hand the screen
