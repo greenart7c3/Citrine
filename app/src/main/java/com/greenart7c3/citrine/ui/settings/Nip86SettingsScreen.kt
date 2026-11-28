@@ -3,12 +3,14 @@
 package com.greenart7c3.citrine.ui.settings
 
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -21,25 +23,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.greenart7c3.citrine.R
 import com.greenart7c3.citrine.server.Settings
-import com.greenart7c3.citrine.service.LocalPreferences
 import com.greenart7c3.citrine.ui.components.PubkeyInputRow
 import com.greenart7c3.citrine.ui.components.PubkeyListItem
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-
-private val EVENT_ID_REGEX = Regex("^[0-9a-f]{64}$")
 
 @Composable
 fun Nip86SettingsScreen(
@@ -47,223 +40,164 @@ fun Nip86SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: Nip86SettingsViewModel = viewModel(factory = Nip86SettingsViewModel.factory(LocalContext.current.applicationContext)),
 ) {
-    var isLoading by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val clipboardManager = LocalClipboard.current
+    val paste = rememberClipboardPaste()
     val invalidKeyMsg = stringResource(R.string.invalid_key)
     val invalidEventIdMsg = stringResource(R.string.invalid_event_id)
     val invalidIpMsg = stringResource(R.string.invalid_ip)
 
     Surface(modifier) {
-        var bannedPubKeys by remember { mutableStateOf(Settings.bannedPubKeys.toMap()) }
-        var bannedEventIds by remember { mutableStateOf(Settings.bannedEventIds.toMap()) }
-        var blockedIps by remember { mutableStateOf(Settings.blockedIps.toMap()) }
-
-        var bannedPubkeyInput by remember { mutableStateOf(TextFieldValue("")) }
-        var bannedEventInput by remember { mutableStateOf(TextFieldValue("")) }
-        var blockedIpInput by remember { mutableStateOf(TextFieldValue("")) }
-
-        // Pubkeys the user opted to purge from the database. Deletion runs on
-        // Apply, so backing out of the screen without applying deletes nothing.
-        var pubkeysToPurge by remember { mutableStateOf(setOf<String>()) }
         var purgeDialogPubkey by remember { mutableStateOf<String?>(null) }
-
-        val applyChanges = {
-            scope.launch(Dispatchers.IO) {
-                isLoading = true
-                Settings.bannedPubKeys = java.util.concurrent.ConcurrentHashMap(bannedPubKeys)
-                Settings.bannedEventIds = java.util.concurrent.ConcurrentHashMap(bannedEventIds)
-                Settings.blockedIps = java.util.concurrent.ConcurrentHashMap(blockedIps)
-                LocalPreferences.saveSettingsToEncryptedStorage(Settings, context)
-                viewModel.purgeEventsOf(pubkeysToPurge.intersect(bannedPubKeys.keys))
-                pubkeysToPurge = emptySet()
-                onApplyChanges()
-                delay(1500)
-                isLoading = false
-            }
-            Unit
-        }
-
-        val addBannedPubkey: (String) -> Boolean = { text ->
-            val key = text.toNostrKey()
-            if (key == null) {
-                Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
-                false
-            } else {
-                bannedPubKeys = bannedPubKeys + (key to "")
-                purgeDialogPubkey = key
-                true
-            }
-        }
-        val addBannedEvent: (String) -> Boolean = { text ->
-            val id = text.trim().lowercase()
-            if (!EVENT_ID_REGEX.matches(id)) {
-                Toast.makeText(context, invalidEventIdMsg, Toast.LENGTH_SHORT).show()
-                false
-            } else {
-                bannedEventIds = bannedEventIds + (id to "")
-                true
-            }
-        }
-        val addBlockedIp: (String) -> Boolean = { text ->
-            val ip = text.trim()
-            if (!isIpValid(ip)) {
-                Toast.makeText(context, invalidIpMsg, Toast.LENGTH_SHORT).show()
-                false
-            } else {
-                blockedIps = blockedIps + (ip to "")
-                true
-            }
-        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (Settings.ownerPubkey.isNotBlank()) {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            },
-                        ),
-                    ) {
-                        Text(
-                            text = stringResource(
-                                if (Settings.ownerPubkey.isNotBlank()) {
-                                    R.string.nip86_status_enabled
-                                } else {
-                                    R.string.nip86_status_disabled
-                                },
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    }
-                }
-
-                stickyHeader {
-                    SectionHeader(stringResource(R.string.banned_pubkeys))
-                }
-                item {
-                    PubkeyInputRow(
-                        value = bannedPubkeyInput,
-                        onValueChange = { bannedPubkeyInput = it },
-                        onPaste = {
-                            scope.launch {
-                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                                bannedPubkeyInput = TextFieldValue(text)
-                                if (addBannedPubkey(text)) bannedPubkeyInput = TextFieldValue("")
-                            }
-                        },
-                        onAdd = {
-                            if (addBannedPubkey(bannedPubkeyInput.text)) bannedPubkeyInput = TextFieldValue("")
-                        },
-                    )
-                }
-                if (bannedPubKeys.isEmpty()) {
-                    item {
-                        EmptyListHint(stringResource(R.string.no_banned_pubkeys_hint))
-                    }
-                }
-                items(bannedPubKeys.toList()) { (pubkey, reason) ->
-                    PubkeyListItem(
-                        text = if (reason.isBlank()) pubkey.toShortenHex() else "${pubkey.toShortenHex()} — $reason",
-                        onDelete = { bannedPubKeys = bannedPubKeys - pubkey },
-                    )
-                }
-
-                stickyHeader {
-                    SectionHeader(stringResource(R.string.banned_events))
-                }
-                item {
-                    PubkeyInputRow(
-                        value = bannedEventInput,
-                        onValueChange = { bannedEventInput = it },
-                        onPaste = {
-                            scope.launch {
-                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                                bannedEventInput = TextFieldValue(text)
-                                if (addBannedEvent(text)) bannedEventInput = TextFieldValue("")
-                            }
-                        },
-                        onAdd = {
-                            if (addBannedEvent(bannedEventInput.text)) bannedEventInput = TextFieldValue("")
-                        },
-                    )
-                }
-                if (bannedEventIds.isEmpty()) {
-                    item {
-                        EmptyListHint(stringResource(R.string.no_banned_events_hint))
-                    }
-                }
-                items(bannedEventIds.toList()) { (id, reason) ->
-                    PubkeyListItem(
-                        text = if (reason.isBlank()) id.toShortenHex() else "${id.toShortenHex()} — $reason",
-                        onDelete = { bannedEventIds = bannedEventIds - id },
-                    )
-                }
-
-                stickyHeader {
-                    SectionHeader(stringResource(R.string.blocked_ips))
-                }
-                item {
-                    PubkeyInputRow(
-                        value = blockedIpInput,
-                        onValueChange = { blockedIpInput = it },
-                        onPaste = {
-                            scope.launch {
-                                val text = clipboardManager.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString() ?: return@launch
-                                blockedIpInput = TextFieldValue(text)
-                                if (addBlockedIp(text)) blockedIpInput = TextFieldValue("")
-                            }
-                        },
-                        onAdd = {
-                            if (addBlockedIp(blockedIpInput.text)) blockedIpInput = TextFieldValue("")
-                        },
-                    )
-                }
-                if (blockedIps.isEmpty()) {
-                    item {
-                        EmptyListHint(stringResource(R.string.no_blocked_ips_hint))
-                    }
-                }
-                items(blockedIps.toList()) { (ip, reason) ->
-                    PubkeyListItem(
-                        text = if (reason.isBlank()) ip else "$ip — $reason",
-                        onDelete = { blockedIps = blockedIps - ip },
-                    )
-                }
+                nip86StatusItem()
+                banListItems(
+                    bannedPubKeys = viewModel.bannedPubKeys,
+                    bannedEventIds = viewModel.bannedEventIds,
+                    blockedIps = viewModel.blockedIps,
+                    paste = paste,
+                    onBannedPubkey = { key ->
+                        if (key == null) {
+                            Toast.makeText(context, invalidKeyMsg, Toast.LENGTH_SHORT).show()
+                        } else {
+                            purgeDialogPubkey = key
+                        }
+                    },
+                    onInvalidEventId = { Toast.makeText(context, invalidEventIdMsg, Toast.LENGTH_SHORT).show() },
+                    onInvalidIp = { Toast.makeText(context, invalidIpMsg, Toast.LENGTH_SHORT).show() },
+                )
             }
 
-            SettingsApplyBar(enabled = !isLoading, onApply = applyChanges)
+            SettingsApplyBar(enabled = !viewModel.isLoading, onApply = { viewModel.applyChanges(onApplyChanges) })
         }
 
         purgeDialogPubkey?.let { pubkey ->
-            AlertDialog(
-                onDismissRequest = { purgeDialogPubkey = null },
-                title = { Text(stringResource(R.string.delete_banned_pubkey_events_title)) },
-                text = { Text(stringResource(R.string.delete_banned_pubkey_events_message, pubkey.toShortenHex())) },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            pubkeysToPurge = pubkeysToPurge + pubkey
-                            purgeDialogPubkey = null
-                        },
-                    ) {
-                        Text(stringResource(R.string.yes))
-                    }
+            PurgeEventsDialog(
+                pubkey = pubkey,
+                onConfirm = {
+                    viewModel.purgeOnApply(pubkey)
+                    purgeDialogPubkey = null
                 },
-                dismissButton = {
-                    TextButton(onClick = { purgeDialogPubkey = null }) {
-                        Text(stringResource(R.string.no))
-                    }
-                },
+                onDismiss = { purgeDialogPubkey = null },
             )
         }
     }
+}
+
+private fun LazyListScope.nip86StatusItem() {
+    item {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (Settings.ownerPubkey.isNotBlank()) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
+            ),
+        ) {
+            Text(
+                text = stringResource(
+                    if (Settings.ownerPubkey.isNotBlank()) {
+                        R.string.nip86_status_enabled
+                    } else {
+                        R.string.nip86_status_disabled
+                    },
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+    }
+}
+
+private fun LazyListScope.banListItems(
+    bannedPubKeys: EditableBanList,
+    bannedEventIds: EditableBanList,
+    blockedIps: EditableBanList,
+    paste: (onText: (String) -> Unit) -> Unit,
+    onBannedPubkey: (String?) -> Unit,
+    onInvalidEventId: () -> Unit,
+    onInvalidIp: () -> Unit,
+) {
+    banSectionItems(
+        header = R.string.banned_pubkeys,
+        emptyHint = R.string.no_banned_pubkeys_hint,
+        list = bannedPubKeys,
+        paste = paste,
+        onAdded = onBannedPubkey,
+    )
+    banSectionItems(
+        header = R.string.banned_events,
+        emptyHint = R.string.no_banned_events_hint,
+        list = bannedEventIds,
+        paste = paste,
+        onAdded = { if (it == null) onInvalidEventId() },
+    )
+    banSectionItems(
+        header = R.string.blocked_ips,
+        emptyHint = R.string.no_blocked_ips_hint,
+        list = blockedIps,
+        paste = paste,
+        onAdded = { if (it == null) onInvalidIp() },
+        displayKey = { it },
+    )
+}
+
+private fun LazyListScope.banSectionItems(
+    @StringRes header: Int,
+    @StringRes emptyHint: Int,
+    list: EditableBanList,
+    paste: (onText: (String) -> Unit) -> Unit,
+    onAdded: (String?) -> Unit,
+    displayKey: (String) -> String = { it.toShortenHex() },
+) {
+    stickyHeader {
+        SectionHeader(stringResource(header))
+    }
+    item {
+        PubkeyInputRow(
+            value = list.input,
+            onValueChange = { list.input = it },
+            onPaste = { paste { onAdded(list.paste(it)) } },
+            onAdd = { onAdded(list.add()) },
+        )
+    }
+    if (list.entries.isEmpty()) {
+        item {
+            EmptyListHint(stringResource(emptyHint))
+        }
+    }
+    items(list.entries.toList()) { (key, reason) ->
+        PubkeyListItem(
+            text = if (reason.isBlank()) displayKey(key) else "${displayKey(key)} — $reason",
+            onDelete = { list.remove(key) },
+        )
+    }
+}
+
+@Composable
+private fun PurgeEventsDialog(
+    pubkey: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.delete_banned_pubkey_events_title)) },
+        text = { Text(stringResource(R.string.delete_banned_pubkey_events_message, pubkey.toShortenHex())) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.yes))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.no))
+            }
+        },
+    )
 }

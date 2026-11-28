@@ -4,9 +4,6 @@
   <CurrentIssues>
     <ID>ComplexCondition:CustomWebSocketServer.kt:CustomWebSocketServer$(filter.since == null || filter.since == 0) &amp;&amp; (filter.until == null || filter.until == 0) &amp;&amp; filter.limit == null</ID>
     <ID>ComplexCondition:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$Settings.autoBackup &amp;&amp; Settings.autoBackupFolder.isNotBlank() &amp;&amp; Settings.lastBackup &lt; oneWeekAgo &amp;&amp; !Citrine.isImportingEvents</ID>
-    <ID>CyclomaticComplexMethod:AccessControlSettingsScreen.kt:@Composable fun AccessControlSettingsScreen</ID>
-    <ID>CyclomaticComplexMethod:AggregatorSettingsScreen.kt:@Composable fun AggregatorSettingsScreen</ID>
-    <ID>CyclomaticComplexMethod:BrowseNsitesScreen.kt:@Composable fun BrowseNsitesScreen</ID>
     <ID>CyclomaticComplexMethod:Citrine.kt:Citrine$suspend fun eventsToDelete</ID>
     <ID>CyclomaticComplexMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
     <ID>CyclomaticComplexMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
@@ -27,7 +24,6 @@
     <ID>CyclomaticComplexMethod:Nip29Handler.kt:Nip29Handler$suspend fun process: Nip29Result</ID>
     <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$fun verifyNip98: String?</ID>
     <ID>CyclomaticComplexMethod:Nip86Handler.kt:Nip86Handler$private suspend fun dispatch: Any?</ID>
-    <ID>CyclomaticComplexMethod:Nip86SettingsScreen.kt:@Composable fun Nip86SettingsScreen</ID>
     <ID>CyclomaticComplexMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
     <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
     <ID>CyclomaticComplexMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
@@ -35,9 +31,6 @@
     <ID>CyclomaticComplexMethod:TorManager.kt:TorManager$private suspend fun run</ID>
     <ID>LargeClass:CustomWebSocketServer.kt:CustomWebSocketServer</ID>
     <ID>LargeClass:RelayAggregator.kt:RelayAggregator</ID>
-    <ID>LongMethod:AccessControlSettingsScreen.kt:@Composable fun AccessControlSettingsScreen</ID>
-    <ID>LongMethod:AggregatorSettingsScreen.kt:@Composable fun AggregatorSettingsScreen</ID>
-    <ID>LongMethod:BrowseNsitesScreen.kt:@Composable fun BrowseNsitesScreen</ID>
     <ID>LongMethod:CitrineContentProvider.kt:CitrineContentProvider$private fun insertEvent: Uri?</ID>
     <ID>LongMethod:ContactsScreen.kt:@Composable fun ContactsScreen</ID>
     <ID>LongMethod:CrashReportScreen.kt:@Composable fun CrashReportScreen</ID>
@@ -56,14 +49,11 @@
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun loadSettingsFromEncryptedStorage</ID>
     <ID>LongMethod:LocalPreferences.kt:LocalPreferences$fun saveSettingsToEncryptedStorage</ID>
     <ID>LongMethod:NegentropyHandler.kt:NegentropyHandler$suspend fun handleOpen</ID>
-    <ID>LongMethod:Nip86SettingsScreen.kt:@Composable fun Nip86SettingsScreen</ID>
-    <ID>LongMethod:NsiteRelaysSettingsScreen.kt:@Composable fun NsiteRelaysSettingsScreen</ID>
     <ID>LongMethod:NsiteRow.kt:@Composable fun NsiteRow</ID>
     <ID>LongMethod:RebroadcastScreen.kt:@Composable fun RebroadcastScreen</ID>
     <ID>LongMethod:RelayAggregator.kt:RelayAggregator$@Synchronized fun start</ID>
     <ID>LongMethod:RelayAggregator.kt:RelayAggregator$private suspend fun refreshAndSubscribe: Boolean</ID>
     <ID>LongMethod:TorManager.kt:TorManager$private suspend fun run</ID>
-    <ID>LongMethod:WebClientsSettingsScreen.kt:@Composable fun WebClientsSettingsScreen</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$@SuppressLint("UnspecifiedRegisterReceiverFlag") override fun onCreate</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService$private fun buildForegroundNotification: ForegroundNotification</ID>
     <ID>LongMethod:WebSocketServerService.kt:WebSocketServerService.&lt;no name provided&gt;$override fun run</ID>
@@ -463,8 +453,6 @@
     <ID>NoComments:Nip86Handler.kt:NIP-98 verification</ID>
     <ID>NoComments:Nip86Handler.kt:clients that omit the root slash in the NIP-98 `u` tag still match.</ID>
     <ID>NoComments:Nip86Handler.kt:countByKind returns a Flow — sample the first emission.</ID>
-    <ID>NoComments:Nip86SettingsScreen.kt:Apply, so backing out of the screen without applying deletes nothing.</ID>
-    <ID>NoComments:Nip86SettingsScreen.kt:Pubkeys the user opted to purge from the database. Deletion runs on</ID>
     <ID>NoComments:NsiteManager.kt:"nsite" + first 16 hex chars of sha256(address): a deterministic, hostname-safe slug.</ID>
     <ID>NoComments:NsiteManager.kt:Builds a Blossom URL for an icon, or null when there's no icon hash.</ID>
     <ID>NoComments:NsiteManager.kt:Common raster icon filenames, in priority order. Coil can't decode .ico/.svg, so those</ID>
