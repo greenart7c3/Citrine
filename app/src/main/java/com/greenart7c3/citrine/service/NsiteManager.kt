@@ -488,30 +488,37 @@ object NsiteManager {
         if (servers.isEmpty()) return Result.failure(IllegalStateException("No blossom servers found"))
 
         val folderName = folderNameFor(address)
+        return installFolder(folderName, paths, servers, onProgress).map {
+            val info = NsiteInfo(
+                address = address,
+                pubkey = pubkey,
+                kind = kind,
+                dTag = dTag,
+                displayName = displayName,
+                description = descriptionOf(manifest),
+                folderName = folderName,
+                aggregateHash = aggregateHashOf(manifest),
+                autoUpdate = autoUpdate,
+                lastChecked = TimeUtils.now(),
+            )
+            upsert(info)
+            CustomWebSocketService.server?.startNsiteServer(info)
+            info
+        }
+    }
+
+    private fun installFolder(
+        folderName: String,
+        paths: List<Pair<String, String>>,
+        servers: List<String>,
+        onProgress: ((downloaded: Int, total: Int) -> Unit)?,
+    ): Result<Unit> {
         val rootDir = File(context.filesDir, "nsites/$folderName")
         val tmpDir = File(context.filesDir, "nsites/$folderName.tmp")
         tmpDir.deleteRecursively()
         tmpDir.mkdirs()
 
-        try {
-            val tmpCanonical = tmpDir.canonicalFile
-            onProgress?.invoke(0, paths.size)
-            paths.forEachIndexed { index, (urlPath, sha256) ->
-                val outFile = File(tmpCanonical, urlPath.trimStart('/')).canonicalFile
-                if (outFile.path != tmpCanonical.path && !outFile.path.startsWith(tmpCanonical.path + File.separator)) {
-                    return Result.failure(IllegalStateException("Illegal path in manifest: $urlPath"))
-                }
-                val bytes = downloadBlob(servers, sha256)
-                    ?: return Result.failure(IllegalStateException("Failed to download $urlPath"))
-                outFile.parentFile?.mkdirs()
-                outFile.writeBytes(bytes)
-                onProgress?.invoke(index + 1, paths.size)
-            }
-        } catch (e: Exception) {
-            tmpDir.deleteRecursively()
-            if (e is CancellationException) throw e
-            return Result.failure(e)
-        }
+        downloadInto(tmpDir, paths, servers, onProgress)?.let { return Result.failure(it) }
 
         // Swap tmp into place.
         rootDir.deleteRecursively()
@@ -519,23 +526,43 @@ object NsiteManager {
             tmpDir.deleteRecursively()
             return Result.failure(IllegalStateException("Failed to finalize nsite folder"))
         }
-
-        val info = NsiteInfo(
-            address = address,
-            pubkey = pubkey,
-            kind = kind,
-            dTag = dTag,
-            displayName = displayName,
-            description = descriptionOf(manifest),
-            folderName = folderName,
-            aggregateHash = aggregateHashOf(manifest),
-            autoUpdate = autoUpdate,
-            lastChecked = TimeUtils.now(),
-        )
-        upsert(info)
-        CustomWebSocketService.server?.startNsiteServer(info)
-        return Result.success(info)
+        return Result.success(Unit)
     }
+
+    private fun downloadInto(
+        tmpDir: File,
+        paths: List<Pair<String, String>>,
+        servers: List<String>,
+        onProgress: ((downloaded: Int, total: Int) -> Unit)?,
+    ): Throwable? {
+        try {
+            val tmpCanonical = tmpDir.canonicalFile
+            onProgress?.invoke(0, paths.size)
+            paths.forEachIndexed { index, (urlPath, sha256) ->
+                downloadFile(tmpCanonical, urlPath, sha256, servers)?.let { return it }
+                onProgress?.invoke(index + 1, paths.size)
+            }
+        } catch (e: Exception) {
+            tmpDir.deleteRecursively()
+            if (e is CancellationException) throw e
+            return e
+        }
+        return null
+    }
+
+    private fun downloadFile(tmpCanonical: File, urlPath: String, sha256: String, servers: List<String>): Throwable? {
+        val outFile = File(tmpCanonical, urlPath.trimStart('/')).canonicalFile
+        if (!isInside(outFile, tmpCanonical)) {
+            return IllegalStateException("Illegal path in manifest: $urlPath")
+        }
+        val bytes = downloadBlob(servers, sha256)
+            ?: return IllegalStateException("Failed to download $urlPath")
+        outFile.parentFile?.mkdirs()
+        outFile.writeBytes(bytes)
+        return null
+    }
+
+    private fun isInside(file: File, dir: File): Boolean = file.path == dir.path || file.path.startsWith(dir.path + File.separator)
 
     /** Downloads a blob, trying each server in order and verifying its sha256. */
     private fun downloadBlob(servers: List<String>, sha256: String): ByteArray? {

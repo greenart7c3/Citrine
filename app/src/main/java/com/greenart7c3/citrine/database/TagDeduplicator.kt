@@ -108,51 +108,61 @@ object TagDeduplicator {
      * key. Returns `(eventsRepaired, rowsRemoved)`, or `null` if deferred by an active import.
      */
     internal suspend fun cleanDao(dao: EventDao): Pair<Int, Int>? {
-        var eventsRepaired = 0
-        var rowsRemoved = 0
+        val tally = RepairTally()
 
         for (kind in PRIORITY_KINDS) {
-            var cursorCreatedAt = Long.MAX_VALUE
-            var cursorId = ""
-            while (true) {
-                currentCoroutineContext().ensureActive()
-                if (Citrine.isImportingEvents) return null
-                val page = dao.getIdsAndPubkeysByKindAfter(kind, cursorCreatedAt, cursorId, SCAN_PAGE_SIZE)
-                if (page.isEmpty()) break
-                val dupIds = dao.findEventIdsWithDuplicateTags(page.map { it.id })
-                for (eventId in dupIds) {
-                    val removed = deduplicateEvent(dao, eventId)
-                    if (removed > 0) {
-                        eventsRepaired++
-                        rowsRemoved += removed
-                    }
-                }
-                if (page.size < SCAN_PAGE_SIZE) break
-                cursorCreatedAt = page.last().createdAt
-                cursorId = page.last().id
-                yield()
-            }
+            if (!scanKind(dao, kind, tally)) return null
         }
 
+        if (!scanAllEvents(dao, tally)) return null
+
+        return tally.eventsRepaired to tally.rowsRemoved
+    }
+
+    private class RepairTally {
+        var eventsRepaired = 0
+        var rowsRemoved = 0
+    }
+
+    private suspend fun scanKind(dao: EventDao, kind: Int, tally: RepairTally): Boolean {
+        var cursorCreatedAt = Long.MAX_VALUE
+        var cursorId = ""
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            if (Citrine.isImportingEvents) return false
+            val page = dao.getIdsAndPubkeysByKindAfter(kind, cursorCreatedAt, cursorId, SCAN_PAGE_SIZE)
+            if (page.isEmpty()) break
+            repairAll(dao, dao.findEventIdsWithDuplicateTags(page.map { it.id }), tally)
+            if (page.size < SCAN_PAGE_SIZE) break
+            cursorCreatedAt = page.last().createdAt
+            cursorId = page.last().id
+            yield()
+        }
+        return true
+    }
+
+    private suspend fun scanAllEvents(dao: EventDao, tally: RepairTally): Boolean {
         var lastId = ""
         while (true) {
             currentCoroutineContext().ensureActive()
-            if (Citrine.isImportingEvents) return null
+            if (Citrine.isImportingEvents) return false
             val page = dao.getEventIdsAfter(lastId, SCAN_PAGE_SIZE)
             if (page.isEmpty()) break
-            val dupIds = dao.findEventIdsWithDuplicateTags(page)
-            for (eventId in dupIds) {
-                val removed = deduplicateEvent(dao, eventId)
-                if (removed > 0) {
-                    eventsRepaired++
-                    rowsRemoved += removed
-                }
-            }
+            repairAll(dao, dao.findEventIdsWithDuplicateTags(page), tally)
             if (page.size < SCAN_PAGE_SIZE) break
             lastId = page.last()
             yield()
         }
+        return true
+    }
 
-        return eventsRepaired to rowsRemoved
+    private suspend fun repairAll(dao: EventDao, dupIds: List<String>, tally: RepairTally) {
+        for (eventId in dupIds) {
+            val removed = deduplicateEvent(dao, eventId)
+            if (removed > 0) {
+                tally.eventsRepaired++
+                tally.rowsRemoved += removed
+            }
+        }
     }
 }

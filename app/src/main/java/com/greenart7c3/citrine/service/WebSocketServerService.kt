@@ -96,140 +96,186 @@ class WebSocketServerService : Service() {
         timer?.schedule(
             object : TimerTask() {
                 override fun run() {
-                    val nowMs = System.currentTimeMillis()
-                    if ((Citrine.job == null || Citrine.job?.isCompleted == true) && !Citrine.isImportingEvents) {
-                        if (lastBackupProgressText != null || Citrine.hasProgressNotification) {
-                            NotificationManagerCompat.from(citrine).cancel(2)
-                            lastBackupProgressText = null
-                            Citrine.hasProgressNotification = false
-                        }
-                    }
-
-                    if (!Citrine.isImportingEvents) {
-                        val runAgeRetention = lastAgeRetentionMs == 0L || (nowMs - lastAgeRetentionMs) >= AGE_RETENTION_INTERVAL_MS
-                        if (runAgeRetention) {
-                            lastAgeRetentionMs = nowMs
-                        }
-                        citrine.applicationScope.launch {
-                            citrine.eventCleanup.eventsToDelete(database, runAgeRetention = runAgeRetention)
-                        }
-                    }
-
-                    if (lastLogTrimMs == 0L || (nowMs - lastLogTrimMs) >= LOG_TRIM_INTERVAL_MS) {
-                        lastLogTrimMs = nowMs
-                        citrine.applicationScope.launch {
-                            try {
-                                LogDatabase.getDatabase(this@WebSocketServerService)
-                                    .logDao()
-                                    .deleteOlderThan(System.currentTimeMillis() - ONE_WEEK_MILLIS)
-                            } catch (e: Exception) {
-                                if (e is CancellationException) throw e
-                                Log.e(Citrine.TAG, "Error deleting old logs", e)
-                            }
-                        }
-                    }
-
-                    val oneWeekAgo = TimeUtils.oneWeekAgo()
-                    if (Settings.autoBackup && Settings.autoBackupFolder.isNotBlank() && Settings.lastBackup < oneWeekAgo && !Citrine.isImportingEvents) {
-                        Citrine.isImportingEvents = true
-                        try {
-                            val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
-                            folder?.let {
-                                Log.d(Citrine.TAG, "Backing up database")
-
-                                Settings.lastBackup = TimeUtils.now()
-                                LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
-
-                                Citrine.job?.cancel()
-                                Citrine.job = citrine.applicationScope.launch(Dispatchers.IO) {
-                                    ExportDatabaseUtils.exportDatabase(
-                                        database = database,
-                                        context = this@WebSocketServerService,
-                                        folder = it,
-                                        deleteOldFiles = true,
-                                        onProgress = {
-                                            val notificationManager = NotificationManagerCompat.from(citrine)
-                                            if (it.isBlank()) {
-                                                notificationManager.cancel(2)
-                                                lastBackupProgressText = null
-                                                Citrine.hasProgressNotification = false
-                                            } else if (it != lastBackupProgressText) {
-                                                val channel = NotificationChannelCompat.Builder(
-                                                    "citrine",
-                                                    NotificationManagerCompat.IMPORTANCE_DEFAULT,
-                                                )
-                                                    .setName("Citrine")
-                                                    .build()
-
-                                                notificationManager.createNotificationChannel(channel)
-
-                                                val copyIntent = Intent(citrine, ClipboardReceiver::class.java)
-                                                copyIntent.putExtra("job", "cancel")
-
-                                                val copyPendingIntent = PendingIntent.getBroadcast(
-                                                    citrine,
-                                                    0,
-                                                    copyIntent,
-                                                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-                                                )
-
-                                                val notification = NotificationCompat.Builder(citrine, "citrine")
-                                                    .setContentTitle("Citrine")
-                                                    .setContentText(it)
-                                                    .setSmallIcon(R.drawable.ic_notification)
-                                                    .setOnlyAlertOnce(true)
-                                                    .addAction(R.drawable.ic_launcher_background, citrine.getString(R.string.cancel), copyPendingIntent)
-                                                    .build()
-
-                                                if (ActivityCompat.checkSelfPermission(citrine, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                                                    notificationManager.notify(2, notification)
-                                                    lastBackupProgressText = it
-                                                    Citrine.hasProgressNotification = true
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                            }
-                            Citrine.isImportingEvents = false
-                        } catch (e: Exception) {
-                            Citrine.isImportingEvents = false
-                            if (e is CancellationException) throw e
-                            Log.e(Citrine.TAG, "Error backing up database", e)
-                        }
-                    }
-
-                    // Daily nsite update check. Gated by lastNsiteCheck like the weekly backup,
-                    // and persisted before the async work so the next maintenance tick doesn't re-trigger.
-                    if (!Citrine.isImportingEvents && Settings.nsites.isNotEmpty()) {
-                        val oneDayAgo = TimeUtils.now() - ONE_DAY_SECONDS
-                        if (Settings.lastNsiteCheck < oneDayAgo) {
-                            Settings.lastNsiteCheck = TimeUtils.now()
-                            LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
-                            citrine.applicationScope.launch {
-                                try {
-                                    val updates = NsiteManager.checkForUpdates()
-                                    updates.forEach { update ->
-                                        if (update.nsite.autoUpdate) {
-                                            NsiteManager.applyUpdate(update)
-                                        } else {
-                                            postNsiteUpdateNotification(update.nsite.address, update.nsite.displayName)
-                                        }
-                                    }
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    Log.e(Citrine.TAG, "Error checking nsite updates", e)
-                                }
-                            }
-                        }
-                    }
+                    runMaintenance(database)
                 }
             },
             0,
             MAINTENANCE_INTERVAL_MS,
         )
 
+        watchDatabaseUpgrade()
+
+        startRelayServer(database)
+
+        startOrStopTor()
+
+        if (Settings.relayAggregatorEnabled) {
+            RelayAggregator.start(database)
+        }
+
+        if (!Settings.duplicateTagsCleaned) {
+            scheduleDuplicateTagCleanup(database)
+        }
+
+        startForegroundWithRetries()
+
+        watchForegroundNotificationSources()
+    }
+
+    private fun runMaintenance(database: AppDatabase) {
+        val nowMs = System.currentTimeMillis()
+        if (isBackupIdle() && !Citrine.isImportingEvents) {
+            if (lastBackupProgressText != null || Citrine.hasProgressNotification) {
+                NotificationManagerCompat.from(citrine).cancel(2)
+                lastBackupProgressText = null
+                Citrine.hasProgressNotification = false
+            }
+        }
+
+        if (!Citrine.isImportingEvents) {
+            scheduleEventCleanup(database, nowMs)
+        }
+
+        if (lastLogTrimMs == 0L || (nowMs - lastLogTrimMs) >= LOG_TRIM_INTERVAL_MS) {
+            lastLogTrimMs = nowMs
+            scheduleLogTrim()
+        }
+
+        val oneWeekAgo = TimeUtils.oneWeekAgo()
+        if (isAutoBackupDue(oneWeekAgo)) {
+            startAutoBackup(database)
+        }
+
+        // Daily nsite update check. Gated by lastNsiteCheck like the weekly backup,
+        // and persisted before the async work so the next maintenance tick doesn't re-trigger.
+        if (!Citrine.isImportingEvents && Settings.nsites.isNotEmpty()) {
+            val oneDayAgo = TimeUtils.now() - ONE_DAY_SECONDS
+            if (Settings.lastNsiteCheck < oneDayAgo) {
+                Settings.lastNsiteCheck = TimeUtils.now()
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
+                scheduleNsiteUpdateCheck()
+            }
+        }
+    }
+
+    private fun isBackupIdle(): Boolean = Citrine.job == null || Citrine.job?.isCompleted == true
+
+    private fun isAutoBackupDue(oneWeekAgo: Long): Boolean = Settings.autoBackup && Settings.autoBackupFolder.isNotBlank() && Settings.lastBackup < oneWeekAgo && !Citrine.isImportingEvents
+
+    private fun scheduleEventCleanup(database: AppDatabase, nowMs: Long) {
+        val runAgeRetention = lastAgeRetentionMs == 0L || (nowMs - lastAgeRetentionMs) >= AGE_RETENTION_INTERVAL_MS
+        if (runAgeRetention) {
+            lastAgeRetentionMs = nowMs
+        }
+        citrine.applicationScope.launch {
+            citrine.eventCleanup.eventsToDelete(database, runAgeRetention = runAgeRetention)
+        }
+    }
+
+    private fun scheduleLogTrim() {
+        citrine.applicationScope.launch {
+            try {
+                LogDatabase.getDatabase(this@WebSocketServerService)
+                    .logDao()
+                    .deleteOlderThan(System.currentTimeMillis() - ONE_WEEK_MILLIS)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.e(Citrine.TAG, "Error deleting old logs", e)
+            }
+        }
+    }
+
+    private fun startAutoBackup(database: AppDatabase) {
+        Citrine.isImportingEvents = true
+        try {
+            val folder = DocumentFile.fromTreeUri(this@WebSocketServerService, Settings.autoBackupFolder.toUri())
+            folder?.let {
+                Log.d(Citrine.TAG, "Backing up database")
+
+                Settings.lastBackup = TimeUtils.now()
+                LocalPreferences.saveSettingsToEncryptedStorage(Settings, citrine)
+
+                Citrine.job?.cancel()
+                Citrine.job = citrine.applicationScope.launch(Dispatchers.IO) {
+                    ExportDatabaseUtils.exportDatabase(
+                        database = database,
+                        context = this@WebSocketServerService,
+                        folder = it,
+                        deleteOldFiles = true,
+                        onProgress = { progress -> showBackupProgress(progress) },
+                    )
+                }
+            }
+            Citrine.isImportingEvents = false
+        } catch (e: Exception) {
+            Citrine.isImportingEvents = false
+            if (e is CancellationException) throw e
+            Log.e(Citrine.TAG, "Error backing up database", e)
+        }
+    }
+
+    private fun showBackupProgress(progress: String) {
+        val notificationManager = NotificationManagerCompat.from(citrine)
+        if (progress.isBlank()) {
+            notificationManager.cancel(2)
+            lastBackupProgressText = null
+            Citrine.hasProgressNotification = false
+        } else if (progress != lastBackupProgressText) {
+            val channel = NotificationChannelCompat.Builder(
+                "citrine",
+                NotificationManagerCompat.IMPORTANCE_DEFAULT,
+            )
+                .setName("Citrine")
+                .build()
+
+            notificationManager.createNotificationChannel(channel)
+
+            val copyIntent = Intent(citrine, ClipboardReceiver::class.java)
+            copyIntent.putExtra("job", "cancel")
+
+            val copyPendingIntent = PendingIntent.getBroadcast(
+                citrine,
+                0,
+                copyIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+            )
+
+            val notification = NotificationCompat.Builder(citrine, "citrine")
+                .setContentTitle("Citrine")
+                .setContentText(progress)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setOnlyAlertOnce(true)
+                .addAction(R.drawable.ic_launcher_background, citrine.getString(R.string.cancel), copyPendingIntent)
+                .build()
+
+            if (ActivityCompat.checkSelfPermission(citrine, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                notificationManager.notify(2, notification)
+                lastBackupProgressText = progress
+                Citrine.hasProgressNotification = true
+            }
+        }
+    }
+
+    private fun scheduleNsiteUpdateCheck() {
+        citrine.applicationScope.launch {
+            try {
+                val updates = NsiteManager.checkForUpdates()
+                updates.forEach { update ->
+                    if (update.nsite.autoUpdate) {
+                        NsiteManager.applyUpdate(update)
+                    } else {
+                        postNsiteUpdateNotification(update.nsite.address, update.nsite.displayName)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(Citrine.TAG, "Error checking nsite updates", e)
+            }
+        }
+    }
+
+    private fun watchDatabaseUpgrade() {
         scope.launch {
             AppDatabase.isDatabaseUpgrading.collect { isUpgrading ->
                 val notificationManager = NotificationManagerCompat.from(this@WebSocketServerService)
@@ -258,7 +304,9 @@ class WebSocketServerService : Service() {
                 }
             }
         }
+    }
 
+    private fun startRelayServer(database: AppDatabase) {
         Log.d(Citrine.TAG, "Starting WebSocket server")
         // Start the WebSocket server
         val app = citrine
@@ -271,7 +319,9 @@ class WebSocketServerService : Service() {
             onEphemeralEventStored = { app.eventCleanup.scheduleEphemeralCleanup(database) },
         )
         CustomWebSocketService.server?.start()
+    }
 
+    private fun startOrStopTor() {
         if (Settings.useTor || Settings.useProxy) {
             Log.d(Citrine.TAG, "Starting embedded Tor (hiddenService=${Settings.useTor}, socks=${Settings.useProxy})")
             TorManager.start(Settings.port, enableHiddenService = Settings.useTor)
@@ -280,23 +330,21 @@ class WebSocketServerService : Service() {
             // background tasks and guard channels don't keep burning battery.
             TorManager.stop(destroyClient = true)
         }
+    }
 
-        if (Settings.relayAggregatorEnabled) {
-            RelayAggregator.start(database)
-        }
-
-        if (!Settings.duplicateTagsCleaned) {
-            scope.launch {
-                try {
-                    TagDeduplicator.cleanDatabases(database, this@WebSocketServerService)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(Citrine.TAG, "Duplicate tag cleanup failed", e)
-                }
+    private fun scheduleDuplicateTagCleanup(database: AppDatabase) {
+        scope.launch {
+            try {
+                TagDeduplicator.cleanDatabases(database, this@WebSocketServerService)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(Citrine.TAG, "Duplicate tag cleanup failed", e)
             }
         }
+    }
 
+    private fun startForegroundWithRetries() {
         var error = true
         var attempts = 0
         while (error && attempts < 5) {
@@ -310,7 +358,9 @@ class WebSocketServerService : Service() {
             }
             attempts++
         }
+    }
 
+    private fun watchForegroundNotificationSources() {
         @OptIn(FlowPreview::class)
         scope.launch {
             // The aggregator publishes status on every burst of received events and every
@@ -372,29 +422,10 @@ class WebSocketServerService : Service() {
     private data class ForegroundNotification(val notification: Notification, val signature: String)
 
     private fun buildForegroundNotification(status: AggregatorStatus? = null): ForegroundNotification {
-        val notificationManager = NotificationManagerCompat.from(this)
-        val channelId = "WebSocketServerServiceChannel"
         val groupId = "WebSocketServerServiceGroup"
-        val group = NotificationChannelGroupCompat.Builder(groupId)
-            .setName("WebSocket Server")
-            .build()
-        notificationManager.createNotificationChannelGroup(group)
+        createForegroundChannel(groupId)
 
-        val channel = NotificationChannelCompat.Builder(channelId, NotificationManager.IMPORTANCE_DEFAULT)
-            .setName("WebSocket Server")
-            .setGroup(groupId)
-            .setSound(null, null)
-            .build()
-        notificationManager.createNotificationChannel(channel)
-
-        val resultIntent = Intent(this, MainActivity::class.java)
-
-        val resultPendingIntent = TaskStackBuilder.create(this).run {
-            // Add the intent, which inflates the back stack.
-            addNextIntentWithParentStack(resultIntent)
-            // Get the PendingIntent containing the entire back stack.
-            getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        }
+        val resultPendingIntent = mainActivityPendingIntent()
 
         val title = getString(R.string.relay_running_at_ws, Settings.host, Settings.port.toString())
         val notificationBuilder = NotificationCompat.Builder(this, "WebSocketServerServiceChannel")
@@ -424,11 +455,7 @@ class WebSocketServerService : Service() {
             )
         }
 
-        val torState = TorManager.state.value
-        val onionHost = when (torState) {
-            is TorManager.State.Running -> torState.hostname.takeIf { it.isNotBlank() }
-            else -> Settings.onionHostname.takeIf { it.isNotBlank() && Settings.useTor }
-        }
+        val onionHost = onionHostForNotification()
         val torUrl = if (!onionHost.isNullOrBlank()) "ws://$onionHost" else null
         if (torUrl != null) {
             notificationBuilder.addAction(
@@ -454,6 +481,38 @@ class WebSocketServerService : Service() {
         val signature = listOf(title, summary, details, localUrl, wifiUrl.orEmpty(), torUrl.orEmpty())
             .joinToString("")
         return ForegroundNotification(notificationBuilder.build(), signature)
+    }
+
+    private fun createForegroundChannel(groupId: String) {
+        val notificationManager = NotificationManagerCompat.from(this)
+        val channelId = "WebSocketServerServiceChannel"
+        val group = NotificationChannelGroupCompat.Builder(groupId)
+            .setName("WebSocket Server")
+            .build()
+        notificationManager.createNotificationChannelGroup(group)
+
+        val channel = NotificationChannelCompat.Builder(channelId, NotificationManager.IMPORTANCE_DEFAULT)
+            .setName("WebSocket Server")
+            .setGroup(groupId)
+            .setSound(null, null)
+            .build()
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun mainActivityPendingIntent(): PendingIntent? {
+        val resultIntent = Intent(this, MainActivity::class.java)
+
+        return TaskStackBuilder.create(this).run {
+            // Add the intent, which inflates the back stack.
+            addNextIntentWithParentStack(resultIntent)
+            // Get the PendingIntent containing the entire back stack.
+            getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
+    }
+
+    private fun onionHostForNotification(): String? = when (val torState = TorManager.state.value) {
+        is TorManager.State.Running -> torState.hostname.takeIf { it.isNotBlank() }
+        else -> Settings.onionHostname.takeIf { it.isNotBlank() && Settings.useTor }
     }
 
     private fun postForegroundNotificationIfChanged(status: AggregatorStatus?) {

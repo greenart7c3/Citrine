@@ -84,102 +84,126 @@ object LocalPreferences {
     fun saveSettingsToEncryptedStorage(settings: Settings, context: Context) {
         encryptedPreferences(context).edit {
             apply {
-                if (settings.allowedKinds.isEmpty()) {
-                    remove(PrefKeys.ALLOWED_KINDS)
-                } else {
-                    putString(PrefKeys.ALLOWED_KINDS, settings.allowedKinds.joinToString(","))
-                }
-                // Persisted even when empty so a user who clears the defaults keeps an empty
-                // set on reload instead of having DEFAULT_REJECTED_KINDS restored.
-                putString(PrefKeys.REJECTED_KINDS, settings.rejectedKinds.joinToString(","))
-                putStringSet(PrefKeys.ALLOWED_PUB_KEYS, settings.allowedPubKeys)
-                putStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, settings.allowedTaggedPubKeys)
-                putString(PrefKeys.DELETE_EVENTS_OLDER_THAN, settings.deleteEventsOlderThan.toString())
-                putBoolean(PrefKeys.USE_SSL, settings.useSSL)
-                putString(PrefKeys.HOST, settings.host)
-                putInt(PrefKeys.PORT, settings.port)
-                putStringSet(PrefKeys.NEVER_DELETE_FROM, settings.neverDeleteFrom)
-                putString(
-                    PrefKeys.PRESERVED_KINDS_FROM_DELETION,
-                    settings.preservedKindsFromDeletion.joinToString(","),
-                )
-                putString(PrefKeys.RELAY_NAME, settings.name)
-                putString(PrefKeys.RELAY_OWNER_PUBKEY, settings.ownerPubkey)
-                putString(PrefKeys.RELAY_CONTACT, settings.contact)
-                putString(PrefKeys.RELAY_DESCRIPTION, settings.description)
-                putString(PrefKeys.RELAY_ICON, settings.relayIcon)
-                putInt(PrefKeys.MAX_EVENT_SIZE, settings.maxEventSize)
-                putBoolean(PrefKeys.AUTO_BACKUP, settings.autoBackup)
-                putString(PrefKeys.AUTO_BACKUP_FOLDER, settings.autoBackupFolder)
-                putString(PrefKeys.RELAY_SIGNER_PACKAGE_NAME, settings.relaySignerPackageName)
-                putBoolean(PrefKeys.SEND_MUTE_RESPONSE, settings.sendMuteResponse)
-                putBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, settings.listenToPokeyBroadcasts)
-                putBoolean(PrefKeys.START_ON_BOOT, settings.startOnBoot)
-                putLong(PrefKeys.LAST_BACKUP, settings.lastBackup)
-                putBoolean(PrefKeys.USE_PROXY, settings.useProxy)
-                putBoolean(PrefKeys.PROXY_ALL_URLS, settings.proxyAllUrls)
-                putBoolean(PrefKeys.USE_TOR, settings.useTor)
-                putString(PrefKeys.ONION_HOSTNAME, settings.onionHostname)
-                if (Settings.webClients.isNotEmpty()) {
-                    putString(PrefKeys.WEB_CLIENTS, Settings.webClientsToJson())
-                } else {
-                    remove(PrefKeys.WEB_CLIENTS)
-                }
-                if (settings.nsites.isNotEmpty()) {
-                    putString(PrefKeys.NSITES, Settings.nsitesToJson())
-                } else {
-                    remove(PrefKeys.NSITES)
-                }
-                putLong(PrefKeys.LAST_NSITE_CHECK, settings.lastNsiteCheck)
-                putStringSet(PrefKeys.NSITE_RELAYS, settings.nsiteRelays)
-
-                if (settings.bannedPubKeys.isNotEmpty()) {
-                    putString(PrefKeys.BANNED_PUBKEYS, Settings.bannedPubKeysToJson())
-                } else {
-                    remove(PrefKeys.BANNED_PUBKEYS)
-                }
-                if (settings.bannedEventIds.isNotEmpty()) {
-                    putString(PrefKeys.BANNED_EVENT_IDS, Settings.bannedEventIdsToJson())
-                } else {
-                    remove(PrefKeys.BANNED_EVENT_IDS)
-                }
-                if (settings.blockedIps.isNotEmpty()) {
-                    putString(PrefKeys.BLOCKED_IPS, Settings.blockedIpsToJson())
-                } else {
-                    remove(PrefKeys.BLOCKED_IPS)
-                }
-
-                putBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, settings.relayAggregatorEnabled)
-                putString(PrefKeys.AGGREGATOR_PUBKEY, settings.aggregatorPubkey)
-                if (settings.relayAggregatorKinds.isEmpty()) {
-                    remove(PrefKeys.RELAY_AGGREGATOR_KINDS)
-                } else {
-                    putString(PrefKeys.RELAY_AGGREGATOR_KINDS, settings.relayAggregatorKinds.joinToString(","))
-                }
-                putInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, settings.relayAggregatorRefreshMinutes)
-                putBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, settings.relayAggregatorIncludeTagged)
-                putLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, settings.relayAggregatorLastSync)
-                putStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, settings.relayAggregatorExtraRelays)
-                putStringSet(PrefKeys.RELAY_AGGREGATOR_SOURCE_RELAYS, settings.relayAggregatorSourceRelays)
-                putStringSet(PrefKeys.RELAY_AGGREGATOR_INDEXER_RELAYS, settings.relayAggregatorIndexerRelays)
-                putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
-                putBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, settings.relayAggregatorPauseOnLimitedNetwork)
-                putBoolean(PrefKeys.STRANGER_CONTACT_LISTS_PRUNED, settings.strangerContactListsPruned)
-                putBoolean(PrefKeys.DUPLICATE_TAGS_CLEANED, settings.duplicateTagsCleaned)
-                putString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, settings.aggregatorSignerPubkey)
-                putString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, settings.aggregatorSignerPackageName)
-                putBoolean(PrefKeys.SHOW_EVENT_GRAPH, settings.showEventGraph)
+                putRelaySettings(settings)
+                putServiceSettings(settings)
+                putModerationLists(settings)
+                putAggregatorSettings(settings)
             }
         }
     }
 
+    private fun SharedPreferences.Editor.putRelaySettings(settings: Settings) {
+        if (settings.allowedKinds.isEmpty()) {
+            remove(PrefKeys.ALLOWED_KINDS)
+        } else {
+            putString(PrefKeys.ALLOWED_KINDS, settings.allowedKinds.joinToString(","))
+        }
+        // Persisted even when empty so a user who clears the defaults keeps an empty
+        // set on reload instead of having DEFAULT_REJECTED_KINDS restored.
+        putString(PrefKeys.REJECTED_KINDS, settings.rejectedKinds.joinToString(","))
+        putStringSet(PrefKeys.ALLOWED_PUB_KEYS, settings.allowedPubKeys)
+        putStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, settings.allowedTaggedPubKeys)
+        putString(PrefKeys.DELETE_EVENTS_OLDER_THAN, settings.deleteEventsOlderThan.toString())
+        putBoolean(PrefKeys.USE_SSL, settings.useSSL)
+        putString(PrefKeys.HOST, settings.host)
+        putInt(PrefKeys.PORT, settings.port)
+        putStringSet(PrefKeys.NEVER_DELETE_FROM, settings.neverDeleteFrom)
+        putString(
+            PrefKeys.PRESERVED_KINDS_FROM_DELETION,
+            settings.preservedKindsFromDeletion.joinToString(","),
+        )
+        putString(PrefKeys.RELAY_NAME, settings.name)
+        putString(PrefKeys.RELAY_OWNER_PUBKEY, settings.ownerPubkey)
+        putString(PrefKeys.RELAY_CONTACT, settings.contact)
+        putString(PrefKeys.RELAY_DESCRIPTION, settings.description)
+        putString(PrefKeys.RELAY_ICON, settings.relayIcon)
+        putInt(PrefKeys.MAX_EVENT_SIZE, settings.maxEventSize)
+        putBoolean(PrefKeys.AUTO_BACKUP, settings.autoBackup)
+        putString(PrefKeys.AUTO_BACKUP_FOLDER, settings.autoBackupFolder)
+        putString(PrefKeys.RELAY_SIGNER_PACKAGE_NAME, settings.relaySignerPackageName)
+    }
+
+    private fun SharedPreferences.Editor.putServiceSettings(settings: Settings) {
+        putBoolean(PrefKeys.SEND_MUTE_RESPONSE, settings.sendMuteResponse)
+        putBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, settings.listenToPokeyBroadcasts)
+        putBoolean(PrefKeys.START_ON_BOOT, settings.startOnBoot)
+        putLong(PrefKeys.LAST_BACKUP, settings.lastBackup)
+        putBoolean(PrefKeys.USE_PROXY, settings.useProxy)
+        putBoolean(PrefKeys.PROXY_ALL_URLS, settings.proxyAllUrls)
+        putBoolean(PrefKeys.USE_TOR, settings.useTor)
+        putString(PrefKeys.ONION_HOSTNAME, settings.onionHostname)
+        if (Settings.webClients.isNotEmpty()) {
+            putString(PrefKeys.WEB_CLIENTS, Settings.webClientsToJson())
+        } else {
+            remove(PrefKeys.WEB_CLIENTS)
+        }
+        if (settings.nsites.isNotEmpty()) {
+            putString(PrefKeys.NSITES, Settings.nsitesToJson())
+        } else {
+            remove(PrefKeys.NSITES)
+        }
+        putLong(PrefKeys.LAST_NSITE_CHECK, settings.lastNsiteCheck)
+        putStringSet(PrefKeys.NSITE_RELAYS, settings.nsiteRelays)
+    }
+
+    private fun SharedPreferences.Editor.putModerationLists(settings: Settings) {
+        if (settings.bannedPubKeys.isNotEmpty()) {
+            putString(PrefKeys.BANNED_PUBKEYS, Settings.bannedPubKeysToJson())
+        } else {
+            remove(PrefKeys.BANNED_PUBKEYS)
+        }
+        if (settings.bannedEventIds.isNotEmpty()) {
+            putString(PrefKeys.BANNED_EVENT_IDS, Settings.bannedEventIdsToJson())
+        } else {
+            remove(PrefKeys.BANNED_EVENT_IDS)
+        }
+        if (settings.blockedIps.isNotEmpty()) {
+            putString(PrefKeys.BLOCKED_IPS, Settings.blockedIpsToJson())
+        } else {
+            remove(PrefKeys.BLOCKED_IPS)
+        }
+    }
+
+    private fun SharedPreferences.Editor.putAggregatorSettings(settings: Settings) {
+        putBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, settings.relayAggregatorEnabled)
+        putString(PrefKeys.AGGREGATOR_PUBKEY, settings.aggregatorPubkey)
+        if (settings.relayAggregatorKinds.isEmpty()) {
+            remove(PrefKeys.RELAY_AGGREGATOR_KINDS)
+        } else {
+            putString(PrefKeys.RELAY_AGGREGATOR_KINDS, settings.relayAggregatorKinds.joinToString(","))
+        }
+        putInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, settings.relayAggregatorRefreshMinutes)
+        putBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, settings.relayAggregatorIncludeTagged)
+        putLong(PrefKeys.RELAY_AGGREGATOR_LAST_SYNC, settings.relayAggregatorLastSync)
+        putStringSet(PrefKeys.RELAY_AGGREGATOR_EXTRA_RELAYS, settings.relayAggregatorExtraRelays)
+        putStringSet(PrefKeys.RELAY_AGGREGATOR_SOURCE_RELAYS, settings.relayAggregatorSourceRelays)
+        putStringSet(PrefKeys.RELAY_AGGREGATOR_INDEXER_RELAYS, settings.relayAggregatorIndexerRelays)
+        putBoolean(PrefKeys.RELAY_AGGREGATOR_WIFI_ONLY, settings.relayAggregatorWifiOnly)
+        putBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, settings.relayAggregatorPauseOnLimitedNetwork)
+        putBoolean(PrefKeys.STRANGER_CONTACT_LISTS_PRUNED, settings.strangerContactListsPruned)
+        putBoolean(PrefKeys.DUPLICATE_TAGS_CLEANED, settings.duplicateTagsCleaned)
+        putString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, settings.aggregatorSignerPubkey)
+        putString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, settings.aggregatorSignerPackageName)
+        putBoolean(PrefKeys.SHOW_EVENT_GRAPH, settings.showEventGraph)
+    }
+
     fun loadSettingsFromEncryptedStorage(context: Context) {
         val prefs = encryptedPreferences(context)
-        Settings.allowedKinds = prefs.getString(PrefKeys.ALLOWED_KINDS, null)?.split(",")?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet()
-        Settings.rejectedKinds = prefs.getString(PrefKeys.REJECTED_KINDS, null)
-            ?.split(",")
-            ?.mapNotNull { it.toIntOrNull() }
-            ?.toSet()
+        readRelaySettings(prefs)
+        readRelayInfo(prefs)
+        readServiceSettings(prefs)
+        readModerationLists(prefs)
+        readAggregatorSettings(prefs)
+    }
+
+    private fun SharedPreferences.intSet(key: String): Set<Int>? = getString(key, null)
+        ?.split(",")
+        ?.mapNotNull { it.toIntOrNull() }
+        ?.toSet()
+
+    private fun readRelaySettings(prefs: SharedPreferences) {
+        Settings.allowedKinds = prefs.intSet(PrefKeys.ALLOWED_KINDS) ?: emptySet()
+        Settings.rejectedKinds = prefs.intSet(PrefKeys.REJECTED_KINDS)
             ?: Settings.DEFAULT_REJECTED_KINDS
         Settings.allowedPubKeys = prefs.getStringSet(PrefKeys.ALLOWED_PUB_KEYS, emptySet()) ?: emptySet()
         Settings.allowedTaggedPubKeys = prefs.getStringSet(PrefKeys.ALLOWED_TAGGED_PUB_KEYS, emptySet()) ?: emptySet()
@@ -188,11 +212,11 @@ object LocalPreferences {
         Settings.host = prefs.getString(PrefKeys.HOST, "127.0.0.1") ?: "127.0.0.1"
         Settings.port = prefs.getInt(PrefKeys.PORT, 4869)
         Settings.neverDeleteFrom = prefs.getStringSet(PrefKeys.NEVER_DELETE_FROM, emptySet()) ?: emptySet()
-        Settings.preservedKindsFromDeletion = prefs.getString(PrefKeys.PRESERVED_KINDS_FROM_DELETION, null)
-            ?.split(",")
-            ?.mapNotNull { it.toIntOrNull() }
-            ?.toSet()
+        Settings.preservedKindsFromDeletion = prefs.intSet(PrefKeys.PRESERVED_KINDS_FROM_DELETION)
             ?: setOf(0, 3, 10000, 10002)
+    }
+
+    private fun readRelayInfo(prefs: SharedPreferences) {
         Settings.name = prefs.getString(PrefKeys.RELAY_NAME, "Citrine") ?: "Citrine"
         Settings.ownerPubkey = prefs.getString(PrefKeys.RELAY_OWNER_PUBKEY, "") ?: ""
         Settings.contact = prefs.getString(PrefKeys.RELAY_CONTACT, "") ?: ""
@@ -202,6 +226,9 @@ object LocalPreferences {
         Settings.autoBackup = prefs.getBoolean(PrefKeys.AUTO_BACKUP, false)
         Settings.autoBackupFolder = prefs.getString(PrefKeys.AUTO_BACKUP_FOLDER, "") ?: ""
         Settings.relaySignerPackageName = prefs.getString(PrefKeys.RELAY_SIGNER_PACKAGE_NAME, "") ?: ""
+    }
+
+    private fun readServiceSettings(prefs: SharedPreferences) {
         Settings.sendMuteResponse = prefs.getBoolean(PrefKeys.SEND_MUTE_RESPONSE, false)
         Settings.listenToPokeyBroadcasts = prefs.getBoolean(PrefKeys.LISTEN_TO_POKEY_BROADCASTS, true)
         Settings.startOnBoot = prefs.getBoolean(PrefKeys.START_ON_BOOT, true)
@@ -220,7 +247,9 @@ object LocalPreferences {
         }
         Settings.lastNsiteCheck = prefs.getLong(PrefKeys.LAST_NSITE_CHECK, 0L)
         Settings.nsiteRelays = prefs.getStringSet(PrefKeys.NSITE_RELAYS, null) ?: Settings.DEFAULT_NSITE_RELAYS
+    }
 
+    private fun readModerationLists(prefs: SharedPreferences) {
         Settings.bannedPubKeys = prefs.getString(PrefKeys.BANNED_PUBKEYS, null)
             ?.let { runCatching { Settings.bannedPubKeysFromJson(it) }.getOrNull() }
             ?: java.util.concurrent.ConcurrentHashMap()
@@ -230,13 +259,12 @@ object LocalPreferences {
         Settings.blockedIps = prefs.getString(PrefKeys.BLOCKED_IPS, null)
             ?.let { runCatching { Settings.blockedIpsFromJson(it) }.getOrNull() }
             ?: java.util.concurrent.ConcurrentHashMap()
+    }
 
+    private fun readAggregatorSettings(prefs: SharedPreferences) {
         Settings.relayAggregatorEnabled = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_ENABLED, false)
         Settings.aggregatorPubkey = prefs.getString(PrefKeys.AGGREGATOR_PUBKEY, "") ?: ""
-        Settings.relayAggregatorKinds = prefs.getString(PrefKeys.RELAY_AGGREGATOR_KINDS, null)
-            ?.split(",")
-            ?.mapNotNull { it.toIntOrNull() }
-            ?.toSet()
+        Settings.relayAggregatorKinds = prefs.intSet(PrefKeys.RELAY_AGGREGATOR_KINDS)
             ?: setOf(0, 1, 3, 5, 6, 7, 1111, 10002, 30023)
         Settings.relayAggregatorRefreshMinutes = prefs.getInt(PrefKeys.RELAY_AGGREGATOR_REFRESH_MINUTES, 60)
         Settings.relayAggregatorIncludeTagged = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_INCLUDE_TAGGED, true)

@@ -26,39 +26,53 @@ object NegentropyHandler {
     ) {
         val filter = parseFilter(filterNode, objectMapper)
 
-        when (AuthGate.check(filter, connection)) {
-            AuthGate.Denial.AUTH_REQUIRED -> {
-                connection.trySend(negError(objectMapper, subId, "auth-required: we only accept events from registered users"))
-                return
-            }
-            AuthGate.Denial.RESTRICTED -> {
-                connection.trySend(negError(objectMapper, subId, "restricted: we only accept events from registered users"))
-                return
-            }
-            null -> Unit
-        }
-
-        val matchCount = EventRepository.countQuery(appDatabase, filter)
-        if (matchCount > MAX_EVENTS) {
-            connection.trySend(
-                objectMapper.writeValueAsString(
-                    listOf("NEG-ERR", subId, "blocked: query too big", MAX_EVENTS),
-                ),
-            )
+        val refusal = openRefusal(connection, subId, filter, appDatabase, objectMapper)
+        if (refusal != null) {
+            connection.trySend(refusal)
             return
         }
+
+        val ne = Negentropy(buildStorage(connection, filter, appDatabase), FRAME_SIZE_LIMIT)
+        connection.negentropySessions.put(subId, ne)
+
+        reconcileAndReply(connection, subId, ne, initialMsgHex, "NEG-OPEN", objectMapper)
+    }
+
+    private fun openRefusal(
+        connection: Connection,
+        subId: String,
+        filter: EventFilter,
+        appDatabase: AppDatabase,
+        objectMapper: ObjectMapper,
+    ): String? = when (AuthGate.check(filter, connection)) {
+        AuthGate.Denial.AUTH_REQUIRED -> negError(objectMapper, subId, "auth-required: we only accept events from registered users")
+        AuthGate.Denial.RESTRICTED -> negError(objectMapper, subId, "restricted: we only accept events from registered users")
+        null -> capacityRefusal(connection, subId, filter, appDatabase, objectMapper)
+    }
+
+    private fun capacityRefusal(
+        connection: Connection,
+        subId: String,
+        filter: EventFilter,
+        appDatabase: AppDatabase,
+        objectMapper: ObjectMapper,
+    ): String? = when {
+        EventRepository.countQuery(appDatabase, filter) > MAX_EVENTS -> objectMapper.writeValueAsString(
+            listOf("NEG-ERR", subId, "blocked: query too big", MAX_EVENTS),
+        )
 
         // Each open session holds a materialized id set plus reconciliation state until
         // the client finishes or closes it; abandoned sessions must not accumulate.
-        if (connection.negentropySessions.size >= MAX_SESSIONS_PER_CONNECTION) {
-            connection.trySend(negError(objectMapper, subId, "blocked: too many concurrent sessions"))
-            return
-        }
+        connection.negentropySessions.size >= MAX_SESSIONS_PER_CONNECTION -> negError(objectMapper, subId, "blocked: too many concurrent sessions")
 
+        else -> null
+    }
+
+    private suspend fun buildStorage(connection: Connection, filter: EventFilter, appDatabase: AppDatabase): StorageVector {
         // NIP-29: with private groups on the relay, a broad filter's id set could reveal
         // private-group event ids, so the storage is built from readable events only.
         val nip29Gate = GroupManager.hasPrivateGroups()
-        val storage = StorageVector().apply {
+        return StorageVector().apply {
             if (nip29Gate) {
                 EventRepository.batchedQuery(appDatabase, filter, null) { batch ->
                     for (row in batch) {
@@ -75,28 +89,6 @@ object NegentropyHandler {
             }
             seal()
         }
-
-        val ne = Negentropy(storage, FRAME_SIZE_LIMIT)
-        connection.negentropySessions.put(subId, ne)
-
-        val response = try {
-            ne.reconcile(initialMsgHex.hexToByteArray())
-        } catch (e: Exception) {
-            Log.d(Citrine.TAG, "negentropy reconcile failed on NEG-OPEN $subId", e)
-            connection.negentropySessions.remove(subId)
-            connection.trySend(negError(objectMapper, subId, "error: ${e.message ?: "reconcile failed"}"))
-            return
-        }
-
-        val msg = response.msg
-        if (msg == null) {
-            connection.negentropySessions.remove(subId)
-        }
-        connection.trySend(
-            objectMapper.writeValueAsString(
-                listOf("NEG-MSG", subId, (msg ?: ByteArray(0)).toHexString()),
-            ),
-        )
     }
 
     fun handleMsg(
@@ -111,10 +103,21 @@ object NegentropyHandler {
             return
         }
 
+        reconcileAndReply(connection, subId, ne, msgHex, "NEG-MSG", objectMapper)
+    }
+
+    private fun reconcileAndReply(
+        connection: Connection,
+        subId: String,
+        ne: Negentropy,
+        msgHex: String,
+        frameType: String,
+        objectMapper: ObjectMapper,
+    ) {
         val response = try {
             ne.reconcile(msgHex.hexToByteArray())
         } catch (e: Exception) {
-            Log.d(Citrine.TAG, "negentropy reconcile failed on NEG-MSG $subId", e)
+            Log.d(Citrine.TAG, "negentropy reconcile failed on $frameType $subId", e)
             connection.negentropySessions.remove(subId)
             connection.trySend(negError(objectMapper, subId, "error: ${e.message ?: "reconcile failed"}"))
             return

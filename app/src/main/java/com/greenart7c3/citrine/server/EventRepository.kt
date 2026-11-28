@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.server
 
+import android.database.Cursor
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -60,6 +61,50 @@ object EventRepository {
         cursorId: String? = null,
         batchLimit: Int? = null,
     ): Pair<String, List<Any>> {
+        val sql = QueryParts()
+
+        // --- EventEntity filters ---
+        sql.appendEventFilters(filter)
+
+        // --- Add each tag as an AND EXISTS in WHERE ---
+        // Note: no JOIN against TagEntity. The EXISTS predicates below do all the tag
+        // filtering; a join would multiply each event row by its tag count and force a
+        // DISTINCT over full-width rows (including content) to dedupe them again, which
+        // is dramatically slower.
+        filter.tags.forEach { tag -> sql.appendTagExists(tag.key, tag.value, filter.kinds) }
+
+        // Never load rows whose content exceeds the size cap: a single multi-MB row can
+        // exhaust the heap while being serialized (issue #187).
+        if (mode == SelectMode.FULL_EVENTS && Settings.maxEventSize > 0) {
+            sql.appendWhere("length(EventEntity.content) <= ?")
+            sql.params.add(Settings.maxEventSize)
+        }
+
+        // Keyset pagination cursor: continues strictly after the previous page's last row
+        // under the non-search ordering "createdAt DESC, id ASC", index-backed by
+        // idx_event_created_id. Never combine with searchKeywords (rowid ordering).
+        if (cursorCreatedAt != null && cursorId != null) {
+            sql.appendWhere("(EventEntity.createdAt < ? OR (EventEntity.createdAt = ? AND EventEntity.id > ?))")
+            sql.params.add(cursorCreatedAt)
+            sql.params.add(cursorCreatedAt)
+            sql.params.add(cursorId)
+        }
+
+        val query = sql.select(mode, filter)
+
+        if (batchLimit != null) {
+            query.append(" LIMIT ?")
+            sql.params.add(batchLimit)
+        } else {
+            filter.limit?.let {
+                query.append(" LIMIT ?")
+                sql.params.add(it)
+            }
+        }
+        return Pair(query.toString(), sql.params)
+    }
+
+    private class QueryParts {
         val params = mutableListOf<Any>()
         val joinClause = StringBuilder()
         val whereClause = StringBuilder()
@@ -73,69 +118,65 @@ object EventRepository {
             whereClause.append(predicate)
         }
 
-        // --- EventEntity filters ---
-        // Exclude events whose NIP-40 expiration timestamp is in the past.
-        appendWhere("(EventEntity.expiresAt IS NULL OR EventEntity.expiresAt >= ?)")
-        params.add(TimeUtils.now())
+        fun appendEventFilters(filter: EventFilter) {
+            // Exclude events whose NIP-40 expiration timestamp is in the past.
+            appendWhere("(EventEntity.expiresAt IS NULL OR EventEntity.expiresAt >= ?)")
+            params.add(TimeUtils.now())
 
-        filter.since?.let {
-            appendWhere("EventEntity.createdAt >= ?")
-            params.add(it)
+            filter.since?.let {
+                appendWhere("EventEntity.createdAt >= ?")
+                params.add(it)
+            }
+
+            filter.until?.let {
+                appendWhere("EventEntity.createdAt <= ?")
+                params.add(it)
+            }
+
+            if (filter.ids.isNotEmpty()) {
+                val placeholders = filter.ids.joinToString(",") { "?" }
+                appendWhere("EventEntity.id IN ($placeholders)")
+                params.addAll(filter.ids)
+            }
+
+            if (filter.authors.isNotEmpty()) {
+                val placeholders = filter.authors.joinToString(",") { "?" }
+                appendWhere("EventEntity.pubkey IN ($placeholders)")
+                params.addAll(filter.authors)
+            }
+
+            if (filter.searchKeywords.isNotEmpty()) {
+                joinClause.append(" INNER JOIN event_fts ON event_fts.rowid = EventEntity.rowid")
+                val searchParam = filter.searchKeywords.joinToString(" ") { "\"$it\"" }
+                appendWhere("event_fts MATCH ?")
+                params.add(searchParam)
+            }
+
+            if (filter.kinds.isNotEmpty()) {
+                val placeholders = filter.kinds.joinToString(",") { "?" }
+                appendWhere("EventEntity.kind IN ($placeholders)")
+                params.addAll(filter.kinds)
+            }
         }
 
-        filter.until?.let {
-            appendWhere("EventEntity.createdAt <= ?")
-            params.add(it)
-        }
-
-        if (filter.ids.isNotEmpty()) {
-            val placeholders = filter.ids.joinToString(",") { "?" }
-            appendWhere("EventEntity.id IN ($placeholders)")
-            params.addAll(filter.ids)
-        }
-
-        if (filter.authors.isNotEmpty()) {
-            val placeholders = filter.authors.joinToString(",") { "?" }
-            appendWhere("EventEntity.pubkey IN ($placeholders)")
-            params.addAll(filter.authors)
-        }
-
-        if (filter.searchKeywords.isNotEmpty()) {
-            joinClause.append(" INNER JOIN event_fts ON event_fts.rowid = EventEntity.rowid")
-            val searchParam = filter.searchKeywords.joinToString(" ") { "\"$it\"" }
-            appendWhere("event_fts MATCH ?")
-            params.add(searchParam)
-        }
-
-        if (filter.kinds.isNotEmpty()) {
-            val placeholders = filter.kinds.joinToString(",") { "?" }
-            appendWhere("EventEntity.kind IN ($placeholders)")
-            params.addAll(filter.kinds)
-        }
-
-        // --- Add each tag as an AND EXISTS in WHERE ---
-        // Note: no JOIN against TagEntity. The EXISTS predicates below do all the tag
-        // filtering; a join would multiply each event row by its tag count and force a
-        // DISTINCT over full-width rows (including content) to dedupe them again, which
-        // is dramatically slower.
-        filter.tags.forEach { tag ->
-            val safeTagKey = tag.key.takeIf { it.matches(TAG_KEY_REGEX) }
-                ?: throw IllegalArgumentException("Invalid tag key: ${tag.key}")
+        fun appendTagExists(key: String, values: Set<String>, kinds: Set<Int>) {
+            val safeTagKey = key.takeIf { it.matches(TAG_KEY_REGEX) }
+                ?: throw IllegalArgumentException("Invalid tag key: $key")
 
             val existsClause = StringBuilder()
                 .append("EXISTS (SELECT 1 FROM TagEntity WHERE pkEvent = EventEntity.id AND col0Name = ?")
             params.add(safeTagKey)
 
-            if (tag.value.isNotEmpty()) {
-                val valuePlaceholders = tag.value.joinToString(",") { "?" }
+            if (values.isNotEmpty()) {
+                val valuePlaceholders = values.joinToString(",") { "?" }
                 existsClause.append(" AND col1Value IN (").append(valuePlaceholders).append(")")
-                params.addAll(tag.value)
+                params.addAll(values)
             }
 
-            if (filter.kinds.isNotEmpty()) {
-                val kindPlaceholders = filter.kinds.joinToString(",") { "?" }
+            if (kinds.isNotEmpty()) {
+                val kindPlaceholders = kinds.joinToString(",") { "?" }
                 existsClause.append(" AND kind IN (").append(kindPlaceholders).append(")")
-                params.addAll(filter.kinds)
+                params.addAll(kinds)
             }
 
             existsClause.append(")")
@@ -143,63 +184,38 @@ object EventRepository {
             appendWhere(existsClause)
         }
 
-        // Never load rows whose content exceeds the size cap: a single multi-MB row can
-        // exhaust the heap while being serialized (issue #187).
-        if (mode == SelectMode.FULL_EVENTS && Settings.maxEventSize > 0) {
-            appendWhere("length(EventEntity.content) <= ?")
-            params.add(Settings.maxEventSize)
-        }
-
-        // Keyset pagination cursor: continues strictly after the previous page's last row
-        // under the non-search ordering "createdAt DESC, id ASC", index-backed by
-        // idx_event_created_id. Never combine with searchKeywords (rowid ordering).
-        if (cursorCreatedAt != null && cursorId != null) {
-            appendWhere("(EventEntity.createdAt < ? OR (EventEntity.createdAt = ? AND EventEntity.id > ?))")
-            params.add(cursorCreatedAt)
-            params.add(cursorCreatedAt)
-            params.add(cursorId)
-        }
-
-        // --- Build SQL ---
-        val orderBy = if (filter.searchKeywords.isNotEmpty()) {
-            "EventEntity.rowid DESC"
-        } else {
-            "EventEntity.createdAt DESC, EventEntity.id ASC"
-        }
-
-        // The FTS join is 1:1 (rowid = rowid) and the tag filters use EXISTS, so no row
-        // in the result is ever duplicated and no DISTINCT is needed in any mode.
-        val query = StringBuilder()
-        when (mode) {
-            SelectMode.COUNT -> {
-                query.append("SELECT COUNT(*) FROM EventEntity EventEntity")
-                query.append(joinClause)
-                query.append(whereClause)
+        fun select(mode: SelectMode, filter: EventFilter): StringBuilder {
+            // --- Build SQL ---
+            val orderBy = if (filter.searchKeywords.isNotEmpty()) {
+                "EventEntity.rowid DESC"
+            } else {
+                "EventEntity.createdAt DESC, EventEntity.id ASC"
             }
-            SelectMode.FULL_EVENTS -> {
-                query.append("SELECT EventEntity.* FROM EventEntity EventEntity")
-                query.append(joinClause)
-                query.append(whereClause)
-                query.append(" ORDER BY ").append(orderBy)
-            }
-            SelectMode.IDS_AND_CREATED_AT -> {
-                query.append("SELECT EventEntity.id AS id, EventEntity.createdAt AS createdAt FROM EventEntity EventEntity")
-                query.append(joinClause)
-                query.append(whereClause)
-                query.append(" ORDER BY ").append(orderBy)
-            }
-        }
 
-        if (batchLimit != null) {
-            query.append(" LIMIT ?")
-            params.add(batchLimit)
-        } else {
-            filter.limit?.let {
-                query.append(" LIMIT ?")
-                params.add(it)
+            // The FTS join is 1:1 (rowid = rowid) and the tag filters use EXISTS, so no row
+            // in the result is ever duplicated and no DISTINCT is needed in any mode.
+            val query = StringBuilder()
+            when (mode) {
+                SelectMode.COUNT -> {
+                    query.append("SELECT COUNT(*) FROM EventEntity EventEntity")
+                    query.append(joinClause)
+                    query.append(whereClause)
+                }
+                SelectMode.FULL_EVENTS -> {
+                    query.append("SELECT EventEntity.* FROM EventEntity EventEntity")
+                    query.append(joinClause)
+                    query.append(whereClause)
+                    query.append(" ORDER BY ").append(orderBy)
+                }
+                SelectMode.IDS_AND_CREATED_AT -> {
+                    query.append("SELECT EventEntity.id AS id, EventEntity.createdAt AS createdAt FROM EventEntity EventEntity")
+                    query.append(joinClause)
+                    query.append(whereClause)
+                    query.append(" ORDER BY ").append(orderBy)
+                }
             }
+            return query
         }
-        return Pair(query.toString(), params)
     }
 
     fun query(
@@ -413,11 +429,11 @@ object EventRepository {
      * `pkEvent` strings to the ids we already hold, checking coroutine cancellation mid-cursor,
      * and dropping any event whose tag count or text payload exceeds the per-event ceiling.
      */
-    internal suspend fun loadTagsByEvents(
+    private suspend fun loadTagsByEvents(
         database: AppDatabase,
         chunk: List<EventEntity>,
-        maxTagsPerEvent: Int = MAX_EVENT_TAGS,
-        maxTagCharsPerEvent: Int = MAX_EVENT_TAG_CHARS,
+        maxTagsPerEvent: Int,
+        maxTagCharsPerEvent: Int,
     ): TagLoadResult {
         if (chunk.isEmpty()) return TagLoadResult(emptyMap(), emptySet())
 
@@ -436,9 +452,7 @@ object EventRepository {
             append(')')
         }
 
-        val tagsByEvent = HashMap<String, ArrayList<TagEntity>>(chunk.size * 2)
-        val charCounts = HashMap<String, Long>(chunk.size * 2)
-        val oversized = HashSet<String>()
+        val reader = TagRowReader(canonicalIds, chunk.size, maxTagsPerEvent, maxTagCharsPerEvent)
         var rowsRead = 0
 
         database.openHelper.readableDatabase.query(SimpleSQLiteQuery(sql, args)).use { cursor ->
@@ -446,60 +460,81 @@ object EventRepository {
                 if ((rowsRead++ and 255) == 0) {
                     currentCoroutineContext().ensureActive()
                 }
-                if (cursor.isNull(0)) continue
-                val rawPkEvent = cursor.getString(0)
-                val pkEvent = canonicalIds[rawPkEvent] ?: rawPkEvent
-                if (pkEvent in oversized) continue
-
-                val list = tagsByEvent.getOrPut(pkEvent) { ArrayList() }
-                if (list.size >= maxTagsPerEvent) {
-                    oversized.add(pkEvent)
-                    tagsByEvent.remove(pkEvent)
-                    Log.w(Citrine.TAG, "Skipping event $pkEvent: tag count exceeded $maxTagsPerEvent while loading")
-                    continue
-                }
-
-                val col0 = if (cursor.isNull(2)) null else internTagName(cursor.getString(2))
-                val col1 = if (cursor.isNull(3)) null else cursor.getString(3)
-                val col2 = if (cursor.isNull(4)) null else cursor.getString(4)
-                val col3 = if (cursor.isNull(5)) null else cursor.getString(5)
-                val col4Raw = if (cursor.isNull(6)) "" else cursor.getString(6)
-
-                val rowChars = (col0?.length ?: 0).toLong() +
-                    (col1?.length ?: 0) +
-                    (col2?.length ?: 0) +
-                    (col3?.length ?: 0) +
-                    col4Raw.length
-                val totalChars = (charCounts[pkEvent] ?: 0L) + rowChars
-                charCounts[pkEvent] = totalChars
-                if (totalChars > maxTagCharsPerEvent) {
-                    oversized.add(pkEvent)
-                    tagsByEvent.remove(pkEvent)
-                    Log.w(Citrine.TAG, "Skipping event $pkEvent: tag payload exceeded $maxTagCharsPerEvent chars")
-                    continue
-                }
-
-                val col4Plus: List<String> = if (col4Raw.isEmpty()) {
-                    emptyList()
-                } else {
-                    JacksonMapper.mapper.readValue(col4Raw)
-                }
-                list.add(
-                    TagEntity(
-                        pk = null,
-                        pkEvent = pkEvent,
-                        position = cursor.getInt(1),
-                        col0Name = col0,
-                        col1Value = col1,
-                        col2Differentiator = col2,
-                        col3Amount = col3,
-                        col4Plus = col4Plus,
-                        kind = cursor.getInt(7),
-                    ),
-                )
+                reader.read(cursor)
             }
         }
-        return TagLoadResult(tagsByEvent, oversized)
+        return TagLoadResult(reader.tagsByEvent, reader.oversized)
+    }
+
+    private class TagRowReader(
+        private val canonicalIds: Map<String, String>,
+        chunkSize: Int,
+        private val maxTagsPerEvent: Int,
+        private val maxTagCharsPerEvent: Int,
+    ) {
+        val tagsByEvent = HashMap<String, ArrayList<TagEntity>>(chunkSize * 2)
+        private val charCounts = HashMap<String, Long>(chunkSize * 2)
+        val oversized = HashSet<String>()
+
+        fun read(cursor: Cursor) {
+            val pkEvent = pkEventOf(cursor) ?: return
+
+            val list = tagsByEvent.getOrPut(pkEvent) { ArrayList() }
+            if (list.size >= maxTagsPerEvent) {
+                oversized.add(pkEvent)
+                tagsByEvent.remove(pkEvent)
+                Log.w(Citrine.TAG, "Skipping event $pkEvent: tag count exceeded $maxTagsPerEvent while loading")
+                return
+            }
+
+            tagOf(cursor, pkEvent)?.let { list.add(it) }
+        }
+
+        private fun pkEventOf(cursor: Cursor): String? {
+            if (cursor.isNull(0)) return null
+            val rawPkEvent = cursor.getString(0)
+            val pkEvent = canonicalIds[rawPkEvent] ?: rawPkEvent
+            return pkEvent.takeIf { it !in oversized }
+        }
+
+        private fun tagOf(cursor: Cursor, pkEvent: String): TagEntity? {
+            val col0 = if (cursor.isNull(2)) null else internTagName(cursor.getString(2))
+            val col1 = if (cursor.isNull(3)) null else cursor.getString(3)
+            val col2 = if (cursor.isNull(4)) null else cursor.getString(4)
+            val col3 = if (cursor.isNull(5)) null else cursor.getString(5)
+            val col4Raw = if (cursor.isNull(6)) "" else cursor.getString(6)
+
+            val rowChars = (col0?.length ?: 0).toLong() +
+                (col1?.length ?: 0) +
+                (col2?.length ?: 0) +
+                (col3?.length ?: 0) +
+                col4Raw.length
+            val totalChars = (charCounts[pkEvent] ?: 0L) + rowChars
+            charCounts[pkEvent] = totalChars
+            if (totalChars > maxTagCharsPerEvent) {
+                oversized.add(pkEvent)
+                tagsByEvent.remove(pkEvent)
+                Log.w(Citrine.TAG, "Skipping event $pkEvent: tag payload exceeded $maxTagCharsPerEvent chars")
+                return null
+            }
+
+            val col4Plus: List<String> = if (col4Raw.isEmpty()) {
+                emptyList()
+            } else {
+                JacksonMapper.mapper.readValue(col4Raw)
+            }
+            return TagEntity(
+                pk = null,
+                pkEvent = pkEvent,
+                position = cursor.getInt(1),
+                col0Name = col0,
+                col1Value = col1,
+                col2Differentiator = col2,
+                col3Amount = col3,
+                col4Plus = col4Plus,
+                kind = cursor.getInt(7),
+            )
+        }
     }
 
     private fun internTagName(name: String): String = when (name) {

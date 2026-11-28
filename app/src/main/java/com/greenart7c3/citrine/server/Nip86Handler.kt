@@ -135,6 +135,10 @@ object Nip86Handler {
         "listbannedevents" -> listBannedEvents()
         "allowevent" -> allowEvent(rpc.params, ctx)
         "listeventsneedingmoderation" -> emptyList<Any>()
+        else -> dispatchRelayMethod(rpc, db, ctx)
+    }
+
+    private suspend fun dispatchRelayMethod(rpc: RpcRequest, db: AppDatabase, ctx: Context): Any? = when (rpc.method) {
         "changerelayname" -> changeRelayName(rpc.params, ctx)
         "changerelaydescription" -> changeRelayDescription(rpc.params, ctx)
         "changerelayicon" -> changeRelayIcon(rpc.params, ctx)
@@ -269,6 +273,16 @@ object Nip86Handler {
     // ---------------------------------------------------------------------
 
     fun verifyNip98(authHeader: String?, method: String, fullUrl: String, body: ByteArray): String? {
+        val event = decodeNip98Event(authHeader) ?: return null
+        val refusal = nip98Refusal(event, method, fullUrl, body)
+        if (refusal != null) {
+            Log.d(Citrine.TAG, refusal)
+            return null
+        }
+        return event.pubKey
+    }
+
+    private fun decodeNip98Event(authHeader: String?): Event? {
         if (authHeader == null || !authHeader.startsWith("Nostr ")) return null
         val b64 = authHeader.removePrefix("Nostr ").trim()
         val json = try {
@@ -277,53 +291,39 @@ object Nip86Handler {
             Log.d(Citrine.TAG, "NIP-98 invalid base64", e)
             return null
         }
-        val event = try {
+        return try {
             Event.fromJson(json)
         } catch (e: Exception) {
             Log.d(Citrine.TAG, "NIP-98 invalid event json", e)
-            return null
+            null
         }
-        if (event.kind != AUTH_KIND) {
-            Log.d(Citrine.TAG, "NIP-98 wrong kind ${event.kind}")
-            return null
-        }
-        val now = TimeUtils.now()
-        if (event.createdAt > now + AUTH_TIME_WINDOW_SEC || event.createdAt < now - AUTH_TIME_WINDOW_SEC) {
-            Log.d(Citrine.TAG, "NIP-98 timestamp out of window: createdAt=${event.createdAt} now=$now")
-            return null
-        }
+    }
 
+    private fun nip98Refusal(event: Event, method: String, fullUrl: String, body: ByteArray): String? {
+        val now = TimeUtils.now()
         val uTag = event.tags.firstOrNull { it.size > 1 && it[0] == "u" }?.get(1)
         val mTag = event.tags.firstOrNull { it.size > 1 && it[0] == "method" }?.get(1)
-        if (uTag == null || !normalizeUrl(uTag).equals(normalizeUrl(fullUrl), ignoreCase = true)) {
-            Log.d(Citrine.TAG, "NIP-98 u tag mismatch expected=$fullUrl got=$uTag")
-            return null
+        return when {
+            event.kind != AUTH_KIND -> "NIP-98 wrong kind ${event.kind}"
+            isOutsideAuthWindow(event.createdAt, now) -> "NIP-98 timestamp out of window: createdAt=${event.createdAt} now=$now"
+            uTag == null || !normalizeUrl(uTag).equals(normalizeUrl(fullUrl), ignoreCase = true) -> "NIP-98 u tag mismatch expected=$fullUrl got=$uTag"
+            mTag == null || !mTag.equals(method, ignoreCase = true) -> "NIP-98 method tag mismatch expected=$method got=$mTag"
+            else -> payloadRefusal(event, body) ?: signatureRefusal(event)
         }
-        if (mTag == null || !mTag.equals(method, ignoreCase = true)) {
-            Log.d(Citrine.TAG, "NIP-98 method tag mismatch expected=$method got=$mTag")
-            return null
-        }
-
-        if (body.isNotEmpty()) {
-            val payloadTag = event.tags.firstOrNull { it.size > 1 && it[0] == "payload" }?.get(1)
-                ?: run {
-                    Log.d(Citrine.TAG, "NIP-98 missing payload tag")
-                    return null
-                }
-            val hex = MessageDigest.getInstance("SHA-256").digest(body)
-                .joinToString("") { "%02x".format(it) }
-            if (!payloadTag.equals(hex, ignoreCase = true)) {
-                Log.d(Citrine.TAG, "NIP-98 payload hash mismatch")
-                return null
-            }
-        }
-
-        if (!event.verify()) {
-            Log.d(Citrine.TAG, "NIP-98 signature verify failed")
-            return null
-        }
-        return event.pubKey
     }
+
+    private fun isOutsideAuthWindow(createdAt: Long, now: Long): Boolean = createdAt > now + AUTH_TIME_WINDOW_SEC || createdAt < now - AUTH_TIME_WINDOW_SEC
+
+    private fun payloadRefusal(event: Event, body: ByteArray): String? {
+        if (body.isEmpty()) return null
+        val payloadTag = event.tags.firstOrNull { it.size > 1 && it[0] == "payload" }?.get(1)
+            ?: return "NIP-98 missing payload tag"
+        val hex = MessageDigest.getInstance("SHA-256").digest(body)
+            .joinToString("") { "%02x".format(it) }
+        return if (payloadTag.equals(hex, ignoreCase = true)) null else "NIP-98 payload hash mismatch"
+    }
+
+    private fun signatureRefusal(event: Event): String? = if (event.verify()) null else "NIP-98 signature verify failed"
 
     // ---------------------------------------------------------------------
     // Helpers
