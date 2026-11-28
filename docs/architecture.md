@@ -175,7 +175,7 @@ Step 1 is done: `Citrine.instance` is gone, and with it its allow-list. What is
 left of the container on the Application is reached only through
 `Context.citrine` in the entry points, which `contextCitrineUsers` pins.
 
-### 2. Give the big screens ViewModels
+### 2. Give the big screens ViewModels (done)
 
 `HomeScreen`, `SettingsScreen` and the `settings/` screens,
 `DownloadYourEventsUserScreen`, `RebroadcastScreen`, `ContactsScreen`: hoist state
@@ -209,6 +209,15 @@ The other settings screens follow the same shape: `AccessControlSettingsViewMode
 The editable lists share two state holders, `EditableSet` (a set and the field a new
 entry is typed in) and `EditableBanList` (NIP-86 bans with their reasons), which the
 item builders edit directly.
+
+The remaining long screens split the same way, each keeping its state and actions
+and laying out private sections: `ContactsScreen`, `CrashReportScreen`,
+`DatabaseInfo`, `DownloadYourEventsUserScreen` and its relay picker,
+`ImportFromListsDialog`, `NsiteRow` and `RebroadcastScreen` (whose form and
+validation are a remembered `RebroadcastFormState`). `HomeViewModel.importDatabase`
+splits into `importLines`/`importLine`, and `StoragePickerHelper` takes its pickers
+and permission launcher as two small groups. Step 2 is done: nothing under `ui/` has
+a grandfathered size or complexity finding left.
 
 ### 3. Keep `ui/` off the database (done)
 
