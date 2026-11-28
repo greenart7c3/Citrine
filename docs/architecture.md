@@ -64,7 +64,7 @@ There are two ViewModels (`HomeViewModel`, `LogcatViewModel`) plus the one insid
 - `Citrine.instance` was the only way most code got its dependencies (30
   files), so almost nothing could be constructed in a test without the
   Application; step 1 removed it.
-- `ui/` reaches Room DAOs directly in 9 files.
+- `ui/` reached Room DAOs directly in 9 files; since step 3 it does not.
 - The detekt baseline holds 1076 grandfathered findings in the app: 936
   `NoComments`, 38 `LongMethod`, 32 `CyclomaticComplexMethod` and about 70
   mechanical Compose and small logic findings.
@@ -182,7 +182,7 @@ left of the container on the Application is reached only through
 into a `…ViewModel` and keep a stateless content composable. Removes their
 `LongMethod`/`ComposableParamOrder` baseline entries.
 
-### 3. Keep `ui/` off the database
+### 3. Keep `ui/` off the database (done)
 
 Move each screen's loading and writing into its ViewModel and hand the screen
 only what it shows; delete the screen from `databaseInUi`. `DatabaseInfo.kt`'s
@@ -201,7 +201,11 @@ the database itself for export and import, wipes it (`deleteAllEvents`, stopping
 and restarting the aggregator around it) and exposes the upgrade flag. The
 per-kind event list in `CitrineScaffold`: `FeedViewModel` owns the `Pager`
 (cached in its scope, so it is no longer rebuilt on every recomposition) and
-hands the screen `Event`s.
+hands the screen `Event`s. `DownloadYourEventsUserScreen`:
+`DownloadYourEventsViewModel` looks up the stored contact and relay lists (else
+fetches them) for the relay picker. The `databaseInUi` allow-list is empty, so
+the rule now fails on any `ui/` file outside a ViewModel that touches the
+database.
 
 ### 4. Split the large server and service files
 

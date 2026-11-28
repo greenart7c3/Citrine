@@ -56,11 +56,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.R
-import com.greenart7c3.citrine.database.AppDatabase
-import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.service.EventDownloader
 import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
@@ -70,14 +69,12 @@ import com.vitorpamplona.quartz.nip01Core.relay.normalizer.RelayUrlNormalizer
 import com.vitorpamplona.quartz.nip01Core.relay.normalizer.displayUrl
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
 import com.vitorpamplona.quartz.nip01Core.signers.NostrSignerInternal
-import com.vitorpamplona.quartz.nip02FollowList.ContactListEvent
 import com.vitorpamplona.quartz.nip19Bech32.Nip19Parser
 import com.vitorpamplona.quartz.nip19Bech32.entities.NPub
 import com.vitorpamplona.quartz.nip19Bech32.toNpub
 import com.vitorpamplona.quartz.nip55AndroidSigner.api.CommandType
 import com.vitorpamplona.quartz.nip55AndroidSigner.api.permission.Permission
 import com.vitorpamplona.quartz.nip55AndroidSigner.client.NostrSignerExternal
-import com.vitorpamplona.quartz.nip65RelayList.AdvertisedRelayListEvent
 import com.vitorpamplona.quartz.utils.Hex
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -119,13 +116,13 @@ fun SelectRelayModal(
     signer: NostrSigner,
     onDone: (List<NormalizedRelayUrl>) -> Unit,
     onDismiss: () -> Unit,
+    viewModel: DownloadYourEventsViewModel = viewModel(factory = DownloadYourEventsViewModel.factory(LocalContext.current.applicationContext)),
 ) {
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
     )
     val scope = rememberCoroutineScope()
     val relayClient = LocalRelayClient.current
-    val appContext = LocalContext.current.applicationContext
 
     ModalBottomSheet(
         modifier = Modifier
@@ -153,27 +150,11 @@ fun SelectRelayModal(
                     // never answers, or a local query stuck behind a write, must never leave the
                     // sheet spinning with no way out. Results are added as they arrive.
                     lookupRelays("contact list for ${signer.pubKey}") {
-                        withContext(Dispatchers.IO) {
-                            val stored = AppDatabase.getDatabase(appContext)
-                                .eventDao()
-                                .getContactList(signer.pubKey)
-                                ?.toEvent() as? ContactListEvent
-                            stored ?: EventDownloader.fetchContactList(
-                                signer = signer,
-                            )
-                        }
+                        withContext(Dispatchers.IO) { viewModel.contactList(signer) }
                     }?.relays()?.forEach { relays.addIfNew(it.key.url) }
 
                     lookupRelays("relay list for ${signer.pubKey}") {
-                        withContext(Dispatchers.IO) {
-                            val stored = AppDatabase.getDatabase(appContext)
-                                .eventDao()
-                                .getAdvertisedRelayList(signer.pubKey)
-                                ?.toEvent() as? AdvertisedRelayListEvent
-                            stored ?: EventDownloader.fetchAdvertisedRelayList(
-                                signer = signer,
-                            )
-                        }
+                        withContext(Dispatchers.IO) { viewModel.relayList(signer) }
                     }?.relays()?.forEach { relays.addIfNew(it.relayUrl.url) }
                 } finally {
                     loading = false

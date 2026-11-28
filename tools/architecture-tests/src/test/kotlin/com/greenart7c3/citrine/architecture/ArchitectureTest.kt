@@ -119,9 +119,7 @@ class ArchitectureTest {
     private companion object {
         val databaseOrDaoCallEvenWithoutImport = Regex("""\.(\w*D|d)aos?\(|\bget(History|Log)?Database\(""")
 
-        val databaseInUi = setOf(
-            "ui/DownloadYourEventsUserScreen.kt",
-        )
+        val databaseInUi = emptySet<String>()
 
         val contextCitrineUsers = setOf(
             "MainActivity.kt",
