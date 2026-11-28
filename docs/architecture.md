@@ -244,7 +244,7 @@ fetches them) for the relay picker. The `databaseInUi` allow-list is empty, so
 the rule now fails on any `ui/` file outside a ViewModel that touches the
 database.
 
-### 4. Split the large server and service files
+### 4. Split the large server and service files (done)
 
 `RelayAggregator`, `CustomWebSocketServer` (message handling per verb, the
 HTTP/NIP-86/NIP-11 routes, validation) and `CitrineContentProvider` (one function
@@ -260,6 +260,17 @@ checks as named functions, chained in the original order), `EventStore`,
 `WebClientHosting`. Each `VerificationResult` refusal carries its OK reply as a
 constructor argument, so a new result cannot compile without one
 (`VerificationResultRefusalTest` pins the texts). All 17 of its entries are gone.
+
+`RelayAggregator` keeps its public API, the listener, the status emitter, the
+refresh orchestration and everything that shares its lock (relay reset, network
+evaluation, pause/resume); the rest is internal files beside it in `service/`:
+`AggregatorFetcher`, `AggregatorBatchFetch`, `AggregatorOutbox`,
+`AggregatorSubscriptions`, `AggregatorMuteList`, `AggregatorRelayAuth`,
+`AggregatorConnectivity` and `StrangerContactListPruner`.
+`CitrineContentProvider.insertEvent` splits into parse and store steps with
+exhaustive `when`s over `VerificationResult`, and `deleteEventById` into
+`requireEventAuthor` and `deleteVerified`. Step 4 is done: no file has a
+`LargeClass` entry left.
 
 ### 5. Split `Citrine`
 
